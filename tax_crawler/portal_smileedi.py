@@ -23,6 +23,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
 
 from base_handler import BaseTaxInvoiceHandler
+from xml_parser import parse_tax_invoice_xml
 
 
 class SmileEdiHandler(BaseTaxInvoiceHandler):
@@ -56,6 +57,7 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
             "ok": False,
             "portal": self.portal_name,
             "pdf_path": None,
+            "xml_path": None,
             "subject": "",
             "data": {},
             "approval": {},
@@ -127,13 +129,19 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         self._dump_state(driver, dump_dir, "04_after_approval_check")
         pdf_path = None
         pdf_error = None
+        xml_path = None
+        xml_error = None
         if approval.get("approved") or self._approval_state(driver) == "approved":
+            xml_path, xml_parsed, xml_error = self._download_and_parse_xml(driver, parsed, dump_dir)
+            if xml_parsed:
+                parsed = {**parsed, **xml_parsed}
             pdf_path, pdf_error = self._save_invoice_pdf(driver, parsed, dump_dir)
 
         result.update(
             {
                 "ok": True,
                 "pdf_path": str(pdf_path) if pdf_path else None,
+                "xml_path": str(xml_path) if xml_path else None,
                 "subject": self._build_subject(parsed),
                 "data": self._build_data(parsed, matched_biz_no),
                 "approval": approval,
@@ -142,6 +150,8 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
                 "matched_site_name": self._site_name_from_biz_no(matched_biz_no),
             }
         )
+        if xml_error:
+            result["xml_error"] = xml_error
         if pdf_error:
             result["pdf_error"] = pdf_error
 
@@ -390,6 +400,273 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
             return actions if isinstance(actions, list) else []
         except Exception:
             return []
+
+    # ------------------------------------------------------------------
+    # XML output
+    # ------------------------------------------------------------------
+    def _download_and_parse_xml(
+        self,
+        driver: WebDriver,
+        parsed: dict,
+        dump_dir: Path,
+    ) -> tuple[Path | None, dict | None, str | None]:
+        xml_path = self._download_invoice_xml(driver, dump_dir)
+        if not xml_path:
+            return None, None, "SMILE EDI XML download failed"
+
+        try:
+            supplier, buyer, content = parse_tax_invoice_xml(str(xml_path))
+            xml_parsed = self._xml_to_parsed(xml_path, supplier, buyer, content)
+            normalized_path = self._normalize_xml_path(xml_path, {**parsed, **xml_parsed}, dump_dir)
+            xml_parsed["xml_path"] = str(normalized_path)
+            self._write_text(
+                dump_dir / "05_xml_parse_result.json",
+                json.dumps(xml_parsed, ensure_ascii=False, indent=2),
+            )
+            return normalized_path, xml_parsed, None
+        except Exception as exc:
+            self._write_text(dump_dir / "05_xml_parse_error.txt", repr(exc))
+            return xml_path, {"xml_path": str(xml_path)}, str(exc)
+
+    def _download_invoice_xml(self, driver: WebDriver, dump_dir: Path) -> Path | None:
+        before_state = self._snapshot_xml_state()
+        attempts: list[object] = []
+
+        try:
+            click_result = driver.execute_script(
+                """
+                return (function () {
+                  const actions = [];
+                  const originalConfirm = window.confirm;
+                  window.__smileediXmlConfirms = [];
+                  window.confirm = function (message) {
+                    window.__smileediXmlConfirms.push(String(message || ''));
+                    return true;
+                  };
+                  function labelOf(el) {
+                    return [
+                      el.innerText, el.value, el.title, el.alt,
+                      el.getAttribute && el.getAttribute('href'),
+                      el.getAttribute && el.getAttribute('onclick')
+                    ].join(' ');
+                  }
+                  function ensureField(form, name, value) {
+                    let field = form.elements[name];
+                    if (!field) {
+                      field = document.createElement('input');
+                      field.type = 'hidden';
+                      field.name = name;
+                      form.appendChild(field);
+                    }
+                    field.value = value;
+                  }
+                  try {
+                    if (typeof print_viewer_save === 'function') {
+                      print_viewer_save();
+                      actions.push('print_viewer_save()');
+                      return {ok: true, actions: actions, confirms: window.__smileediXmlConfirms};
+                    }
+
+                    const direct = Array.from(document.querySelectorAll(
+                      "a[href*='print_viewer_save'], a[onclick*='print_viewer_save']"
+                    ))[0];
+                    if (direct) {
+                      direct.click();
+                      actions.push('click print_viewer_save link');
+                      return {ok: true, actions: actions, confirms: window.__smileediXmlConfirms};
+                    }
+
+                    const xmlLink = Array.from(document.querySelectorAll('a, button, input')).find(function (el) {
+                      return labelOf(el).toUpperCase().includes('XML');
+                    });
+                    if (xmlLink) {
+                      xmlLink.click();
+                      actions.push('click XML element');
+                      return {ok: true, actions: actions, confirms: window.__smileediXmlConfirms};
+                    }
+
+                    const form = document.forms.eform || document.eform;
+                    if (form) {
+                      let frame = document.querySelector("iframe[name='hiddenFrame'], frame[name='hiddenFrame']");
+                      if (!frame) {
+                        frame = document.createElement('iframe');
+                        frame.name = 'hiddenFrame';
+                        frame.style.display = 'none';
+                        document.body.appendChild(frame);
+                      }
+                      ensureField(form, 'submitType', 'viewer');
+                      form.action = '/DtiTaxSign.do';
+                      form.target = 'hiddenFrame';
+                      form.submit();
+                      actions.push('submit eform viewer');
+                      return {ok: true, actions: actions, confirms: window.__smileediXmlConfirms};
+                    }
+
+                    return {ok: false, actions: actions, confirms: window.__smileediXmlConfirms};
+                  } finally {
+                    window.confirm = originalConfirm;
+                  }
+                })();
+                """
+            )
+            attempts.append(click_result)
+        except Exception as exc:
+            attempts.append(f"execute_script failed: {exc!r}")
+
+        self._accept_alerts(driver, timeout=1.0, rounds=3)
+        downloaded = self._wait_xml_change(before_state, timeout=15)
+        if downloaded:
+            self._write_text(
+                dump_dir / "05_xml_download_success.txt",
+                f"download={downloaded}\nattempts={json.dumps(attempts, ensure_ascii=False, indent=2)}",
+            )
+            return downloaded
+
+        frame_xml = self._save_xml_from_frames(driver, dump_dir)
+        if frame_xml:
+            self._write_text(
+                dump_dir / "05_xml_download_success.txt",
+                f"frame={frame_xml}\nattempts={json.dumps(attempts, ensure_ascii=False, indent=2)}",
+            )
+            return frame_xml
+
+        self._write_text(
+            dump_dir / "05_xml_download_failed.json",
+            json.dumps({"attempts": attempts}, ensure_ascii=False, indent=2),
+        )
+        return None
+
+    def _xml_to_parsed(self, xml_path: Path, supplier: dict, buyer: dict, content: dict) -> dict:
+        xml_items = content.get("항목") or content.get("품목") or []
+        items = []
+        for item in xml_items:
+            supply_amount = self._to_int(item.get("공급가액"))
+            tax_amount = self._to_int(item.get("세액"))
+            name = item.get("품목") or ""
+            if not name and not supply_amount and not tax_amount:
+                continue
+            items.append(
+                {
+                    "name": name or content.get("비고") or "세금계산서",
+                    "qty": 1,
+                    "supply_amount": supply_amount,
+                    "tax_amount": tax_amount,
+                    "inc_vat": supply_amount + tax_amount,
+                }
+            )
+
+        first_item = items[0] if items else {}
+        target_supply = self._to_int(content.get("공급가액")) or sum(item["supply_amount"] for item in items)
+        total_tax = self._to_int(content.get("세액")) or sum(item["tax_amount"] for item in items)
+        total_sum = self._to_int(content.get("합계금액")) or (target_supply + total_tax)
+
+        return {
+            "xml_path": str(xml_path),
+            "supplier_name": supplier.get("상호") or "",
+            "buyer_name": buyer.get("상호") or "",
+            "supplier_biz_no": supplier.get("등록번호") or "",
+            "buyer_biz_no": buyer.get("등록번호") or "",
+            "issue_date": self._normalize_date(content.get("작성일자") or ""),
+            "item_name": first_item.get("name") or content.get("비고") or "",
+            "target_supply": target_supply,
+            "total_tax": total_tax,
+            "total_sum": total_sum,
+            "items": items,
+            "source": "xml_download",
+            "raw_xml": {
+                "supplier": supplier,
+                "buyer": buyer,
+                "content": content,
+            },
+        }
+
+    def _normalize_xml_path(self, xml_path: Path, parsed: dict, dump_dir: Path) -> Path:
+        final_pdf_name = self.build_pdf_filename(
+            issue_date=parsed.get("issue_date") or "",
+            buyer=parsed.get("buyer_name") or "사업장",
+            supplier=parsed.get("supplier_name") or "매입처",
+            item=parsed.get("item_name") or "세금계산서",
+            extra="",
+            amount=str(parsed.get("total_sum") or 0),
+            buyer_biz_no=parsed.get("buyer_biz_no") or "",
+        )
+        target = self.dedupe_path(self.download_dir / f"{Path(final_pdf_name).stem}.xml")
+        try:
+            if xml_path.resolve() == target.resolve():
+                return xml_path
+        except Exception:
+            pass
+        try:
+            xml_path.replace(target)
+            self._write_text(dump_dir / "05_xml_renamed.txt", f"{xml_path} -> {target}")
+            return target
+        except Exception as exc:
+            self._write_text(dump_dir / "05_xml_rename_error.txt", repr(exc))
+            return xml_path
+
+    def _snapshot_xml_state(self) -> dict[str, tuple[int, int]]:
+        state: dict[str, tuple[int, int]] = {}
+        for path in self.download_dir.glob("*.xml"):
+            try:
+                stat = path.stat()
+                state[str(path.resolve())] = (stat.st_mtime_ns, stat.st_size)
+            except Exception:
+                continue
+        return state
+
+    def _wait_xml_change(self, before_state: dict[str, tuple[int, int]], timeout: int = 15) -> Path | None:
+        deadline = time.time() + timeout
+        while time.time() < deadline:
+            for path in self.download_dir.glob("*.xml"):
+                try:
+                    stat = path.stat()
+                    current = (stat.st_mtime_ns, stat.st_size)
+                    key = str(path.resolve())
+                except Exception:
+                    continue
+                if key not in before_state or before_state.get(key) != current:
+                    if not path.name.endswith(".crdownload") and self._is_stable(path):
+                        return path
+            time.sleep(0.5)
+        return None
+
+    def _save_xml_from_frames(self, driver: WebDriver, dump_dir: Path) -> Path | None:
+        try:
+            driver.switch_to.default_content()
+            frames = driver.find_elements(By.CSS_SELECTOR, "iframe, frame")
+        except Exception:
+            return None
+
+        for index, frame in enumerate(frames):
+            try:
+                driver.switch_to.default_content()
+                driver.switch_to.frame(frame)
+                body_text = ""
+                try:
+                    body_text = driver.find_element(By.TAG_NAME, "body").text
+                except Exception:
+                    pass
+                source = driver.page_source or ""
+                xml_text = body_text if self._looks_like_xml(body_text) else source
+                if not self._looks_like_xml(xml_text):
+                    continue
+                target = self.dedupe_path(self.download_dir / f"smileedi_hidden_frame_{int(time.time())}.xml")
+                target.write_text(xml_text.strip(), encoding="utf-8", errors="replace")
+                return target
+            except Exception as exc:
+                self._write_text(dump_dir / f"05_xml_frame_{index}_error.txt", repr(exc))
+                continue
+            finally:
+                try:
+                    driver.switch_to.default_content()
+                except Exception:
+                    pass
+        return None
+
+    @staticmethod
+    def _looks_like_xml(value: str) -> bool:
+        text = str(value or "").lstrip()
+        return text.startswith("<?xml") or "<TaxInvoice" in text or "TaxInvoiceDocument" in text
 
     # ------------------------------------------------------------------
     # PDF output
@@ -821,6 +1098,13 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         if match:
             return f"{match.group(1)}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
         return ""
+
+    @staticmethod
+    def _normalize_date(value: str) -> str:
+        digits = re.sub(r"[^\d]", "", str(value or ""))
+        if len(digits) >= 8:
+            return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+        return str(value or "").strip()
 
     @staticmethod
     def _label_value_from_text(text: str, labels: tuple[str, ...]) -> str:
