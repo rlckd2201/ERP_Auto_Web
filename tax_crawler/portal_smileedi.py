@@ -318,12 +318,23 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
 
     def _click_approval_button(self, driver: WebDriver) -> bool:
         candidates = [
+            "//a[contains(@href, \"approve('K')\")]",
+            "//*[contains(@href,'approve') and contains(@href,'K')]",
             "//*[self::button or self::a or self::input][normalize-space(.)='승인']",
             "//*[self::button or self::a or self::input][contains(normalize-space(.),'승인') and not(contains(normalize-space(.),'미승인')) and not(contains(normalize-space(.),'반송'))]",
             "//input[contains(@value,'승인') and not(contains(@value,'미승인')) and not(contains(@value,'반송'))]",
             "//*[contains(@onclick,'approve') or contains(@onclick,'appr') or contains(@onclick,'Approval')]",
         ]
-        return self._click_first(driver, candidates, timeout=5, exclude_text=("미승인", "반송"))
+        if self._click_first(driver, candidates, timeout=5, exclude_text=("미승인", "반송")):
+            return True
+        try:
+            return bool(
+                driver.execute_script(
+                    "if (typeof approve === 'function') { approve('K'); return true; } return false;"
+                )
+            )
+        except Exception as exc:
+            return "alert" in str(exc).lower()
 
     # ------------------------------------------------------------------
     # Parsing
