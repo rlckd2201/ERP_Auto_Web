@@ -172,7 +172,11 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
                 self._switch_to_latest_window(driver)
                 self._wait_document_ready(driver, timeout=8)
 
+                if self._has_terminal_error_text(driver):
+                    return None
                 if self._is_invoice_view_ready(driver):
+                    return key
+                if self._find_business_no_input(driver) is None:
                     return key
                 if self._has_auth_failure_text(driver):
                     self._accept_alerts(driver, timeout=1.0)
@@ -183,25 +187,34 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         return None
 
     def _find_business_no_input(self, driver: WebDriver) -> WebElement | None:
-        selectors = [
+        try:
+            driver.switch_to.default_content()
+        except Exception:
+            pass
+
+        selectors = (
+            "form[name='LoginForm'] input[name='inpasswd']",
+            "form[name='LoginForm'] input#input.passwd_input",
             "input[name='inpasswd']",
             "input#input.passwd_input",
-            "input[name*='biz']",
-            "input[name*='Biz']",
-            "input[name*='corp']",
-            "input[name*='reg']",
-            "input[type='tel']",
-            "input[type='number']",
-            "input[type='password']",
-            "input[type='text']",
-            "input:not([type])",
-        ]
-        candidates: list[WebElement] = []
+        )
         for selector in selectors:
             for elem in driver.find_elements(By.CSS_SELECTOR, selector):
                 if self._is_editable_visible(elem):
-                    candidates.append(elem)
-        return candidates[0] if candidates else None
+                    return elem
+
+        text = self._visible_text(driver)
+        auth_markers = (
+            "사업자번호를 입력 후 전자(세금)계산서를 확인",
+            "사업자번호를 입력하세요",
+        )
+        if not any(marker in text for marker in auth_markers):
+            return None
+
+        for elem in driver.find_elements(By.CSS_SELECTOR, "form[name='LoginForm'] input"):
+            if self._is_editable_visible(elem):
+                return elem
+        return None
 
     def _click_confirm(self, driver: WebDriver) -> bool:
         xpaths = [
@@ -250,6 +263,14 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
             "사업자번호를 입력",
         )
         return any(marker in text for marker in failure_markers)
+
+    def _has_terminal_error_text(self, driver: WebDriver) -> bool:
+        text = self._visible_text(driver)
+        fatal_markers = (
+            "전송타입 오류",
+            "문제가 계속될 경우 SmileEDI 담당 운영관리자",
+        )
+        return any(marker in text for marker in fatal_markers)
 
     # ------------------------------------------------------------------
     # Approval
