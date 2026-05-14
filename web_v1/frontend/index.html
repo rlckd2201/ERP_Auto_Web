@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>회계업무 자동화 WEB v1.0</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=20260514_fix102_existing_output">
+  <link rel="stylesheet" href="/assets/styles.css?v=20260514_fix106_regular">
 </head>
 <body>
   <section id="loginView" class="gate-view">
@@ -66,7 +66,7 @@
       </div>
       <nav class="nav-list">
         <button id="purchaseNavButton" class="nav-item active" type="button">구매 처리</button>
-        <button class="nav-item" type="button" disabled>정기 처리</button>
+        <button id="regularNavButton" class="nav-item" type="button">정기 처리</button>
         <button id="setupNavButton" class="nav-item" type="button">설정</button>
       </nav>
     </aside>
@@ -74,8 +74,8 @@
     <main class="main">
       <header class="topbar">
         <div>
-          <h1>구매 처리</h1>
-          <p>메일 수집, PDF 저장, ERP 입력 큐 등록까지 운영서버에서 진행합니다.</p>
+          <h1 id="pageTitle">구매 처리</h1>
+          <p id="pageSubtitle">메일 수집, PDF 저장, ERP 입력 큐 등록까지 운영서버에서 진행합니다.</p>
         </div>
         <div class="top-actions">
           <button id="detailModeButton" class="button secondary" type="button">상세모드</button>
@@ -145,7 +145,7 @@
       <section class="queue-panel" aria-label="구매 수신 내역">
         <div class="panel-header compact">
           <div>
-            <h2>구매 수신 내역</h2>
+            <h2 id="invoicePanelTitle">구매 수신 내역</h2>
             <p id="selectedCount">선택 0건</p>
           </div>
           <div class="panel-actions">
@@ -199,7 +199,7 @@
         <div class="purchase-detail" id="purchaseDetailPanel">
           <div class="panel-header compact">
             <div>
-              <h2>구매 상세</h2>
+              <h2 id="detailPanelTitle">구매 상세</h2>
               <p id="purchaseDetailTitle">구매 건을 1개 선택하면 견적서 첨부와 분석을 진행할 수 있습니다.</p>
             </div>
             <div class="panel-actions">
@@ -299,6 +299,6 @@
     </div>
   </div>
 
-  <script src="/assets/app.js?v=20260514_fix105_no_detail_autorefresh" defer></script>
+  <script src="/assets/app.js?v=20260514_fix106_regular" defer></script>
 </body>
 </html>

@@ -23,7 +23,7 @@ from .compuzone_quote import auto_attach_compuzone_quote
 from .config import WEB_ROOT, settings
 from .invoice_db import DONE, ERROR, PROCESSING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
-from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate
+from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .output_set import build_output_set_status, generate_expense_report_pdf
 from .erp_queue import queue_dir, write_expense_report_queue
 from .purchase_analysis import (
@@ -119,8 +119,11 @@ def _expense_report_exists(invoice: dict[str, Any] | None) -> bool:
     return bool(path and Path(path).exists())
 
 
-def _invoice_output_set_ready(invoice: dict[str, Any] | None) -> bool:
-    if not invoice or str(invoice.get("invoice_type") or "").lower() != "purchase":
+def _invoice_output_set_ready(invoice: dict[str, Any] | None, expected_type: str = "") -> bool:
+    invoice_type = str((invoice or {}).get("invoice_type") or "").lower()
+    if not invoice:
+        return False
+    if expected_type and invoice_type != expected_type:
         return False
     status = build_output_set_status(invoice, persist=True)
     return bool(status.get("ready")) and not status.get("blockers")
@@ -269,14 +272,22 @@ def _maybe_queue_one_click_output(source_job_id: str) -> None:
     invoice_ids = [int(item) for item in source_job.payload.get("invoice_ids") or [] if str(item).isdigit()]
     if not invoice_ids:
         return
-    missing = []
-    for invoice_id in invoice_ids:
-        if not _expense_report_exists(get_invoice(invoice_id)):
-            missing.append(invoice_id)
-    if missing:
-        if job_store.get(source_job_id):
-            job_store.add_event(source_job_id, "printing", 97, f"현금출금결의서 생성 대기: {len(missing)}건")
-        return
+    one_click_mode = str(source_job.payload.get("one_click_mode") or "purchase").strip().lower()
+    if one_click_mode == "regular":
+        missing = [invoice_id for invoice_id in invoice_ids if not _invoice_output_set_ready(get_invoice(invoice_id), "regular")]
+        if missing:
+            if job_store.get(source_job_id):
+                job_store.add_event(source_job_id, "printing", 97, f"정기 문서 세트 준비 대기: {len(missing)}건")
+            return
+    else:
+        missing = []
+        for invoice_id in invoice_ids:
+            if not _expense_report_exists(get_invoice(invoice_id)):
+                missing.append(invoice_id)
+        if missing:
+            if job_store.get(source_job_id):
+                job_store.add_event(source_job_id, "printing", 97, f"현금출금결의서 생성 대기: {len(missing)}건")
+            return
     job = job_store.create(
         JobCreateRequest(
             job_type="output_set",
@@ -1074,6 +1085,9 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
                 target_client_ip=str(task_payload.get("target_client_ip") or client_ip(request)).strip(),
                 source_job_id=job_id,
             )
+    source_job = job_store.get(job_id)
+    if ok and source_job and bool(source_job.payload.get("one_click")) and str(source_job.payload.get("one_click_mode") or "").lower() == "regular":
+        _maybe_queue_one_click_output(job_id)
     if job_store.get(job_id):
         job_store.set_result(job_id, dict(payload))
         if ok:
@@ -1136,7 +1150,7 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
     for raw_id in body.invoice_ids:
         invoice_id = int(raw_id)
         invoice = get_invoice(invoice_id)
-        if _invoice_output_set_ready(invoice):
+        if _invoice_output_set_ready(invoice, "purchase"):
             ready_output_ids.append(invoice_id)
             add_invoice_log(invoice_id, "기존 문서 세트가 모두 준비되어 원클릭 ERP/현금결의서 생성 단계를 건너뜁니다.")
         else:
@@ -1184,6 +1198,72 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
     return job.to_response()
 
 
+@app.post("/api/jobs/regular-one-click", response_model=JobResponse, status_code=202)
+def create_regular_one_click_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
+    if not body.invoice_ids:
+        raise HTTPException(status_code=400, detail="원클릭 처리할 정기 건을 선택해야 합니다.")
+    setup = require_setup_ready(request)
+    output = _one_click_output_payload(body.output_target, setup)
+    ready_output_ids: list[int] = []
+    erp_invoice_ids: list[int] = []
+    for raw_id in body.invoice_ids:
+        invoice_id = int(raw_id)
+        invoice = get_invoice(invoice_id)
+        if not invoice:
+            continue
+        if str(invoice.get("invoice_type") or "").strip().lower() != "regular":
+            raise HTTPException(status_code=400, detail=f"정기 처리 대상이 아닌 계산서가 포함되어 있습니다: #{invoice_id}")
+        if _invoice_output_set_ready(invoice, "regular"):
+            ready_output_ids.append(invoice_id)
+            add_invoice_log(invoice_id, "기존 정기 문서 세트가 모두 준비되어 ERP 전표 생성 단계를 건너뜁니다.")
+        else:
+            erp_invoice_ids.append(invoice_id)
+    if not ready_output_ids and not erp_invoice_ids:
+        raise HTTPException(status_code=400, detail="처리할 정기 계산서를 찾지 못했습니다.")
+    if ready_output_ids and not erp_invoice_ids:
+        job = job_store.create(
+            JobCreateRequest(
+                job_type="output_set",
+                title=f"기존 정기 문서 출력 {len(ready_output_ids)}건",
+                payload={
+                    "invoice_ids": ready_output_ids,
+                    "action": output["action"],
+                    "printer_key": output["printer_key"],
+                    "printer_name": output["printer_name"],
+                    "processor": body.processor or "WEB v1.0",
+                    "target_agent_id": setup.get("agent_id") or "",
+                    "target_client_ip": setup.get("client_ip") or client_ip(request),
+                    "existing_only": True,
+                    "one_click_existing_only": True,
+                },
+            )
+        )
+        worker.submit(job)
+        return job.to_response()
+    job = job_store.create(
+        JobCreateRequest(
+            job_type="regular_one_click",
+            title=f"정기 원클릭 처리 {len(body.invoice_ids)}건",
+            payload={
+                "invoice_ids": body.invoice_ids,
+                "erp_invoice_ids": erp_invoice_ids,
+                "ready_output_invoice_ids": ready_output_ids,
+                "processor": body.processor or "WEB v1.0",
+                "target_agent_id": setup.get("agent_id") or "",
+                "target_client_ip": setup.get("client_ip") or client_ip(request),
+                "one_click": True,
+                "one_click_mode": "regular",
+                "output_target": body.output_target,
+                "output_action": output["action"],
+                "printer_key": output["printer_key"],
+                "printer_name": output["printer_name"],
+            },
+        )
+    )
+    worker.submit(job)
+    return job.to_response()
+
+
 @app.post("/api/jobs/purchase-analyze", response_model=JobResponse, status_code=202)
 def create_purchase_analyze_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
     require_setup_ready(request)
@@ -1210,6 +1290,33 @@ def create_purchase_erp_input_job(body: InvoiceIdsRequest, request: Request) -> 
         JobCreateRequest(
             job_type="purchase_erp_input",
             title=f"구매 ERP 입력 실행 {len(body.invoice_ids)}건",
+            payload={
+                "invoice_ids": body.invoice_ids,
+                "processor": body.processor or "WEB v1.0",
+                "target_agent_id": setup.get("agent_id") or "",
+                "target_client_ip": setup.get("client_ip") or client_ip(request),
+            },
+        )
+    )
+    worker.submit(job)
+    return job.to_response()
+
+
+@app.post("/api/jobs/regular-erp-input", response_model=JobResponse, status_code=202)
+def create_regular_erp_input_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
+    if not body.invoice_ids:
+        raise HTTPException(status_code=400, detail="ERP 입력할 정기 건을 선택해야 합니다.")
+    setup = require_setup_ready(request)
+    for invoice_id in body.invoice_ids:
+        invoice = get_invoice(int(invoice_id))
+        if not invoice:
+            raise HTTPException(status_code=404, detail=f"Invoice not found: #{invoice_id}")
+        if str(invoice.get("invoice_type") or "").strip().lower() != "regular":
+            raise HTTPException(status_code=400, detail=f"정기 처리 대상이 아닌 계산서가 포함되어 있습니다: #{invoice_id}")
+    job = job_store.create(
+        JobCreateRequest(
+            job_type="regular_erp_input",
+            title=f"정기 ERP 입력 실행 {len(body.invoice_ids)}건",
             payload={
                 "invoice_ids": body.invoice_ids,
                 "processor": body.processor or "WEB v1.0",
@@ -1713,6 +1820,41 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
         add_invoice_log(invoice_id, f"구매 품목 학습 DB 반영: {learned_count}건")
     reset_invoice(invoice_id)
     return get_invoice(invoice_id) or updated or {"ok": True, "invoice_id": invoice_id}
+
+
+@app.patch("/api/invoices/{invoice_id}/regular-data")
+def api_update_regular_data(invoice_id: int, request: RegularDataUpdate) -> dict[str, Any]:
+    invoice = get_invoice(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if str(invoice.get("invoice_type") or "").strip().lower() != "regular":
+        raise HTTPException(status_code=400, detail="정기 처리 건만 수정 저장할 수 있습니다.")
+    payload = request.model_dump()
+    clean_items: list[dict[str, Any]] = []
+    allowed_accounts = {"지급수수료", "통신비", "소모품비", "컴퓨터소프트웨어", "집기비품"}
+    for source in payload.get("items") or []:
+        if not isinstance(source, dict):
+            continue
+        account = str(source.get("account") or "지급수수료").strip()
+        row = {
+            "account": account if account in allowed_accounts else "지급수수료",
+            "name": str(source.get("name") or source.get("item_name") or "정기 서비스").strip() or "정기 서비스",
+            "qty": max(1, int(source.get("qty") or source.get("quantity") or 1)),
+            "supply": int(source.get("supply") or source.get("supply_amount") or 0),
+            "inc_vat": int(source.get("inc_vat") or source.get("total") or source.get("amount") or 0),
+        }
+        if not row["inc_vat"] and row["supply"]:
+            row["inc_vat"] = round(row["supply"] * 1.1)
+        clean_items.append(row)
+    payload["items"] = clean_items
+    payload["invoice_type"] = "regular"
+    payload["erp_ready"] = bool(clean_items or payload.get("total_sum"))
+    updated = update_invoice_json(invoice_id, payload, message="정기 처리 전표 데이터가 화면에서 수정 저장되었습니다.")
+    reset_invoice(invoice_id)
+    refreshed = get_invoice(invoice_id) or updated or {"id": invoice_id}
+    if isinstance(refreshed, dict):
+        refreshed["output_docs"] = build_output_set_status(refreshed, persist=True)
+    return refreshed
 
 
 @app.get("/api/invoices/{invoice_id}/logs")

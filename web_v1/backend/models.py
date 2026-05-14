@@ -41,6 +41,16 @@ class PurchaseAnalysisUpdate(BaseModel):
     approval_pdf_paths: list[str] = Field(default_factory=list)
 
 
+class RegularDataUpdate(BaseModel):
+    site_name: str = Field(default="", max_length=80)
+    vendor_name: str = Field(default="", max_length=120)
+    invoice_date: str = Field(default="", max_length=20)
+    target_supply: int = 0
+    total_tax: int = 0
+    total_sum: int = 0
+    items: list[dict[str, Any]] = Field(default_factory=list)
+
+
 class JobEventResponse(BaseModel):
     seq: int
     status: JobStatus

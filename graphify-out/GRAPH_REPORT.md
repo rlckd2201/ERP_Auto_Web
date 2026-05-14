@@ -1,11 +1,11 @@
 # Graph Report - 회계업무 자동화_WEB_Version  (2026-05-14)
 
 ## Corpus Check
-- 230 files · ~255,781 words
+- 230 files · ~256,142 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1265 nodes · 4050 edges · 34 communities detected
+- 1265 nodes · 4051 edges · 34 communities detected
 - Extraction: 83% EXTRACTED · 17% INFERRED · 0% AMBIGUOUS · INFERRED: 676 edges (avg confidence: 0.78)
 - Token cost: 0 input · 0 output
 
@@ -88,12 +88,12 @@ Cohesion: 0.05
 Nodes (12): _start_mail_collect_scheduler(), AppManager, ERPAutoApp, ERPConfig, ERPLoginBot, _is_sane_amount(), _normalize_biz_no(), _normalize_issue_date() (+4 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.08
-Nodes (30): _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task(), _task_files(), update_erp_task(), _write_task(), _app_version() (+22 more)
+Cohesion: 0.09
+Nodes (29): _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task(), _task_files(), update_erp_task(), _write_task(), _app_version() (+21 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.15
-Nodes (27): api_delete_invoice(), api_get_invoice(), api_get_invoice_logs(), api_list_invoices(), api_retry_invoice(), create_demo_job(), create_job(), create_purchase_mail_collect_job() (+19 more)
+Cohesion: 0.13
+Nodes (28): api_delete_invoice(), api_get_invoice(), api_get_invoice_logs(), api_list_invoices(), api_retry_invoice(), create_demo_job(), create_job(), create_purchase_mail_collect_job() (+20 more)
 
 ### Community 6 - "Community 6"
 Cohesion: 0.1
@@ -236,7 +236,7 @@ _Questions this graph is uniquely positioned to answer:_
   _High betweenness centrality (0.037) - this node is a cross-community bridge._
 - **Why does `main()` connect `Community 8` to `Community 1`?**
   _High betweenness centrality (0.025) - this node is a cross-community bridge._
-- **Why does `JobStore` connect `Community 5` to `Community 1`, `Community 4`?**
+- **Why does `JobStore` connect `Community 5` to `Community 1`?**
   _High betweenness centrality (0.025) - this node is a cross-community bridge._
 - **Are the 42 inferred relationships involving `RuntimeError` (e.g. with `.run()` and `._setup_slip_form()`) actually correct?**
   _`RuntimeError` has 42 INFERRED edges - model-reasoned connections that need verification._

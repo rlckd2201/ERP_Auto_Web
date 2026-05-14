@@ -14,16 +14,18 @@ def queue_dir() -> Path:
     return path
 
 
-def write_purchase_erp_queue(
+def _write_erp_queue(
     job_id: str,
     invoices: list[dict[str, Any]],
     *,
+    job_type: str,
+    filename_prefix: str,
     target_agent_id: str = "",
     target_client_ip: str = "",
 ) -> Path:
     payload = {
         "job_id": job_id,
-        "job_type": "purchase_erp_input",
+        "job_type": job_type,
         "agent_status": "pending",
         "agent_id": "",
         "target_agent_id": str(target_agent_id or ""),
@@ -32,9 +34,43 @@ def write_purchase_erp_queue(
         "invoice_count": len(invoices),
         "invoices": invoices,
     }
-    path = queue_dir() / f"purchase_erp_{job_id}.json"
+    path = queue_dir() / f"{filename_prefix}_{job_id}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def write_purchase_erp_queue(
+    job_id: str,
+    invoices: list[dict[str, Any]],
+    *,
+    target_agent_id: str = "",
+    target_client_ip: str = "",
+) -> Path:
+    return _write_erp_queue(
+        job_id,
+        invoices,
+        job_type="purchase_erp_input",
+        filename_prefix="purchase_erp",
+        target_agent_id=target_agent_id,
+        target_client_ip=target_client_ip,
+    )
+
+
+def write_regular_erp_queue(
+    job_id: str,
+    invoices: list[dict[str, Any]],
+    *,
+    target_agent_id: str = "",
+    target_client_ip: str = "",
+) -> Path:
+    return _write_erp_queue(
+        job_id,
+        invoices,
+        job_type="regular_erp_input",
+        filename_prefix="regular_erp",
+        target_agent_id=target_agent_id,
+        target_client_ip=target_client_ip,
+    )
 
 
 def write_expense_report_queue(

@@ -29,6 +29,7 @@ const state = {
   approvalPollTimer: null,
   oneClickOutputTarget: localStorage.getItem(ONE_CLICK_OUTPUT_STORAGE_KEY) || "",
   detailMode: localStorage.getItem("accountingWebDetailMode") === "1",
+  invoiceMode: localStorage.getItem("accountingWebInvoiceMode") === "regular" ? "regular" : "purchase",
 };
 
 const els = {
@@ -48,6 +49,11 @@ const els = {
   setupOpenButton: document.querySelector("#setupOpenButton"),
   setupNavButton: document.querySelector("#setupNavButton"),
   purchaseNavButton: document.querySelector("#purchaseNavButton"),
+  regularNavButton: document.querySelector("#regularNavButton"),
+  pageTitle: document.querySelector("#pageTitle"),
+  pageSubtitle: document.querySelector("#pageSubtitle"),
+  invoicePanelTitle: document.querySelector("#invoicePanelTitle"),
+  detailPanelTitle: document.querySelector("#detailPanelTitle"),
   printerMappingForm: document.querySelector("#printerMappingForm"),
   serverState: document.querySelector("#serverState"),
   serverVersion: document.querySelector("#serverVersion"),
@@ -163,6 +169,10 @@ function singleSelectedInvoiceId() {
   return ids.length === 1 ? ids[0] : null;
 }
 
+function invoiceTypeOf(invoice) {
+  return String(invoice?.invoice_type || invoice?.raw?.invoice_type || "").toLowerCase();
+}
+
 function selectedInvoiceType() {
   const selectedId = singleSelectedInvoiceId();
   if (!selectedId) return "";
@@ -170,6 +180,20 @@ function selectedInvoiceType() {
   if (detailType) return String(detailType).toLowerCase();
   const invoice = state.invoices.find((row) => Number(row.id) === Number(selectedId));
   return String(invoice?.invoice_type || "").toLowerCase();
+}
+
+function applyModeUi() {
+  const regular = state.invoiceMode === "regular";
+  if (els.pageTitle) els.pageTitle.textContent = regular ? "정기 처리" : "구매 처리";
+  if (els.pageSubtitle) {
+    els.pageSubtitle.textContent = regular
+      ? "정기 세금계산서를 확인하고 ERP 전표와 문서 세트를 처리합니다."
+      : "메일 수집, PDF 저장, ERP 입력 큐 등록까지 운영서버에서 진행합니다.";
+  }
+  if (els.invoicePanelTitle) els.invoicePanelTitle.textContent = regular ? "정기 수신 내역" : "구매 수신 내역";
+  if (els.detailPanelTitle) els.detailPanelTitle.textContent = regular ? "정기 상세" : "구매 상세";
+  if (els.erpQueueButton) els.erpQueueButton.textContent = regular ? "정기 원클릭 처리" : "원클릭 처리";
+  els.purchaseCollectButton?.classList.toggle("hidden", regular);
 }
 
 function setManualUploadOpen(open) {
@@ -351,7 +375,8 @@ function showView(name) {
   els.loginView?.classList.toggle("hidden", name !== "login");
   els.setupView?.classList.toggle("hidden", name !== "setup");
   els.appShell?.classList.toggle("hidden", name !== "app");
-  els.purchaseNavButton?.classList.toggle("active", name === "app");
+  els.purchaseNavButton?.classList.toggle("active", name === "app" && state.invoiceMode === "purchase");
+  els.regularNavButton?.classList.toggle("active", name === "app" && state.invoiceMode === "regular");
   els.setupNavButton?.classList.toggle("active", name === "setup");
 }
 
@@ -563,13 +588,24 @@ async function openSetupSettings() {
   }
 }
 
-async function showApp() {
+async function showApp(mode = state.invoiceMode) {
+  const nextMode = mode === "regular" ? "regular" : "purchase";
+  const modeChanged = state.invoiceMode !== nextMode;
+  state.invoiceMode = nextMode;
+  localStorage.setItem("accountingWebInvoiceMode", state.invoiceMode);
+  applyModeUi();
   showView("app");
   state.setupWasReady = true;
   startSetupMonitor();
   startMailCollectMonitor();
   if (state.appLoaded) {
-    updateSelectionUi();
+    if (modeChanged) {
+      state.selectedInvoiceIds.clear();
+      state.selectedInvoiceDetail = null;
+      await refreshInvoices({ forceDetailReload: true, force: true });
+    } else {
+      updateSelectionUi();
+    }
     return;
   }
   state.appLoaded = true;
@@ -673,8 +709,10 @@ function setBusy(isBusy) {
   if (els.oneClickOutputTarget) els.oneClickOutputTarget.disabled = isBusy || gateBlocked;
   if (els.demoButton) els.demoButton.disabled = isBusy || gateBlocked;
   if (els.manualUploadButton) els.manualUploadButton.disabled = isBusy || gateBlocked;
-  els.analyzePurchaseButton.disabled = isBusy || !detailData(state.selectedInvoiceDetail).quote_path;
-  els.saveAnalysisButton.disabled = isBusy || !(Array.isArray(detailData(state.selectedInvoiceDetail).items) && detailData(state.selectedInvoiceDetail).items.length);
+  const detail = detailData(state.selectedInvoiceDetail);
+  const regular = selectedInvoiceType() === "regular" || state.invoiceMode === "regular";
+  els.analyzePurchaseButton.disabled = regular || isBusy || !detail.quote_path;
+  els.saveAnalysisButton.disabled = isBusy || !(Array.isArray(detail.items) && detail.items.length);
   els.retryInvoiceButton.disabled = isBusy || state.selectedInvoiceIds.size === 0;
   els.deleteInvoiceButton.disabled = isBusy || state.selectedInvoiceIds.size === 0;
   if (isBusy) els.erpQueueButton.disabled = true;
@@ -822,10 +860,11 @@ function updateSelectionUi() {
   const gateBlocked = !setupReady();
   const erpExecutable = !gateBlocked && count > 0 && selectedVisible.length === count && selectedVisible.every((item) => canRunErp(item));
   const blocked = selectedVisible.find((item) => !canRunErp(item));
-  const blockedReason = gateBlocked ? "필수 프로그램 점검 완료 후 원클릭 처리를 실행할 수 있습니다." : (blocked ? `원클릭 처리 불가: #${blocked.id} ${invoiceReadinessText(blocked)}` : "");
+  const actionName = state.invoiceMode === "regular" ? "정기 원클릭 처리" : "원클릭 처리";
+  const blockedReason = gateBlocked ? `필수 프로그램 점검 완료 후 ${actionName}를 실행할 수 있습니다.` : (blocked ? `${actionName} 불가: #${blocked.id} ${invoiceReadinessText(blocked)}` : "");
   els.selectedCount.textContent = `선택 ${count}건 · 표시 ${visible.length}/${filtered.length}건`;
   els.erpQueueButton.disabled = !erpExecutable;
-  els.erpQueueButton.title = erpExecutable ? "선택 건 원클릭 처리" : blockedReason;
+  els.erpQueueButton.title = erpExecutable ? `선택 건 ${actionName}` : blockedReason;
   syncOneClickOutputTarget();
   els.retryInvoiceButton.disabled = count === 0;
   els.deleteInvoiceButton.disabled = count === 0;
@@ -838,7 +877,8 @@ function renderInvoices() {
   const filtered = filteredInvoices();
   const invoices = visibleInvoices();
   if (!filtered.length) {
-    els.invoicesTable.innerHTML = '<tr><td colspan="7" class="empty-cell">수신 내역 없음</td></tr>';
+    const label = state.invoiceMode === "regular" ? "정기 수신 내역 없음" : "수신 내역 없음";
+    els.invoicesTable.innerHTML = `<tr><td colspan="7" class="empty-cell">${label}</td></tr>`;
     updateSelectionUi();
     return;
   }
@@ -859,7 +899,7 @@ function renderInvoices() {
 }
 
 async function refreshInvoices(options = {}) {
-  const invoices = await requestJson("/api/invoices?mode=purchase&limit=200");
+  const invoices = await requestJson(`/api/invoices?mode=${encodeURIComponent(state.invoiceMode)}&limit=200`);
   state.invoices = invoices;
   state.selectedInvoiceIds = new Set([...state.selectedInvoiceIds].filter((id) => invoices.some((item) => item.id === id)));
   if (options.forceDetailReload) {
@@ -882,6 +922,7 @@ function detailData(invoice) {
 }
 
 function readinessText(data) {
+  if (invoiceTypeOf(data) === "regular") return regularReadinessText(data);
   if (data.readiness_reason) return data.readiness_reason;
   if (!data.quote_path) return "견적서 필요";
   if (!data.purchase_analysis_ready && !(Array.isArray(data.items) && data.items.length)) return "분석 필요";
@@ -891,8 +932,19 @@ function readinessText(data) {
   return "ERP 입력 가능";
 }
 
+function regularReadinessText(data) {
+  if (data.readiness_reason && !String(data.readiness_reason).includes("견적서")) return data.readiness_reason;
+  if (!(data.pdf_path || data.tax_invoice_pdf_path)) return "세금계산서 필요";
+  const total = Number(data.total_sum || data.total_amount || data.amount || 0);
+  if (!total) return "금액 확인 필요";
+  return "ERP 입력 가능";
+}
+
 function canRunErp(invoice) {
   const data = detailData(invoice);
+  if (invoiceTypeOf(invoice) === "regular" || invoiceTypeOf(data) === "regular") {
+    return regularReadinessText(data) === "ERP 입력 가능";
+  }
   return Boolean(
     data.quote_path &&
     (data.purchase_analysis_ready || (Array.isArray(data.items) && data.items.length))
@@ -905,6 +957,11 @@ function invoiceReadinessText(invoice) {
 
 function accountOptions(value) {
   const accounts = ["소모품비", "집기비품", "컴퓨터소프트웨어"];
+  return accounts.map((account) => `<option value="${account}" ${account === value ? "selected" : ""}>${account}</option>`).join("");
+}
+
+function regularAccountOptions(value) {
+  const accounts = ["지급수수료", "통신비", "소모품비", "컴퓨터소프트웨어", "집기비품"];
   return accounts.map((account) => `<option value="${account}" ${account === value ? "selected" : ""}>${account}</option>`).join("");
 }
 
@@ -937,7 +994,9 @@ function renderOutputSetPanel(outputSet, invoiceId) {
   const ready = Boolean(outputSet?.ready);
   const canOutput = Boolean(outputSet?.can_output);
   const blockers = Array.isArray(outputSet?.blockers) ? outputSet.blockers : [];
-  const isPurchaseSet = (outputSet?.mode || "purchase") === "purchase";
+  const outputMode = outputSet?.mode || (state.invoiceMode === "regular" ? "regular" : "purchase");
+  const isPurchaseSet = outputMode === "purchase";
+  const requiredDocText = isPurchaseSet ? "전표, 세금계산서, 품의, 현금결의서" : "전표, 세금계산서";
   const blockerText = ready
     ? "저장된 문서로 바로 출력할 수 있습니다."
     : (blockers.length ? `누락 문서: ${blockers.map((doc) => doc.label).join(", ")}` : "필수 문서가 준비되면 출력할 수 있습니다.");
@@ -955,7 +1014,7 @@ function renderOutputSetPanel(outputSet, invoiceId) {
         </div>
         <div class="output-set-actions admin-only">
           <select id="savedOutputTarget" class="saved-output-target" title="기존 문서 출력 대상">${outputTargetOptions(currentOutputTarget())}</select>
-          <button class="button primary" type="button" data-output-action="saved_output" ${ready ? "" : "disabled"} title="${ready ? "저장된 문서 세트로 바로 출력" : "전표, 세금계산서, 품의, 현금결의서가 모두 있어야 합니다."}">기존 문서 출력</button>
+          <button class="button primary" type="button" data-output-action="saved_output" ${ready ? "" : "disabled"} title="${ready ? "저장된 문서 세트로 바로 출력" : `${requiredDocText}가 모두 있어야 합니다.`}">기존 문서 출력</button>
           <select id="outputPrinterKey" title="개별 출력 대상">${printerOptions}</select>
           <button class="button secondary" type="button" data-output-action="refresh">세트 상태 갱신</button>
           ${isPurchaseSet ? '<button class="button secondary" type="button" data-output-action="generate_expense_report">현금결의서 생성</button>' : ""}
@@ -999,9 +1058,118 @@ function normalizedDept(item) {
   return (item.account || "소모품비") === "소모품비" ? "소모품" : (item.dept || "");
 }
 
+function guessRegularAccount(itemName, vendorName = "") {
+  const text = `${itemName || ""} ${vendorName || ""}`.toLowerCase();
+  const compact = `${itemName || ""}${vendorName || ""}`.replace(/\s+/g, "");
+  if (compact.includes("동양정보통신") || compact.includes("대신아이씨티")) return "지급수수료";
+  if (["kt", "케이티", "통신", "vpn", "sdwan", "오토에버", "autoever", "704100", "w001"].some((key) => text.includes(key))) return "통신비";
+  return "지급수수료";
+}
+
+function regularItemsForDisplay(data, invoice) {
+  const source = Array.isArray(data.items) && data.items.length ? data.items : [{
+    name: data.item_name || data.item || invoice?.subject || "정기 서비스",
+    qty: 1,
+    inc_vat: Number(data.total_sum || invoice?.total_sum || 0),
+  }];
+  const totalSupply = Number(data.target_supply || data.total_supply || 0);
+  const totalIncVat = source.reduce((sum, item) => sum + (Number(item.inc_vat || item.amount || item.total || 0) || 0), 0);
+  let supplyRemainder = totalSupply;
+  let maxIndex = 0;
+  let maxAmount = -1;
+  const rows = source.map((item, index) => {
+    const incVat = Number(item.inc_vat || item.amount || item.total || 0) || 0;
+    let supply = Number(item.supply || item.supply_amount || 0) || 0;
+    if (!supply && totalSupply && totalIncVat) supply = Math.floor(totalSupply * (incVat / totalIncVat));
+    if (!supply && incVat) supply = Math.round(incVat / 1.1);
+    if (!supply && source.length === 1) supply = totalSupply;
+    if (incVat > maxAmount) {
+      maxAmount = incVat;
+      maxIndex = index;
+    }
+    supplyRemainder -= supply;
+    return {
+      account: item.account || guessRegularAccount(item.name || item.item_name, data.vendor_name || invoice?.vendor_name),
+      name: item.name || item.item_name || "정기 서비스",
+      qty: Math.max(1, Number(item.qty || item.quantity || 1) || 1),
+      supply,
+      inc_vat: incVat,
+    };
+  });
+  if (rows.length && supplyRemainder) rows[maxIndex].supply = (Number(rows[maxIndex].supply) || 0) + supplyRemainder;
+  return rows;
+}
+
+function renderRegularDetail(invoice) {
+  const ids = [...state.selectedInvoiceIds];
+  clearApprovalPoll();
+  if (els.detailPanelTitle) els.detailPanelTitle.textContent = "정기 상세";
+  if (els.manualUploadButton) els.manualUploadButton.disabled = !setupReady();
+  els.analyzePurchaseButton.classList.add("hidden");
+  els.analyzePurchaseButton.disabled = true;
+  els.saveAnalysisButton.textContent = "정기 저장";
+  els.saveAnalysisButton.disabled = true;
+  if (ids.length !== 1) {
+    state.selectedInvoiceDetail = null;
+    els.purchaseDetailTitle.textContent = ids.length ? "정기 건은 1개만 선택해야 상세를 편집할 수 있습니다." : "정기 건을 1개 선택하면 전표 데이터를 확인할 수 있습니다.";
+    els.purchaseDetailBody.innerHTML = '<div class="empty-cell">선택된 정기 건이 없습니다.</div>';
+    return;
+  }
+  if (!invoice) {
+    els.purchaseDetailTitle.textContent = `#${ids[0]} 상세를 불러오는 중입니다.`;
+    els.purchaseDetailBody.innerHTML = '<div class="empty-cell">상세 로딩 중</div>';
+    return;
+  }
+  const data = detailData(invoice);
+  const items = regularItemsForDisplay(data, invoice);
+  els.purchaseDetailTitle.textContent = `#${invoice.id} ${invoice.vendor_name || data.vendor_name || invoice.subject || ""} · ${regularReadinessText(data)}`;
+  els.saveAnalysisButton.disabled = !items.length;
+  els.purchaseDetailBody.innerHTML = `
+    <div class="detail-summary-grid">
+      <label>세금계산서 <input value="${escapeHtml(invoice.pdf_path || data.pdf_path || "")}" readonly></label>
+      <label>사업장 <input data-regular-field="site_name" value="${escapeHtml(data.site_name || invoice.site_name || "")}"></label>
+      <label>거래처 <input data-regular-field="vendor_name" value="${escapeHtml(data.vendor_name || invoice.vendor_name || "")}"></label>
+      <label>회계일 <input data-regular-field="invoice_date" value="${escapeHtml(data.invoice_date || data.issue_date || "")}"></label>
+      <label>공급가액 <input data-regular-field="target_supply" value="${escapeHtml(data.target_supply || data.total_supply || 0)}"></label>
+      <label>부가세 <input data-regular-field="total_tax" value="${escapeHtml(data.total_tax || data.tax || 0)}"></label>
+      <label>합계 <input data-regular-field="total_sum" value="${escapeHtml(data.total_sum || invoice.total_sum || 0)}"></label>
+    </div>
+    ${renderOutputSetPanel(data.output_docs || invoice.output_docs || null, invoice.id)}
+    <div class="analysis-table-wrap">
+      <table class="analysis-table">
+        <thead>
+          <tr>
+            <th>계정</th>
+            <th>품목명</th>
+            <th>수량</th>
+            <th>공급가</th>
+            <th>합계</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${items.length ? items.map((item, index) => `
+            <tr data-regular-index="${index}">
+              <td><select data-item-field="account">${regularAccountOptions(item.account || "지급수수료")}</select></td>
+              <td><input data-item-field="name" value="${escapeHtml(item.name || "")}"></td>
+              <td><input data-item-field="qty" value="${escapeHtml(item.qty || 1)}"></td>
+              <td><input data-item-field="supply" value="${escapeHtml(item.supply || 0)}"></td>
+              <td><input data-item-field="inc_vat" value="${escapeHtml(item.inc_vat || 0)}"></td>
+            </tr>
+          `).join("") : '<tr><td colspan="5" class="empty-cell">정기 품목이 없습니다.</td></tr>'}
+        </tbody>
+      </table>
+    </div>
+  `;
+  loadOutputSet(invoice.id);
+}
+
 function renderPurchaseDetail(invoice) {
   const ids = [...state.selectedInvoiceIds];
   clearApprovalPoll();
+  if (els.detailPanelTitle) els.detailPanelTitle.textContent = "구매 상세";
+  els.analyzePurchaseButton.classList.remove("hidden");
+  els.analyzePurchaseButton.textContent = "분석";
+  els.saveAnalysisButton.textContent = "분석 저장";
   if (els.manualUploadButton) els.manualUploadButton.disabled = !setupReady();
   els.analyzePurchaseButton.disabled = true;
   els.saveAnalysisButton.disabled = true;
@@ -1075,19 +1243,23 @@ function renderPurchaseDetail(invoice) {
 async function loadSelectedPurchaseDetail(options = {}) {
   const ids = [...state.selectedInvoiceIds];
   if (ids.length !== 1) {
-    renderPurchaseDetail(null);
+    if (state.invoiceMode === "regular") renderRegularDetail(null);
+    else renderPurchaseDetail(null);
     return;
   }
   const selectedId = ids[0];
   if (!options.force && state.selectedInvoiceDetail?.id === selectedId) {
-    renderPurchaseDetail(state.selectedInvoiceDetail);
+    if (invoiceTypeOf(state.selectedInvoiceDetail) === "regular") renderRegularDetail(state.selectedInvoiceDetail);
+    else renderPurchaseDetail(state.selectedInvoiceDetail);
     return;
   }
-  renderPurchaseDetail(null);
+  if (state.invoiceMode === "regular") renderRegularDetail(null);
+  else renderPurchaseDetail(null);
   try {
     state.detailLoading = true;
     state.selectedInvoiceDetail = await requestJson(`/api/invoices/${selectedId}`);
-    renderPurchaseDetail(state.selectedInvoiceDetail);
+    if (invoiceTypeOf(state.selectedInvoiceDetail) === "regular") renderRegularDetail(state.selectedInvoiceDetail);
+    else renderPurchaseDetail(state.selectedInvoiceDetail);
   } catch (error) {
     els.purchaseDetailTitle.textContent = `#${selectedId} 상세 로딩 실패`;
     els.purchaseDetailBody.innerHTML = `<div class="empty-cell">${escapeHtml(error.message)}</div>`;
@@ -1119,14 +1291,47 @@ function collectAnalysisForm() {
   return payload;
 }
 
+function collectRegularForm() {
+  const body = els.purchaseDetailBody;
+  const payload = {};
+  body.querySelectorAll("[data-regular-field]").forEach((input) => {
+    const key = input.dataset.regularField;
+    payload[key] = ["target_supply", "total_tax", "total_sum"].includes(key) ? Number(String(input.value).replace(/[^0-9-]/g, "")) || 0 : input.value.trim();
+  });
+  payload.items = [...body.querySelectorAll("[data-regular-index]")].map((row) => {
+    const item = {};
+    row.querySelectorAll("[data-item-field]").forEach((input) => {
+      const key = input.dataset.itemField;
+      item[key] = ["qty", "supply", "inc_vat"].includes(key) ? Number(String(input.value).replace(/[^0-9-]/g, "")) || 0 : input.value.trim();
+    });
+    if (!item.inc_vat && item.supply) item.inc_vat = Math.round(item.supply * 1.1);
+    return item;
+  });
+  return payload;
+}
+
 async function saveCurrentAnalysisIfEditable() {
   const invoiceIds = [...state.selectedInvoiceIds];
   if (invoiceIds.length !== 1) return;
+  if (selectedInvoiceType() === "regular") return;
   const invoiceId = invoiceIds[0];
   if (!els.purchaseDetailBody?.querySelector("[data-analysis-field]")) return;
   const payload = collectAnalysisForm();
   if (!Array.isArray(payload.items) || !payload.items.length) return;
   state.selectedInvoiceDetail = await requestJson(`/api/invoices/${invoiceId}/purchase-analysis`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+async function saveCurrentRegularIfEditable() {
+  const invoiceIds = [...state.selectedInvoiceIds];
+  if (invoiceIds.length !== 1) return;
+  const invoiceId = invoiceIds[0];
+  if (!els.purchaseDetailBody?.querySelector("[data-regular-field]")) return;
+  const payload = collectRegularForm();
+  if (!Array.isArray(payload.items) || !payload.items.length) return;
+  state.selectedInvoiceDetail = await requestJson(`/api/invoices/${invoiceId}/regular-data`, {
     method: "PATCH",
     body: JSON.stringify(payload),
   });
@@ -1216,13 +1421,15 @@ async function startErpQueue() {
   const invoiceIds = [...state.selectedInvoiceIds];
   if (!invoiceIds.length) return;
   try {
-    await saveCurrentAnalysisIfEditable();
+    if (state.invoiceMode === "regular") await saveCurrentRegularIfEditable();
+    else await saveCurrentAnalysisIfEditable();
     await refreshInvoices({ skipDetail: true });
   } catch (error) {
-    alert(`ERP 입력 전 분석 저장 실패: ${error.message}`);
+    alert(`ERP 입력 전 화면 저장 실패: ${error.message}`);
     return;
   }
-  await startJob("/api/jobs/purchase-one-click", {
+  const url = state.invoiceMode === "regular" ? "/api/jobs/regular-one-click" : "/api/jobs/purchase-one-click";
+  await startJob(url, {
     invoice_ids: invoiceIds,
     output_target: currentOutputTarget(),
     processor: "WEB v1.0",
@@ -1252,7 +1459,10 @@ async function startSavedOutputSet() {
   if (invoiceIds.length !== 1) return;
   const outputSet = detailData(state.selectedInvoiceDetail).output_docs || state.selectedInvoiceDetail?.output_docs;
   if (!outputSet?.ready) {
-    alert("전표, 세금계산서, 품의, 현금결의서가 모두 저장된 건만 기존 문서 출력이 가능합니다.");
+    const message = outputSet?.mode === "regular"
+      ? "전표와 세금계산서가 모두 저장된 정기 건만 기존 문서 출력이 가능합니다."
+      : "전표, 세금계산서, 품의, 현금결의서가 모두 저장된 건만 기존 문서 출력이 가능합니다.";
+    alert(message);
     return;
   }
   const target = document.querySelector("#savedOutputTarget")?.value || currentOutputTarget();
@@ -1339,7 +1549,7 @@ async function deleteSelectedInvoices() {
   state.selectedInvoiceIds.clear();
   await refreshInvoices();
   els.invoiceLogTitle.textContent = "-";
-  els.invoiceLogList.textContent = "로그를 볼 구매 건을 선택하세요.";
+  els.invoiceLogList.textContent = `로그를 볼 ${state.invoiceMode === "regular" ? "정기" : "구매"} 건을 선택하세요.`;
 }
 
 async function loadInvoiceLogs(invoiceId) {
@@ -1410,7 +1620,10 @@ els.setupContinueButton?.addEventListener("click", () => {
 els.setupOpenButton?.addEventListener("click", openSetupSettings);
 els.setupNavButton?.addEventListener("click", openSetupSettings);
 els.purchaseNavButton?.addEventListener("click", () => {
-  if (setupReady()) showApp();
+  if (setupReady()) showApp("purchase");
+});
+els.regularNavButton?.addEventListener("click", () => {
+  if (setupReady()) showApp("regular");
 });
 els.detailModeButton?.addEventListener("click", toggleDetailMode);
 els.notifyButton.addEventListener("click", requestNotification);
@@ -1558,7 +1771,8 @@ els.saveAnalysisButton.addEventListener("click", async () => {
   const invoiceIds = [...state.selectedInvoiceIds];
   if (invoiceIds.length !== 1) return;
   try {
-    await saveCurrentAnalysisIfEditable();
+    if (state.invoiceMode === "regular") await saveCurrentRegularIfEditable();
+    else await saveCurrentAnalysisIfEditable();
     await refreshInvoices({ skipDetail: true });
   } catch (error) {
     alert(error.message);

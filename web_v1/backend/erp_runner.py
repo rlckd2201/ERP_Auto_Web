@@ -175,7 +175,7 @@ def _guess_account(item_name: str, vendor_name: str = "") -> str:
     compact = re.sub(r"\s+", "", f"{item_name}{vendor_name}")
     if "동양정보통신" in compact or "대신아이씨티" in compact:
         return "지급수수료"
-    if any(key in text for key in ["kt", "케이티", "통신", "vpn", "sdwan", "autoever", "704100"]):
+    if any(key in text for key in ["kt", "케이티", "통신", "vpn", "sdwan", "오토에버", "autoever", "704100", "w001"]):
         return "통신비"
     if any(
         key.lower() in text
@@ -185,19 +185,133 @@ def _guess_account(item_name: str, vendor_name: str = "") -> str:
             "watching-on",
             "watchingon",
             "acronis",
+            "그룹웨어",
+            "다우오피스",
             "k-system",
             "ksystem",
+            "helpu",
+            "원격지원",
+            "자산관리",
             "adobe",
             "cloudoc",
+            "문서중앙화",
         ]
     ):
         return "지급수수료"
     return "지급수수료"
 
 
-def _summary(site: str, vendor: str, item: dict[str, Any], supply: int, qty: int) -> str:
-    name = _clean_text(item.get("name") or item.get("item_name"), "정기 서비스")
-    return f"{site} {name}({supply:,} - {qty}EA) - {vendor}"
+def _regular_period_label(data: dict[str, Any]) -> str:
+    pdf_name = Path(str(data.get("pdf_path") or "")).name
+    match = re.search(r"_(\d{4}년\s*\d{1,2}월(?:\s*\d차)?|\d{4}년\s*\d{1,2}~\d{1,2}월\s*\d차)(?:_\d+)?\.pdf$", pdf_name)
+    if match:
+        return re.sub(r"\s+", " ", match.group(1)).strip()
+    digits = re.sub(r"[^0-9]", "", str(data.get("invoice_date") or data.get("issue_date") or ""))
+    if len(digits) >= 6:
+        return f"{digits[:4]}년 {digits[4:6]}월"
+    return "미확인"
+
+
+def _regular_month_text(period_label: str) -> str:
+    match = re.search(r"(\d{1,2})월", str(period_label or ""))
+    if match:
+        return f"{int(match.group(1))}월"
+    return "해당월"
+
+
+def _regular_year_month_text(period_label: str) -> str:
+    match = re.search(r"(\d{4})년\s*(\d{1,2})월", str(period_label or ""))
+    if match:
+        return f"{match.group(1)}년 {int(match.group(2))}월"
+    return str(period_label or "").strip() or "해당월"
+
+
+def _regular_round_text(period_label: str) -> str:
+    match = re.search(r"(\d차)", str(period_label or ""))
+    return match.group(1) if match else ""
+
+
+def _regular_vendor_display(vendor: Any) -> str:
+    raw = str(vendor or "").strip()
+    compact = re.sub(r"\s+", "", raw.lower())
+    rules = [
+        ("다우", "다우기술"),
+        ("에티버스", "에티버스"),
+        ("이테크", "이테크시스템"),
+        ("시큐어포인트", "시큐어포인트"),
+        ("피플러스", "피플러스"),
+        ("헬프유", "헬프유"),
+        ("유비플러스", "유비플러스"),
+        ("adobe", "Adobe"),
+        ("어도비", "Adobe"),
+        ("케이티", "KT"),
+        ("kt", "KT"),
+        ("오토에버", "현대오토에버시스템즈"),
+        ("비엔아이", "비엔아이"),
+    ]
+    for key, label in rules:
+        if key in compact:
+            return label
+    return re.sub(r"\(주\)|㈜|\(유\)|유한회사|주식회사", "", raw).strip() or "업체명"
+
+
+def _site_short_name(site: str) -> str:
+    site_short = site.split("-")[-1].strip() if "-" in site else site
+    compact = site.replace(" ", "")
+    if "제1공장" in compact:
+        return "D1공장"
+    if "제2공장" in compact:
+        return "D2공장"
+    if "제5공장" in compact:
+        return "D3공장"
+    for key in ("P1", "P2", "P3", "P4"):
+        if key in compact:
+            return f"{key}공장"
+    return site_short
+
+
+def _summary(site: str, vendor: str, item: dict[str, Any], supply: int, qty: int, *, account: str = "", data: dict[str, Any] | None = None) -> str:
+    data = data or {}
+    name = _clean_text(item.get("name") or item.get("item_name") or item.get("raw_desc"), "정기 서비스")
+    vendor_display = _regular_vendor_display(vendor)
+    period = _regular_period_label(data)
+    month = _regular_month_text(period)
+    year_month = _regular_year_month_text(period)
+    text = f"{name} {vendor_display}".lower()
+
+    if ("동양정보통신" in text or "대신아이씨티" in text) and "보수료" in text and supply == 250000:
+        return f"{_site_short_name(site)} {year_month.replace(' 0', ' ')} 통합유지보수료 - {vendor_display}"
+    if "다우오피스" in text or "그룹웨어" in text or "daou" in text:
+        return f"{year_month} 다우오피스 월 사용료 - {vendor_display}"
+    if "watching-on" in text or "watchingon" in text or "watching" in text:
+        return f"{month}분 Watching-On 모니터링 서비스 사용료 - {vendor_display}"
+    if "acronis" in text:
+        return f"{month}분 Acronis Cloud 사용료 - {vendor_display}"
+    if "k-system" in text or "ksystem" in text:
+        return f"K-System 유지보수 {month}분 - {vendor_display}"
+    if "nac" in text or "genian" in text:
+        return f"NAC 유지보수 {month} - {vendor_display}"
+    if "dlp" in text or "gradius" in text:
+        return f"GRADIUS DLP 연간 유지보수 {_regular_round_text(period)} - {vendor_display}".strip()
+    if "helpu" in text or "원격지원" in text:
+        return f"HelpU 원격지원 프로그램 구독({supply:,} - 2Y) - {vendor_display}"
+    if "자산관리" in text:
+        return f"자산관리 프로그램 구독(전산)({supply:,} - {qty}User) - {vendor_display}"
+    if "acrobat" in text:
+        return f"Acrobat Pro 구독(영업,인사총무,기획,전산)({supply:,} - {qty}EA) - {vendor_display}"
+    if "cloudoc" in text or "문서중앙화" in text:
+        return f"문서중앙화(Cloudoc) 라이선스 {qty}user 구매 - {vendor_display}"
+    if "vpn" in text or "sdwan" in text or "오토에버" in text or "autoever" in text:
+        return f"{month}분 현대자동차VPN사용료(2007010097) - {vendor_display}"
+    if account == "통신비" or "kt" in text or "케이티" in text:
+        if "일강" in site:
+            return f"{month}분 인터넷 전용선비, 보안시스템 시큐어넷(일강-W0011501)-(주)케이티"
+        if "P1" in site:
+            return f"{month}분 P3공장 인터넷 전용선비 (704100003954) - 케이티"
+        if "P4" in site:
+            return f"{month}분 인터넷 전용선비, biz managed 보안 ( 704100003983 ) - 케이티"
+        return f"{month}분 인터넷 전용선비, 보안시스템 시큐어넷-(주)케이티"
+    return f"{year_month} {name} - {vendor_display}"
 
 
 def _purchase_account(value: Any) -> str:
@@ -305,7 +419,11 @@ def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         ]
 
     items: list[dict[str, Any]] = []
-    items_inc_vat = sum(_to_int(item.get("inc_vat") or item.get("amount") or item.get("total")) for item in source_items)
+    items_inc_vat = sum(
+        _to_int(item.get("inc_vat") or item.get("amount") or item.get("total"))
+        for item in source_items
+        if isinstance(item, dict)
+    )
     supply_remainder = target_supply
     max_item_index = 0
     max_inc_vat = -1
@@ -430,16 +548,32 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         ]
 
     items: list[dict[str, Any]] = []
+    items_inc_vat = sum(
+        _to_int(item.get("inc_vat") or item.get("amount") or item.get("total"))
+        for item in source_items
+        if isinstance(item, dict)
+    )
+    supply_remainder = target_supply
+    max_item_index = 0
+    max_inc_vat = -1
     for source in source_items:
+        if not isinstance(source, dict):
+            continue
         item = dict(source or {})
         name = _clean_text(item.get("name") or item.get("item_name"), "정기 서비스")
         qty = max(1, _to_int(item.get("qty") or item.get("quantity") or 1))
         inc_vat = _to_int(item.get("inc_vat") or item.get("total") or item.get("amount"))
         supply = _to_int(item.get("supply") or item.get("supply_amount"))
+        if not supply and target_supply and items_inc_vat:
+            supply = int(target_supply * (inc_vat / items_inc_vat))
         if not supply and inc_vat:
             supply = round(inc_vat / 1.1)
         if not supply and len(source_items) == 1:
             supply = target_supply
+        if inc_vat > max_inc_vat:
+            max_inc_vat = inc_vat
+            max_item_index = len(items)
+        supply_remainder -= supply
         items.append(
             {
                 "name": name,
@@ -450,6 +584,8 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
             }
         )
 
+    if items and supply_remainder:
+        items[max_item_index]["supply"] = _to_int(items[max_item_index].get("supply")) + supply_remainder
     if not target_supply:
         target_supply = sum(_to_int(item.get("supply")) for item in items)
     if not total_sum:
@@ -463,12 +599,21 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
     for account, group in grouped.items():
         supply = sum(_to_int(item.get("supply")) for item in group)
         qty = sum(max(1, _to_int(item.get("qty") or 1)) for item in group)
-        rows.append(f"{account}\t\t{supply}\t0\t{_summary(site, vendor, group[0], supply, qty)}")
+        rows.append(f"{account}\t\t{supply}\t0\t{_summary(site, vendor, group[0], supply, qty, account=account, data=data)}")
 
     first_item = items[0] if items else {"name": "정기 서비스", "qty": 1}
-    slip_summary = _summary(site, vendor, first_item, target_supply, sum(_to_int(item.get("qty") or 1) for item in items) or 1)
+    first_account = str(first_item.get("account") or "지급수수료")
+    slip_summary = _summary(
+        site,
+        vendor,
+        first_item,
+        target_supply,
+        sum(_to_int(item.get("qty") or 1) for item in items) or 1,
+        account=first_account,
+        data=data,
+    )
     rows.append(f"부가세대급금\t\t{total_tax}\t0\tV.A.T - {slip_summary}")
-    rows.append(f"미지급금(전화)\t\t0\t{total_sum}\t{slip_summary}")
+    rows.append(f"미지급금(원화)\t\t0\t{total_sum}\t{slip_summary}")
 
     data_for_erp = {
         "pdf_path": pdf_path,

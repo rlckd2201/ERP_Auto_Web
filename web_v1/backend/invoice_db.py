@@ -197,7 +197,19 @@ def _repair_purchase_amounts(raw: dict[str, Any], pdf_path: str = "") -> dict[st
     return fixed
 
 
-def _readiness(data: dict[str, Any], raw: dict[str, Any]) -> tuple[bool, str]:
+def _readiness(data: dict[str, Any], raw: dict[str, Any], *, invoice_type: str, pdf_path: str = "") -> tuple[bool, str]:
+    if invoice_type == "regular":
+        if not str(pdf_path or data.get("pdf_path") or raw.get("pdf_path") or "").strip():
+            return False, "세금계산서 필요"
+        total = (
+            _clean_int(data.get("total_sum"))
+            or _clean_int(data.get("total_amount"))
+            or _clean_int(data.get("amount"))
+        )
+        if total <= 0:
+            return False, "금액 확인 필요"
+        return True, "ERP 입력 가능"
+
     quote_path = data.get("quote_path") or raw.get("quote_path") or ""
     items = data.get("items") or raw.get("items") or []
     if not quote_path:
@@ -216,7 +228,8 @@ def _row_to_invoice(row: sqlite3.Row) -> dict[str, Any]:
     if invoice_type == "purchase":
         raw = _repair_purchase_amounts(raw, str(row["pdf_path"] or ""))
     data = _invoice_data(raw)
-    erp_ready, readiness_reason = _readiness(data, raw)
+    invoice_type = invoice_type or "regular"
+    erp_ready, readiness_reason = _readiness(data, raw, invoice_type=invoice_type, pdf_path=str(row["pdf_path"] or ""))
     total = (
         _clean_int(data.get("total_sum"))
         or _clean_int(data.get("total_amount"))
@@ -232,7 +245,7 @@ def _row_to_invoice(row: sqlite3.Row) -> dict[str, Any]:
         "processed_at": row["processed_at"],
         "last_error": row["last_error"] if "last_error" in row.keys() else "",
         "erp_job_id": row["erp_job_id"] if "erp_job_id" in row.keys() else "",
-        "invoice_type": invoice_type or "regular",
+        "invoice_type": invoice_type,
         "site_name": data.get("site_name") or data.get("buyer_name") or "",
         "vendor_name": data.get("vendor_name") or data.get("supplier_name") or "",
         "total_sum": total,

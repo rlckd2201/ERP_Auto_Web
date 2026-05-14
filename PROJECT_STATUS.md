@@ -41,7 +41,8 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Current WEB/Agent version in files: `1.0.94`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
-- Latest local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
+- Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
+- Latest local deployment ZIP after first WEB regular-processing pass: `C:\Tmp\accounting_web_v1_regular_processing_fix106_20260514_155214.zip`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
 - Backend has new `POST /api/jobs/purchase-one-click`.
@@ -74,7 +75,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Graphify was updated after restoring the one-click source.
 - Graphify was updated again after the `fix101` backend/Agent/version repair.
 - Graphify was updated again after the `fix102` existing-document output update.
-- Graphify was updated after adding the standalone SMILE EDI crawler prototype and the first regular-processing WEB pass: 1265 nodes, 4050 edges, 34 communities.
+- Graphify was updated after tightening the standalone SMILE EDI crawler authentication detection and the first regular-processing WEB pass: 1265 nodes, 4051 edges, 34 communities.
 
 ## Recently Changed Files
 

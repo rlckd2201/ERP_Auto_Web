@@ -2,7 +2,7 @@
 
 Updated: 2026-05-14
 
-This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1265 nodes, 4050 edges, and 34 communities, so use the graph for navigation, then verify behavior in the active source before editing.
+This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1265 nodes, 4051 edges, and 34 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
 ## Reading Rules
 
@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-14, WEB/Agent files are at `1.0.94`. The last local deployment ZIP is still:
+As of 2026-05-14, WEB/Agent files are at `1.0.94`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_no_detail_refresh_erp_edit_fix105_20260514_145151.zip
+C:\Tmp\accounting_web_v1_regular_processing_fix106_20260514_155214.zip
 ```
 
 Recent purchase-side changes are intentionally paused for later operational bug fixing:
@@ -458,7 +458,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.93
+1.0.94
 ```
 
 ## Safe Change Checklist

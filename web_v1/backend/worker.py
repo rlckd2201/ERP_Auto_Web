@@ -9,8 +9,8 @@ from typing import Any
 
 from .approval_fetcher import fetch_approval_documents
 from .compuzone_quote import auto_attach_compuzone_quote
-from .erp_queue import write_output_print_queue, write_purchase_erp_queue
-from .erp_runner import run_invoice_erp_input, validate_purchase_invoice_for_erp
+from .erp_queue import write_output_print_queue, write_purchase_erp_queue, write_regular_erp_queue
+from .erp_runner import build_regular_erp_payload, run_invoice_erp_input, validate_purchase_invoice_for_erp
 from .config import settings
 from .invoice_db import ERP_QUEUED, ERROR, PROCESSING, DONE, add_invoice_log, get_invoice, set_invoice_status, update_invoice_json
 from .job_store import JobRecord, JobStore
@@ -73,6 +73,10 @@ class JobWorker:
             elif job.job_type == "purchase_one_click":
                 result = self._run_purchase_erp_input(job)
             elif job.job_type == "purchase_erp_input":
+                result = self._run_purchase_erp_input(job)
+            elif job.job_type == "regular_one_click":
+                result = self._run_purchase_erp_input(job)
+            elif job.job_type == "regular_erp_input":
                 result = self._run_purchase_erp_input(job)
             elif job.job_type == "output_set":
                 result = self._run_output_set(job)
@@ -255,6 +259,9 @@ class JobWorker:
         threading.Thread(target=_worker, name=f"approval-fetch-{invoice_id}", daemon=True).start()
 
     def _run_purchase_erp_input(self, job: JobRecord) -> dict[str, Any]:
+        is_regular_job = job.job_type in {"regular_one_click", "regular_erp_input"}
+        expected_type = "regular" if is_regular_job else "purchase"
+        label = "정기" if is_regular_job else "구매"
         requested_invoice_ids = [int(item) for item in job.payload.get("invoice_ids", []) if str(item).isdigit()]
         erp_payload_ids = [int(item) for item in job.payload.get("erp_invoice_ids", []) if str(item).isdigit()]
         invoice_ids = erp_payload_ids if job.payload.get("one_click") and erp_payload_ids else requested_invoice_ids
@@ -265,24 +272,27 @@ class JobWorker:
             suffix = "" if len(ready_output_ids) <= 5 else f" 외 {len(ready_output_ids) - 5}건"
             self.store.add_event(job.id, "printing", 10, f"기존 문서 출력 대상은 ERP 입력을 건너뜁니다: {preview}{suffix}")
         if not invoice_ids:
-            raise RuntimeError("ERP 입력 큐에 넣을 구매 건을 선택해야 합니다.")
+            raise RuntimeError(f"ERP 입력 큐에 넣을 {label} 건을 선택해야 합니다.")
 
-        self.store.add_event(job.id, "erp", 12, f"선택 건 확인: {len(invoice_ids)}건")
+        self.store.add_event(job.id, "erp", 12, f"{label} 선택 건 확인: {len(invoice_ids)}건")
         invoices: list[dict[str, Any]] = []
         for index, invoice_id in enumerate(invoice_ids, start=1):
             invoice = get_invoice(invoice_id)
             if not invoice:
                 self.store.add_event(job.id, "erp", 15, f"없는 계산서 건너뜀: {invoice_id}")
                 continue
-            if str(invoice.get("invoice_type") or "").strip().lower() != "purchase":
-                self.store.add_event(job.id, "erp", 15, f"구매 ERP 입력 대상이 아닌 계산서 건너뜀: #{invoice_id}")
+            if str(invoice.get("invoice_type") or "").strip().lower() != expected_type:
+                self.store.add_event(job.id, "erp", 15, f"{label} ERP 입력 대상이 아닌 계산서 건너뜀: #{invoice_id}")
                 continue
             try:
-                validate_purchase_invoice_for_erp(invoice)
+                if is_regular_job:
+                    build_regular_erp_payload(invoice)
+                else:
+                    validate_purchase_invoice_for_erp(invoice)
             except Exception as exc:
                 message = str(exc) or exc.__class__.__name__
                 set_invoice_status(invoice_id, ERROR, processor=processor, job_id=job.id, error=message)
-                self.store.add_event(job.id, "error", 15, f"구매 ERP 입력 보류: #{invoice_id} / {message}")
+                self.store.add_event(job.id, "error", 15, f"{label} ERP 입력 보류: #{invoice_id} / {message}")
                 continue
             set_invoice_status(invoice_id, PROCESSING, processor=processor, job_id=job.id)
             progress = 15 + int(index / max(len(invoice_ids), 1) * 35)
@@ -290,9 +300,10 @@ class JobWorker:
             invoices.append(invoice)
 
         if not invoices:
-            raise RuntimeError("ERP 입력 큐에 등록할 유효한 구매 건이 없습니다.")
+            raise RuntimeError(f"ERP 입력 큐에 등록할 유효한 {label} 건이 없습니다.")
 
-        queue_path = write_purchase_erp_queue(
+        queue_writer = write_regular_erp_queue if is_regular_job else write_purchase_erp_queue
+        queue_path = queue_writer(
             job.id,
             invoices,
             target_agent_id=str(job.payload.get("target_agent_id") or ""),

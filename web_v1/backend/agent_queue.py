@@ -54,7 +54,7 @@ def claim_next_erp_task(agent_id: str, capabilities: dict[str, Any] | None = Non
     for path in _task_files():
         payload = _read_task(path)
         job_type = str(payload.get("job_type") or "")
-        if job_type not in {"purchase_erp_input", "expense_report", "output_print"}:
+        if job_type not in {"purchase_erp_input", "regular_erp_input", "expense_report", "output_print"}:
             continue
         if str(payload.get("agent_status") or "pending") not in {"", "pending", "retry"}:
             continue
@@ -129,6 +129,7 @@ def claim_next_erp_task(agent_id: str, capabilities: dict[str, Any] | None = Non
 def update_erp_task(job_id: str, status: str, update: dict[str, Any] | None = None) -> dict[str, Any]:
     candidates = [
         queue_dir() / f"purchase_erp_{job_id}.json",
+        queue_dir() / f"regular_erp_{job_id}.json",
         queue_dir() / f"expense_report_{job_id}.json",
         queue_dir() / f"output_print_{job_id}.json",
     ]
