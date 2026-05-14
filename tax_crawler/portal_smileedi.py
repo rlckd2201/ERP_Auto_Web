@@ -6,13 +6,14 @@ tested directly, and approval is opt-in because SMILE EDI approval cannot be
 rolled back to an unapproved state.
 """
 import argparse
+import base64
 import html
 import json
 import re
 import time
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 
 from selenium.webdriver.common.by import By
 from selenium.webdriver.common.keys import Keys
@@ -124,10 +125,15 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         parsed = {**mail_summary, **{k: v for k, v in page_summary.items() if v not in ("", None, [])}}
         approval = self._handle_approval(driver, dump_dir)
         self._dump_state(driver, dump_dir, "04_after_approval_check")
+        pdf_path = None
+        pdf_error = None
+        if approval.get("approved") or self._approval_state(driver) == "approved":
+            pdf_path, pdf_error = self._save_invoice_pdf(driver, parsed, dump_dir)
 
         result.update(
             {
                 "ok": True,
+                "pdf_path": str(pdf_path) if pdf_path else None,
                 "subject": self._build_subject(parsed),
                 "data": self._build_data(parsed, matched_biz_no),
                 "approval": approval,
@@ -136,6 +142,8 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
                 "matched_site_name": self._site_name_from_biz_no(matched_biz_no),
             }
         )
+        if pdf_error:
+            result["pdf_error"] = pdf_error
 
     # ------------------------------------------------------------------
     # Auth / navigation
@@ -382,6 +390,142 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
             return actions if isinstance(actions, list) else []
         except Exception:
             return []
+
+    # ------------------------------------------------------------------
+    # PDF output
+    # ------------------------------------------------------------------
+    def _save_invoice_pdf(self, driver: WebDriver, parsed: dict, dump_dir: Path) -> tuple[Path | None, str | None]:
+        original_handle = None
+        opened_handle = None
+        try:
+            original_handle = driver.current_window_handle
+        except Exception:
+            pass
+
+        try:
+            before_handles = list(driver.window_handles)
+            if not self._open_print_view(driver, before_handles):
+                return None, "SMILE EDI 인쇄 화면을 열지 못했습니다."
+
+            self._wait_document_ready(driver, timeout=12)
+            time.sleep(2.0)
+            try:
+                if original_handle and driver.current_window_handle != original_handle:
+                    opened_handle = driver.current_window_handle
+            except Exception:
+                pass
+            self._dump_state(driver, dump_dir, "05_print_view")
+
+            final_name = self.build_pdf_filename(
+                issue_date=parsed.get("issue_date") or "",
+                buyer=parsed.get("buyer_name") or "사업장",
+                supplier=parsed.get("supplier_name") or "매입처",
+                item=parsed.get("item_name") or "세금계산서",
+                extra="",
+                amount=str(parsed.get("total_sum") or 0),
+                buyer_biz_no=parsed.get("buyer_biz_no") or "",
+            )
+            final_path = self.dedupe_path(self.download_dir / final_name)
+            payload = driver.execute_cdp_cmd(
+                "Page.printToPDF",
+                {
+                    "printBackground": True,
+                    "preferCSSPageSize": True,
+                    "landscape": False,
+                    "marginTop": 0.2,
+                    "marginBottom": 0.2,
+                    "marginLeft": 0.2,
+                    "marginRight": 0.2,
+                },
+            )
+            pdf_bytes = base64.b64decode(payload["data"])
+            final_path.write_bytes(pdf_bytes)
+            self._write_text(
+                dump_dir / "05_pdf_saved.json",
+                json.dumps(
+                    {"pdf_path": str(final_path), "size": len(pdf_bytes), "url": driver.current_url},
+                    ensure_ascii=False,
+                    indent=2,
+                ),
+            )
+            if not final_path.exists() or final_path.stat().st_size <= 0:
+                return None, f"SMILE EDI PDF 저장 파일이 비어 있습니다: {final_path}"
+            return final_path, None
+        except Exception as exc:
+            self._write_text(dump_dir / "05_pdf_error.txt", repr(exc))
+            return None, str(exc)
+        finally:
+            if opened_handle:
+                try:
+                    driver.close()
+                except Exception:
+                    pass
+                if original_handle:
+                    try:
+                        driver.switch_to.window(original_handle)
+                    except Exception:
+                        pass
+
+    def _open_print_view(self, driver: WebDriver, before_handles: list[str]) -> bool:
+        try:
+            opened = bool(
+                driver.execute_script(
+                    """
+                    if (typeof print_tax === 'function') {
+                      print_tax('Y');
+                      return true;
+                    }
+                    var link = document.querySelector("a[href*='print_tax']");
+                    if (link) {
+                      link.click();
+                      return true;
+                    }
+                    return false;
+                    """
+                )
+            )
+        except Exception:
+            opened = False
+
+        deadline = time.time() + 8
+        while time.time() < deadline:
+            handles = list(driver.window_handles)
+            if len(handles) > len(before_handles):
+                new_handle = [handle for handle in handles if handle not in before_handles][-1]
+                driver.switch_to.window(new_handle)
+                return True
+            time.sleep(0.4)
+
+        if "submitType=print" in (driver.current_url or ""):
+            return True
+        if opened:
+            return True
+
+        print_url = self._build_print_url(driver)
+        if not print_url:
+            return False
+        driver.get(print_url)
+        return True
+
+    def _build_print_url(self, driver: WebDriver) -> str:
+        hidden = self._hidden_values(driver.page_source or "")
+        taxid = hidden.get("taxid") or hidden.get("docid") or ""
+        if not taxid:
+            return ""
+        current = urlparse(driver.current_url or "https://www.smileedi.com/DtiEmail.do")
+        origin = f"{current.scheme or 'https'}://{current.netloc or 'www.smileedi.com'}"
+        params = {
+            "submitType": "print",
+            "selectType": hidden.get("selectType") or "r",
+            "taxid": taxid,
+            "pubtype": hidden.get("pubtype") or "N",
+            "beforeState": "K",
+            "r_a_id": hidden.get("r_a_id") or "",
+            "s_a_id": hidden.get("s_a_id") or "",
+            "couple_taxid": hidden.get("couple_taxid") or "",
+            "addTax": hidden.get("addTax") or "",
+        }
+        return f"{origin}/DtiEmail.do?{urlencode(params)}"
 
     # ------------------------------------------------------------------
     # Parsing
