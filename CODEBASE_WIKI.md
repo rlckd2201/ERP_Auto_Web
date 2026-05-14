@@ -1,0 +1,435 @@
+# CODEBASE WIKI
+
+Updated: 2026-05-14
+
+This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, a direct Graphify query against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1193 nodes, 3834 edges, and 30 communities, so use the graph for navigation, then verify behavior in the active source before editing.
+
+## Reading Rules
+
+- Treat `web_v1` as the active WEB product.
+- Treat `manager_server` as the legacy/Agent-side GUI automation lineage.
+- Treat `tax_crawler` as the active reusable tax-invoice crawler package.
+- Treat `_backup_*`, `_hotfix_*`, and `_release_*` folders as history/reference unless a task explicitly asks about them.
+- Graphify inferred edges are useful hints, but this repository has many historical copies. Check active files before changing behavior.
+- After meaningful edits, run `graphify update .` and update this wiki or `PROJECT_STATUS.md` if the architecture changed.
+
+## Mental Model
+
+The WEB app is an operating-server dashboard that coordinates accounting work while ERP GUI automation runs on the manager PC Agent.
+
+```mermaid
+flowchart LR
+  UI["web_v1/frontend<br>browser UI"] --> API["web_v1/backend/app.py<br>FastAPI routes"]
+  API --> Jobs["job_store.py<br>in-memory job/event store"]
+  Jobs --> Worker["worker.py<br>background job runner"]
+  Worker --> DB["invoice_db.py<br>C:/ERP_DB learned_data.db + JSON data"]
+  Worker --> Mail["mail_collector.py<br>IMAP unread mail"]
+  Mail --> Crawler["tax_crawler<br>portal handlers"]
+  Worker --> Queue["erp_queue.py + agent_queue.py<br>JSON task files"]
+  Agent["web_v1/agent/erp_agent.py<br>manager PC Agent"] --> Queue
+  Agent --> ERP["ERP GUI + local Excel/printing"]
+  Agent --> API
+  Worker --> Output["output_set.py<br>document set / merged PDF / print"]
+  Output --> Files["C:/ERP_DB<br>downloads, vouchers, reports, output_sets"]
+```
+
+## Graphify Navigation
+
+Graphify's current god nodes point to the main architecture:
+
+| Node | Meaning |
+| --- | --- |
+| `ERPAutoApp` | Legacy manager desktop automation root; useful when ERP GUI behavior needs historical context. |
+| `BaseTaxInvoiceHandler` | Crawler handler base used by portal-specific tax invoice handlers. |
+| `get_invoice()` | Central invoice lookup. Many flows pass through it. |
+| `WehagoHandler` | High-connectivity crawler handler; bridge between mail detection and portal crawling. |
+| `add_invoice_log()` | Per-invoice audit log entry point. |
+| `init_db()` | Database/bootstrap entry point. |
+| `update_invoice_json()` | Main mutation path for invoice `data` JSON. |
+| `UplusEdocuHandler`, `SmartBillHandler` | Important portal-specific crawler paths. |
+| `build_output_set_status()` | Core output-readiness and document-set status builder. |
+
+Important active communities:
+
+| Community | Active Interpretation |
+| --- | --- |
+| 0 | ERP payload building and server-side ERP runner helpers in `erp_runner.py`. |
+| 2 | FastAPI app, worker orchestration, installer APIs, job lifecycle. |
+| 3 | Frontend state/rendering/actions in `web_v1/frontend/app.js`. |
+| 4 | Agent queue files, mail collector, backend config. |
+| 5 | Invoice API, invoice DB, agent completion/upload routes. |
+| 8 | Output set, cash withdrawal report generation, PDF merge/print. |
+| 9 | Setup status, auth, Agent heartbeat, printer mapping, installer jobs. |
+| 10 | Manual purchase intake and purchase document analysis. |
+| 12 | Agent preflight/version/hash/default-printer capability reporting. |
+| 14 | Compuzone quote auto-attach/fetch flow. |
+
+Known Graphify noise:
+
+- Many `BaseTaxInvoiceHandler` inferred edges come from backup/hotfix folders. Use them as clues only.
+- Thin communities made mostly of `__init__.py`, `create_https_cert.py`, or one-line docstrings are not architectural anchors.
+- `ERPAutoApp` is highly connected because legacy GUI automation is large; it is not the WEB server entry point.
+
+## Directory Map
+
+| Path | Role |
+| --- | --- |
+| `web_v1/backend/app.py` | FastAPI app, routes, startup hooks, Agent upload/complete APIs, job creation. |
+| `web_v1/backend/worker.py` | Background job dispatcher for mail collection, analysis, ERP queueing, output sets. |
+| `web_v1/backend/invoice_db.py` | SQLite/database access, invoice JSON updates, statuses, logs. |
+| `web_v1/backend/job_store.py` | In-memory job records, progress events, SSE event source backing store. |
+| `web_v1/backend/mail_collector.py` | IMAP unread-mail scan, target extraction, crawler invocation, invoice insertion. |
+| `web_v1/backend/purchase_analysis.py` | Purchase tax invoice/quote parsing and normalized item data. |
+| `web_v1/backend/compuzone_quote.py` | Compuzone quote auto-fetch/attach support. |
+| `web_v1/backend/erp_runner.py` | ERP payload validation/building and server-mode ERP runner functions. |
+| `web_v1/backend/erp_queue.py` | Writes JSON queue files for Agent ERP and expense-report tasks. |
+| `web_v1/backend/agent_queue.py` | Lets Agent claim/update queue tasks targeted to that manager PC. |
+| `web_v1/backend/output_set.py` | Required document status, cash report generation, PDF merge, print dispatch. |
+| `web_v1/backend/setup_state.py` | Login/setup DB, Agent heartbeat, setup checks, printer mappings, installer jobs. |
+| `web_v1/backend/versioning.py` | Agent bundle hash calculation. |
+| `web_v1/agent/erp_agent.py` | Manager PC Agent: heartbeat/preflight, queue claim, ERP run, report upload. |
+| `web_v1/frontend/index.html` | Static UI shell. |
+| `web_v1/frontend/app.js` | Main browser state machine and UI actions. |
+| `web_v1/frontend/styles.css` | UI styling, simple/detail mode visibility. |
+| `tax_crawler/` | Portal handlers and crawler entry points for tax invoice PDF capture/parsing. |
+| `manager_server/` | Legacy/manager-side desktop automation reference. |
+| `web_v1/deploy/` | Operating server and manager PC setup scripts. |
+| `graphify-out/` | Graphify report, JSON graph, and HTML graph viewer. |
+
+## Startup And API Surface
+
+`web_v1/backend/app.py` is the server entry point.
+
+Startup does four important things:
+
+- Initializes invoice/auth/setup DBs.
+- Starts `JobWorker`.
+- Starts the 1-minute automatic purchase mail collector scheduler.
+- Serves the static frontend under `/assets` and `/`.
+
+High-value routes:
+
+| Route | Purpose |
+| --- | --- |
+| `GET /health` | Server liveness/version/environment check. |
+| `GET /api/mail-collect/status` | Current automatic mail collection status. |
+| `POST /api/login` | User login plus setup status. |
+| `GET /api/setup/status` | Required program / Agent / printer readiness. |
+| `POST /api/setup/printers` | Save printer mapping for 평택/김제/PDF targets. |
+| `POST /api/agent/heartbeat` | Manager PC Agent capability heartbeat. |
+| `POST /api/agent/erp/next` | Agent claims the next targeted ERP or expense-report task. |
+| `POST /api/agent/jobs/{job_id}/voucher` | Agent uploads saved ERP voucher PDF. |
+| `POST /api/agent/jobs/{job_id}/expense-report` | Agent uploads generated cash withdrawal report. |
+| `POST /api/agent/jobs/{job_id}/complete` | Agent reports final success/failure for claimed tasks. |
+| `POST /api/jobs/purchase-mail-collect` | Manual one-shot purchase mail collection. |
+| `POST /api/jobs/purchase-one-click` | Main purchase one-click workflow. |
+| `POST /api/jobs/output-set` | Save/print output document sets. |
+| `GET /api/invoices` | Invoice list. |
+| `GET /api/invoices/{invoice_id}` | Invoice detail. |
+| `GET /api/invoices/{invoice_id}/output-set` | Required document status for detail screen. |
+| `POST /api/invoices/manual-purchase` | Manual purchase intake from uploaded PDFs. |
+| `PATCH /api/invoices/{invoice_id}/purchase-analysis` | Save edited analysis/item data. |
+| `GET /api/jobs/{job_id}/events` | Server-sent job progress events. |
+
+## Job Lifecycle
+
+Most UI actions create a `JobRecord` through `job_store`, submit it to `JobWorker`, and stream progress through SSE.
+
+Job statuses come from `models.JobStatus`:
+
+```text
+queued, running, crawling, analyzing, erp, printing, done, error
+```
+
+Main job types:
+
+| Job Type | Runner | Notes |
+| --- | --- | --- |
+| `purchase_mail_collect` | `JobWorker._run_purchase_mail_collect()` | Calls `collect_mail_once()`, inserts invoices, auto-analyzes new purchase invoices. |
+| `purchase_analyze` | `JobWorker._run_purchase_analyze()` | Ensures quote, analyzes purchase docs, starts background approval fetch. |
+| `purchase_one_click` | `JobWorker._run_purchase_erp_input()` | Queues ERP for non-complete purchase invoices; output is queued after Agent completion/report generation. |
+| `purchase_erp_input` | `JobWorker._run_purchase_erp_input()` | Direct ERP queue path, mostly admin/detail mode. |
+| `expense_report` | Agent-side task | Written to queue by server and executed by manager PC Agent. |
+| `output_set` | `JobWorker._run_output_set()` | Builds document set, saves merged PDF, saves individual files, or prints. |
+
+## Purchase One-Click Flow
+
+Current expected behavior:
+
+- User selects purchase invoices.
+- Frontend posts to `POST /api/jobs/purchase-one-click` with `invoice_ids`, `output_target`, and `processor`.
+- Server resolves output target:
+  - `pdf` -> `merged_pdf`
+  - `pyeongtaek` -> `print_individual` with mapped 평택 printer
+  - `gimje` -> `print_individual` with mapped 김제 printer
+- Server partitions selected invoices:
+  - If a purchase invoice already has all required output docs, it skips ERP and cash-report regeneration.
+  - If every selected invoice is already ready, server creates an `output_set` job directly with `existing_only=true`.
+  - Otherwise server creates `purchase_one_click` with `erp_invoice_ids` for only the invoices that still need ERP/report work.
+- Worker validates purchase invoices for ERP and writes queue files.
+- Manager PC Agent claims the queue, performs ERP GUI input, saves/uploads voucher PDFs.
+- Agent completion route updates invoice data and queues `expense_report` tasks as needed.
+- Agent generates cash withdrawal report using local Excel/template and uploads it.
+- Once all selected invoices have cash reports, `_maybe_queue_one_click_output()` creates the final `output_set` job.
+- Output job saves merged PDFs or prints individual document files.
+
+The key anti-waste rule is `existing_only`: when the user uses stored documents, `output_set.py` must not silently generate a new cash withdrawal report. It should fail if any required saved document is missing.
+
+## Output Set Rules
+
+`web_v1/backend/output_set.py` owns the document set.
+
+Required purchase documents:
+
+```text
+01_전표.pdf
+02_세금계산서.pdf
+03_전자결재품의.pdf
+04_현금출금결의서.pdf
+```
+
+Required regular documents:
+
+```text
+01_전표.pdf
+02_세금계산서.pdf
+```
+
+Important functions:
+
+| Function | Role |
+| --- | --- |
+| `build_output_set_status(invoice, persist=False)` | Finds source files, calculates `ready`, `can_output`, blockers, and missing docs. |
+| `generate_expense_report_pdf(invoice, force=False)` | Generates cash withdrawal report via Excel/AppData template flow. |
+| `prepare_output_documents(invoice, existing_only=False)` | Copies/merges required docs into an output-set folder; may generate missing cash report unless `existing_only=true`. |
+| `run_output_set_job(...)` | Batch wrapper for merged PDF, individual PDF save, or printer output. |
+
+File roots:
+
+- Cash reports: `C:\ERP_DB\expense_reports\{invoice_id}\04_현금출금결의서.pdf`
+- Output sets: `C:\ERP_DB\output_sets\purchase\{invoice_id}` or `C:\ERP_DB\output_sets\regular\{invoice_id}`
+- Templates: `%APPDATA%\양식_현금출금정산서.xlsx`, `%APPDATA%\AccountingWeb`, `C:\ERP_DB\templates`, or `support`
+
+## Agent Architecture
+
+The manager PC Agent is `web_v1/agent/erp_agent.py`.
+
+Responsibilities:
+
+- Reports heartbeat and capabilities to `/api/agent/heartbeat`.
+- Reports Agent bundle version/hash.
+- Reports installed printers and Windows default printer.
+- Claims targeted tasks through `/api/agent/erp/next`.
+- Runs ERP GUI automation on the manager PC.
+- Saves and uploads ERP voucher PDF.
+- Runs cash withdrawal report generation locally because Excel COM must run on a manager PC, not the operating server.
+- Uploads generated cash report to the server.
+
+Queue targeting matters:
+
+- Queue files include `target_agent_id` and `target_client_ip`.
+- `agent_queue.claim_next_erp_task()` rejects stale or untargeted legacy queue files.
+- This prevents another manager PC from accidentally claiming the wrong ERP GUI work.
+
+## Setup And Versioning
+
+`setup_state.py` is the setup source of truth.
+
+It tracks:
+
+- Auth/login state.
+- Last Agent heartbeat and capabilities.
+- Required installer/setup checks.
+- Printer mapping for `pyeongtaek`, `gimje`, and `pdf`.
+- Expected Agent bundle hash.
+- Auto-install jobs.
+
+Version/hash rules:
+
+- Current WEB/Agent version is in `web_v1/VERSION`, `web_v1/agent/erp_agent.py`, and `web_v1/deploy/install_operating_server.ps1`.
+- `versioning.py` hashes `web_v1/agent`, `web_v1/backend`, `web_v1/deploy`, and `web_v1/VERSION`.
+- Backend changes can force manager PCs to reinstall/update the Agent because the bundle hash changes.
+
+## Mail Collection And Crawling
+
+Mail collection starts from `web_v1/backend/mail_collector.py`.
+
+Flow:
+
+- Uses IMAP settings from `config.py`.
+- Reads unread inbox messages.
+- Extracts body text, subject, mail date, and attachment names.
+- Uses `tax_crawler` API functions to detect links/attachments and crawl supported invoice sources.
+- Inserts or deduplicates invoices through `invoice_db`.
+- Returns `saved_invoice_ids`.
+- Worker auto-analyzes newly saved purchase invoices after collection.
+
+Crawler-related Graphify hubs:
+
+- `BaseTaxInvoiceHandler`
+- `WehagoHandler`
+- `SmartBillHandler`
+- `UplusEdocuHandler`
+- `CsbillHandler`
+- `KtAttachmentHandler`
+- `AutoEverHandler`
+
+When changing crawler behavior, prefer active `tax_crawler` files over backup copies.
+
+## Purchase Analysis And Approval
+
+Purchase analysis is split across:
+
+- `purchase_analysis.py`: parse tax invoice + quote into normalized purchase data and items.
+- `compuzone_quote.py`: auto-fetch Compuzone quote PDFs.
+- `approval_fetcher.py`: fetches matching approval documents in the background.
+- `worker.py`: coordinates analysis job and background approval fetch.
+- `app.py`: manual upload/update routes.
+
+Important invoice JSON fields include:
+
+```text
+quote_path
+approval_pdf_paths
+items
+purchase_analysis_ready
+erp_ready
+site_name
+vendor_name
+invoice_date
+order_no
+erp_pdf_path / erp_voucher_pdf_path / voucher_pdf_path
+expense_report_pdf_path
+output_docs
+output_set_dir
+output_set_merged_pdf_path
+```
+
+## Frontend
+
+The frontend is static HTML/CSS/JS.
+
+Main state/actions live in `web_v1/frontend/app.js`:
+
+| Function | Role |
+| --- | --- |
+| `requestJson()` | JSON fetch wrapper with backend error handling. |
+| `renderSetupStatus()` | Renders setup/Agent/printer readiness. |
+| `loadSetupStatus()` | Fetches setup and switches app/setup views. |
+| `startMailCollectMonitor()` | Polls mail auto-collect status. |
+| `refreshInvoices()` | Loads invoice table and detail refresh. |
+| `renderPurchaseDetail()` | Renders selected purchase invoice detail. |
+| `renderOutputSetPanel()` | Renders required document cards and detail-mode output actions. |
+| `startErpQueue()` | Sends top-level one-click request. |
+| `startOutputSet()` | Sends output-set job request. |
+| `startSavedOutputSet()` | Detail-mode stored-document output path. |
+
+UI modes:
+
+- Simple mode hides `.admin-only`.
+- Detail mode shows logs, analysis buttons, output-set maintenance actions, and manual/debug operations.
+
+The top-level manager flow should remain simple: select invoices, choose output target, click `원클릭 처리`.
+
+## Configuration
+
+Runtime configuration is in `web_v1/backend/config.py` and the generated `.env`.
+
+Important environment variables:
+
+| Variable | Purpose |
+| --- | --- |
+| `APP_VERSION` | Server version shown by `/health`. |
+| `ERP_DB_DIR` | Main operational data root, default `C:\ERP_DB`. |
+| `IMAP_SERVER`, `EMAIL_ID`, `EMAIL_PW` | Mail collection. |
+| `PRINT_TARGET_PYEONGTAEK`, `PRINT_TARGET_GIMJE`, `PRINT_TARGET_PDF` | Server/default printer targets; UI mapping still comes from Agent setup. |
+| `ERP_PRINT_TARGET` | ERP print/PDF target. |
+| `ERP_EXECUTION_MODE` | Normally `agent`; `server` exists but GUI automation should not run on operating server. |
+| `ERP_EXECUTE_ENABLED` | Allows disabling actual ERP execution in server mode. |
+| `EXPENSE_REPORT_TEMPLATE_PATH` | Optional override for cash report Excel template. |
+| `EXPENSE_REPORT_EXCEL_TIMEOUT` | Bounds Excel PDF export time. |
+
+## Deployment Artifacts
+
+Key scripts:
+
+- `web_v1/deploy/install_operating_server.ps1`
+- `web_v1/deploy/start_operating_server.ps1`
+- `web_v1/deploy/check_operating_server.ps1`
+- `web_v1/deploy/start_user_erp_agent.ps1`
+- `web_v1/deploy/check_user_erp_agent.ps1`
+
+Current operational ZIP information is tracked in `PROJECT_STATUS.md`.
+
+Standard validation after deployment:
+
+```powershell
+curl.exe -k https://172.17.39.121:8080/health
+```
+
+Expected version at the time of this wiki:
+
+```text
+1.0.90
+```
+
+## Safe Change Checklist
+
+Before editing:
+
+- Read `PROJECT_STATUS.md`.
+- Check `graphify-out/GRAPH_REPORT.md`.
+- Use `rg` to find active code paths.
+- Confirm whether a file is active source or historical backup.
+
+After editing backend/Agent:
+
+```powershell
+& "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe" -m py_compile .\web_v1\backend\app.py .\web_v1\backend\worker.py .\web_v1\backend\output_set.py .\web_v1\backend\models.py .\web_v1\agent\erp_agent.py
+```
+
+After editing frontend:
+
+```powershell
+node --check .\web_v1\frontend\app.js
+```
+
+After meaningful architecture/code changes:
+
+```powershell
+graphify update .
+```
+
+Before release:
+
+- Verify `web_v1/VERSION`.
+- Verify `AGENT_BUNDLE_VERSION`.
+- Verify `APP_VERSION` in `install_operating_server.ps1`.
+- Create a fresh ZIP in `C:\Tmp`.
+- Verify ZIP contains the changed files and no `__pycache__`/`.pyc`.
+- Commit and push meaningful work to `origin/main`.
+
+## Common Pitfalls
+
+- The operating server cannot be trusted to run Excel COM workflows. Cash report generation that needs Excel belongs on the manager PC Agent.
+- Already completed purchase invoices should not re-run ERP or regenerate cash reports when stored documents are ready.
+- Agent task files without `target_agent_id` and `target_client_ip` are stale and should be requeued from WEB.
+- Printer output depends on the manager PC Agent's printer list/mapping, not just server environment variables.
+- Graphify includes historical folders, so a highly connected node may belong to legacy code.
+- Static asset cache can hide frontend changes. `index.html` cache-busting query strings should be bumped for UI changes.
+
+## Where To Start For Typical Tasks
+
+| Task | Start Here |
+| --- | --- |
+| One-click flow bug | `web_v1/backend/app.py`, `web_v1/backend/worker.py`, `web_v1/agent/erp_agent.py`, `web_v1/backend/output_set.py`, `web_v1/frontend/app.js` |
+| Stored document output | `output_set.py`, `app.py` `_invoice_output_set_ready`, frontend `startSavedOutputSet()` |
+| Agent not connecting | `setup_state.py`, `erp_agent.py`, `/api/agent/heartbeat`, `/api/setup/status` |
+| Printer mapping | `setup_state.py`, `erp_agent.py` printer preflight, frontend setup view |
+| Mail not collecting | `mail_collector.py`, `worker._run_purchase_mail_collect()`, `/api/mail-collect/status`, `.env` mail vars |
+| Purchase analysis wrong | `purchase_analysis.py`, `compuzone_quote.py`, `approval_fetcher.py`, detail-mode analysis UI |
+| ERP queue stuck | `agent_queue.py`, `erp_queue.py`, `worker._run_purchase_erp_input()`, Agent logs |
+| Cash report generation | `output_set.py`, `expense_excel_export.py`, Agent `run_expense_report_task()` |
+| Frontend simple/detail UI | `frontend/app.js`, `frontend/styles.css`, `admin-only`, `detailMode` |
+| Version mismatch | `VERSION`, `erp_agent.py`, `install_operating_server.ps1`, `versioning.py`, setup status Agent bundle check |
+
