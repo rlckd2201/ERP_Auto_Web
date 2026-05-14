@@ -12,13 +12,15 @@ Updated: 2026-05-14
 ## Current Goal
 
 WEB v1.0 accounting automation is replacing the old CS desktop accounting flow.
-The active focus is purchase one-click processing, automatic mail collection, and simplified manager UI:
+Purchase one-click processing, automatic mail collection, and simplified manager UI are implemented enough to pause further bug chasing for now. The active next focus is moving to regular processing (`정기 처리`):
 
 - Multiple selected purchase invoices should run through one simple `one-click processing` flow.
 - One-click should cover ERP input, ERP voucher PDF save/upload, cash withdrawal report creation, output-set refresh, and selected output target.
 - Already completed purchase invoices with all required output documents must skip ERP/cash-report regeneration and print/save from stored documents.
 - The manager default UI should stay simple; debug logs and individual analysis/output buttons should live in detail/admin mode.
 - Mail collection should run automatically every minute while the operating server is running.
+- Build a real WEB regular-processing view from the disabled `정기 처리` nav item.
+- Port/reference the legacy manager regular tab behavior from `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`.
 
 ## Active Architecture Decisions
 

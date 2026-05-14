@@ -2,7 +2,7 @@
 
 Updated: 2026-05-14
 
-This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, a direct Graphify query against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1193 nodes, 3834 edges, and 30 communities, so use the graph for navigation, then verify behavior in the active source before editing.
+This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1202 nodes, 3866 edges, and 31 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
 ## Reading Rules
 
@@ -12,6 +12,25 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, a direct Graph
 - Treat `_backup_*`, `_hotfix_*`, and `_release_*` folders as history/reference unless a task explicitly asks about them.
 - Graphify inferred edges are useful hints, but this repository has many historical copies. Check active files before changing behavior.
 - After meaningful edits, run `graphify update .` and update this wiki or `PROJECT_STATUS.md` if the architecture changed.
+
+## Current Handoff
+
+As of 2026-05-14, WEB/Agent files are at `1.0.93`. The last local deployment ZIP is:
+
+```text
+C:\Tmp\accounting_web_v1_no_detail_refresh_erp_edit_fix105_20260514_145151.zip
+```
+
+Recent purchase-side changes are intentionally paused for later operational bug fixing:
+
+- One-click purchase flow exists and queues ERP through the manager PC Agent.
+- Existing completed purchase document sets can skip ERP/cash-report regeneration.
+- Printer output is Agent-side through `output_print`, not server-side `ShellExecute`.
+- Output-set PDF merge now writes to a temporary file before replacing the target, so rediscovered output-set PDFs are not deleted before being read.
+- The frontend no longer force-refreshes selected purchase detail/logs during job follow-up refreshes.
+- One-click auto-saves the open purchase analysis form before ERP, and `erp_runner.py` now prioritizes saved screen edits for ERP payload fields.
+
+Next work focus requested by the user: move to `정기 처리` instead of continuing purchase bug fixing.
 
 ## Mental Model
 
@@ -29,7 +48,7 @@ flowchart LR
   Agent["web_v1/agent/erp_agent.py<br>manager PC Agent"] --> Queue
   Agent --> ERP["ERP GUI + local Excel/printing"]
   Agent --> API
-  Worker --> Output["output_set.py<br>document set / merged PDF / print"]
+  Worker --> Output["output_set.py<br>document set / merged PDF / Agent print queue"]
   Output --> Files["C:/ERP_DB<br>downloads, vouchers, reports, output_sets"]
 ```
 
@@ -53,16 +72,16 @@ Important active communities:
 
 | Community | Active Interpretation |
 | --- | --- |
-| 0 | ERP payload building and server-side ERP runner helpers in `erp_runner.py`. |
-| 2 | FastAPI app, worker orchestration, installer APIs, job lifecycle. |
-| 3 | Frontend state/rendering/actions in `web_v1/frontend/app.js`. |
-| 4 | Agent queue files, mail collector, backend config. |
-| 5 | Invoice API, invoice DB, agent completion/upload routes. |
-| 8 | Output set, cash withdrawal report generation, PDF merge/print. |
-| 9 | Setup status, auth, Agent heartbeat, printer mapping, installer jobs. |
-| 10 | Manual purchase intake and purchase document analysis. |
-| 12 | Agent preflight/version/hash/default-printer capability reporting. |
-| 14 | Compuzone quote auto-attach/fetch flow. |
+| 0 | FastAPI app, setup/installer APIs, worker orchestration, Agent job event routes. |
+| 1 | Agent output-print file download route plus legacy ERP app references. |
+| 2 | Frontend state/rendering/actions in `web_v1/frontend/app.js`. |
+| 4 | ERP payload building, manual purchase intake, purchase analysis, approval fetch. |
+| 5 | Agent queue files, backend config, versioning, job claim/update helpers. |
+| 6 | Invoice API, invoice DB, Agent completion/upload routes. |
+| 10 | Agent preflight/version/hash/default-printer capability reporting. |
+| 11 | Output set, cash withdrawal report generation, PDF merge/preparation. |
+| 12 | Setup status, auth, Agent heartbeat, printer mapping, installer jobs. |
+| 15 | Compuzone quote auto-attach/fetch flow. |
 
 Known Graphify noise:
 
@@ -82,9 +101,9 @@ Known Graphify noise:
 | `web_v1/backend/purchase_analysis.py` | Purchase tax invoice/quote parsing and normalized item data. |
 | `web_v1/backend/compuzone_quote.py` | Compuzone quote auto-fetch/attach support. |
 | `web_v1/backend/erp_runner.py` | ERP payload validation/building and server-mode ERP runner functions. |
-| `web_v1/backend/erp_queue.py` | Writes JSON queue files for Agent ERP and expense-report tasks. |
+| `web_v1/backend/erp_queue.py` | Writes JSON queue files for Agent ERP, expense-report, and output-print tasks. |
 | `web_v1/backend/agent_queue.py` | Lets Agent claim/update queue tasks targeted to that manager PC. |
-| `web_v1/backend/output_set.py` | Required document status, cash report generation, PDF merge, print dispatch. |
+| `web_v1/backend/output_set.py` | Required document status, cash report generation, PDF merge/preparation. |
 | `web_v1/backend/setup_state.py` | Login/setup DB, Agent heartbeat, setup checks, printer mappings, installer jobs. |
 | `web_v1/backend/versioning.py` | Agent bundle hash calculation. |
 | `web_v1/agent/erp_agent.py` | Manager PC Agent: heartbeat/preflight, queue claim, ERP run, report upload. |
@@ -120,6 +139,7 @@ High-value routes:
 | `POST /api/agent/erp/next` | Agent claims the next targeted ERP or expense-report task. |
 | `POST /api/agent/jobs/{job_id}/voucher` | Agent uploads saved ERP voucher PDF. |
 | `POST /api/agent/jobs/{job_id}/expense-report` | Agent uploads generated cash withdrawal report. |
+| `GET /api/agent/jobs/{job_id}/print-file/{invoice_id}/{file_index}` | Agent downloads a prepared output-set PDF before local printing. |
 | `POST /api/agent/jobs/{job_id}/complete` | Agent reports final success/failure for claimed tasks. |
 | `POST /api/jobs/purchase-mail-collect` | Manual one-shot purchase mail collection. |
 | `POST /api/jobs/purchase-one-click` | Main purchase one-click workflow. |
@@ -176,6 +196,40 @@ Current expected behavior:
 - Agent downloads the prepared PDFs through `/api/agent/jobs/{job_id}/print-file/{invoice_id}/{file_index}` and prints them on the selected mapped printer.
 
 The key anti-waste rule is `existing_only`: when the user uses stored documents, `output_set.py` must not silently generate a new cash withdrawal report. It should fail if any required saved document is missing.
+
+Edited purchase analysis rule:
+
+- `frontend/app.js` saves the open purchase analysis form before `startErpQueue()` posts one-click.
+- `erp_runner.build_purchase_erp_payload()` merges data in this priority order: raw JSON, nested raw `data`, list/top-level invoice fields, then current `invoice.data`. Screen-saved edits must win.
+- `_resolve_site()` accepts explicit edited `site_name` before inferred buyer-business-number mapping.
+
+## Regular Processing Starting Point
+
+`정기 처리` is not yet a first-class WEB screen. The frontend nav button is present but disabled in `web_v1/frontend/index.html`.
+
+Existing active WEB support:
+
+- `GET /api/invoices?mode=regular` lists regular invoices through `invoice_db.list_invoices()`.
+- `invoice_db.detect_invoice_type()` classifies regular vendors and crawler/XML results.
+- `mail_collector.py` keeps known regular mail/XML flows as `invoice_type=regular`.
+- `erp_runner.build_regular_erp_payload()` already builds WEB-side regular ERP payload rows.
+- `run_invoice_erp_input()` chooses `build_regular_erp_payload()` for non-purchase invoices.
+- `output_set.py` supports regular output sets with only `전표` and `세금계산서`.
+
+Legacy behavior to port/reference:
+
+- `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` has the old regular tab.
+- Start at `create_regular_tab()`, `_extract_regular_payload()`, `_guess_regular_account()`, `copy_regular_erp()`, and `run_regular_print_set()`.
+- Legacy regular flow includes dashboard, multi-select, manual complete/delete, item/account editing, ERP voucher creation, tax PDF preview/print, and `전표 + 세금계산서` output set.
+
+Suggested WEB implementation path:
+
+- Enable a real `정기 처리` view in the static frontend instead of the disabled nav item.
+- Add a regular list using `/api/invoices?mode=regular`.
+- Reuse setup/Agent readiness from purchase flow.
+- Add a regular ERP job route or generalize `purchase_erp_input` naming so regular invoices can be queued intentionally.
+- Reuse `output_set` for regular merged PDF / individual PDF / Agent-side printer output.
+- Keep the same no-auto-detail-refresh rule used by purchase editing.
 
 ## Output Set Rules
 
@@ -332,6 +386,7 @@ Main state/actions live in `web_v1/frontend/app.js`:
 | `renderPurchaseDetail()` | Renders selected purchase invoice detail. |
 | `renderOutputSetPanel()` | Renders required document cards and detail-mode output actions. |
 | `startErpQueue()` | Sends top-level one-click request. |
+| `saveCurrentAnalysisIfEditable()` | Saves the open purchase analysis form before one-click ERP. |
 | `startOutputSet()` | Sends output-set job request. |
 | `startSavedOutputSet()` | Detail-mode stored-document output path. |
 
@@ -383,7 +438,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.90
+1.0.93
 ```
 
 ## Safe Change Checklist
@@ -430,6 +485,7 @@ Before release:
 - Printer output depends on the manager PC Agent's printer list/mapping, not just server environment variables.
 - Graphify includes historical folders, so a highly connected node may belong to legacy code.
 - Static asset cache can hide frontend changes. `index.html` cache-busting query strings should be bumped for UI changes.
+- Do not reintroduce automatic selected-detail/log refresh while a user is editing purchase or future regular forms.
 
 ## Where To Start For Typical Tasks
 
@@ -441,6 +497,8 @@ Before release:
 | Printer mapping | `setup_state.py`, `erp_agent.py` printer preflight, frontend setup view |
 | Mail not collecting | `mail_collector.py`, `worker._run_purchase_mail_collect()`, `/api/mail-collect/status`, `.env` mail vars |
 | Purchase analysis wrong | `purchase_analysis.py`, `compuzone_quote.py`, `approval_fetcher.py`, detail-mode analysis UI |
+| Purchase edited fields not in ERP | `frontend/app.js` `saveCurrentAnalysisIfEditable()`, `erp_runner.build_purchase_erp_payload()`, `_resolve_site()` |
+| Regular processing WEB migration | `frontend/index.html`, `frontend/app.js`, `invoice_db.py`, `mail_collector.py`, `erp_runner.build_regular_erp_payload()`, legacy `manager_server` regular methods |
 | ERP queue stuck | `agent_queue.py`, `erp_queue.py`, `worker._run_purchase_erp_input()`, Agent logs |
 | Cash report generation | `output_set.py`, `expense_excel_export.py`, Agent `run_expense_report_task()` |
 | Frontend simple/detail UI | `frontend/app.js`, `frontend/styles.css`, `admin-only`, `detailMode` |
