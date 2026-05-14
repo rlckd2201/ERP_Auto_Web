@@ -453,15 +453,20 @@ function stopMailCollectMonitor() {
 }
 
 function downloadUserPcInstaller() {
-  const link = document.createElement("a");
-  link.href = "/api/setup/user-pc-installer.exe";
-  link.download = "AccountingWebRequiredSetup.exe";
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  if (els.setupSummary) {
-    els.setupSummary.textContent = "담당자 PC 필수 프로그램 설치 파일을 다운로드했습니다. 다운로드된 EXE 파일을 더블클릭하고, 설치가 끝나면 다시 점검을 누르세요.";
+  const serverUrl = window.location.origin;
+  const command = [
+    "$ServerUrl = \"" + serverUrl + "\"",
+    "$Bootstrap = \"$env:TEMP\\accounting_web_user_pc_bootstrap.ps1\"",
+    "curl.exe -k -L --fail --output $Bootstrap \"$ServerUrl/api/setup/user-pc-bootstrap.ps1\"",
+    "powershell -ExecutionPolicy Bypass -File $Bootstrap",
+  ].join("\n");
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(command).catch(() => {});
   }
+  if (els.setupSummary) {
+    els.setupSummary.textContent = "담당자 PC 필수 프로그램 설치 명령을 클립보드에 복사했습니다. PowerShell에 붙여넣어 실행한 뒤 다시 점검을 누르세요.";
+  }
+  alert(`PowerShell에 아래 명령을 붙여넣어 실행하세요.\n\n${command}`);
 }
 
 function requestAgentStartByProtocol() {

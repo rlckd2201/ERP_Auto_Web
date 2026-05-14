@@ -46,8 +46,13 @@ Invoke-Expression "$pythonCmd -m pip install -r `"$BackendDir\requirements.txt`"
 Invoke-Expression "$pythonCmd -m pip install --force-reinstall --no-cache-dir greenlet playwright"
 Invoke-Expression "$pythonCmd -m playwright install chromium"
 
-Write-Host "[WEB v1.0] Creating HTTPS certificate for $DefaultServerIp"
-Invoke-Expression "$pythonCmd -m web_v1.backend.tools.create_https_cert `"$CertDir`" $DefaultServerIp 127.0.0.1 localhost"
+$ForceRenewCert = $env:FORCE_RENEW_HTTPS_CERT -eq "1"
+if ($ForceRenewCert -or -not (Test-Path -LiteralPath $SslCertFile) -or -not (Test-Path -LiteralPath $SslKeyFile)) {
+    Write-Host "[WEB v1.0] Creating HTTPS certificate for $DefaultServerIp"
+    Invoke-Expression "$pythonCmd -m web_v1.backend.tools.create_https_cert `"$CertDir`" $DefaultServerIp 127.0.0.1 localhost"
+} else {
+    Write-Host "[WEB v1.0] Reusing existing HTTPS certificate: $SslCertFile"
+}
 Import-Certificate -FilePath $SslCertFile -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
 Write-Host "[WEB v1.0] HTTPS certificate trusted for current Windows user"
 
@@ -69,7 +74,7 @@ $ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } 
 $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($gjAuto) { $gjAuto } else { Read-Host "김제 프린터 이름 입력(Get-Printer 결과와 동일)" }
 
 @"
-APP_VERSION=1.0.95
+APP_VERSION=1.0.96
 APP_ENV=production
 
 WEB_HOST=0.0.0.0

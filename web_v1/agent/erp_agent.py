@@ -12,6 +12,8 @@ import socket
 import subprocess
 import sys
 import ssl
+import tempfile
+import threading
 import time
 import zipfile
 from ctypes import wintypes
@@ -58,7 +60,8 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.95"
+AGENT_BUNDLE_VERSION = "1.0.96"
+_MUTEX_HANDLE: Any = None
 
 
 def now_text() -> str:
@@ -67,6 +70,135 @@ def now_text() -> str:
 
 def log(message: str) -> None:
     print(f"[{now_text()}] {message}", flush=True)
+    try:
+        AGENT_APPDATA_DIR.mkdir(parents=True, exist_ok=True)
+        with (AGENT_APPDATA_DIR / "agent.log").open("a", encoding="utf-8") as fh:
+            fh.write(f"[{now_text()}] {message}\n")
+    except Exception:
+        pass
+
+
+def _acquire_single_instance(agent_id: str, server_url: str) -> bool:
+    global _MUTEX_HANDLE
+    if os.name != "nt":
+        return True
+    name_seed = hashlib.sha1(f"{server_url}|{agent_id}".encode("utf-8", errors="ignore")).hexdigest()
+    mutex_name = f"Global\\AccountingWebAgent_{name_seed}"
+    kernel32 = ctypes.windll.kernel32
+    _MUTEX_HANDLE = kernel32.CreateMutexW(None, False, mutex_name)
+    if not _MUTEX_HANDLE:
+        return True
+    return kernel32.GetLastError() != 183
+
+
+class AgentTray:
+    def __init__(self, server_url: str) -> None:
+        self.server_url = server_url
+        self.status = "Starting"
+        self.stop_requested = False
+        self._hwnd = None
+        self._notify_id = None
+        self._thread: threading.Thread | None = None
+
+    def start(self) -> None:
+        if os.name != "nt":
+            return
+        self._thread = threading.Thread(target=self._run, name="accounting-web-tray", daemon=True)
+        self._thread.start()
+
+    def update(self, status: str) -> None:
+        self.status = status
+        self._modify()
+
+    def _run(self) -> None:
+        try:
+            import win32api
+            import win32con
+            import win32gui
+
+            message_map = {
+                win32con.WM_DESTROY: self._on_destroy,
+                win32con.WM_COMMAND: self._on_command,
+                win32con.WM_USER + 20: self._on_notify,
+            }
+            wc = win32gui.WNDCLASS()
+            wc.hInstance = win32api.GetModuleHandle(None)
+            wc.lpszClassName = "AccountingWebAgentTray"
+            wc.lpfnWndProc = message_map
+            class_atom = win32gui.RegisterClass(wc)
+            self._hwnd = win32gui.CreateWindow(class_atom, "Accounting WEB Agent", 0, 0, 0, 0, 0, 0, 0, wc.hInstance, None)
+            icon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
+            self._notify_id = (
+                self._hwnd,
+                0,
+                win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP,
+                win32con.WM_USER + 20,
+                icon,
+                f"Accounting WEB Agent - {self.status}",
+            )
+            win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, self._notify_id)
+            win32gui.PumpMessages()
+        except Exception as exc:
+            log(f"tray unavailable: {exc}")
+
+    def _modify(self) -> None:
+        if not self._notify_id:
+            return
+        try:
+            import win32gui
+
+            data = list(self._notify_id)
+            data[5] = f"Accounting WEB Agent - {self.status}"[:127]
+            self._notify_id = tuple(data)
+            win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, self._notify_id)
+        except Exception:
+            pass
+
+    def _on_destroy(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
+        try:
+            import win32gui
+
+            if self._notify_id:
+                win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, self._notify_id)
+            win32gui.PostQuitMessage(0)
+        except Exception:
+            pass
+        return 0
+
+    def _on_command(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
+        command_id = int(wparam) & 0xFFFF
+        if command_id == 1001:
+            try:
+                os.startfile(self.server_url)
+            except Exception as exc:
+                log(f"open WEB failed: {exc}")
+        elif command_id == 1002:
+            self.stop_requested = True
+            try:
+                import win32gui
+
+                win32gui.DestroyWindow(hwnd)
+            except Exception:
+                pass
+        return 0
+
+    def _on_notify(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
+        try:
+            import win32con
+            import win32gui
+
+            if lparam == win32con.WM_LBUTTONDBLCLK:
+                os.startfile(self.server_url)
+            elif lparam == win32con.WM_RBUTTONUP:
+                menu = win32gui.CreatePopupMenu()
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 1001, "Open WEB")
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 1002, "Exit Agent")
+                pos = win32gui.GetCursorPos()
+                win32gui.SetForegroundWindow(hwnd)
+                win32gui.TrackPopupMenu(menu, win32con.TPM_LEFTALIGN, pos[0], pos[1], 0, hwnd, None)
+        except Exception:
+            pass
+        return 0
 
 
 def _agent_bundle_hash() -> str:
@@ -1125,6 +1257,57 @@ def run_expense_report_task(server: str, task: dict[str, Any], agent_id: str, ve
             log(f"expense report failure report failed: {report_exc}")
 
 
+def _server_version_payload(server: str, verify: bool) -> dict[str, Any]:
+    response = requests.get(f"{server.rstrip('/')}/api/version", verify=verify, timeout=10)
+    response.raise_for_status()
+    return response.json() if response.content else {}
+
+
+def _agent_update_required(server: str, capabilities: dict[str, Any], verify: bool) -> bool:
+    try:
+        payload = _server_version_payload(server, verify)
+    except Exception as exc:
+        log(f"version check failed: {exc}")
+        return False
+    expected_hash = str(payload.get("agent_bundle_hash") or "")
+    current_hash = str(capabilities.get("agent_bundle_hash") or "")
+    if not expected_hash or not current_hash or current_hash.startswith("error:"):
+        return False
+    if expected_hash == current_hash:
+        return False
+    log(f"agent update required: current={current_hash[:12]} expected={expected_hash[:12]}")
+    return True
+
+
+def _run_self_update(server: str, verify: bool) -> bool:
+    try:
+        temp_root = Path(tempfile.mkdtemp(prefix="accounting_web_agent_update_"))
+        payload_zip = temp_root / "payload.zip"
+        log(f"downloading agent update payload: {server}")
+        response = requests.get(f"{server.rstrip('/')}/api/setup/user-pc-payload.zip", verify=verify, timeout=120)
+        response.raise_for_status()
+        payload_zip.write_bytes(response.content)
+        with zipfile.ZipFile(payload_zip) as archive:
+            archive.extractall(temp_root)
+        setup_script = temp_root / "setup.ps1"
+        if not setup_script.exists():
+            setup_script = temp_root / "1_필수프로그램_설치_실행.ps1"
+        if not setup_script.exists():
+            raise RuntimeError(f"setup script not found in payload: {temp_root}")
+        powershell = str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
+        subprocess.Popen(
+            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(setup_script)],
+            cwd=str(temp_root),
+            close_fds=True,
+            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+        )
+        log("agent self-update started; current process will exit")
+        return True
+    except Exception as exc:
+        log(f"agent self-update failed: {exc}")
+        return False
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Accounting WEB v1.0 local ERP Agent")
     parser.add_argument("--server", default=os.getenv("WEB_SERVER_URL", "https://172.17.39.121:8080"))
@@ -1132,10 +1315,17 @@ def main() -> int:
     parser.add_argument("--interval", type=float, default=3.0)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
+    parser.add_argument("--no-tray", action="store_true")
     parser.add_argument("--insecure", action="store_true", help="Skip HTTPS certificate verification for internal self-signed WEB server")
     args = parser.parse_args()
 
     verify = not args.insecure
+    if not args.once and not args.preflight_only and not _acquire_single_instance(args.agent_id, args.server):
+        log("another ERP Agent instance is already running; exiting")
+        return 0
+    tray = AgentTray(args.server)
+    if not args.once and not args.preflight_only and not args.no_tray:
+        tray.start()
     log(f"ERP Agent started: {args.agent_id} -> {args.server}")
     if args.preflight_only:
         capabilities = preflight(args.server)
@@ -1143,20 +1333,29 @@ def main() -> int:
         return 0 if capabilities["ok"] else 2
     while True:
         capabilities = preflight(args.server)
+        tray.update("Checking")
         heartbeat_payload: dict[str, Any] = {}
         try:
             heartbeat = _post(args.server, "/api/agent/heartbeat", {"agent_id": args.agent_id, "capabilities": capabilities}, verify=verify, timeout=10)
             heartbeat.raise_for_status()
             heartbeat_payload = heartbeat.json() if heartbeat.content else {}
             _apply_server_setup_config(heartbeat_payload)
+            tray.update("Connected")
         except Exception as exc:
             log(f"heartbeat failed: {exc}")
+            tray.update("Disconnected")
+        if not args.once and _agent_update_required(args.server, capabilities, verify):
+            tray.update("Updating")
+            if _run_self_update(args.server, verify):
+                return 10
         install_job = heartbeat_payload.get("install_job") if isinstance(heartbeat_payload.get("install_job"), dict) else None
         if install_job:
+            tray.update("Installing")
             run_install_job(args.server, install_job, args.agent_id, verify)
         elif not capabilities["ok"]:
             log("preflight failed; ERP task claim paused")
             log(json.dumps(capabilities, ensure_ascii=False))
+            tray.update("Setup required")
         else:
             try:
                 response = _post(args.server, "/api/agent/erp/next", {"agent_id": args.agent_id, "capabilities": capabilities}, verify=verify, timeout=20)
@@ -1170,14 +1369,21 @@ def main() -> int:
                     task = response.json()
                     job_type = str(task.get("job_type") or "")
                     if job_type == "expense_report":
+                        tray.update("Expense report")
                         run_expense_report_task(args.server, task, args.agent_id, verify)
                     elif job_type == "output_print":
+                        tray.update("Printing")
                         run_output_print_task(args.server, task, args.agent_id, verify)
                     else:
+                        tray.update("ERP task")
                         run_task(args.server, task, args.agent_id, verify)
             except Exception as exc:
                 log(f"agent loop error: {exc}")
+                tray.update("Error")
         if args.once:
+            return 0
+        if tray.stop_requested:
+            log("tray exit requested")
             return 0
         time.sleep(max(1.0, args.interval))
 

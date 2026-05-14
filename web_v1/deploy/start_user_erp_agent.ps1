@@ -55,4 +55,7 @@ Write-Host "[WEB v1.0] Agent: $Agent"
 Write-Host "[WEB v1.0] Python: $Python"
 
 & $Python -m pip install -r (Join-Path $RepoRoot "web_v1\backend\requirements.txt")
-& $Python $Agent --server $ServerUrl --insecure
+
+$AgentArgs = "`"$Agent`" --server `"$ServerUrl`" --insecure"
+Start-Process -FilePath $Python -ArgumentList $AgentArgs -WindowStyle Hidden
+Write-Host "[WEB v1.0] User PC ERP Agent started in background tray mode"

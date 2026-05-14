@@ -38,12 +38,13 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.95`.
+- Current WEB/Agent version in files: `1.0.96`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
 - Previous local deployment ZIP after first WEB regular-processing pass: `C:\Tmp\accounting_web_v1_regular_processing_fix106_20260514_155214.zip`.
-- Latest local deployment ZIP after regular PDF 작성일자 fallback fix: `C:\Tmp\accounting_web_v1_regular_pdf_date_fix107_20260514_165139.zip`.
+- Previous local deployment ZIP after regular PDF 작성일자 fallback fix: `C:\Tmp\accounting_web_v1_regular_pdf_date_fix107_20260514_165139.zip`.
+- Latest local deployment ZIP after resident tray Agent / auto-update fix: `C:\Tmp\accounting_web_v1_agent_tray_autoupdate_fix108_20260515_082707.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -69,6 +70,10 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix107` makes regular ERP payload creation fall back to reading the tax-invoice PDF body for 작성일자 when saved data and filename do not contain a full date.
 - `fix107` enriches newly collected regular invoices with the PDF-derived 작성일자 before DB insert, so monthly filenames like `2026년 05월.pdf` do not fail ERP validation.
 - `fix107` changes the user-PC bootstrap payload download to prefer `curl.exe -k`, avoiding PowerShell `Invoke-WebRequest` TLS failures on manager PCs.
+- `fix108` preserves the operating-server HTTPS certificate/key across redeploys unless `FORCE_RENEW_HTTPS_CERT=1`, so manager PCs do not need to re-trust a new certificate every deploy.
+- `fix108` starts the manager PC Agent as a hidden background process with a Windows tray icon and a single-instance mutex.
+- `fix108` makes the Agent compare its bundle hash with `/api/version` and download/run the latest payload in the background when the server bundle changes.
+- `fix108` changes the setup install button from blocked EXE download to a copied PowerShell bootstrap command.
 - `tax_crawler/portal_smileedi.py` has been added as a standalone SMILE EDI crawler prototype. It is intentionally not registered in `crawler_main.py` yet.
 - SMILE EDI approval handling is opt-in via the prototype CLI `--approve`; without that flag it records unapproved status and debug HTML/screenshots only.
 - Frontend has one-click output target combo and localStorage preference.

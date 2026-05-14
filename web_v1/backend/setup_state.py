@@ -293,7 +293,7 @@ def setup_status(user_id: str = "", agent_id: str = "", client_ip: str = "") -> 
         "\uc5c5\ub370\uc774\ud2b8\ud544\uc694",
         "\ub2f4\ub2f9\uc790 PC \ud544\uc218 \ud504\ub85c\uadf8\ub7a8\uc774 \ucd5c\uc2e0\uc785\ub2c8\ub2e4."
         if agent_update_ok
-        else "\ud544\uc218 \ud504\ub85c\uadf8\ub7a8\uc774 \uc11c\ubc84 \ubc84\uc804\uacfc \ub2e4\ub985\ub2c8\ub2e4. \uc124\uce58 EXE\ub97c \ub2e4\uc2dc \uc2e4\ud589\ud574\uc57c \ud569\ub2c8\ub2e4.",
+        else "\ud544\uc218 \ud504\ub85c\uadf8\ub7a8\uc774 \uc11c\ubc84 \ubc84\uc804\uacfc \ub2e4\ub985\ub2c8\ub2e4. \uc124\uce58 PowerShell \uba85\ub839\uc744 \uc2e4\ud589\ud574\uc57c \ud569\ub2c8\ub2e4.",
         {
             "current_hash": current_hash,
             "expected_hash": expected_hash,
