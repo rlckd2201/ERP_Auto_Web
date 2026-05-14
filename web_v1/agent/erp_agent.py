@@ -58,7 +58,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.90"
+AGENT_BUNDLE_VERSION = "1.0.91"
 
 
 def now_text() -> str:
@@ -174,6 +174,175 @@ def _upload_expense_report(
         return {"ok": True, "server_path": server_path, "local_path": str(pdf_path)}
     except Exception as exc:
         return {"ok": False, "error": str(exc), "local_path": str(pdf_path)}
+
+
+def _safe_print_filename(value: str, fallback: str) -> str:
+    name = Path(str(value or fallback)).name.strip() or fallback
+    for char in '<>:"/\\|?*':
+        name = name.replace(char, "_")
+    return name[:140] or fallback
+
+
+def _download_output_print_file(
+    server: str,
+    job_id: str,
+    invoice_id: int,
+    file_index: int,
+    filename: str,
+    verify: bool,
+) -> Path:
+    target_dir = Path(os.getenv("TEMP") or r"C:\Windows\Temp") / "AccountingWeb" / "output_print" / job_id
+    target_dir.mkdir(parents=True, exist_ok=True)
+    safe_name = _safe_print_filename(filename, f"{invoice_id}_{file_index}.pdf")
+    target = target_dir / f"{invoice_id}_{file_index:02d}_{safe_name}"
+    response = requests.get(
+        f"{server.rstrip('/')}/api/agent/jobs/{job_id}/print-file/{invoice_id}/{file_index}",
+        verify=verify,
+        timeout=120,
+        stream=True,
+    )
+    response.raise_for_status()
+    with target.open("wb") as out:
+        for chunk in response.iter_content(chunk_size=1024 * 256):
+            if chunk:
+                out.write(chunk)
+    return target
+
+
+def _print_pdf_to_printer(path: Path, printer_name: str) -> None:
+    if not printer_name:
+        raise RuntimeError("출력 프린터가 비어 있습니다.")
+    if not path.exists() or not path.is_file():
+        raise RuntimeError(f"출력할 PDF가 없습니다: {path}")
+    import win32print
+
+    original_printer = ""
+    try:
+        original_printer = str(win32print.GetDefaultPrinter() or "")
+    except Exception:
+        original_printer = ""
+    first_error = ""
+    try:
+        win32print.SetDefaultPrinter(printer_name)
+        os.startfile(str(path), "print")
+        time.sleep(1.5)
+        return
+    except Exception as exc:
+        first_error = str(exc) or exc.__class__.__name__
+    finally:
+        if original_printer:
+            try:
+                win32print.SetDefaultPrinter(original_printer)
+            except Exception:
+                pass
+
+    try:
+        import win32api
+
+        win32api.ShellExecute(0, "printto", str(path), f'"{printer_name}"', str(path.parent), 0)
+        time.sleep(1.5)
+        return
+    except Exception as exc:
+        second_error = str(exc) or exc.__class__.__name__
+        raise RuntimeError(f"PDF 출력 실패: {path.name} / print={first_error} / printto={second_error}") from exc
+
+
+def run_output_print_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> None:
+    job_id = str(task.get("job_id") or "")
+    printer_name = str(task.get("printer_name") or "").strip()
+    print_files = [item for item in task.get("print_files") or [] if isinstance(item, dict)]
+    invoice_ids: list[int] = []
+    successes_by_invoice: dict[int, dict[str, Any]] = {}
+    failures: list[dict[str, Any]] = []
+    log(f"output print task claimed: job={job_id}, files={len(print_files)}, printer={printer_name}")
+    try:
+        if not printer_name:
+            raise RuntimeError("출력 프린터가 지정되지 않았습니다.")
+        if not print_files:
+            raise RuntimeError("출력할 문서 세트 PDF가 없습니다.")
+        total = len(print_files)
+        for index, item in enumerate(print_files, start=1):
+            invoice_id = int(item.get("invoice_id") or 0)
+            file_index = int(item.get("file_index") or index)
+            filename = str(item.get("filename") or f"{invoice_id}_{file_index}.pdf")
+            if invoice_id and invoice_id not in invoice_ids:
+                invoice_ids.append(invoice_id)
+            progress_value = 92 + int(index / max(total, 1) * 6)
+            _post(
+                server,
+                f"/api/agent/jobs/{job_id}/event",
+                {
+                    "agent_id": agent_id,
+                    "status": "printing",
+                    "progress": min(98, progress_value),
+                    "message": f"담당자 PC 출력 전송: #{invoice_id} / {filename}",
+                    "invoice_ids": [invoice_id] if invoice_id else [],
+                },
+                verify=verify,
+                timeout=10,
+            )
+            try:
+                local_pdf = _download_output_print_file(server, job_id, invoice_id, file_index, filename, verify)
+                _print_pdf_to_printer(local_pdf, printer_name)
+                row = successes_by_invoice.setdefault(
+                    invoice_id,
+                    {"invoice_id": invoice_id, "printed_files": [], "printer_name": printer_name},
+                )
+                row["printed_files"].append(str(local_pdf))
+            except Exception as exc:
+                failures.append(
+                    {
+                        "invoice_id": invoice_id,
+                        "file_index": file_index,
+                        "filename": filename,
+                        "error": str(exc) or exc.__class__.__name__,
+                    }
+                )
+                break
+        ok = not failures
+        message = (
+            f"담당자 PC 출력 완료: {len(print_files)}개 파일 / {printer_name}"
+            if ok
+            else f"담당자 PC 출력 실패: {failures[0].get('filename')} / {failures[0].get('error')}"
+        )
+        _post(
+            server,
+            f"/api/agent/jobs/{job_id}/complete",
+            {
+                "ok": ok,
+                "job_type": "output_print",
+                "agent_id": agent_id,
+                "invoice_ids": invoice_ids,
+                "successes": list(successes_by_invoice.values()),
+                "failures": failures,
+                "completed_at": now_text(),
+                "message": message,
+            },
+            verify=verify,
+            timeout=20,
+        )
+    except Exception as exc:
+        message = str(exc) or exc.__class__.__name__
+        log(f"output print task failed: {message}")
+        try:
+            _post(
+                server,
+                f"/api/agent/jobs/{job_id}/complete",
+                {
+                    "ok": False,
+                    "job_type": "output_print",
+                    "agent_id": agent_id,
+                    "invoice_ids": invoice_ids,
+                    "successes": list(successes_by_invoice.values()),
+                    "failures": failures or [{"error": message}],
+                    "completed_at": now_text(),
+                    "message": message,
+                },
+                verify=verify,
+                timeout=20,
+            )
+        except Exception as report_exc:
+            log(f"output print failure report failed: {report_exc}")
 
 
 def _package_check() -> list[dict[str, Any]]:
@@ -691,6 +860,7 @@ def preflight(server_url: str = "") -> dict[str, Any]:
         "display": display,
         "https_certificate": https_certificate,
         "expense_template": expense_template,
+        "output_print": True,
     }
     ok = all(item["ok"] for item in packages) and bool(setup["ready"])
     return {
@@ -704,6 +874,7 @@ def preflight(server_url: str = "") -> dict[str, Any]:
         "erp": erp,
         "display": display,
         "setup": setup,
+        "output_print": True,
     }
 
 
@@ -997,8 +1168,11 @@ def main() -> int:
                 else:
                     response.raise_for_status()
                     task = response.json()
-                    if str(task.get("job_type") or "") == "expense_report":
+                    job_type = str(task.get("job_type") or "")
+                    if job_type == "expense_report":
                         run_expense_report_task(args.server, task, args.agent_id, verify)
+                    elif job_type == "output_print":
+                        run_output_print_task(args.server, task, args.agent_id, verify)
                     else:
                         run_task(args.server, task, args.agent_id, verify)
             except Exception as exc:

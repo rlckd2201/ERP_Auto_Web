@@ -50,10 +50,11 @@ def _active_invoice_items(payload: dict[str, Any]) -> tuple[list[dict[str, Any]]
 def claim_next_erp_task(agent_id: str, capabilities: dict[str, Any] | None = None, client_ip: str = "") -> dict[str, Any] | None:
     agent_id = str(agent_id or "").strip() or "unknown-agent"
     client_ip = str(client_ip or "").strip()
+    capabilities = capabilities or {}
     for path in _task_files():
         payload = _read_task(path)
         job_type = str(payload.get("job_type") or "")
-        if job_type not in {"purchase_erp_input", "expense_report"}:
+        if job_type not in {"purchase_erp_input", "expense_report", "output_print"}:
             continue
         if str(payload.get("agent_status") or "pending") not in {"", "pending", "retry"}:
             continue
@@ -88,6 +89,22 @@ def claim_next_erp_task(agent_id: str, capabilities: dict[str, Any] | None = Non
             payload["queue_path"] = str(path)
             _write_task(path, payload)
             return payload
+        if job_type == "output_print":
+            if not bool(capabilities.get("output_print")):
+                continue
+            if not payload.get("print_files"):
+                payload["agent_status"] = "stale"
+                payload["updated_at"] = now_text()
+                payload["stale_reason"] = "Output print task has no files"
+                _write_task(path, payload)
+                continue
+            payload["agent_status"] = "claimed"
+            payload["agent_id"] = agent_id
+            payload["claimed_at"] = now_text()
+            payload["capabilities"] = capabilities
+            payload["queue_path"] = str(path)
+            _write_task(path, payload)
+            return payload
         active_invoices, stale_invoices = _active_invoice_items(payload)
         if not active_invoices:
             payload["agent_status"] = "stale"
@@ -113,6 +130,7 @@ def update_erp_task(job_id: str, status: str, update: dict[str, Any] | None = No
     candidates = [
         queue_dir() / f"purchase_erp_{job_id}.json",
         queue_dir() / f"expense_report_{job_id}.json",
+        queue_dir() / f"output_print_{job_id}.json",
     ]
     path = next((candidate for candidate in candidates if candidate.exists()), candidates[0])
     payload = _read_task(path) if path.exists() else {"job_id": job_id, "job_type": "purchase_erp_input"}

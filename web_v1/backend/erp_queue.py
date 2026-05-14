@@ -58,3 +58,56 @@ def write_expense_report_queue(
     path = queue_dir() / f"expense_report_{job_id}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
+
+
+def write_output_print_queue(
+    job_id: str,
+    results: list[dict[str, Any]],
+    *,
+    printer_name: str,
+    printer_key: str = "",
+    target_agent_id: str = "",
+    target_client_ip: str = "",
+    source_job_id: str = "",
+) -> Path:
+    print_files: list[dict[str, Any]] = []
+    invoice_ids: list[int] = []
+    for result in results:
+        try:
+            invoice_id = int(result.get("invoice_id") or 0)
+        except Exception:
+            invoice_id = 0
+        if not invoice_id:
+            continue
+        if invoice_id not in invoice_ids:
+            invoice_ids.append(invoice_id)
+        for index, file_path in enumerate(result.get("individual_files") or [], start=1):
+            path = Path(str(file_path))
+            print_files.append(
+                {
+                    "invoice_id": invoice_id,
+                    "file_index": index,
+                    "path": str(path),
+                    "filename": path.name,
+                }
+            )
+    if not print_files:
+        raise RuntimeError("출력할 문서 세트 PDF가 없습니다.")
+    payload = {
+        "job_id": job_id,
+        "job_type": "output_print",
+        "agent_status": "pending",
+        "agent_id": "",
+        "target_agent_id": str(target_agent_id or ""),
+        "target_client_ip": str(target_client_ip or ""),
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "invoice_ids": invoice_ids,
+        "invoice_count": len(invoice_ids),
+        "printer_key": str(printer_key or ""),
+        "printer_name": str(printer_name or ""),
+        "source_job_id": str(source_job_id or ""),
+        "print_files": print_files,
+    }
+    path = queue_dir() / f"output_print_{job_id}.json"
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    return path

@@ -150,7 +150,8 @@ Main job types:
 | `purchase_one_click` | `JobWorker._run_purchase_erp_input()` | Queues ERP for non-complete purchase invoices; output is queued after Agent completion/report generation. |
 | `purchase_erp_input` | `JobWorker._run_purchase_erp_input()` | Direct ERP queue path, mostly admin/detail mode. |
 | `expense_report` | Agent-side task | Written to queue by server and executed by manager PC Agent. |
-| `output_set` | `JobWorker._run_output_set()` | Builds document set, saves merged PDF, saves individual files, or prints. |
+| `output_set` | `JobWorker._run_output_set()` | Builds document set, saves merged PDF, saves individual files, or queues Agent printing. |
+| `output_print` | Agent-side task | Server-prepared output PDFs are downloaded and printed by the manager PC Agent. |
 
 ## Purchase One-Click Flow
 
@@ -171,7 +172,8 @@ Current expected behavior:
 - Agent completion route updates invoice data and queues `expense_report` tasks as needed.
 - Agent generates cash withdrawal report using local Excel/template and uploads it.
 - Once all selected invoices have cash reports, `_maybe_queue_one_click_output()` creates the final `output_set` job.
-- Output job saves merged PDFs or prints individual document files.
+- Output job saves merged PDFs on the server, or prepares individual PDFs and creates an `output_print` task for the manager PC Agent.
+- Agent downloads the prepared PDFs through `/api/agent/jobs/{job_id}/print-file/{invoice_id}/{file_index}` and prints them on the selected mapped printer.
 
 The key anti-waste rule is `existing_only`: when the user uses stored documents, `output_set.py` must not silently generate a new cash withdrawal report. It should fail if any required saved document is missing.
 
@@ -202,7 +204,14 @@ Important functions:
 | `build_output_set_status(invoice, persist=False)` | Finds source files, calculates `ready`, `can_output`, blockers, and missing docs. |
 | `generate_expense_report_pdf(invoice, force=False)` | Generates cash withdrawal report via Excel/AppData template flow. |
 | `prepare_output_documents(invoice, existing_only=False)` | Copies/merges required docs into an output-set folder; may generate missing cash report unless `existing_only=true`. |
-| `run_output_set_job(...)` | Batch wrapper for merged PDF, individual PDF save, or printer output. |
+| `run_output_set_job(...)` | Batch wrapper for merged PDF and individual PDF preparation. |
+| `write_output_print_queue(...)` | Creates Agent-targeted printer tasks after individual PDFs are prepared. |
+
+Printer output rule:
+
+- Do not print document-set PDFs directly from the operating server. Server-side `ShellExecute` depends on the server's PDF handler/printer state and can fail with Windows device errors.
+- For `print_individual`, the server prepares the PDF files first, then queues `output_print`.
+- The manager PC Agent advertises `output_print=true`, downloads the files over HTTPS, sets the selected printer locally, and prints from the PC that actually owns the printer setup.
 
 File roots:
 
@@ -224,6 +233,7 @@ Responsibilities:
 - Saves and uploads ERP voucher PDF.
 - Runs cash withdrawal report generation locally because Excel COM must run on a manager PC, not the operating server.
 - Uploads generated cash report to the server.
+- Downloads prepared output-set PDFs and sends them to the selected local/network printer for `output_print` tasks.
 
 Queue targeting matters:
 
@@ -432,4 +442,3 @@ Before release:
 | Cash report generation | `output_set.py`, `expense_excel_export.py`, Agent `run_expense_report_task()` |
 | Frontend simple/detail UI | `frontend/app.js`, `frontend/styles.css`, `admin-only`, `detailMode` |
 | Version mismatch | `VERSION`, `erp_agent.py`, `install_operating_server.ps1`, `versioning.py`, setup status Agent bundle check |
-

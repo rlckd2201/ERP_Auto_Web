@@ -25,7 +25,7 @@ from .invoice_db import DONE, ERROR, PROCESSING, add_invoice_log, delete_invoice
 from .job_store import job_store
 from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate
 from .output_set import build_output_set_status, generate_expense_report_pdf
-from .erp_queue import write_expense_report_queue
+from .erp_queue import queue_dir, write_expense_report_queue
 from .purchase_analysis import (
     _extract_amounts_from_tax,
     _extract_date,
@@ -170,6 +170,19 @@ def _queue_expense_report_after_erp(
     return True
 
 
+def _output_print_task(job_id: str) -> dict[str, Any]:
+    path = queue_dir() / f"output_print_{job_id}.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="출력 큐 파일을 찾을 수 없습니다.")
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"출력 큐 파일을 읽을 수 없습니다: {exc}") from exc
+    if str(payload.get("job_type") or "") != "output_print":
+        raise HTTPException(status_code=404, detail="출력 큐 작업이 아닙니다.")
+    return payload if isinstance(payload, dict) else {}
+
+
 def _job_time(value: Any) -> str:
     return value.isoformat(timespec="seconds") if hasattr(value, "isoformat") else ""
 
@@ -275,6 +288,8 @@ def _maybe_queue_one_click_output(source_job_id: str) -> None:
                 "printer_name": str(source_job.payload.get("printer_name") or ""),
                 "processor": str(source_job.payload.get("processor") or "WEB v1.0"),
                 "source_job_id": source_job_id,
+                "target_agent_id": str(source_job.payload.get("target_agent_id") or ""),
+                "target_client_ip": str(source_job.payload.get("target_client_ip") or ""),
                 "existing_only": True,
             },
         )
@@ -803,8 +818,11 @@ async def api_agent_next_task(request: Request) -> Any:
         return Response(status_code=204)
     job_id = str(task.get("job_id") or "")
     if job_store.get(job_id):
-        if str(task.get("job_type") or "") == "expense_report":
+        job_type = str(task.get("job_type") or "")
+        if job_type == "expense_report":
             job_store.add_event(job_id, "erp", 80, f"담당자 PC Agent 현금출금결의서 생성 시작: {task.get('agent_id')}")
+        elif job_type == "output_print":
+            job_store.add_event(job_id, "printing", 92, f"담당자 PC Agent 출력 시작: {task.get('agent_id')}")
         else:
             job_store.add_event(job_id, "erp", 80, f"ERP Agent claimed task: {task.get('agent_id')}")
     return task
@@ -929,6 +947,24 @@ def api_agent_job_expense_report_upload(
     }
 
 
+@app.get("/api/agent/jobs/{job_id}/print-file/{invoice_id}/{file_index}")
+def api_agent_output_print_file(job_id: str, invoice_id: int, file_index: int) -> FileResponse:
+    task = _output_print_task(job_id)
+    matched = None
+    for item in task.get("print_files") or []:
+        if not isinstance(item, dict):
+            continue
+        if int(item.get("invoice_id") or 0) == int(invoice_id) and int(item.get("file_index") or 0) == int(file_index):
+            matched = item
+            break
+    if not matched:
+        raise HTTPException(status_code=404, detail="출력 대상 파일이 큐에 없습니다.")
+    path = Path(str(matched.get("path") or ""))
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail=f"출력 대상 PDF가 없습니다: {path}")
+    return FileResponse(path, filename=path.name, media_type="application/pdf")
+
+
 @app.post("/api/agent/jobs/{job_id}/complete")
 async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any]:
     payload = await request.json()
@@ -953,6 +989,34 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
         },
     )
     job_type = str(task_payload.get("job_type") or payload.get("job_type") or "")
+    if job_type == "output_print":
+        output_job = job_store.get(job_id)
+        output_payload = output_job.payload if output_job else {}
+        source_job_id = str(output_payload.get("source_job_id") or task_payload.get("source_job_id") or "")
+        for invoice_id in invoice_ids:
+            add_invoice_log(invoice_id, message, level="info" if ok else "error", job_id=job_id)
+        result_payload = dict(payload)
+        result_payload["job_type"] = "output_print"
+        if output_job:
+            merged_result = dict(output_job.result or {})
+            merged_result["agent_print"] = result_payload
+            job_store.set_result(job_id, merged_result)
+            if ok:
+                job_store.add_event(job_id, "done", 100, message)
+            else:
+                job_store.set_error(job_id, message)
+                job_store.add_event(job_id, "error", 100, message)
+        if source_job_id and job_store.get(source_job_id):
+            source = job_store.get(source_job_id)
+            source_result = dict(source.result if source else {})
+            source_result["one_click_output"] = job_store.get(job_id).result if job_store.get(job_id) else result_payload
+            job_store.set_result(source_job_id, source_result)
+            if ok:
+                job_store.add_event(source_job_id, "done", 100, message)
+            else:
+                job_store.set_error(source_job_id, message)
+                job_store.add_event(source_job_id, "error", 100, f"원클릭 출력 실패: {message}")
+        return {"ok": True}
     if job_type == "expense_report":
         expense_job = job_store.get(job_id)
         expense_payload = expense_job.payload if expense_job else {}
@@ -1088,6 +1152,8 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
                     "printer_key": output["printer_key"],
                     "printer_name": output["printer_name"],
                     "processor": body.processor or "WEB v1.0",
+                    "target_agent_id": setup.get("agent_id") or "",
+                    "target_client_ip": setup.get("client_ip") or client_ip(request),
                     "existing_only": True,
                     "one_click_existing_only": True,
                 },
@@ -1182,6 +1248,8 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
                 "printer_key": body.printer_key,
                 "printer_name": printer_name,
                 "processor": body.processor or "WEB v1.0",
+                "target_agent_id": setup.get("agent_id") or "",
+                "target_client_ip": setup.get("client_ip") or client_ip(request),
                 "existing_only": body.existing_only,
             },
         )

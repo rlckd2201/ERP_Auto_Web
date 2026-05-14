@@ -9,7 +9,7 @@ from typing import Any
 
 from .approval_fetcher import fetch_approval_documents
 from .compuzone_quote import auto_attach_compuzone_quote
-from .erp_queue import write_purchase_erp_queue
+from .erp_queue import write_output_print_queue, write_purchase_erp_queue
 from .erp_runner import run_invoice_erp_input, validate_purchase_invoice_for_erp
 from .config import settings
 from .invoice_db import ERP_QUEUED, ERROR, PROCESSING, DONE, add_invoice_log, get_invoice, set_invoice_status, update_invoice_json
@@ -386,15 +386,43 @@ class JobWorker:
             self.store.add_event(job.id, status, value, message)
 
         self.store.add_event(job.id, "printing", 10, f"문서 세트 작업 시작: {len(invoice_ids)}건")
+        prepare_action = "individual_pdf" if action == "print_individual" else action
         result = run_output_set_job(
             invoice_ids,
-            action=action,
+            action=prepare_action,
             printer_name=printer_name,
             existing_only=existing_only,
             job_id=job.id,
             progress=progress,
         )
         source_job_id = str(job.payload.get("source_job_id") or "")
+        if action == "print_individual":
+            if not printer_name:
+                raise RuntimeError("개별 출력용 프린터가 선택되지 않았습니다.")
+            target_agent_id = str(job.payload.get("target_agent_id") or "")
+            target_client_ip = str(job.payload.get("target_client_ip") or "")
+            if not target_agent_id or not target_client_ip:
+                raise RuntimeError("담당자 PC Agent 식별 정보가 없어 프린터 출력을 요청할 수 없습니다.")
+            queue_path = write_output_print_queue(
+                job.id,
+                list(result.get("results") or []),
+                printer_name=printer_name,
+                printer_key=str(job.payload.get("printer_key") or ""),
+                target_agent_id=target_agent_id,
+                target_client_ip=target_client_ip,
+                source_job_id=source_job_id,
+            )
+            result["action"] = "print_individual"
+            result["queue_path"] = str(queue_path)
+            result["target_agent_id"] = target_agent_id
+            result["target_client_ip"] = target_client_ip
+            result["printer_name"] = printer_name
+            result["defer_completion"] = True
+            result["notification"] = f"담당자 PC 출력 대기: {len(invoice_ids)}건"
+            self.store.add_event(job.id, "printing", 90, f"담당자 PC 출력 큐 등록: {printer_name}")
+            if source_job_id and self.store.get(source_job_id):
+                self.store.add_event(source_job_id, "printing", 99, f"담당자 PC 출력 대기: {printer_name}")
+            return result
         if source_job_id and self.store.get(source_job_id):
             source = self.store.get(source_job_id)
             merged_result = dict(source.result if source else {})

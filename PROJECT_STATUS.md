@@ -32,7 +32,7 @@ The active focus is purchase one-click processing, automatic mail collection, an
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.90`.
+- Current WEB/Agent version in files: `1.0.91`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Latest local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -46,6 +46,9 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - Mail collector now records `saved_invoice_ids`; worker auto-analyzes newly saved purchase invoices.
 - Agent preflight now reports Windows default printer as `default_printer`.
 - Setup status exposes `capabilities.default_printer`.
+- WEB/Agent files are now bumped to `1.0.91` for Agent-side document-set printing.
+- Printer output no longer uses operating-server `ShellExecute`; `print_individual` prepares PDFs on the server, queues `output_print`, and the manager PC Agent downloads/prints the PDFs locally.
+- Agent preflight advertises `output_print=true`; old Agents without that capability will not claim print tasks and should be updated from the server installer.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -55,10 +58,13 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - Graphify was updated after restoring the one-click source.
 - Graphify was updated again after the `fix101` backend/Agent/version repair.
 - Graphify was updated again after the `fix102` existing-document output update.
+- Graphify should be updated again after the `fix103` Agent-side output-print patch.
 
 ## Recently Changed Files
 
 - `web_v1/backend/app.py`
+- `web_v1/backend/agent_queue.py`
+- `web_v1/backend/erp_queue.py`
 - `web_v1/backend/job_store.py`
 - `web_v1/backend/mail_collector.py`
 - `web_v1/backend/models.py`
@@ -82,6 +88,8 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - `web_v1/frontend/index.html` now has `admin-only` on both purchase analysis buttons.
 - `fix101` ZIP content verification passed for `web_v1/VERSION`, `purchase-one-click`, `mail-collect/status`, `_start_mail_collect_scheduler`, `purchase_one_click`, `auto_analyzed_count`, `default_printer`, `oneClickOutputTarget`, and `원클릭 처리`.
 - `fix102` ZIP content verification passed for `web_v1/VERSION`, `purchase-one-click`, `existing_only`, `saved_output`, `기존 문서 출력`, and no `__pycache__`/`.pyc`.
+- Changed-file `py_compile` passed for `web_v1/backend/app.py`, `web_v1/backend/worker.py`, `web_v1/backend/erp_queue.py`, `web_v1/backend/agent_queue.py`, and `web_v1/agent/erp_agent.py`.
+- Current local workspace has `web_v1/frontend/app.js`, `web_v1/frontend/index.html`, and `web_v1/frontend/styles.css` deleted before this print patch. Do not create a deployment ZIP from this workspace until that unrelated deletion is resolved or restored intentionally.
 
 ## Open Work
 
@@ -92,6 +100,8 @@ The active focus is purchase one-click processing, automatic mail collection, an
   - output set refreshes after each event,
   - selected output target produces merged PDF or printer output.
 - Verify automatic mail collection scheduler with real unread mail and Compuzone quote auto-attach.
+- Verify Agent-side `output_print` on real 평택/김제 printers after deploying WEB/Agent `1.0.91`.
+- Resolve the local frontend deletion before packaging the next deployment ZIP.
 - After deploying this ZIP, manager PCs may require Agent update because the Agent bundle hash changes with backend/agent/version files.
 
 ## Operational Cautions
