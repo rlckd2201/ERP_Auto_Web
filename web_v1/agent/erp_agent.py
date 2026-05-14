@@ -58,7 +58,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.88"
+AGENT_BUNDLE_VERSION = "1.0.89"
 
 
 def now_text() -> str:
@@ -387,6 +387,17 @@ def _printer_entries() -> list[dict[str, str]]:
         return [{"name": "", "port": "", "driver": "", "error": str(exc)}]
 
 
+def _default_printer_name() -> str:
+    if platform.system().lower() != "windows":
+        return ""
+    try:
+        import win32print
+
+        return str(win32print.GetDefaultPrinter() or "").strip()
+    except Exception:
+        return ""
+
+
 def _detect_printer_mapping(printers: list[dict[str, str]]) -> dict[str, str]:
     mapping: dict[str, str] = {}
 
@@ -407,6 +418,7 @@ def _detect_printer_mapping(printers: list[dict[str, str]]) -> dict[str, str]:
 def _printer_check() -> dict[str, Any]:
     printers = _printer_entries()
     names = [item["name"] for item in printers if item.get("name")]
+    default_printer = _default_printer_name()
     config = _read_agent_config()
     stored = config.get("printer_mapping") if isinstance(config.get("printer_mapping"), dict) else {}
     detected = _detect_printer_mapping(printers)
@@ -424,6 +436,7 @@ def _printer_check() -> dict[str, Any]:
     return {
         "ok": ok,
         "printers": names,
+        "default_printer": default_printer,
         "printer_details": printers,
         "printer_mapping": mapping,
         "printer_mapping_source": source,
@@ -670,6 +683,7 @@ def preflight(server_url: str = "") -> dict[str, Any]:
         "companies": required_erp["companies"],
         "config": erp,
         "printers": printers["printers"],
+        "default_printer": printers.get("default_printer") or "",
         "printer_details": printers["printer_details"],
         "printer_mapping": printers["printer_mapping"],
         "printer_mapping_source": printers["printer_mapping_source"],
@@ -858,6 +872,7 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
                     "ok": False,
                     "agent_id": agent_id,
                     "invoice_ids": invoice_ids,
+                    "successes": successes,
                     "completed_at": now_text(),
                     "message": message,
                 },

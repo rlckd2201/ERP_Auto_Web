@@ -7,7 +7,7 @@ Updated: 2026-05-14
 - Read this file before starting work.
 - Update this file before ending a meaningful work session.
 - This file must be enough to recover goals, decisions, changed files, remaining work, tests, deployment ZIP, and cautions after context compaction.
-- When commands are requested, always provide complete numbered steps `1, 2, 3`.
+- When commands are requested, provide copy-pasteable command blocks without `1.`/`2.` prefixes inside the commands.
 
 ## Current Goal
 
@@ -33,8 +33,8 @@ The active focus is purchase one-click processing, automatic mail collection, an
 
 - Current WEB/Agent version in files: `1.0.89`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
-- Latest local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix98_20260514_113533.zip`.
-- `fix97` contains the intended frontend, but a later local/server state showed old UI symptoms. Rebuilt `fix98` from the verified one-click source so the operating server can be overwritten cleanly.
+- Latest local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
+- `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - Backend has new `POST /api/jobs/purchase-one-click`.
 - Backend has new `GET /api/mail-collect/status`.
 - Backend startup starts a 1-minute mail collection scheduler with duplicate-run prevention.
@@ -47,6 +47,7 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - Frontend hides mail collect/log/debug panels in simple mode via `admin-only`.
 - Frontend hides purchase `분석` and `분석 저장` buttons in simple mode via `admin-only`.
 - Graphify was updated after restoring the one-click source.
+- Graphify was updated again after the `fix101` backend/Agent/version repair.
 
 ## Recently Changed Files
 
@@ -71,6 +72,7 @@ The active focus is purchase one-click processing, automatic mail collection, an
   - `web_v1/agent`
 - `node --check web_v1/frontend/app.js` passed.
 - `web_v1/frontend/index.html` now has `admin-only` on both purchase analysis buttons.
+- `fix101` ZIP content verification passed for `web_v1/VERSION`, `purchase-one-click`, `mail-collect/status`, `_start_mail_collect_scheduler`, `purchase_one_click`, `auto_analyzed_count`, `default_printer`, `oneClickOutputTarget`, and `원클릭 처리`.
 
 ## Open Work
 
@@ -90,6 +92,6 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - Local development path:
   - `C:\Users\user\Desktop\개발파일\회계업무 자동화_WEB_Version`
 - Because backend files are included in the Agent bundle hash, manager PCs may show latest-version-required after this update. Run the required setup/installer on manager PCs after deploying the server ZIP.
-- User expects numbered deployment commands every time commands are given.
+- User expects clean command blocks without `1.`/`2.` prefixes inside the commands.
 - Large feature updates or high-volume work should be committed and pushed to `origin` (`https://github.com/rlckd2201/ERP_Auto_Web`) after verification, using a focused commit that excludes pycache, temporary ZIPs, and unrelated backup folders.
 - Keep Graphify current: inspect `graphify-out/GRAPH_REPORT.md` before architecture/codebase questions and run `graphify update .` after meaningful code changes.

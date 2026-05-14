@@ -70,6 +70,8 @@ class JobWorker:
                 result = self._run_purchase_mail_collect(job)
             elif job.job_type == "purchase_analyze":
                 result = self._run_purchase_analyze(job)
+            elif job.job_type == "purchase_one_click":
+                result = self._run_purchase_erp_input(job)
             elif job.job_type == "purchase_erp_input":
                 result = self._run_purchase_erp_input(job)
             elif job.job_type == "output_set":
@@ -83,6 +85,10 @@ class JobWorker:
         except Exception as exc:
             self.store.set_error(job_id, str(exc))
             self.store.add_event(job_id, "error", 100, f"Job failed: {exc}")
+            source_job_id = str(job.payload.get("source_job_id") or "")
+            if job.job_type == "output_set" and source_job_id and self.store.get(source_job_id):
+                self.store.set_error(source_job_id, str(exc))
+                self.store.add_event(source_job_id, "error", 100, f"원클릭 출력 실패: {exc}")
 
     def _run_demo(self, job: JobRecord) -> dict[str, Any]:
         steps = [
@@ -110,12 +116,36 @@ class JobWorker:
         duplicates = int(result.get("duplicate_count") or 0)
         failed = int(result.get("failed_count") or 0)
         scanned = int(result.get("scanned_messages") or 0)
+        saved_invoice_ids = [int(item) for item in result.get("saved_invoice_ids") or [] if str(item).isdigit()]
+        auto_analyzed_count = 0
+        for invoice_id in saved_invoice_ids:
+            try:
+                invoice = get_invoice(invoice_id)
+                if not invoice or str(invoice.get("invoice_type") or "").strip().lower() != "purchase":
+                    continue
+                self.store.add_event(job.id, "analyzing", 88, f"신규 구매건 자동 분석 시작: #{invoice_id}")
+                analysis = analyze_purchase_documents(invoice)
+                analysis["erp_ready"] = bool(analysis.get("items"))
+                update_invoice_json(
+                    invoice_id,
+                    analysis,
+                    message="메일 수집 후 신규 구매건 자동 분석 결과가 저장되었습니다.",
+                )
+                auto_analyzed_count += 1
+            except Exception as exc:
+                failed += 1
+                errors = result.setdefault("errors", [])
+                if isinstance(errors, list):
+                    errors.append(f"auto analysis #{invoice_id}: {exc}")
+                add_invoice_log(invoice_id, f"메일 수집 후 자동 분석 실패: {exc}", level="error", job_id=job.id)
         self.store.add_event(
             job.id,
             "printing",
             92,
             f"수집 결과 정리: 메일 {scanned}건, 저장 {saved}건, 중복 {duplicates}건, 실패 {failed}건",
         )
+        result["auto_analyzed_count"] = auto_analyzed_count
+        result["failed_count"] = failed
         result["notification"] = f"구매 메일 수집 완료: 저장 {saved}건, 실패 {failed}건"
         return result
 
@@ -348,13 +378,21 @@ class JobWorker:
             self.store.add_event(job.id, status, value, message)
 
         self.store.add_event(job.id, "printing", 10, f"문서 세트 작업 시작: {len(invoice_ids)}건")
-        return run_output_set_job(
+        result = run_output_set_job(
             invoice_ids,
             action=action,
             printer_name=printer_name,
             job_id=job.id,
             progress=progress,
         )
+        source_job_id = str(job.payload.get("source_job_id") or "")
+        if source_job_id and self.store.get(source_job_id):
+            source = self.store.get(source_job_id)
+            merged_result = dict(source.result if source else {})
+            merged_result["one_click_output"] = result
+            self.store.set_result(source_job_id, merged_result)
+            self.store.add_event(source_job_id, "done", 100, str(result.get("notification") or "원클릭 출력 완료"))
+        return result
 
     def _run_placeholder(self, job: JobRecord) -> dict[str, Any]:
         self.store.add_event(job.id, "running", 15, f"Preparing {job.job_type}")

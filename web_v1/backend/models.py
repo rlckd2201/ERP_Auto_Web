@@ -18,6 +18,7 @@ class JobCreateRequest(BaseModel):
 class InvoiceIdsRequest(BaseModel):
     invoice_ids: list[int] = Field(default_factory=list)
     processor: str = Field(default="WEB v1.0", max_length=80)
+    output_target: Literal["pdf", "pyeongtaek", "gimje"] = "pdf"
 
 
 class OutputSetRequest(BaseModel):

@@ -393,6 +393,7 @@ def setup_status(user_id: str = "", agent_id: str = "", client_ip: str = "") -> 
 
     printer_names = _printer_names(capabilities)
     printer_mapping = _merged_printer_mapping(profile)
+    default_printer = str(setup.get("default_printer") or capabilities.get("default_printer") or "").strip()
     for key, label in PRINTER_KEYS.items():
         selected = printer_mapping.get(key, "")
         installed = bool(selected) and (not printer_names or selected in printer_names)
@@ -459,6 +460,7 @@ def setup_status(user_id: str = "", agent_id: str = "", client_ip: str = "") -> 
         "printer_keys": [{"key": key, "label": label} for key, label in PRINTER_KEYS.items()],
         "capabilities": {
             "printers": printer_names,
+            "default_printer": default_printer,
             "printer_mapping": printer_mapping,
             "erp_base": erp_base,
             "expense_template": expense_template,

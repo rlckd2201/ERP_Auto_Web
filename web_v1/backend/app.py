@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import shutil
+import threading
 import time
 import zipfile
 from datetime import datetime
@@ -96,6 +97,10 @@ FRONTEND_DIR = WEB_ROOT / "frontend"
 INSTALLER_EXE_PATH = WEB_ROOT / "backend" / "tools" / "AccountingWebRequiredSetup.exe"
 INSTALLER_EXE_OVERLAY_BEGIN = b"\r\n--ACCOUNTING-WEB-SERVER-URL-BEGIN--\r\n"
 INSTALLER_EXE_OVERLAY_END = b"\r\n--ACCOUNTING-WEB-SERVER-URL-END--\r\n"
+_MAIL_COLLECT_INTERVAL_SECONDS = 60
+_mail_collect_scheduler_started = False
+_mail_collect_scheduler_lock = threading.RLock()
+_mail_collect_last_job_id = ""
 
 
 def _invoice_data(invoice: dict[str, Any] | None) -> dict[str, Any]:
@@ -126,6 +131,7 @@ def _queue_expense_report_after_erp(
         return False
     if _expense_report_exists(invoice):
         build_output_set_status(invoice, persist=True)
+        _maybe_queue_one_click_output(source_job_id)
         return False
     if not str(agent_id or "").strip() or not str(target_client_ip or "").strip():
         add_invoice_log(invoice_id, "ERP 완료 후 현금출금결의서 자동 생성 보류: 담당자 PC Agent 식별 정보 없음", level="error", job_id=source_job_id)
@@ -155,6 +161,119 @@ def _queue_expense_report_after_erp(
     if job_store.get(source_job_id):
         job_store.add_event(source_job_id, "erp", 98, f"현금출금결의서 자동 생성 큐 등록: #{invoice_id}")
     return True
+
+
+def _job_time(value: Any) -> str:
+    return value.isoformat(timespec="seconds") if hasattr(value, "isoformat") else ""
+
+
+def _mail_collect_job_running(job: Any) -> bool:
+    return bool(job and getattr(job, "status", "") not in {"done", "error"})
+
+
+def _queue_mail_collect_job(*, auto: bool) -> Any:
+    global _mail_collect_last_job_id
+    with _mail_collect_scheduler_lock:
+        current = job_store.get(_mail_collect_last_job_id) if _mail_collect_last_job_id else None
+        if _mail_collect_job_running(current):
+            return current
+        job = job_store.create(
+            JobCreateRequest(
+                job_type="purchase_mail_collect",
+                title="구매 메일 자동 수집" if auto else "구매 메일 수집",
+                payload={"auto": auto},
+            )
+        )
+        _mail_collect_last_job_id = job.id
+    worker.submit(job)
+    return job
+
+
+def _mail_collect_status() -> dict[str, Any]:
+    with _mail_collect_scheduler_lock:
+        job_id = _mail_collect_last_job_id
+    job = job_store.get(job_id) if job_id else None
+    result = job.result if job else {}
+    return {
+        "enabled": True,
+        "interval_seconds": _MAIL_COLLECT_INTERVAL_SECONDS,
+        "running": _mail_collect_job_running(job),
+        "job_id": job_id,
+        "status": getattr(job, "status", "idle") if job else "idle",
+        "last_started_at": _job_time(getattr(job, "started_at", None) or getattr(job, "created_at", None)) if job else "",
+        "last_finished_at": _job_time(getattr(job, "finished_at", None)) if job else "",
+        "saved_count": int(result.get("saved_count") or 0) if isinstance(result, dict) else 0,
+        "duplicate_count": int(result.get("duplicate_count") or 0) if isinstance(result, dict) else 0,
+        "failed_count": int(result.get("failed_count") or 0) if isinstance(result, dict) else 0,
+        "auto_analyzed_count": int(result.get("auto_analyzed_count") or 0) if isinstance(result, dict) else 0,
+        "errors": result.get("errors", []) if isinstance(result, dict) and isinstance(result.get("errors"), list) else [],
+    }
+
+
+def _start_mail_collect_scheduler() -> None:
+    global _mail_collect_scheduler_started
+    with _mail_collect_scheduler_lock:
+        if _mail_collect_scheduler_started:
+            return
+        _mail_collect_scheduler_started = True
+
+    def _loop() -> None:
+        while True:
+            try:
+                _queue_mail_collect_job(auto=True)
+            except Exception:
+                logging.exception("Automatic purchase mail collection failed to queue")
+            time.sleep(_MAIL_COLLECT_INTERVAL_SECONDS)
+
+    threading.Thread(target=_loop, name="purchase-mail-collector", daemon=True).start()
+
+
+def _one_click_output_payload(output_target: str, setup: dict[str, Any]) -> dict[str, str]:
+    target = output_target if output_target in {"pdf", "pyeongtaek", "gimje"} else "pdf"
+    if target == "pdf":
+        return {"action": "merged_pdf", "printer_key": "pdf", "printer_name": ""}
+    mapping = setup.get("capabilities", {}).get("printer_mapping", {})
+    printer_name = str(mapping.get(target) or "").strip() if isinstance(mapping, dict) else ""
+    if not printer_name:
+        label = "평택 프린터" if target == "pyeongtaek" else "김제 프린터"
+        raise HTTPException(status_code=400, detail=f"{label} 매핑이 없습니다. 프린터 설정을 먼저 저장해야 합니다.")
+    return {"action": "print_individual", "printer_key": target, "printer_name": printer_name}
+
+
+def _maybe_queue_one_click_output(source_job_id: str) -> None:
+    source_job = job_store.get(source_job_id)
+    if not source_job or not bool(source_job.payload.get("one_click")):
+        return
+    if str(source_job.payload.get("one_click_output_job_id") or ""):
+        return
+    invoice_ids = [int(item) for item in source_job.payload.get("invoice_ids") or [] if str(item).isdigit()]
+    if not invoice_ids:
+        return
+    missing = []
+    for invoice_id in invoice_ids:
+        if not _expense_report_exists(get_invoice(invoice_id)):
+            missing.append(invoice_id)
+    if missing:
+        if job_store.get(source_job_id):
+            job_store.add_event(source_job_id, "printing", 97, f"현금출금결의서 생성 대기: {len(missing)}건")
+        return
+    job = job_store.create(
+        JobCreateRequest(
+            job_type="output_set",
+            title=f"원클릭 문서 출력 {len(invoice_ids)}건",
+            payload={
+                "invoice_ids": invoice_ids,
+                "action": str(source_job.payload.get("output_action") or "merged_pdf"),
+                "printer_key": str(source_job.payload.get("printer_key") or "pdf"),
+                "printer_name": str(source_job.payload.get("printer_name") or ""),
+                "processor": str(source_job.payload.get("processor") or "WEB v1.0"),
+                "source_job_id": source_job_id,
+            },
+        )
+    )
+    source_job.payload["one_click_output_job_id"] = job.id
+    job_store.add_event(source_job_id, "printing", 98, f"원클릭 출력 작업 등록: {job.id}")
+    worker.submit(job)
 
 
 def _installer_server_url(request: Request) -> str:
@@ -504,6 +623,7 @@ def on_startup() -> None:
     init_auth_db()
     init_setup_db()
     worker.start()
+    _start_mail_collect_scheduler()
 
 
 @app.get("/health")
@@ -514,6 +634,11 @@ def health() -> dict[str, Any]:
         "env": settings.app_env,
         "erp_execution_mode": settings.erp_execution_mode,
     }
+
+
+@app.get("/api/mail-collect/status")
+def api_mail_collect_status() -> dict[str, Any]:
+    return _mail_collect_status()
 
 
 @app.post("/api/agent/heartbeat")
@@ -821,6 +946,9 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
     )
     job_type = str(task_payload.get("job_type") or payload.get("job_type") or "")
     if job_type == "expense_report":
+        expense_job = job_store.get(job_id)
+        expense_payload = expense_job.payload if expense_job else {}
+        source_job_id = str(expense_payload.get("source_job_id") or task_payload.get("source_job_id") or "")
         for invoice_id in invoice_ids:
             refreshed_invoice = get_invoice(invoice_id)
             if refreshed_invoice:
@@ -833,15 +961,18 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
             else:
                 job_store.set_error(job_id, message)
                 job_store.add_event(job_id, "error", 100, message)
+        if ok and source_job_id:
+            _maybe_queue_one_click_output(source_job_id)
         return {"ok": True}
     for index, invoice_id in enumerate(invoice_ids):
         result = success_by_invoice_id.get(invoice_id)
         if result is None and index < len(successes) and isinstance(successes[index], dict):
             result = successes[index]
+        invoice_ok = ok or invoice_id in success_by_invoice_id
         erp_pdf_path = str((result or {}).get("erp_pdf_server_path") or (result or {}).get("erp_pdf_path") or "").strip()
         erp_pdf_local_path = str((result or {}).get("erp_pdf_local_path") or "").strip()
         erp_pdf_uploaded = bool((result or {}).get("erp_pdf_uploaded") or (result or {}).get("erp_pdf_server_path"))
-        if ok and erp_pdf_path and erp_pdf_uploaded and Path(erp_pdf_path).exists():
+        if invoice_ok and erp_pdf_path and erp_pdf_uploaded and Path(erp_pdf_path).exists():
             update_invoice_json(
                 invoice_id,
                 {"erp_pdf_path": erp_pdf_path, "erp_voucher_pdf_path": erp_pdf_path},
@@ -850,21 +981,21 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
             refreshed_invoice = get_invoice(invoice_id)
             if refreshed_invoice:
                 build_output_set_status(refreshed_invoice, persist=True)
-        elif ok and erp_pdf_path:
+        elif invoice_ok and erp_pdf_path:
             add_invoice_log(
                 invoice_id,
                 f"ERP 전표 PDF 서버 보관 누락: server_path={erp_pdf_path}, agent_local_path={erp_pdf_local_path}",
                 level="error",
                 job_id=job_id,
             )
-        if ok:
+        if invoice_ok:
             refreshed_invoice = get_invoice(invoice_id)
             if refreshed_invoice:
                 build_output_set_status(refreshed_invoice, persist=True)
         display_processor = normalize_processor(agent_id) or "ERP Agent"
-        set_invoice_status(invoice_id, DONE if ok else ERROR, processor=display_processor, job_id=job_id, processed=ok, error="" if ok else message)
-        add_invoice_log(invoice_id, message, level="info" if ok else "error", job_id=job_id)
-        if ok:
+        set_invoice_status(invoice_id, DONE if invoice_ok else ERROR, processor=display_processor, job_id=job_id, processed=invoice_ok, error="" if invoice_ok else message)
+        add_invoice_log(invoice_id, message, level="info" if invoice_ok else "error", job_id=job_id)
+        if invoice_ok:
             _queue_expense_report_after_erp(
                 invoice_id,
                 agent_id=agent_id,
@@ -917,12 +1048,32 @@ def create_demo_job() -> JobResponse:
 
 @app.post("/api/jobs/purchase-mail-collect", response_model=JobResponse, status_code=202)
 def create_purchase_mail_collect_job(request: Request) -> JobResponse:
+    require_setup_ready(request)
+    job = _queue_mail_collect_job(auto=False)
+    return job.to_response()
+
+
+@app.post("/api/jobs/purchase-one-click", response_model=JobResponse, status_code=202)
+def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
+    if not body.invoice_ids:
+        raise HTTPException(status_code=400, detail="원클릭 처리할 구매 건을 선택해야 합니다.")
     setup = require_setup_ready(request)
+    output = _one_click_output_payload(body.output_target, setup)
     job = job_store.create(
         JobCreateRequest(
-            job_type="purchase_mail_collect",
-            title="구매 메일 수집",
-            payload={},
+            job_type="purchase_one_click",
+            title=f"구매 원클릭 처리 {len(body.invoice_ids)}건",
+            payload={
+                "invoice_ids": body.invoice_ids,
+                "processor": body.processor or "WEB v1.0",
+                "target_agent_id": setup.get("agent_id") or "",
+                "target_client_ip": setup.get("client_ip") or client_ip(request),
+                "one_click": True,
+                "output_target": body.output_target,
+                "output_action": output["action"],
+                "printer_key": output["printer_key"],
+                "printer_name": output["printer_name"],
+            },
         )
     )
     worker.submit(job)

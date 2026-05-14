@@ -26,6 +26,7 @@ class CollectResult:
     saved_count: int = 0
     duplicate_count: int = 0
     failed_count: int = 0
+    saved_invoice_ids: list[int] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict:
@@ -35,6 +36,7 @@ class CollectResult:
             "saved_count": self.saved_count,
             "duplicate_count": self.duplicate_count,
             "failed_count": self.failed_count,
+            "saved_invoice_ids": self.saved_invoice_ids,
             "errors": self.errors[-20:],
         }
 
@@ -196,6 +198,7 @@ def collect_mail_once(progress: ProgressCallback | None = None) -> dict:
                             if invoice_type == "purchase":
                                 invoice = get_invoice_by_pdf_path(str(crawled.get("pdf_path") or ""))
                                 if invoice:
+                                    result.saved_invoice_ids.append(int(invoice["id"]))
                                     emit("analyzing", min(base_progress + 18, 86), "컴퓨존 견적서 자동첨부 확인")
                                     quote_result = auto_attach_compuzone_quote(
                                         int(invoice["id"]),
