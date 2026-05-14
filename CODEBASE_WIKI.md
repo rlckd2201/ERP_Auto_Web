@@ -2,7 +2,7 @@
 
 Updated: 2026-05-14
 
-This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1202 nodes, 3866 edges, and 31 communities, so use the graph for navigation, then verify behavior in the active source before editing.
+This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1265 nodes, 4050 edges, and 34 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
 ## Reading Rules
 
@@ -15,7 +15,7 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-14, WEB/Agent files are at `1.0.93`. The last local deployment ZIP is:
+As of 2026-05-14, WEB/Agent files are at `1.0.94`. The last local deployment ZIP is still:
 
 ```text
 C:\Tmp\accounting_web_v1_no_detail_refresh_erp_edit_fix105_20260514_145151.zip
@@ -30,7 +30,7 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - The frontend no longer force-refreshes selected purchase detail/logs during job follow-up refreshes.
 - One-click auto-saves the open purchase analysis form before ERP, and `erp_runner.py` now prioritizes saved screen edits for ERP payload fields.
 
-Next work focus requested by the user: move to `정기 처리` instead of continuing purchase bug fixing.
+Current active product work: the first WEB `정기 처리` pass is implemented in the active source. Standalone `SMILE EDI` crawler development also exists as a separate prototype before wiring into mail collection or operating WEB flow.
 
 ## Mental Model
 
@@ -143,12 +143,15 @@ High-value routes:
 | `POST /api/agent/jobs/{job_id}/complete` | Agent reports final success/failure for claimed tasks. |
 | `POST /api/jobs/purchase-mail-collect` | Manual one-shot purchase mail collection. |
 | `POST /api/jobs/purchase-one-click` | Main purchase one-click workflow. |
+| `POST /api/jobs/regular-one-click` | Main regular-processing ERP + output-set workflow. |
+| `POST /api/jobs/regular-erp-input` | Direct regular ERP queue path. |
 | `POST /api/jobs/output-set` | Save/print output document sets. |
 | `GET /api/invoices` | Invoice list. |
 | `GET /api/invoices/{invoice_id}` | Invoice detail. |
 | `GET /api/invoices/{invoice_id}/output-set` | Required document status for detail screen. |
 | `POST /api/invoices/manual-purchase` | Manual purchase intake from uploaded PDFs. |
 | `PATCH /api/invoices/{invoice_id}/purchase-analysis` | Save edited analysis/item data. |
+| `PATCH /api/invoices/{invoice_id}/regular-data` | Save edited regular ERP fields/items/accounts. |
 | `GET /api/jobs/{job_id}/events` | Server-sent job progress events. |
 
 ## Job Lifecycle
@@ -169,6 +172,8 @@ Main job types:
 | `purchase_analyze` | `JobWorker._run_purchase_analyze()` | Ensures quote, analyzes purchase docs, starts background approval fetch. |
 | `purchase_one_click` | `JobWorker._run_purchase_erp_input()` | Queues ERP for non-complete purchase invoices; output is queued after Agent completion/report generation. |
 | `purchase_erp_input` | `JobWorker._run_purchase_erp_input()` | Direct ERP queue path, mostly admin/detail mode. |
+| `regular_one_click` | `JobWorker._run_purchase_erp_input()` | Queues regular ERP, then uses regular output-set readiness for `전표 + 세금계산서`. |
+| `regular_erp_input` | `JobWorker._run_purchase_erp_input()` | Direct regular ERP queue path. Queue files use `regular_erp_input`. |
 | `expense_report` | Agent-side task | Written to queue by server and executed by manager PC Agent. |
 | `output_set` | `JobWorker._run_output_set()` | Builds document set, saves merged PDF, saves individual files, or queues Agent printing. |
 | `output_print` | Agent-side task | Server-prepared output PDFs are downloaded and printed by the manager PC Agent. |
@@ -203,16 +208,25 @@ Edited purchase analysis rule:
 - `erp_runner.build_purchase_erp_payload()` merges data in this priority order: raw JSON, nested raw `data`, list/top-level invoice fields, then current `invoice.data`. Screen-saved edits must win.
 - `_resolve_site()` accepts explicit edited `site_name` before inferred buyer-business-number mapping.
 
-## Regular Processing Starting Point
+## Regular Processing Flow
 
-`정기 처리` is not yet a first-class WEB screen. The frontend nav button is present but disabled in `web_v1/frontend/index.html`.
+`정기 처리` is now a first-class WEB mode in the shared frontend shell.
 
-Existing active WEB support:
+Current active WEB support:
 
-- `GET /api/invoices?mode=regular` lists regular invoices through `invoice_db.list_invoices()`.
+- `web_v1/frontend/index.html` enables the `정기 처리` nav button.
+- `frontend/app.js` switches between purchase and regular modes, loading `/api/invoices?mode=regular`.
+- Regular detail renders editable site/vendor/date/amount fields and item/account rows.
+- The frontend auto-saves the selected regular detail form before regular one-click ERP.
+- `PATCH /api/invoices/{invoice_id}/regular-data` persists edited regular fields/items/accounts.
+- `POST /api/jobs/regular-one-click` partitions already-ready regular output sets from invoices needing ERP.
+- `POST /api/jobs/regular-erp-input` supports direct regular ERP queueing.
+- `erp_queue.write_regular_erp_queue()` writes `regular_erp_{job_id}.json` with `job_type=regular_erp_input`.
+- `agent_queue.claim_next_erp_task()` can claim `regular_erp_input` queue files.
+- `worker._run_purchase_erp_input()` now handles both purchase and regular job types, validating regular invoices by building a regular ERP payload.
 - `invoice_db.detect_invoice_type()` classifies regular vendors and crawler/XML results.
 - `mail_collector.py` keeps known regular mail/XML flows as `invoice_type=regular`.
-- `erp_runner.build_regular_erp_payload()` already builds WEB-side regular ERP payload rows.
+- `erp_runner.build_regular_erp_payload()` builds WEB-side regular ERP rows with legacy account/summary rules and `미지급금(원화)`.
 - `run_invoice_erp_input()` chooses `build_regular_erp_payload()` for non-purchase invoices.
 - `output_set.py` supports regular output sets with only `전표` and `세금계산서`.
 
@@ -222,14 +236,11 @@ Legacy behavior to port/reference:
 - Start at `create_regular_tab()`, `_extract_regular_payload()`, `_guess_regular_account()`, `copy_regular_erp()`, and `run_regular_print_set()`.
 - Legacy regular flow includes dashboard, multi-select, manual complete/delete, item/account editing, ERP voucher creation, tax PDF preview/print, and `전표 + 세금계산서` output set.
 
-Suggested WEB implementation path:
+Remaining regular gaps:
 
-- Enable a real `정기 처리` view in the static frontend instead of the disabled nav item.
-- Add a regular list using `/api/invoices?mode=regular`.
-- Reuse setup/Agent readiness from purchase flow.
-- Add a regular ERP job route or generalize `purchase_erp_input` naming so regular invoices can be queued intentionally.
-- Reuse `output_set` for regular merged PDF / individual PDF / Agent-side printer output.
-- Keep the same no-auto-detail-refresh rule used by purchase editing.
+- Operational E2E is not yet confirmed on the real operating server/manager PC Agent.
+- Direct tax PDF preview/standalone tax-only print from the legacy tab is not separately ported; WEB regular output is through the document-set flow.
+- Manual complete/delete uses the existing generic retry/delete APIs, not a regular-specific legacy lock/complete API.
 
 ## Output Set Rules
 
@@ -338,6 +349,15 @@ Crawler-related Graphify hubs:
 - `CsbillHandler`
 - `KtAttachmentHandler`
 - `AutoEverHandler`
+
+SMILE EDI prototype:
+
+- File: `tax_crawler/portal_smileedi.py`.
+- Status: standalone prototype only; intentionally not registered in `crawler_main.py` yet.
+- Target links: `https://www.smileedi.com/DtiEmail.do?...`.
+- Auth rule: infer buyer company from mail body and try the configured business numbers in order, such as D1~D3 for `(주)대승`.
+- Approval rule: default runs are dry-run for approval. The crawler records unapproved status and debug HTML/screenshots; it clicks approval only when explicitly run with `--approve`.
+- Next data needed from manual testing: authenticated page HTML/screenshots before and after approval so the final approval selectors and confirmation handling can be locked down safely.
 
 When changing crawler behavior, prefer active `tax_crawler` files over backup copies.
 

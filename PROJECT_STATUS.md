@@ -12,15 +12,19 @@ Updated: 2026-05-14
 ## Current Goal
 
 WEB v1.0 accounting automation is replacing the old CS desktop accounting flow.
-Purchase one-click processing, automatic mail collection, and simplified manager UI are implemented enough to pause further bug chasing for now. The active next focus is moving to regular processing (`정기 처리`):
+Purchase one-click processing, automatic mail collection, simplified manager UI, and the first WEB regular-processing (`정기 처리`) pass are implemented enough for source-level review and next operational E2E. A standalone SMILE EDI crawler prototype also exists before wiring anything into operations:
 
+- New crawler prototype name: `SMILE EDI`.
+- Build the crawler first, do not wire it into automatic mail collection or the operating WEB flow yet.
+- First target: open SMILE EDI `DtiEmail.do` mail links, try D1~D3 business numbers inferred from the mail buyer name, detect unapproved invoices, and approve only when explicitly requested during manual testing.
+- Approval cannot be reverted, so default crawler runs must be dry-run for approval.
 - Multiple selected purchase invoices should run through one simple `one-click processing` flow.
 - One-click should cover ERP input, ERP voucher PDF save/upload, cash withdrawal report creation, output-set refresh, and selected output target.
 - Already completed purchase invoices with all required output documents must skip ERP/cash-report regeneration and print/save from stored documents.
 - The manager default UI should stay simple; debug logs and individual analysis/output buttons should live in detail/admin mode.
 - Mail collection should run automatically every minute while the operating server is running.
-- Build a real WEB regular-processing view from the disabled `정기 처리` nav item.
-- Port/reference the legacy manager regular tab behavior from `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`.
+- E2E verify the new WEB regular-processing view and regular Agent ERP/output queue on a real manager PC.
+- Continue referencing the legacy manager regular tab behavior from `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` for remaining parity gaps.
 
 ## Active Architecture Decisions
 
@@ -34,7 +38,7 @@ Purchase one-click processing, automatic mail collection, and simplified manager
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.93`.
+- Current WEB/Agent version in files: `1.0.94`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Latest local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -55,6 +59,12 @@ Purchase one-click processing, automatic mail collection, and simplified manager
 - `fix105` removes automatic selected-detail/log refresh during job follow-up refreshes, so editing purchase analysis fields is not interrupted.
 - `fix105` auto-saves the currently open purchase analysis form before one-click ERP starts.
 - `fix105` makes ERP payload construction merge raw JSON, nested data, and current invoice fields with the latest saved screen edits taking priority; explicit edited 사업장 also wins over inferred buyer business-number mapping.
+- `fix106` enables the WEB `정기 처리` nav/view, regular list/detail editing, regular one-click ERP/output routing, and regular Agent queue claiming.
+- `fix106` adds `PATCH /api/invoices/{invoice_id}/regular-data`, `POST /api/jobs/regular-one-click`, and `POST /api/jobs/regular-erp-input`.
+- `fix106` writes regular ERP queue files as `regular_erp_{job_id}.json` with `job_type=regular_erp_input`, and the Agent queue accepts that job type.
+- `fix106` ports more legacy regular ERP account/summary rules into `build_regular_erp_payload()` and corrects the regular payable row to `미지급금(원화)`.
+- `tax_crawler/portal_smileedi.py` has been added as a standalone SMILE EDI crawler prototype. It is intentionally not registered in `crawler_main.py` yet.
+- SMILE EDI approval handling is opt-in via the prototype CLI `--approve`; without that flag it records unapproved status and debug HTML/screenshots only.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -64,7 +74,7 @@ Purchase one-click processing, automatic mail collection, and simplified manager
 - Graphify was updated after restoring the one-click source.
 - Graphify was updated again after the `fix101` backend/Agent/version repair.
 - Graphify was updated again after the `fix102` existing-document output update.
-- Graphify should be updated again after the `fix103` Agent-side output-print patch.
+- Graphify was updated after adding the standalone SMILE EDI crawler prototype and the first regular-processing WEB pass: 1265 nodes, 4050 edges, 34 communities.
 
 ## Recently Changed Files
 
@@ -72,6 +82,7 @@ Purchase one-click processing, automatic mail collection, and simplified manager
 - `web_v1/backend/agent_queue.py`
 - `web_v1/backend/erp_queue.py`
 - `web_v1/backend/erp_runner.py`
+- `web_v1/backend/invoice_db.py`
 - `web_v1/backend/job_store.py`
 - `web_v1/backend/mail_collector.py`
 - `web_v1/backend/models.py`
@@ -83,6 +94,7 @@ Purchase one-click processing, automatic mail collection, and simplified manager
 - `web_v1/frontend/index.html`
 - `web_v1/frontend/styles.css`
 - `web_v1/VERSION`
+- `tax_crawler/portal_smileedi.py`
 - `PROJECT_STATUS.md`
 
 ## Verification Results
@@ -102,6 +114,11 @@ Purchase one-click processing, automatic mail collection, and simplified manager
 - The unrelated local deletion of `web_v1/frontend/app.js`, `web_v1/frontend/index.html`, and `web_v1/frontend/styles.css` was restored before packaging.
 - `fix105` frontend syntax check passed after removing automatic selected-log/detail refresh and bumping the `app.js` cache key.
 - `fix105` ERP payload regression passed: edited 매입처, 사업장, 회계일, 금액, 품목 values override older raw/top-level values before ERP input.
+- `fix106` `node --check web_v1/frontend/app.js` passed.
+- `fix106` changed-file `py_compile` passed for `web_v1/backend/app.py`, `web_v1/backend/worker.py`, `web_v1/backend/erp_queue.py`, `web_v1/backend/agent_queue.py`, `web_v1/backend/erp_runner.py`, `web_v1/backend/invoice_db.py`, `web_v1/backend/models.py`, and `web_v1/agent/erp_agent.py`.
+- `fix106` browser mock smoke test passed: regular mode loaded, one regular invoice rendered, row selection opened regular detail with account/item/output-set content, and `정기 원클릭 처리` became enabled.
+- `py_compile` passed for `tax_crawler/portal_smileedi.py`.
+- SMILE EDI URL detection unit check passed for `https://www.smileedi.com/DtiEmail.do?...`.
 
 ## Open Work
 
@@ -114,6 +131,13 @@ Purchase one-click processing, automatic mail collection, and simplified manager
 - Verify automatic mail collection scheduler with real unread mail and Compuzone quote auto-attach.
 - Verify Agent-side `output_print` on real 평택/김제 printers after deploying current WEB/Agent.
 - Verify one-click ERP with an edited purchase analysis field set: 회계일, 매입처, 품목, 계정, 부서.
+- Verify regular one-click on operating server and a real manager PC Agent:
+  - regular ERP voucher creation/upload,
+  - edited regular fields/items/accounts reaching ERP,
+  - existing regular `전표 + 세금계산서` output skip path,
+  - merged PDF and Agent-side 평택/김제 print targets.
+- For SMILE EDI, collect debug HTML/screenshots from one dry-run test after business-number authentication. Confirm the actual 승인 button/confirm-dialog DOM before running a real `--approve` test.
+- After SMILE EDI approval is verified manually, decide whether to add the handler to `crawler_main.py` and `extract_links_from_mail()`.
 - After deploying this ZIP, manager PCs may require Agent update because the Agent bundle hash changes with backend/agent/version files.
 
 ## Operational Cautions
