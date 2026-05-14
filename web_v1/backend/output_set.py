@@ -779,9 +779,12 @@ def _copy_or_merge_doc(doc: dict[str, Any], target_dir: Path) -> str:
     return str(target)
 
 
-def prepare_output_documents(invoice: dict[str, Any]) -> dict[str, Any]:
+def prepare_output_documents(invoice: dict[str, Any], *, existing_only: bool = False) -> dict[str, Any]:
     invoice_id = int(invoice.get("id") or 0)
     status = build_output_set_status(invoice)
+    if existing_only and not status["ready"]:
+        missing = ", ".join(doc["label"] for doc in status["missing"]) or "필수 문서"
+        raise RuntimeError(f"기존 문서 출력은 저장된 필수 문서가 모두 있어야 합니다: {missing}")
     if not status["can_output"]:
         missing = ", ".join(doc["label"] for doc in status["blockers"])
         raise RuntimeError(f"필수 문서가 없습니다: {missing}")
@@ -807,6 +810,9 @@ def prepare_output_documents(invoice: dict[str, Any]) -> dict[str, Any]:
 
     invoice = get_invoice(invoice_id) or invoice
     status = build_output_set_status(invoice)
+    if existing_only and not status["ready"]:
+        missing = ", ".join(doc["label"] for doc in status["missing"]) or "필수 문서"
+        raise RuntimeError(f"기존 문서 출력은 저장된 필수 문서가 모두 있어야 합니다: {missing}")
     if not status["can_output"]:
         missing = ", ".join(doc["label"] for doc in status["blockers"])
         raise RuntimeError(f"필수 문서가 없습니다: {missing}")
@@ -845,6 +851,7 @@ def run_output_set_job(
     *,
     action: str,
     printer_name: str = "",
+    existing_only: bool = False,
     job_id: str = "",
     progress: Progress | None = None,
 ) -> dict[str, Any]:
@@ -864,7 +871,7 @@ def run_output_set_job(
                 raise RuntimeError(f"계산서 건을 찾지 못했습니다: #{invoice_id}")
             if progress:
                 progress("printing", min(95, base), f"문서 세트 준비: #{invoice_id}")
-            status = prepare_output_documents(invoice)
+            status = prepare_output_documents(invoice, existing_only=existing_only)
             files = [str(path) for path in status.get("individual_files") or []]
             merged_path = ""
             if action == "merged_pdf":

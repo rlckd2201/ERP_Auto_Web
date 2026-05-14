@@ -255,8 +255,15 @@ class JobWorker:
         threading.Thread(target=_worker, name=f"approval-fetch-{invoice_id}", daemon=True).start()
 
     def _run_purchase_erp_input(self, job: JobRecord) -> dict[str, Any]:
-        invoice_ids = [int(item) for item in job.payload.get("invoice_ids", []) if str(item).isdigit()]
+        requested_invoice_ids = [int(item) for item in job.payload.get("invoice_ids", []) if str(item).isdigit()]
+        erp_payload_ids = [int(item) for item in job.payload.get("erp_invoice_ids", []) if str(item).isdigit()]
+        invoice_ids = erp_payload_ids if job.payload.get("one_click") and erp_payload_ids else requested_invoice_ids
+        ready_output_ids = [int(item) for item in job.payload.get("ready_output_invoice_ids", []) if str(item).isdigit()]
         processor = str(job.payload.get("processor") or "WEB v1.0")
+        if ready_output_ids:
+            preview = ", ".join(f"#{invoice_id}" for invoice_id in ready_output_ids[:5])
+            suffix = "" if len(ready_output_ids) <= 5 else f" 외 {len(ready_output_ids) - 5}건"
+            self.store.add_event(job.id, "printing", 10, f"기존 문서 출력 대상은 ERP 입력을 건너뜁니다: {preview}{suffix}")
         if not invoice_ids:
             raise RuntimeError("ERP 입력 큐에 넣을 구매 건을 선택해야 합니다.")
 
@@ -373,6 +380,7 @@ class JobWorker:
         invoice_ids = [int(item) for item in job.payload.get("invoice_ids", []) if str(item).isdigit()]
         action = str(job.payload.get("action") or "merged_pdf")
         printer_name = str(job.payload.get("printer_name") or "")
+        existing_only = bool(job.payload.get("existing_only") or job.payload.get("one_click_existing_only"))
 
         def progress(status: str, value: int, message: str) -> None:
             self.store.add_event(job.id, status, value, message)
@@ -382,6 +390,7 @@ class JobWorker:
             invoice_ids,
             action=action,
             printer_name=printer_name,
+            existing_only=existing_only,
             job_id=job.id,
             progress=progress,
         )

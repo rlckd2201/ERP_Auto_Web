@@ -119,6 +119,13 @@ def _expense_report_exists(invoice: dict[str, Any] | None) -> bool:
     return bool(path and Path(path).exists())
 
 
+def _invoice_output_set_ready(invoice: dict[str, Any] | None) -> bool:
+    if not invoice or str(invoice.get("invoice_type") or "").lower() != "purchase":
+        return False
+    status = build_output_set_status(invoice, persist=True)
+    return bool(status.get("ready")) and not status.get("blockers")
+
+
 def _queue_expense_report_after_erp(
     invoice_id: int,
     *,
@@ -268,6 +275,7 @@ def _maybe_queue_one_click_output(source_job_id: str) -> None:
                 "printer_name": str(source_job.payload.get("printer_name") or ""),
                 "processor": str(source_job.payload.get("processor") or "WEB v1.0"),
                 "source_job_id": source_job_id,
+                "existing_only": True,
             },
         )
     )
@@ -1059,12 +1067,42 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
         raise HTTPException(status_code=400, detail="원클릭 처리할 구매 건을 선택해야 합니다.")
     setup = require_setup_ready(request)
     output = _one_click_output_payload(body.output_target, setup)
+    ready_output_ids: list[int] = []
+    erp_invoice_ids: list[int] = []
+    for raw_id in body.invoice_ids:
+        invoice_id = int(raw_id)
+        invoice = get_invoice(invoice_id)
+        if _invoice_output_set_ready(invoice):
+            ready_output_ids.append(invoice_id)
+            add_invoice_log(invoice_id, "기존 문서 세트가 모두 준비되어 원클릭 ERP/현금결의서 생성 단계를 건너뜁니다.")
+        else:
+            erp_invoice_ids.append(invoice_id)
+    if ready_output_ids and not erp_invoice_ids:
+        job = job_store.create(
+            JobCreateRequest(
+                job_type="output_set",
+                title=f"기존 문서 출력 {len(ready_output_ids)}건",
+                payload={
+                    "invoice_ids": ready_output_ids,
+                    "action": output["action"],
+                    "printer_key": output["printer_key"],
+                    "printer_name": output["printer_name"],
+                    "processor": body.processor or "WEB v1.0",
+                    "existing_only": True,
+                    "one_click_existing_only": True,
+                },
+            )
+        )
+        worker.submit(job)
+        return job.to_response()
     job = job_store.create(
         JobCreateRequest(
             job_type="purchase_one_click",
             title=f"구매 원클릭 처리 {len(body.invoice_ids)}건",
             payload={
                 "invoice_ids": body.invoice_ids,
+                "erp_invoice_ids": erp_invoice_ids,
+                "ready_output_invoice_ids": ready_output_ids,
                 "processor": body.processor or "WEB v1.0",
                 "target_agent_id": setup.get("agent_id") or "",
                 "target_client_ip": setup.get("client_ip") or client_ip(request),
@@ -1144,6 +1182,7 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
                 "printer_key": body.printer_key,
                 "printer_name": printer_name,
                 "processor": body.processor or "WEB v1.0",
+                "existing_only": body.existing_only,
             },
         )
     )

@@ -924,12 +924,23 @@ function outputStatusText(status) {
   }[status] || status || "-";
 }
 
+function outputTargetOptions(selectedValue) {
+  return [
+    ["pdf", "통합본 PDF 저장"],
+    ["pyeongtaek", "평택 프린터"],
+    ["gimje", "김제 프린터"],
+  ].map(([value, label]) => `<option value="${value}" ${value === selectedValue ? "selected" : ""}>${label}</option>`).join("");
+}
+
 function renderOutputSetPanel(outputSet, invoiceId) {
   const docs = Array.isArray(outputSet?.docs) ? outputSet.docs : [];
+  const ready = Boolean(outputSet?.ready);
   const canOutput = Boolean(outputSet?.can_output);
   const blockers = Array.isArray(outputSet?.blockers) ? outputSet.blockers : [];
   const isPurchaseSet = (outputSet?.mode || "purchase") === "purchase";
-  const blockerText = blockers.length ? `누락 문서: ${blockers.map((doc) => doc.label).join(", ")}` : "필수 문서가 준비되면 출력할 수 있습니다.";
+  const blockerText = ready
+    ? "저장된 문서로 바로 출력할 수 있습니다."
+    : (blockers.length ? `누락 문서: ${blockers.map((doc) => doc.label).join(", ")}` : "필수 문서가 준비되면 출력할 수 있습니다.");
   const printerOptions = [
     ["pdf", "PDF"],
     ["pyeongtaek", "평택"],
@@ -943,6 +954,8 @@ function renderOutputSetPanel(outputSet, invoiceId) {
           <p>${escapeHtml(outputSet ? blockerText : "문서 세트 상태를 확인하는 중입니다.")}</p>
         </div>
         <div class="output-set-actions admin-only">
+          <select id="savedOutputTarget" class="saved-output-target" title="기존 문서 출력 대상">${outputTargetOptions(currentOutputTarget())}</select>
+          <button class="button primary" type="button" data-output-action="saved_output" ${ready ? "" : "disabled"} title="${ready ? "저장된 문서 세트로 바로 출력" : "전표, 세금계산서, 품의, 현금결의서가 모두 있어야 합니다."}">기존 문서 출력</button>
           <select id="outputPrinterKey" title="개별 출력 대상">${printerOptions}</select>
           <button class="button secondary" type="button" data-output-action="refresh">세트 상태 갱신</button>
           ${isPurchaseSet ? '<button class="button secondary" type="button" data-output-action="generate_expense_report">현금결의서 생성</button>' : ""}
@@ -1200,7 +1213,7 @@ async function startErpQueue() {
   });
 }
 
-async function startOutputSet(action) {
+async function startOutputSet(action, options = {}) {
   if (!setupReady()) {
     showView("setup");
     alert("필수 프로그램 점검 완료 후 문서 세트 출력을 실행할 수 있습니다.");
@@ -1208,13 +1221,27 @@ async function startOutputSet(action) {
   }
   const invoiceIds = [...state.selectedInvoiceIds];
   if (!invoiceIds.length) return;
-  const printerKey = document.querySelector("#outputPrinterKey")?.value || "pdf";
+  const printerKey = options.printerKey || document.querySelector("#outputPrinterKey")?.value || "pdf";
   await startJob("/api/jobs/output-set", {
     invoice_ids: invoiceIds,
     action,
     printer_key: printerKey,
     processor: "WEB v1.0",
+    existing_only: Boolean(options.existingOnly),
   });
+}
+
+async function startSavedOutputSet() {
+  const invoiceIds = [...state.selectedInvoiceIds];
+  if (invoiceIds.length !== 1) return;
+  const outputSet = detailData(state.selectedInvoiceDetail).output_docs || state.selectedInvoiceDetail?.output_docs;
+  if (!outputSet?.ready) {
+    alert("전표, 세금계산서, 품의, 현금결의서가 모두 저장된 건만 기존 문서 출력이 가능합니다.");
+    return;
+  }
+  const target = document.querySelector("#savedOutputTarget")?.value || currentOutputTarget();
+  const action = target === "pdf" ? "merged_pdf" : "print_individual";
+  await startOutputSet(action, { printerKey: target, existingOnly: true });
 }
 
 async function generateExpenseReport(invoiceId) {
@@ -1465,6 +1492,10 @@ els.purchaseDetailBody.addEventListener("click", async (event) => {
   }
   if (action === "generate_expense_report") {
     await generateExpenseReport(invoiceIds[0]);
+    return;
+  }
+  if (action === "saved_output") {
+    await startSavedOutputSet();
     return;
   }
   await startOutputSet(action);

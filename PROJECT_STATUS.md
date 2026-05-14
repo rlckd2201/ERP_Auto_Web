@@ -16,6 +16,7 @@ The active focus is purchase one-click processing, automatic mail collection, an
 
 - Multiple selected purchase invoices should run through one simple `one-click processing` flow.
 - One-click should cover ERP input, ERP voucher PDF save/upload, cash withdrawal report creation, output-set refresh, and selected output target.
+- Already completed purchase invoices with all required output documents must skip ERP/cash-report regeneration and print/save from stored documents.
 - The manager default UI should stay simple; debug logs and individual analysis/output buttons should live in detail/admin mode.
 - Mail collection should run automatically every minute while the operating server is running.
 
@@ -31,11 +32,15 @@ The active focus is purchase one-click processing, automatic mail collection, an
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.89`.
+- Current WEB/Agent version in files: `1.0.90`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
-- Latest local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
+- Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
+- Latest local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
+- `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
 - Backend has new `POST /api/jobs/purchase-one-click`.
+- Backend one-click now partitions selected purchase invoices: invoices with ready output document sets skip ERP/cash-report regeneration; all-ready selections go straight to output-set job.
+- Backend output-set jobs support `existing_only`; in that mode they fail if a required saved document is missing instead of generating a new cash withdrawal report.
 - Backend has new `GET /api/mail-collect/status`.
 - Backend startup starts a 1-minute mail collection scheduler with duplicate-run prevention.
 - Mail collector now records `saved_invoice_ids`; worker auto-analyzes newly saved purchase invoices.
@@ -43,11 +48,13 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - Setup status exposes `capabilities.default_printer`.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
+- Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
 - Frontend has mail auto-collection summary text.
 - Frontend hides mail collect/log/debug panels in simple mode via `admin-only`.
 - Frontend hides purchase `분석` and `분석 저장` buttons in simple mode via `admin-only`.
 - Graphify was updated after restoring the one-click source.
 - Graphify was updated again after the `fix101` backend/Agent/version repair.
+- Graphify was updated again after the `fix102` existing-document output update.
 
 ## Recently Changed Files
 
@@ -71,8 +78,10 @@ The active focus is purchase one-click processing, automatic mail collection, an
   - `web_v1/backend`
   - `web_v1/agent`
 - `node --check web_v1/frontend/app.js` passed.
+- Changed-file `py_compile` passed for `web_v1/backend/app.py`, `web_v1/backend/worker.py`, `web_v1/backend/output_set.py`, `web_v1/backend/models.py`, and `web_v1/agent/erp_agent.py`.
 - `web_v1/frontend/index.html` now has `admin-only` on both purchase analysis buttons.
 - `fix101` ZIP content verification passed for `web_v1/VERSION`, `purchase-one-click`, `mail-collect/status`, `_start_mail_collect_scheduler`, `purchase_one_click`, `auto_analyzed_count`, `default_printer`, `oneClickOutputTarget`, and `원클릭 처리`.
+- `fix102` ZIP content verification passed for `web_v1/VERSION`, `purchase-one-click`, `existing_only`, `saved_output`, `기존 문서 출력`, and no `__pycache__`/`.pyc`.
 
 ## Open Work
 
