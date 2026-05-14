@@ -146,7 +146,7 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         candidates: dict[str, str],
         dump_dir: Path,
     ) -> str | None:
-        if self._is_invoice_view_ready(driver):
+        if self._find_business_no_input(driver) is None and self._is_invoice_view_ready(driver):
             return "already_open"
 
         for index, (key, biz_no) in enumerate(candidates.items(), start=1):
@@ -184,6 +184,8 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
 
     def _find_business_no_input(self, driver: WebDriver) -> WebElement | None:
         selectors = [
+            "input[name='inpasswd']",
+            "input#input.passwd_input",
             "input[name*='biz']",
             "input[name*='Biz']",
             "input[name*='corp']",
@@ -203,6 +205,7 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
 
     def _click_confirm(self, driver: WebDriver) -> bool:
         xpaths = [
+            "//*[self::a or self::button or self::input][contains(@href,'Login') or contains(@onclick,'Login')]",
             "//*[self::button or self::a or self::input][normalize-space(.)='확인']",
             "//*[self::button or self::a or self::input][contains(normalize-space(.),'확인')]",
             "//input[contains(@value,'확인')]",
@@ -212,9 +215,28 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
 
     def _is_invoice_view_ready(self, driver: WebDriver) -> bool:
         text = self._visible_text(driver)
+        auth_markers = (
+            "사업자번호를 입력 후 전자(세금)계산서를 확인",
+            "사업자번호를 입력하세요",
+            "담당자가 아닌 경우 본 이메일을 삭제",
+            "신규회원 혜택서비스",
+        )
+        if any(marker in text for marker in auth_markers):
+            return False
+        if self._find_business_no_input(driver) is not None:
+            return False
         if "전자세금계산서" not in text and "전자(세금)계산서" not in text:
             return False
-        ready_markers = ("승인", "반송", "인쇄", "XML저장", "XML 저장", "미승인", "공급자")
+        ready_markers = (
+            "XML저장",
+            "XML 저장",
+            "반송사유",
+            "승인번호",
+            "일련번호",
+            "미승인 전자",
+            "공급받는자 담당자",
+            "인쇄",
+        )
         return any(marker in text for marker in ready_markers)
 
     def _has_auth_failure_text(self, driver: WebDriver) -> bool:
