@@ -298,7 +298,8 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
 
         info["attempted"] = True
         time.sleep(0.8)
-        self._accept_alerts(driver, timeout=2.0, rounds=3)
+        alert_actions = self._handle_approval_alerts(driver, timeout=2.0, rounds=5)
+        info["alert_actions"] = alert_actions
         self._click_confirm_dialogs(driver, rounds=3)
         time.sleep(1.2)
         after = self._approval_state(driver)
@@ -498,6 +499,24 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
             except Exception:
                 break
         return accepted
+
+    def _handle_approval_alerts(self, driver: WebDriver, timeout: float = 2.0, rounds: int = 5) -> list[dict]:
+        actions: list[dict] = []
+        for _ in range(rounds):
+            try:
+                WebDriverWait(driver, timeout).until(EC.alert_is_present())
+                alert = driver.switch_to.alert
+                text = str(alert.text or "")
+                if "인쇄하시겠습니까" in text:
+                    alert.dismiss()
+                    actions.append({"text": text, "action": "dismiss"})
+                else:
+                    alert.accept()
+                    actions.append({"text": text, "action": "accept"})
+                time.sleep(0.5)
+            except Exception:
+                break
+        return actions
 
     def _switch_to_latest_window(self, driver: WebDriver) -> None:
         try:
