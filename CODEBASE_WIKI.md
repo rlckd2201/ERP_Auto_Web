@@ -15,11 +15,16 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-14, WEB/Agent files are at `1.0.94`. The latest local deployment ZIP is:
+As of 2026-05-14, WEB/Agent files are at `1.0.95`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_regular_processing_fix106_20260514_155214.zip
+C:\Tmp\accounting_web_v1_regular_pdf_date_fix107_20260514_165139.zip
 ```
+
+Known deployment hosts:
+
+- Operating server: `172.17.39.121`
+- Development PC / temporary ZIP HTTP server: `172.17.30.13`
 
 Recent purchase-side changes are intentionally paused for later operational bug fixing:
 
@@ -458,7 +463,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.94
+1.0.95
 ```
 
 ## Safe Change Checklist

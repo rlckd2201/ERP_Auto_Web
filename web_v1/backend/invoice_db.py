@@ -365,6 +365,24 @@ def learn_dictionary_items(items: list[dict[str, Any]]) -> int:
     return learned
 
 
+def _repair_regular_fields(result: dict[str, Any], pdf_path: str) -> dict[str, Any]:
+    fixed = dict(result)
+    nested = _invoice_data(fixed)
+    has_date = any(str(source.get("invoice_date") or source.get("issue_date") or source.get("write_date") or "").strip() for source in (fixed, nested))
+    if not has_date:
+        try:
+            from .erp_runner import _extract_invoice_date
+
+            invoice_date = _extract_invoice_date({**fixed, **nested, "pdf_path": pdf_path}, pdf_path)
+        except Exception:
+            invoice_date = ""
+        if invoice_date:
+            fixed["invoice_date"] = invoice_date
+            nested["invoice_date"] = invoice_date
+    fixed["data"] = nested
+    return fixed
+
+
 def insert_crawler_invoice(subject: str, result: dict[str, Any]) -> bool:
     init_db()
     pdf_path = str(result.get("pdf_path") or "")
@@ -378,6 +396,10 @@ def insert_crawler_invoice(subject: str, result: dict[str, Any]) -> bool:
         result = _repair_purchase_amounts(result, pdf_path)
         result["subject"] = stored_subject
         result["invoice_type"] = "purchase"
+    elif str(result.get("invoice_type") or "").strip().lower() == "regular":
+        result = _repair_regular_fields(result, pdf_path)
+        result["subject"] = stored_subject
+        result["invoice_type"] = "regular"
 
     with get_conn() as conn:
         cur = conn.cursor()

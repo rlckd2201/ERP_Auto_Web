@@ -38,11 +38,13 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.94`.
+- Current WEB/Agent version in files: `1.0.95`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
-- Latest local deployment ZIP after first WEB regular-processing pass: `C:\Tmp\accounting_web_v1_regular_processing_fix106_20260514_155214.zip`.
+- Previous local deployment ZIP after first WEB regular-processing pass: `C:\Tmp\accounting_web_v1_regular_processing_fix106_20260514_155214.zip`.
+- Latest local deployment ZIP after regular PDF 작성일자 fallback fix: `C:\Tmp\accounting_web_v1_regular_pdf_date_fix107_20260514_165139.zip`.
+- Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
 - Backend has new `POST /api/jobs/purchase-one-click`.
@@ -64,6 +66,9 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix106` adds `PATCH /api/invoices/{invoice_id}/regular-data`, `POST /api/jobs/regular-one-click`, and `POST /api/jobs/regular-erp-input`.
 - `fix106` writes regular ERP queue files as `regular_erp_{job_id}.json` with `job_type=regular_erp_input`, and the Agent queue accepts that job type.
 - `fix106` ports more legacy regular ERP account/summary rules into `build_regular_erp_payload()` and corrects the regular payable row to `미지급금(원화)`.
+- `fix107` makes regular ERP payload creation fall back to reading the tax-invoice PDF body for 작성일자 when saved data and filename do not contain a full date.
+- `fix107` enriches newly collected regular invoices with the PDF-derived 작성일자 before DB insert, so monthly filenames like `2026년 05월.pdf` do not fail ERP validation.
+- `fix107` changes the user-PC bootstrap payload download to prefer `curl.exe -k`, avoiding PowerShell `Invoke-WebRequest` TLS failures on manager PCs.
 - `tax_crawler/portal_smileedi.py` has been added as a standalone SMILE EDI crawler prototype. It is intentionally not registered in `crawler_main.py` yet.
 - SMILE EDI approval handling is opt-in via the prototype CLI `--approve`; without that flag it records unapproved status and debug HTML/screenshots only.
 - Frontend has one-click output target combo and localStorage preference.

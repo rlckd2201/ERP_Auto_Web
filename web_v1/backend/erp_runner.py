@@ -164,9 +164,73 @@ def _extract_invoice_date(data: dict[str, Any], pdf_path: str = "") -> str:
         digits = re.sub(r"[^0-9]", "", str(value or ""))
         if len(digits) >= 8:
             return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
-    match = re.search(r"(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?([0-3]\d)", Path(pdf_path or "").name)
-    if match:
-        return f"{match.group(1)}-{match.group(2)}-{match.group(3)}"
+    filename = Path(pdf_path or "").name
+    filename_patterns = [
+        r"(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?([0-3]\d)",
+        r"(20\d{2})\s*\ub144\s*(0?[1-9]|1[0-2])\s*\uc6d4\s*([0-3]?\d)\s*\uc77c",
+    ]
+    for pattern in filename_patterns:
+        match = re.search(pattern, filename)
+        if match:
+            return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+    pdf_text = _extract_pdf_text_for_date(pdf_path)
+    if pdf_text:
+        return _extract_invoice_date_from_text(pdf_text)
+    return ""
+
+
+def _extract_pdf_text_for_date(pdf_path: str = "") -> str:
+    path = Path(pdf_path or "")
+    if not path.exists() or not path.is_file():
+        return ""
+    try:
+        import pdfplumber
+
+        with pdfplumber.open(str(path)) as pdf:
+            text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+        if text.strip():
+            return text
+    except Exception as exc:
+        logging.warning("Regular tax invoice date pdfplumber fallback failed: %s", exc)
+    try:
+        import fitz
+
+        with fitz.open(str(path)) as doc:
+            return "\n".join(page.get_text() or "" for page in doc)
+    except Exception as exc:
+        logging.warning("Regular tax invoice date pymupdf fallback failed: %s", exc)
+    return ""
+
+
+def _extract_invoice_date_from_text(text: str) -> str:
+    def _format(year: str, month: str, day: str) -> str:
+        return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
+
+    label = (
+        r"(?:"
+        r"\uc791\s*\uc131\s*\uc77c\s*\uc790|"
+        r"\ubc1c\s*\ud589\s*\uc77c\s*\uc790|"
+        r"\uacf5\s*\uae09\s*\uc77c\s*\uc790"
+        r")"
+    )
+    labeled_patterns = [
+        label + r"[\s\S]{0,220}?(20\d{2})\D{0,8}(0?[1-9]|1[0-2])\D{0,8}([0-3]?\d)",
+        label + r"[\s\S]{0,220}?(20\d{2})(0[1-9]|1[0-2])([0-3]\d)",
+    ]
+    for pattern in labeled_patterns:
+        match = re.search(pattern, text, re.IGNORECASE)
+        if match:
+            return _format(match.group(1), match.group(2), match.group(3))
+
+    generic_patterns = [
+        r"\b(20\d{2})\s+(0?[1-9]|1[0-2])\s+([0-3]?\d)\b",
+        r"\b(20\d{2})[-./](0?[1-9]|1[0-2])[-./]([0-3]?\d)\b",
+        r"\b(20\d{2})(0[1-9]|1[0-2])([0-3]\d)\b",
+    ]
+    for pattern in generic_patterns:
+        match = re.search(pattern, text)
+        if match:
+            return _format(match.group(1), match.group(2), match.group(3))
     return ""
 
 

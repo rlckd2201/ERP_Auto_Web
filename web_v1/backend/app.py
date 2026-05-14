@@ -474,7 +474,15 @@ New-Item -ItemType Directory -Path $TempRoot -Force | Out-Null
 
 [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
 [System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
-Invoke-WebRequest -Uri "$ServerUrl/api/setup/user-pc-payload.zip" -OutFile $PayloadZip -UseBasicParsing
+$Curl = Get-Command curl.exe -ErrorAction SilentlyContinue
+if ($Curl) {
+    & $Curl.Source -k -L --fail --output $PayloadZip "$ServerUrl/api/setup/user-pc-payload.zip"
+    if ($LASTEXITCODE -ne 0) {
+        throw "payload download failed: curl exit code $LASTEXITCODE"
+    }
+} else {
+    Invoke-WebRequest -Uri "$ServerUrl/api/setup/user-pc-payload.zip" -OutFile $PayloadZip -UseBasicParsing
+}
 Expand-Archive -Path $PayloadZip -DestinationPath $TempRoot -Force
 
 $InstallScript = Join-Path $TempRoot "setup.ps1"
