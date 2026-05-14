@@ -292,16 +292,18 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
             info["message"] = "미승인 계산서 감지. 승인 버튼은 --approve 옵션이 있을 때만 클릭합니다."
             return info
 
+        self._install_approval_confirm_policy(driver)
         if not self._click_approval_button(driver):
             info["message"] = "승인 버튼을 찾지 못했습니다."
             return info
 
         info["attempted"] = True
-        time.sleep(0.8)
+        time.sleep(2.5)
         alert_actions = self._handle_approval_alerts(driver, timeout=2.0, rounds=5)
         info["alert_actions"] = alert_actions
+        info["confirm_actions"] = self._approval_confirm_actions(driver)
         self._click_confirm_dialogs(driver, rounds=3)
-        time.sleep(1.2)
+        time.sleep(2.0)
         after = self._approval_state(driver)
         info["final_state"] = after
         info["approved"] = after != "unapproved"
@@ -317,6 +319,8 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         return "approved"
 
     def _click_approval_button(self, driver: WebDriver) -> bool:
+        if self._execute_approval_script(driver):
+            return True
         candidates = [
             "//a[contains(@href, \"approve('K')\")]",
             "//*[contains(@href,'approve') and contains(@href,'K')]",
@@ -335,6 +339,49 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
             )
         except Exception as exc:
             return "alert" in str(exc).lower()
+
+    def _install_approval_confirm_policy(self, driver: WebDriver) -> None:
+        driver.execute_script(
+            """
+            window.__smileediConfirmActions = [];
+            window.__smileediOriginalConfirm = window.confirm;
+            window.confirm = function(message) {
+              var text = String(message || '');
+              var action = text.indexOf('인쇄하시겠습니까') >= 0 ? 'dismiss' : 'accept';
+              window.__smileediConfirmActions.push({text: text, action: action});
+              return action === 'accept';
+            };
+            """
+        )
+
+    def _execute_approval_script(self, driver: WebDriver) -> bool:
+        try:
+            return bool(
+                driver.execute_script(
+                    """
+                    if (typeof approve === 'function') {
+                      approve('K');
+                      return true;
+                    }
+                    var link = document.querySelector("a[href*=\\"approve('K')\\"]")
+                      || document.querySelector("a[href*='approve'][href*='K']");
+                    if (link) {
+                      link.click();
+                      return true;
+                    }
+                    return false;
+                    """
+                )
+            )
+        except Exception as exc:
+            return "alert" in str(exc).lower()
+
+    def _approval_confirm_actions(self, driver: WebDriver) -> list[dict]:
+        try:
+            actions = driver.execute_script("return window.__smileediConfirmActions || [];")
+            return actions if isinstance(actions, list) else []
+        except Exception:
+            return []
 
     # ------------------------------------------------------------------
     # Parsing
