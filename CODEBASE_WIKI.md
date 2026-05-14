@@ -212,6 +212,7 @@ Printer output rule:
 - Do not print document-set PDFs directly from the operating server. Server-side `ShellExecute` depends on the server's PDF handler/printer state and can fail with Windows device errors.
 - For `print_individual`, the server prepares the PDF files first, then queues `output_print`.
 - The manager PC Agent advertises `output_print=true`, downloads the files over HTTPS, sets the selected printer locally, and prints from the PC that actually owns the printer setup.
+- `merge_pdfs()` must never delete the target before reading inputs. Existing output-set files can be rediscovered as source candidates, so merge through a temporary file and replace the target after the read succeeds.
 
 File roots:
 

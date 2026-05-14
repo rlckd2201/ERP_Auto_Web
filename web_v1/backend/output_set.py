@@ -746,8 +746,9 @@ def generate_expense_report_pdf(invoice: dict[str, Any], *, force: bool = False)
 def merge_pdfs(paths: list[str], output_path: str | Path) -> str:
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    if output.exists():
-        output.unlink()
+    temp_output = output.with_name(f"{output.stem}.__merge_tmp__{output.suffix or '.pdf'}")
+    if temp_output.exists():
+        temp_output.unlink()
     import fitz
 
     merged = fitz.open()
@@ -758,15 +759,29 @@ def merge_pdfs(paths: list[str], output_path: str | Path) -> str:
                 raise RuntimeError(f"병합 대상 PDF가 없습니다: {path}")
             with fitz.open(str(path)) as source:
                 merged.insert_pdf(source)
-        merged.save(str(output))
+        merged.save(str(temp_output))
     finally:
         merged.close()
+    os.replace(temp_output, output)
     return str(output)
 
 
 def _copy_or_merge_doc(doc: dict[str, Any], target_dir: Path) -> str:
     target = target_dir / str(doc["filename"])
-    paths = [path for path in doc.get("paths") or [] if _path_exists(str(path))]
+    paths: list[str] = []
+    seen: set[str] = set()
+    for raw_path in doc.get("paths") or []:
+        if not _path_exists(str(raw_path)):
+            continue
+        path = Path(str(raw_path))
+        try:
+            key = str(path.resolve()).lower()
+        except OSError:
+            key = str(path).lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        paths.append(str(path))
     if not paths:
         raise RuntimeError(f"{doc['label']} 파일이 없습니다.")
     target.parent.mkdir(parents=True, exist_ok=True)
