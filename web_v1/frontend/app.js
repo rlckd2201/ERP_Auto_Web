@@ -214,9 +214,8 @@ function scheduleApprovalRefresh(invoiceId, data) {
   state.approvalPollTimer = setTimeout(async () => {
     const selected = [...state.selectedInvoiceIds];
     if (selected.length !== 1 || selected[0] !== invoiceId) return;
-    state.selectedInvoiceDetail = null;
-    await loadSelectedPurchaseDetail({ force: true });
-    await loadInvoiceLogs(invoiceId);
+    await refreshInvoices({ skipDetail: true });
+    await loadOutputSet(invoiceId);
   }, 3000);
 }
 
@@ -867,6 +866,7 @@ async function refreshInvoices(options = {}) {
     state.selectedInvoiceDetail = null;
   }
   renderInvoices();
+  if (options.skipDetail) return;
   await loadSelectedPurchaseDetail(options);
 }
 
@@ -1119,17 +1119,26 @@ function collectAnalysisForm() {
   return payload;
 }
 
+async function saveCurrentAnalysisIfEditable() {
+  const invoiceIds = [...state.selectedInvoiceIds];
+  if (invoiceIds.length !== 1) return;
+  const invoiceId = invoiceIds[0];
+  if (!els.purchaseDetailBody?.querySelector("[data-analysis-field]")) return;
+  const payload = collectAnalysisForm();
+  if (!Array.isArray(payload.items) || !payload.items.length) return;
+  state.selectedInvoiceDetail = await requestJson(`/api/invoices/${invoiceId}/purchase-analysis`, {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
 function schedulePostJobRefresh() {
-  const selectedId = singleSelectedInvoiceId();
   [0, 1500, 4000, 9000, 15000, 30000, 60000].forEach((delay) => {
     setTimeout(async () => {
       try {
         await refreshJobs();
         await loadMailCollectStatus();
-        await refreshInvoices({ forceDetailReload: true, force: true });
-        if (selectedId && state.selectedInvoiceIds.has(selectedId)) {
-          await loadInvoiceLogs(selectedId);
-        }
+        await refreshInvoices({ skipDetail: true });
       } catch {
         // 다음 주기에서 다시 갱신합니다.
       }
@@ -1206,6 +1215,13 @@ async function startErpQueue() {
   }
   const invoiceIds = [...state.selectedInvoiceIds];
   if (!invoiceIds.length) return;
+  try {
+    await saveCurrentAnalysisIfEditable();
+    await refreshInvoices({ skipDetail: true });
+  } catch (error) {
+    alert(`ERP 입력 전 분석 저장 실패: ${error.message}`);
+    return;
+  }
   await startJob("/api/jobs/purchase-one-click", {
     invoice_ids: invoiceIds,
     output_target: currentOutputTarget(),
@@ -1542,12 +1558,8 @@ els.saveAnalysisButton.addEventListener("click", async () => {
   const invoiceIds = [...state.selectedInvoiceIds];
   if (invoiceIds.length !== 1) return;
   try {
-    state.selectedInvoiceDetail = await requestJson(`/api/invoices/${invoiceIds[0]}/purchase-analysis`, {
-      method: "PATCH",
-      body: JSON.stringify(collectAnalysisForm()),
-    });
-    await refreshInvoices();
-    await loadInvoiceLogs(invoiceIds[0]);
+    await saveCurrentAnalysisIfEditable();
+    await refreshInvoices({ skipDetail: true });
   } catch (error) {
     alert(error.message);
   }

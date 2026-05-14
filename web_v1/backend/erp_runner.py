@@ -79,6 +79,16 @@ def _site_from_known_text(value: Any) -> str:
 
 
 def _resolve_site(data: dict[str, Any], raw: dict[str, Any], invoice: dict[str, Any], pdf_path: str) -> str:
+    explicit_site_candidates = [
+        data.get("site_name"),
+        invoice.get("site_name"),
+        raw.get("site_name"),
+    ]
+    for candidate in explicit_site_candidates:
+        site = _site_from_known_text(candidate)
+        if site:
+            return site
+
     biz_candidates = [
         data.get("buyer_biz_no"),
         data.get("buyer_business_no"),
@@ -96,11 +106,8 @@ def _resolve_site(data: dict[str, Any], raw: dict[str, Any], invoice: dict[str, 
             return site
 
     text_candidates = [
-        data.get("site_name"),
         data.get("buyer_site"),
         data.get("matched_biz_name"),
-        invoice.get("site_name"),
-        raw.get("site_name"),
         raw.get("buyer_site"),
         raw.get("matched_biz_name"),
         Path(pdf_path or "").name,
@@ -256,9 +263,12 @@ def _purchase_summary_label(items: list[dict[str, Any]]) -> tuple[str, int]:
 
 def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
     raw = dict(invoice.get("raw") or {})
-    data = raw.get("data") if isinstance(raw.get("data"), dict) else dict(invoice.get("data") or {})
-    if not data:
-        data = dict(raw)
+    data = dict(raw)
+    if isinstance(raw.get("data"), dict):
+        data.update(raw.get("data") or {})
+    data.update({key: value for key, value in invoice.items() if key not in {"raw", "data"}})
+    if isinstance(invoice.get("data"), dict):
+        data.update(invoice.get("data") or {})
 
     pdf_path = str(invoice.get("pdf_path") or data.get("pdf_path") or raw.get("pdf_path") or "")
     vendor = _clean_text(
@@ -380,9 +390,12 @@ def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
 
 def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
     raw = dict(invoice.get("raw") or {})
-    data = raw.get("data") if isinstance(raw.get("data"), dict) else dict(invoice.get("data") or {})
-    if not data:
-        data = dict(raw)
+    data = dict(raw)
+    if isinstance(raw.get("data"), dict):
+        data.update(raw.get("data") or {})
+    data.update({key: value for key, value in invoice.items() if key not in {"raw", "data"}})
+    if isinstance(invoice.get("data"), dict):
+        data.update(invoice.get("data") or {})
 
     pdf_path = str(invoice.get("pdf_path") or data.get("pdf_path") or raw.get("pdf_path") or "")
     vendor = _clean_text(

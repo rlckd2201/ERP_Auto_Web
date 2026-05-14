@@ -339,6 +339,8 @@ UI modes:
 
 - Simple mode hides `.admin-only`.
 - Detail mode shows logs, analysis buttons, output-set maintenance actions, and manual/debug operations.
+- Job follow-up refreshes must not force-reload the selected purchase detail or selected invoice logs while the user is editing. Use list/status refreshes with `skipDetail` and let logs refresh only from explicit user actions or save/upload actions.
+- Before one-click ERP starts, the open single-invoice purchase analysis form is saved automatically so edited `invoice_date`, `vendor_name`, item/account/department values feed the ERP payload.
 
 The top-level manager flow should remain simple: select invoices, choose output target, click `원클릭 처리`.
 

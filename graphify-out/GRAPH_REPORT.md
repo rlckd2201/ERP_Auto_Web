@@ -1,11 +1,11 @@
 # Graph Report - 회계업무 자동화_WEB_Version  (2026-05-14)
 
 ## Corpus Check
-- 229 files · ~250,600 words
+- 229 files · ~250,860 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1200 nodes · 3862 edges · 30 communities detected
+- 1202 nodes · 3866 edges · 31 communities detected
 - Extraction: 83% EXTRACTED · 17% INFERRED · 0% AMBIGUOUS · INFERRED: 644 edges (avg confidence: 0.78)
 - Token cost: 0 input · 0 output
 
@@ -40,6 +40,7 @@
 - [[_COMMUNITY_Community 29|Community 29]]
 - [[_COMMUNITY_Community 30|Community 30]]
 - [[_COMMUNITY_Community 31|Community 31]]
+- [[_COMMUNITY_Community 75|Community 75]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `ERPAutoApp` - 85 edges
@@ -54,45 +55,45 @@
 10. `build_output_set_status()` - 23 edges
 
 ## Surprising Connections (you probably didn't know these)
+- `BaseTaxInvoiceHandler` --uses--> `visible text input 중 마지막 = 모달 입력창.         확인 클릭 후 visible inputs 수가 줄면 인증 성공.`  [INFERRED]
+  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_wehago.py
+- `BaseTaxInvoiceHandler` --uses--> `Chrome 외부 앱 실행 권한 팝업에서 '허용' 버튼을 자동 클릭.         WEHAGO 인쇄 버튼 이후 1회성 팝업이 뜨는 구조라,`  [INFERRED]
+  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_wehago.py
+- `BaseTaxInvoiceHandler` --uses--> `UIA? ? ?? ?? Chrome ?? ??? ?? ??? ??? ??.`  [INFERRED]
+  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_wehago.py
+- `BaseTaxInvoiceHandler` --uses--> `Microsoft Print to PDF sometimes ignores the target folder.         If the corr`  [INFERRED]
+  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_wehago.py
 - `ERPLoginBot` --calls--> `run_invoice_erp_input()`  [INFERRED]
   _release_fix9_stage\manager_server\전표 자동화 프로그램(담당자용)_v6.2.py → _release_fix9_stage\web_v1\backend\erp_runner.py
-- `BaseTaxInvoiceHandler` --uses--> `AutoEverHandler`  [INFERRED]
-  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_autoever.py
-- `BaseTaxInvoiceHandler` --uses--> `CsbillHandler`  [INFERRED]
-  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_csbill.py
-- `BaseTaxInvoiceHandler` --uses--> `HometaxHandler`  [INFERRED]
-  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_hometax.py
-- `BaseTaxInvoiceHandler` --uses--> `KtAttachmentHandler`  [INFERRED]
-  _backup_working_smartbill_v4_20260507_171727\tax_crawler\base_handler.py → _backup_working_smartbill_v4_20260507_171727\tax_crawler\portal_kt.py
 
 ## Communities
 
 ### Community 0 - "Community 0"
 Cohesion: 0.06
-Nodes (11): AppManager, ERPAutoApp, ERPConfig, ERPLoginBot, _is_sane_amount(), _normalize_biz_no(), _normalize_issue_date(), 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence) (+3 more)
-
-### Community 1 - "Community 1"
-Cohesion: 0.09
-Nodes (95): accountOptions(), addLog(), agentConnectedFromSetup(), agentUpdateRequiredFromSetup(), applyDetailMode(), approvalPaths(), approvalStatusText(), autoStartAgentAfterLogin() (+87 more)
-
-### Community 2 - "Community 2"
-Cohesion: 0.04
-Nodes (47): ABC, _add_months(), BaseTaxInvoiceHandler, digits_only(), _do_process(), _get_chromedriver_service(), _is_stable(), _period_rule_key() (+39 more)
-
-### Community 3 - "Community 3"
-Cohesion: 0.08
 Nodes (64): _add_installer_file(), _add_installer_tree(), _agent_bootstrap_script(), _agent_cmd_launcher(), _agent_exe_launcher(), _agent_installer_script(), _agent_self_contained_cmd(), api_agent_job_event() (+56 more)
 
+### Community 1 - "Community 1"
+Cohesion: 0.05
+Nodes (13): api_agent_output_print_file(), _output_print_task(), AppManager, ERPAutoApp, ERPConfig, ERPLoginBot, _is_sane_amount(), _normalize_biz_no() (+5 more)
+
+### Community 2 - "Community 2"
+Cohesion: 0.08
+Nodes (96): accountOptions(), addLog(), agentConnectedFromSetup(), agentUpdateRequiredFromSetup(), applyDetailMode(), approvalPaths(), approvalStatusText(), autoStartAgentAfterLogin() (+88 more)
+
+### Community 3 - "Community 3"
+Cohesion: 0.05
+Nodes (50): ABC, BaseTaxInvoiceHandler, _add_months(), BaseTaxInvoiceHandler, digits_only(), _do_process(), _get_chromedriver_service(), _period_rule_key() (+42 more)
+
 ### Community 4 - "Community 4"
-Cohesion: 0.09
-Nodes (63): api_create_manual_purchase_invoice(), _save_pdf_upload(), _check_playwright_runtime(), fetch_approval_documents(), build_purchase_erp_payload(), build_regular_erp_payload(), _clean_text(), _configure_pyautogui_for_server() (+55 more)
+Cohesion: 0.1
+Nodes (63): api_create_manual_purchase_invoice(), api_upload_purchase_quote(), _check_playwright_runtime(), fetch_approval_documents(), build_purchase_erp_payload(), build_regular_erp_payload(), _clean_text(), _configure_pyautogui_for_server() (+55 more)
 
 ### Community 5 - "Community 5"
-Cohesion: 0.09
-Nodes (29): _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task(), _task_files(), update_erp_task(), _write_task(), _app_version() (+21 more)
+Cohesion: 0.1
+Nodes (28): _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task(), _task_files(), update_erp_task(), _write_task(), _app_version() (+20 more)
 
 ### Community 6 - "Community 6"
-Cohesion: 0.15
+Cohesion: 0.21
 Nodes (41): api_agent_job_complete(), api_agent_job_expense_report_upload(), api_agent_job_voucher_upload(), api_analyze_purchase(), api_get_invoice_output_set(), api_update_purchase_analysis(), api_upload_erp_voucher(), api_upload_expense_report_file() (+33 more)
 
 ### Community 7 - "Community 7"
@@ -104,20 +105,20 @@ Cohesion: 0.1
 Nodes (20): decode_mime_header(), extract_target_links(), InvoiceMailWatcher, log(), read_part_text(), _split_csv(), portal_name(), LG U+ eDocu tax invoice portal adapter.  This adapter intentionally routes edo (+12 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.12
-Nodes (39): main(), _aggregate_expense_items(), _appdata_template_candidates(), _build_expense_report_text(), _clean_expense_item_name(), _clean_path(), _copy_or_merge_doc(), _ensure_appdata_expense_template() (+31 more)
+Cohesion: 0.1
+Nodes (13): _is_stable(), _candidates_from_url(), _parse_amount(), _parse_field(), _paste_text(), portal_name(), WEHAGO (더존비즈온) 세금계산서 핸들러 대상: www.wehago.com/invoice/#/eTaxMail/... 메일 수신 업체: A, visible text input 중 마지막 = 모달 입력창.         확인 클릭 후 visible inputs 수가 줄면 인증 성공. (+5 more)
 
 ### Community 10 - "Community 10"
 Cohesion: 0.12
 Nodes (39): _agent_bundle_hash(), _apply_server_setup_config(), _cert_cache_path(), _cert_store_has_thumbprint(), _cert_thumbprint(), _config_path(), _default_printer_name(), _detect_printer_mapping() (+31 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.13
-Nodes (37): api_agent_heartbeat(), api_agent_setup_install_complete(), api_login(), api_setup_installer(), api_setup_printers(), _active_install_job(), _add_check(), _age_seconds() (+29 more)
+Cohesion: 0.12
+Nodes (38): main(), _aggregate_expense_items(), _appdata_template_candidates(), _build_expense_report_text(), _clean_expense_item_name(), _clean_path(), _copy_or_merge_doc(), _ensure_appdata_expense_template() (+30 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.11
-Nodes (16): BaseTaxInvoiceHandler, AutoEverHandler, _normalize_cell(), portal_name(), _table_cells(), _to_int(), _write_text(), _file_uri_to_path() (+8 more)
+Cohesion: 0.13
+Nodes (37): api_agent_heartbeat(), api_agent_setup_install_complete(), api_login(), api_setup_installer(), api_setup_printers(), _active_install_job(), _add_check(), _age_seconds() (+29 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.13
@@ -187,8 +188,12 @@ Nodes (1): 실제 크롤링 로직. result dict를 직접 채운다.
 Cohesion: 1.0
 Nodes (1): 캐시된 드라이버 우선 탐색 → 없으면 ChromeDriverManager 자동 설치.
 
+### Community 75 - "Community 75"
+Cohesion: 1.0
+Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+
 ## Knowledge Gaps
-- **25 isolated node(s):** `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`, `지정된 경로의 세금계산서 XML을 파싱하여 딕셔너리 3개를 반환합니다.`, `LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름`, `세금계산서 포털별 핸들러 공통 베이스.     각 포털 핸들러는 이 클래스를 상속하고 supports() / _do_process() 를 구현`, `이 핸들러가 처리 가능한 URL인지 반환.` (+20 more)
+- **26 isolated node(s):** `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`, `지정된 경로의 세금계산서 XML을 파싱하여 딕셔너리 3개를 반환합니다.`, `LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름`, `세금계산서 포털별 핸들러 공통 베이스.     각 포털 핸들러는 이 클래스를 상속하고 supports() / _do_process() 를 구현`, `이 핸들러가 처리 가능한 URL인지 반환.` (+21 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 23`** (9 nodes): `WEB v1 backend package.`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -204,16 +209,18 @@ Nodes (1): 캐시된 드라이버 우선 탐색 → 없으면 ChromeDriverManage
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 31`** (1 nodes): `캐시된 드라이버 우선 탐색 → 없으면 ChromeDriverManager 자동 설치.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 75`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `WehagoHandler` connect `Community 2` to `Community 8`, `Community 12`?**
+- **Why does `WehagoHandler` connect `Community 9` to `Community 8`, `Community 3`?**
   _High betweenness centrality (0.035) - this node is a cross-community bridge._
-- **Why does `BaseTaxInvoiceHandler` connect `Community 2` to `Community 12`, `Community 20`, `Community 14`, `Community 7`?**
-  _High betweenness centrality (0.032) - this node is a cross-community bridge._
-- **Why does `JobStore` connect `Community 3` to `Community 0`, `Community 5`, `Community 6`?**
-  _High betweenness centrality (0.026) - this node is a cross-community bridge._
+- **Why does `BaseTaxInvoiceHandler` connect `Community 3` to `Community 9`, `Community 20`, `Community 14`, `Community 7`?**
+  _High betweenness centrality (0.034) - this node is a cross-community bridge._
+- **Why does `ERPAutoApp` connect `Community 1` to `Community 0`?**
+  _High betweenness centrality (0.022) - this node is a cross-community bridge._
 - **Are the 42 inferred relationships involving `RuntimeError` (e.g. with `.run()` and `._setup_slip_form()`) actually correct?**
   _`RuntimeError` has 42 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 24 inferred relationships involving `BaseTaxInvoiceHandler` (e.g. with `AutoEverHandler` and `CsbillHandler`) actually correct?**

@@ -32,7 +32,7 @@ The active focus is purchase one-click processing, automatic mail collection, an
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.92`.
+- Current WEB/Agent version in files: `1.0.93`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Latest local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -50,6 +50,9 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - Printer output no longer uses operating-server `ShellExecute`; `print_individual` prepares PDFs on the server, queues `output_print`, and the manager PC Agent downloads/prints the PDFs locally.
 - Agent preflight advertises `output_print=true`; old Agents without that capability will not claim print tasks and should be updated from the server installer.
 - `fix104` guards PDF merge/copy preparation when an existing output-set file is also detected as a source. `merge_pdfs()` now writes to a temporary PDF and atomically replaces the target, so it no longer deletes its own input file.
+- `fix105` removes automatic selected-detail/log refresh during job follow-up refreshes, so editing purchase analysis fields is not interrupted.
+- `fix105` auto-saves the currently open purchase analysis form before one-click ERP starts.
+- `fix105` makes ERP payload construction merge raw JSON, nested data, and current invoice fields with the latest saved screen edits taking priority; explicit edited 사업장 also wins over inferred buyer business-number mapping.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -66,6 +69,7 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - `web_v1/backend/app.py`
 - `web_v1/backend/agent_queue.py`
 - `web_v1/backend/erp_queue.py`
+- `web_v1/backend/erp_runner.py`
 - `web_v1/backend/job_store.py`
 - `web_v1/backend/mail_collector.py`
 - `web_v1/backend/models.py`
@@ -94,6 +98,8 @@ The active focus is purchase one-click processing, automatic mail collection, an
 - `node --check web_v1/frontend/app.js` passed after restoring unrelated frontend deletion.
 - PDF merge regression passed: merging `[target PDF, second PDF]` back into the target keeps the target and produced a 2-page PDF.
 - The unrelated local deletion of `web_v1/frontend/app.js`, `web_v1/frontend/index.html`, and `web_v1/frontend/styles.css` was restored before packaging.
+- `fix105` frontend syntax check passed after removing automatic selected-log/detail refresh and bumping the `app.js` cache key.
+- `fix105` ERP payload regression passed: edited 매입처, 사업장, 회계일, 금액, 품목 values override older raw/top-level values before ERP input.
 
 ## Open Work
 
@@ -104,7 +110,8 @@ The active focus is purchase one-click processing, automatic mail collection, an
   - output set refreshes after each event,
   - selected output target produces merged PDF or printer output.
 - Verify automatic mail collection scheduler with real unread mail and Compuzone quote auto-attach.
-- Verify Agent-side `output_print` on real 평택/김제 printers after deploying WEB/Agent `1.0.91`.
+- Verify Agent-side `output_print` on real 평택/김제 printers after deploying current WEB/Agent.
+- Verify one-click ERP with an edited purchase analysis field set: 회계일, 매입처, 품목, 계정, 부서.
 - After deploying this ZIP, manager PCs may require Agent update because the Agent bundle hash changes with backend/agent/version files.
 
 ## Operational Cautions
