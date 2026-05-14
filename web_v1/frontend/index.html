@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>회계업무 자동화 WEB v1.0</title>
+  <link rel="stylesheet" href="/assets/styles.css?v=20260514_fix97_one_click">
+</head>
+<body>
+  <section id="loginView" class="gate-view">
+    <div class="gate-card">
+      <div class="gate-brand">
+        <div class="brand-mark" aria-hidden="true">W1</div>
+        <div>
+          <h1>회계업무 자동화 WEB</h1>
+          <p>담당자 로그인 후 PC 필수환경을 점검합니다.</p>
+        </div>
+      </div>
+      <form id="loginForm" class="login-form">
+        <label>아이디<input id="loginUserId" name="user_id" autocomplete="username" required></label>
+        <label>비밀번호<input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
+        <button class="button primary" type="submit">로그인</button>
+      </form>
+      <p id="loginMessage" class="gate-message"></p>
+    </div>
+  </section>
+
+  <section id="setupView" class="setup-view hidden">
+    <div class="setup-shell">
+      <header class="setup-header">
+        <div>
+          <h1>필수 프로그램 점검/설치</h1>
+          <p>ERP 실행, 담당자 PC 필수 프로그램, 프린터 매핑, 출력 폴더가 정상이어야 업무 화면을 사용할 수 있습니다.</p>
+        </div>
+        <div class="setup-actions">
+          <button id="setupRefreshButton" class="button secondary" type="button">다시 점검</button>
+          <button id="setupInstallButton" class="button ghost" type="button">필수 프로그램 설치</button>
+          <button id="setupContinueButton" class="button primary" type="button" disabled>업무 화면으로 이동</button>
+        </div>
+      </header>
+      <div id="setupSummary" class="setup-summary">점검 상태를 불러오는 중입니다.</div>
+      <section class="setup-panel">
+        <div id="setupChecks" class="setup-checks"></div>
+      </section>
+      <section class="setup-panel">
+        <div class="panel-header compact">
+          <div>
+            <h2>프린터 매핑</h2>
+            <p>담당자 PC에서 감지된 프린터를 평택, 김제, PDF 저장 용도로 연결합니다.</p>
+          </div>
+          <button id="setupSavePrintersButton" class="button secondary" type="button">매핑 저장</button>
+        </div>
+        <div id="printerMappingForm" class="printer-mapping"></div>
+      </section>
+    </div>
+  </section>
+
+  <div id="appShell" class="app-shell hidden">
+    <aside class="sidebar" aria-label="주 메뉴">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true">W1</div>
+        <div>
+          <strong>회계업무 자동화</strong>
+          <span>WEB v1.0</span>
+        </div>
+      </div>
+      <nav class="nav-list">
+        <button id="purchaseNavButton" class="nav-item active" type="button">구매 처리</button>
+        <button class="nav-item" type="button" disabled>정기 처리</button>
+        <button id="setupNavButton" class="nav-item" type="button">설정</button>
+      </nav>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div>
+          <h1>구매 처리</h1>
+          <p>메일 수집, PDF 저장, ERP 입력 큐 등록까지 운영서버에서 진행합니다.</p>
+        </div>
+        <div class="top-actions">
+          <button id="detailModeButton" class="button secondary" type="button">상세모드</button>
+          <button id="notifyButton" class="button secondary admin-only" type="button">알림 허용</button>
+          <button id="setupOpenButton" class="button secondary" type="button">프린터 설정</button>
+          <button id="purchaseCollectButton" class="button primary admin-only" type="button">메일 수집</button>
+          <button id="demoButton" class="button ghost admin-only" type="button">데모</button>
+        </div>
+      </header>
+
+      <div class="utility-toggle-row admin-only">
+        <button id="statusToggleButton" class="button ghost" type="button" aria-expanded="false" aria-controls="statusGrid">서버 상태 보기</button>
+      </div>
+
+      <section id="statusGrid" class="status-grid collapsible hidden admin-only" aria-label="서버 상태">
+        <article class="metric">
+          <span>서버</span>
+          <strong id="serverState">확인 중</strong>
+        </article>
+        <article class="metric">
+          <span>버전</span>
+          <strong id="serverVersion">-</strong>
+        </article>
+        <article class="metric">
+          <span>알림</span>
+          <strong id="notifyState">대기</strong>
+        </article>
+      </section>
+
+      <section class="work-panel" aria-label="현재 작업">
+        <div class="panel-header">
+          <div>
+            <h2>현재 작업</h2>
+            <p id="jobTitle">실행 중인 작업이 없습니다.</p>
+          </div>
+          <div class="work-actions">
+            <button id="workLogToggleButton" class="table-button admin-only" type="button" aria-expanded="false" aria-controls="workLogBox">작업 로그 보기</button>
+            <span id="jobBadge" class="status-badge idle">idle</span>
+          </div>
+        </div>
+
+        <div class="progress-row">
+          <div class="progress-track" aria-label="작업 진행률">
+            <div id="progressBar" class="progress-bar"></div>
+          </div>
+          <strong id="progressText">0%</strong>
+        </div>
+
+        <div class="stage-strip" aria-label="작업 단계">
+          <span data-stage="queued">대기</span>
+          <span data-stage="running">시작</span>
+          <span data-stage="crawling">수집</span>
+          <span data-stage="analyzing">저장</span>
+          <span data-stage="erp">ERP</span>
+          <span data-stage="printing">정리</span>
+          <span data-stage="done">완료</span>
+        </div>
+        <p id="mailCollectSummary" class="mail-collect-summary">메일 자동 수집 상태를 확인하는 중입니다.</p>
+
+        <div id="workLogBox" class="log-box collapsible hidden admin-only" aria-label="작업 로그">
+          <div id="logList" class="log-list">
+            <p class="empty-log">작업을 시작하면 진행 로그가 표시됩니다.</p>
+          </div>
+        </div>
+      </section>
+
+      <section class="queue-panel" aria-label="구매 수신 내역">
+        <div class="panel-header compact">
+          <div>
+            <h2>구매 수신 내역</h2>
+            <p id="selectedCount">선택 0건</p>
+          </div>
+          <div class="panel-actions">
+            <select id="oneClickOutputTarget" class="one-click-target" aria-label="출력대상">
+              <option value="pdf">통합본 PDF 저장</option>
+              <option value="pyeongtaek">평택 프린터</option>
+              <option value="gimje">김제 프린터</option>
+            </select>
+            <button id="erpQueueButton" class="button primary" type="button" disabled>원클릭 처리</button>
+            <button id="retryInvoiceButton" class="button secondary admin-only" type="button" disabled>재시도</button>
+            <button id="invoiceLogButton" class="button secondary admin-only" type="button" disabled>로그 보기</button>
+            <button id="deleteInvoiceButton" class="button danger admin-only" type="button" disabled>삭제</button>
+            <button id="refreshInvoicesButton" class="button ghost" type="button">새로고침</button>
+          </div>
+        </div>
+        <div class="filter-row" aria-label="상태 필터">
+          <button class="filter-chip active" type="button" data-status-filter="all">전체</button>
+          <button class="filter-chip" type="button" data-status-filter="대기중">대기중</button>
+          <button class="filter-chip" type="button" data-status-filter="처리중">처리중</button>
+          <button class="filter-chip" type="button" data-status-filter="ERP대기">ERP대기</button>
+          <button class="filter-chip" type="button" data-status-filter="처리완료">처리완료</button>
+          <button class="filter-chip" type="button" data-status-filter="오류">오류</button>
+          <label class="page-size-control">
+            <span>보기</span>
+            <select id="invoicePageSize">
+              <option value="20" selected>20건</option>
+              <option value="50">50건</option>
+              <option value="100">100건</option>
+              <option value="200">200건</option>
+            </select>
+          </label>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th class="check-col"><input id="invoiceSelectAll" type="checkbox" aria-label="전체 선택"></th>
+                <th>상태</th>
+                <th>거래처</th>
+                <th>사업장</th>
+                <th>금액</th>
+                <th>수신일</th>
+                <th>처리</th>
+              </tr>
+            </thead>
+            <tbody id="invoicesTable">
+              <tr><td colspan="7" class="empty-cell">수신 내역 없음</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="purchase-detail" id="purchaseDetailPanel">
+          <div class="panel-header compact">
+            <div>
+              <h2>구매 상세</h2>
+              <p id="purchaseDetailTitle">구매 건을 1개 선택하면 견적서 첨부와 분석을 진행할 수 있습니다.</p>
+            </div>
+            <div class="panel-actions">
+              <button id="manualUploadButton" class="button secondary" type="button" disabled>자료 수동업로드</button>
+              <input id="taxInvoiceFileInput" class="hidden-file-input" type="file" accept="application/pdf,.pdf">
+              <input id="quoteFileInput" class="hidden-file-input" type="file" accept="application/pdf,.pdf">
+              <input id="voucherFileInput" class="hidden-file-input" type="file" accept="application/pdf,.pdf">
+              <input id="approvalFileInput" class="hidden-file-input" type="file" accept="application/pdf,.pdf" multiple>
+              <input id="expenseReportFileInput" class="hidden-file-input" type="file" accept="application/pdf,.pdf">
+              <button id="analyzePurchaseButton" class="button secondary admin-only" type="button" disabled>분석</button>
+              <button id="saveAnalysisButton" class="button primary admin-only" type="button" disabled>분석 저장</button>
+            </div>
+          </div>
+          <div id="purchaseDetailBody" class="purchase-detail-body">
+            <div class="empty-cell">선택된 구매 건이 없습니다.</div>
+          </div>
+        </div>
+        <div class="detail-log admin-only">
+          <div class="panel-header compact">
+            <h2>선택 건 로그</h2>
+            <span id="invoiceLogTitle">-</span>
+          </div>
+          <div id="invoiceLogList" class="detail-log-list">로그를 볼 구매 건을 선택하세요.</div>
+        </div>
+      </section>
+
+      <section class="queue-panel admin-only" aria-label="최근 작업">
+        <div class="panel-header compact">
+          <h2>최근 작업</h2>
+          <button id="refreshButton" class="button ghost" type="button">새로고침</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>상태</th>
+                <th>작업</th>
+                <th>진행률</th>
+                <th>메시지</th>
+                <th>로그</th>
+              </tr>
+            </thead>
+            <tbody id="jobsTable">
+              <tr><td colspan="5" class="empty-cell">작업 내역 없음</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="manualUploadModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="manualUploadTitle">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 id="manualUploadTitle">자료 수동업로드</h2>
+          <p>첨부할 자료 종류를 선택하세요.</p>
+        </div>
+        <button class="button ghost icon-button" type="button" data-upload-modal-close aria-label="닫기">×</button>
+      </div>
+      <section class="manual-create-panel">
+        <h3>신규 구매자료 등록</h3>
+        <p>메일 수집/크롤러 없이 세금계산서와 견적서를 직접 올려 구매 건을 만듭니다.</p>
+        <div class="manual-create-files">
+          <label>세금계산서 PDF
+            <input id="manualNewTaxInvoiceInput" type="file" accept="application/pdf,.pdf">
+          </label>
+          <label>견적서 PDF
+            <input id="manualNewQuoteInput" type="file" accept="application/pdf,.pdf">
+          </label>
+        </div>
+        <button id="manualCreatePurchaseButton" class="button primary" type="button">신규 구매 건 등록</button>
+      </section>
+      <div class="manual-upload-divider">선택된 기존 건에 자료 첨부/교체</div>
+      <div class="manual-upload-grid">
+        <button type="button" data-upload-kind="tax_invoice">
+          <strong>세금계산서</strong>
+          <span>수신 PDF 교체</span>
+        </button>
+        <button type="button" data-upload-kind="quote">
+          <strong>견적서</strong>
+          <span>구매 견적 PDF</span>
+        </button>
+        <button type="button" data-upload-kind="voucher">
+          <strong>전표</strong>
+          <span>ERP 전표 PDF</span>
+        </button>
+        <button type="button" data-upload-kind="approval">
+          <strong>전자결재 품의</strong>
+          <span>품의 PDF 첨부/교체</span>
+        </button>
+        <button type="button" data-upload-kind="expense_report">
+          <strong>현금출금결의서</strong>
+          <span>생성본 PDF 교체</span>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/app.js?v=20260514_fix97_one_click" defer></script>
+</body>
+</html>

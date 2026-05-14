@@ -1,0 +1,31 @@
+{
+    "users": {
+        "arci": {
+            "name": "노양래 책임매니저",
+            "pw": "eotmd12!@"
+        },
+        "reum0009": {
+            "name": "구름 매니저",
+            "pw": "eotmd12!@"
+        },
+        "kimsanul": {
+            "name": "김산울 매니저",
+            "pw": "eotmd12!@"
+        },
+        "hah4627": {
+            "name": "현시훈 매니저",
+            "pw": "eotmd12!@"
+        },
+        "tuy1120": {
+            "name": "송명학 매니저",
+            "pw": "eotmd12!@"
+        },
+        "rlckd9646": {
+            "name": "김기창 매니저",
+            "pw": "@gozld2201"
+        }
+    },
+    "hide_patch_notes": false,
+    "hide_win_v_guide": false,
+    "last_seen_version": "4.0"
+}

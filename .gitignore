@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+*.pyo
+*.zip
+*.log
+.env
+web_v1/backend/.env
+.codex/
+
+# Generated Graphify cache; keep top-level graph outputs tracked.
+graphify-out/cache/
+graphify-out/converted/
+graphify-out/needs_update
+
+# Local release/backup staging folders.
+_backup*/
+_hotfix*/
+_release*/
+
+# Recursive accidental support copies.
+support/support/
+
+# Timestamped local backup artifacts.
+*.backup_before_*
+*.WORKING_*
