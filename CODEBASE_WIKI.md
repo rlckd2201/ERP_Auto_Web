@@ -2,7 +2,7 @@
 
 Updated: 2026-05-14
 
-This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1266 nodes, 4055 edges, and 33 communities, so use the graph for navigation, then verify behavior in the active source before editing.
+This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1274 nodes, 4072 edges, and 32 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
 ## Reading Rules
 

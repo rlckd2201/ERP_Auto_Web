@@ -338,22 +338,34 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
 
     def _parse_invoice_page(self, driver: WebDriver) -> dict:
         text = self._visible_text(driver)
-        biz_numbers = re.findall(r"\d{3}-?\d{2}-?\d{5}", text)
-        amounts = [self._to_int(value) for value in re.findall(r"\d[\d,]{2,}", text)]
-        amount_candidates = [value for value in amounts if value >= 100]
+        html_source = driver.page_source or ""
+        hidden = self._hidden_values(html_source)
+        rows = self._font_rows(html_source)
 
-        supplier_name = self._label_value_from_text(text, ("공급자", "상호"))
-        buyer_name = self._label_value_from_text(text, ("공급받는자", "상호"))
-        item_name = self._label_value_from_text(text, ("품목", "품목명"))
+        strict_biz_numbers = re.findall(r"\d{3}-\d{2}-\d{5}", text)
+        supplier_biz_no = self._format_biz_no(hidden.get("s_compnum") or "")
+        if not supplier_biz_no and strict_biz_numbers:
+            supplier_biz_no = strict_biz_numbers[0]
+        buyer_biz_no = self._format_biz_no(hidden.get("inpasswd") or "")
+        if not buyer_biz_no and len(strict_biz_numbers) >= 2:
+            buyer_biz_no = strict_biz_numbers[1]
+
+        items = self._items_from_rows(rows)
+        supply_amount = sum(item.get("supply_amount", 0) for item in items)
+        tax_amount = sum(item.get("tax_amount", 0) for item in items)
+        total_sum = self._total_from_rows(rows) or (supply_amount + tax_amount)
 
         return {
-            "supplier_name": supplier_name,
-            "buyer_name": buyer_name,
-            "supplier_biz_no": biz_numbers[0] if len(biz_numbers) >= 1 else "",
-            "buyer_biz_no": biz_numbers[1] if len(biz_numbers) >= 2 else "",
-            "issue_date": self._date_after(text, ("작성일자", "작성일")),
-            "item_name": item_name,
-            "total_sum": max(amount_candidates) if amount_candidates else 0,
+            "supplier_name": hidden.get("s_compname") or self._party_name_from_rows(rows, 0),
+            "buyer_name": hidden.get("r_compname") or self._party_name_from_rows(rows, 1),
+            "supplier_biz_no": supplier_biz_no,
+            "buyer_biz_no": buyer_biz_no,
+            "issue_date": self._invoice_date_from_rows(rows) or self._date_after(text, ("작성일자", "작성일")),
+            "item_name": items[0]["name"] if items else "",
+            "target_supply": supply_amount,
+            "total_tax": tax_amount,
+            "total_sum": total_sum,
+            "items": items,
             "raw_text_head": text[:3000],
         }
 
@@ -369,22 +381,34 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         buyer_biz_no = parsed.get("buyer_biz_no") or matched_biz_no
         site_name = self._site_name_from_biz_no(buyer_biz_no) or parsed.get("buyer_name") or ""
         total_sum = self._to_int(parsed.get("total_sum"))
-        item_name = parsed.get("item_name") or "세금계산서"
+        parsed_items = parsed.get("items") or []
+        item_name = parsed.get("item_name") or (parsed_items[0].get("name") if parsed_items else "") or "세금계산서"
+        items = [
+            {
+                "name": item.get("name") or item_name,
+                "qty": item.get("qty") or 1,
+                "inc_vat": item.get("inc_vat") or total_sum,
+                "account": "소모품비",
+            }
+            for item in parsed_items
+        ] or [
+            {
+                "name": item_name,
+                "qty": 1,
+                "inc_vat": total_sum,
+                "account": "소모품비",
+            }
+        ]
         return {
             "vendor_name": parsed.get("supplier_name") or "",
             "site_name": site_name,
             "business_no": buyer_biz_no,
             "matched_biz_no": matched_biz_no,
             "invoice_date": parsed.get("issue_date") or "",
+            "target_supply": self._to_int(parsed.get("target_supply")),
+            "total_tax": self._to_int(parsed.get("total_tax")),
             "total_sum": total_sum,
-            "items": [
-                {
-                    "name": item_name,
-                    "qty": 1,
-                    "inc_vat": total_sum,
-                    "account": "소모품비",
-                }
-            ],
+            "items": items,
             "raw": {
                 "smileedi": parsed,
             },
@@ -592,6 +616,112 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
     def _to_int(value) -> int:
         digits = re.sub(r"[^\d]", "", str(value or ""))
         return int(digits) if digits else 0
+
+    @staticmethod
+    def _format_biz_no(value: str) -> str:
+        digits = re.sub(r"[^\d]", "", str(value or ""))
+        if len(digits) == 10:
+            return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"
+        return str(value or "").strip()
+
+    @staticmethod
+    def _hidden_values(html_source: str) -> dict[str, str]:
+        values: dict[str, str] = {}
+        for tag in re.findall(r"<input\b[^>]*>", str(html_source or ""), flags=re.I | re.S):
+            name_match = re.search(r"\bname\s*=\s*(['\"])(.*?)\1", tag, flags=re.I | re.S)
+            value_match = re.search(r"\bvalue\s*=\s*(['\"])(.*?)\1", tag, flags=re.I | re.S)
+            if not name_match:
+                continue
+            name = html.unescape(name_match.group(2)).strip()
+            value = html.unescape(value_match.group(2)).strip() if value_match else ""
+            values[name] = value
+        return values
+
+    @classmethod
+    def _font_rows(cls, html_source: str) -> list[list[str]]:
+        rows: list[list[str]] = []
+        for row_html in re.findall(r"<tr\b[^>]*>(.*?)</tr>", str(html_source or ""), flags=re.I | re.S):
+            cells = [
+                cls._clean_html_cell(cell)
+                for cell in re.findall(
+                    r"<p\b[^>]*class\s*=\s*(['\"])[^'\"]*FontForBlack[^'\"]*\1[^>]*>(.*?)</p>",
+                    row_html,
+                    flags=re.I | re.S,
+                )
+            ]
+            if any(cells):
+                rows.append(cells)
+        return rows
+
+    @staticmethod
+    def _clean_html_cell(match_value) -> str:
+        raw = match_value[1] if isinstance(match_value, tuple) else match_value
+        text = re.sub(r"<[^>]+>", " ", str(raw or ""))
+        text = html.unescape(text).replace("\xa0", " ")
+        text = re.sub(r"\s+", " ", text)
+        return text.strip()
+
+    @staticmethod
+    def _party_name_from_rows(rows: list[list[str]], side_index: int) -> str:
+        for cells in rows:
+            if len(cells) >= 8 and re.fullmatch(r"\d{3}-\d{2}-\d{5}", cells[0]) and re.fullmatch(r"\d{3}-\d{2}-\d{5}", cells[4]):
+                continue
+            if len(cells) >= 6 and not re.fullmatch(r"\d{3}-\d{2}-\d{5}", cells[0]):
+                if side_index == 0 and cells[0]:
+                    return cells[0]
+                if side_index == 1 and len(cells) >= 5 and cells[4]:
+                    return cells[4]
+        return ""
+
+    @staticmethod
+    def _invoice_date_from_rows(rows: list[list[str]]) -> str:
+        for cells in rows:
+            if len(cells) < 3:
+                continue
+            year = re.sub(r"[^\d]", "", cells[0])
+            month = re.sub(r"[^\d]", "", cells[1])
+            day = re.sub(r"[^\d]", "", cells[2])
+            if len(year) == 4 and year.startswith("20") and month and day:
+                month_i = int(month)
+                day_i = int(day)
+                if 1 <= month_i <= 12 and 1 <= day_i <= 31:
+                    return f"{year}-{month_i:02d}-{day_i:02d}"
+        return ""
+
+    def _items_from_rows(self, rows: list[list[str]]) -> list[dict]:
+        items: list[dict] = []
+        for cells in rows:
+            if len(cells) < 8:
+                continue
+            month = re.sub(r"[^\d]", "", cells[0])
+            day = re.sub(r"[^\d]", "", cells[1])
+            name = cells[2].strip()
+            if not month or not day or not name:
+                continue
+            if name in {"품목", "규격", "수량", "단가", "공급가액", "세액", "비고"}:
+                continue
+            supply_amount = self._to_int(cells[6] if len(cells) > 6 else "")
+            tax_amount = self._to_int(cells[7] if len(cells) > 7 else "")
+            if not supply_amount and not tax_amount:
+                continue
+            items.append(
+                {
+                    "name": name,
+                    "qty": 1,
+                    "supply_amount": supply_amount,
+                    "tax_amount": tax_amount,
+                    "inc_vat": supply_amount + tax_amount,
+                }
+            )
+        return items
+
+    def _total_from_rows(self, rows: list[list[str]]) -> int:
+        for cells in rows:
+            money_values = [self._to_int(cell) for cell in cells if "," in cell]
+            money_values = [value for value in money_values if value > 0]
+            if money_values and len(cells) <= 5:
+                return money_values[0]
+        return 0
 
     def _candidate_debug(self, candidates: dict[str, str]) -> list[dict]:
         return [
