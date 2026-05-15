@@ -2492,54 +2492,54 @@
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L214",
-      "id": "tax_crawler_crawler_main_rationale_214",
       "community": 10,
-      "norm_label": "?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba??url(?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6fe1\u110a\u116f\u11bd\u1108\u1162\u11af file:// \u5bc3\u110a\u1166\u11ab\u110c\u116e\u11b3) ??pdf ?\u112f\u1109\u1173\u11ae\u6fe1\u110a\u116f\u11bc\u1107\u1164\u11b5 ??\u5bc3\u1100\u1168\u11af\u1102\u1162\u11a8 dict \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.      \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5\u5a9b?"
+      "norm_label": "?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba??url(?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6fe1\u110a\u116f\u11bd\u1108\u1162\u11af file:// \u5bc3\u110a\u1166\u11ab\u110c\u116e\u11b3) ??pdf ?\u112f\u1109\u1173\u11ae\u6fe1\u110a\u116f\u11bc\u1107\u1164\u11b5 ??\u5bc3\u1100\u1168\u11af\u1102\u1162\u11a8 dict \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.      \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5\u5a9b?",
+      "id": "tax_crawler_crawler_main_rationale_214"
     },
     {
       "label": "KT \uf9ce\ubdbf\uc52a \uf9cf\ub086\uaf6d??PDF \uf9e3\u2464?\u745c??\u0080?\u03bd\ube2f\u6028?file:// URI \uf9cf\u2478\uc909 \u8adb\uc111\uc19a.     ?\uc495\u3049 ?\uba2e\ub497 \uf9e3\u2464??\ub6af\uc52a\uf9cf\ub086\ubfc9 'KT emai",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L266",
-      "id": "tax_crawler_crawler_main_rationale_266",
       "community": 10,
-      "norm_label": "kt \u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 \u7d10\u1101\u1175\u11b1\u1101\u116b\u11b0??pdf \u6ce55?\u745c??\u0080?\u03bd\u1107\u1174\u11ae\u6028?file:// uri \u7d10(5)\u110c\u116e\u11b4 \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.     ?\u110a\u116f\u11bc\u3049 ?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9\u7d10\u1101\u1175\u11b1\u1108\u116d\u11c0 'kt emai"
+      "norm_label": "kt \u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 \u7d10\u1101\u1175\u11b1\u1101\u116b\u11b0??pdf \u6ce55?\u745c??\u0080?\u03bd\u1107\u1174\u11ae\u6028?file:// uri \u7d10(5)\u110c\u116e\u11b4 \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.     ?\u110a\u116f\u11bc\u3049 ?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9\u7d10\u1101\u1175\u11b1\u1108\u116d\u11c0 'kt emai",
+      "id": "tax_crawler_crawler_main_rationale_266"
     },
     {
       "label": "Save tax-invoice XML attachments and return file:// URIs.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L311",
-      "id": "tax_crawler_crawler_main_rationale_311",
       "community": 10,
-      "norm_label": "save tax-invoice xml attachments and return file:// uris."
+      "norm_label": "save tax-invoice xml attachments and return file:// uris.",
+      "id": "tax_crawler_crawler_main_rationale_311"
     },
     {
       "label": "\uf9ce\ubdbf\uc52a HTML \u8e42\uba83\u0426?\uba2f\uaf4c ?\uba78\ud211\u6028\uafa9\uad9b???\u044b\uaf6d \uf9cd\uacf9\uac95\uf9cd?\u7570\ubdbf\ud167.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L340",
-      "id": "tax_crawler_crawler_main_rationale_340",
       "community": 10,
-      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 html \u8e42\u1106\u1167\u11ba\u0446?\u1106\u1164\u11ba\u1101\u116a\u11ab ?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba???\u044b\u1101\u116b\u11b0 \u7559\u1100\u1169\u11c0\u1100\u1166\u11b0\u7559?\u7570\u1107\u1170\u11ae\u1110\u1166\u11c2."
+      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 html \u8e42\u1106\u1167\u11ba\u0446?\u1106\u1164\u11ba\u1101\u116a\u11ab ?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba???\u044b\u1101\u116b\u11b0 \u7559\u1100\u1169\u11c0\u1100\u1166\u11b0\u7559?\u7570\u1107\u1170\u11ae\u1110\u1166\u11c2.",
+      "id": "tax_crawler_crawler_main_rationale_340"
     },
     {
       "label": "?\ub300\ucc13??\uf9ce\ubdbf\ub586\uf9de\u0080?\uba2f\uaf4c NTS_eTaxInvoice.html \uf9e3\u2464??\ub6af\uc52a??\uf9e1\uc5a0\ube18 ?\u0080????     file:// URI \u8adb\uc111\uc19a. ?\ub181\uc45d\uf9ce",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L390",
-      "id": "tax_crawler_crawler_main_rationale_390",
       "community": 10,
-      "norm_label": "?\u1103\u1162\u110d\u1175\u11ae??\u786b\u1107\u1170\u11ae\u1104\u1164\u11a9\u540f\u0080?\u1106\u1164\u11ba\u1101\u116a\u11ab nts_etaxinvoice.html \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9??\u674e\u110b\u1164\u11af\u1107\u1173\u11b3 ?\u0080????     file:// uri \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5. ?\u1102\u1169\u11b0\u110a\u116d\u11bc\u786b"
+      "norm_label": "?\u1103\u1162\u110d\u1175\u11ae??\u786b\u1107\u1170\u11ae\u1104\u1164\u11a9\u540f\u0080?\u1106\u1164\u11ba\u1101\u116a\u11ab nts_etaxinvoice.html \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9??\u674e\u110b\u1164\u11af\u1107\u1173\u11b3 ?\u0080????     file:// uri \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5. ?\u1102\u1169\u11b0\u110a\u116d\u11bc\u786b",
+      "id": "tax_crawler_crawler_main_rationale_390"
     },
     {
       "label": "\uf9ce\ubdbf\uc52a ?\uc10f\ub58a????yymmdd ?\ubea4\ub587.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L439",
-      "id": "tax_crawler_crawler_main_rationale_439",
       "community": 10,
-      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 ?\u1109\u1164\u11b6\u1104\u1164\u11ad????yymmdd ?\u1108\u1163\u11b3\u1104\u1164\u11aa."
+      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 ?\u1109\u1164\u11b6\u1104\u1164\u11ad????yymmdd ?\u1108\u1163\u11b3\u1104\u1164\u11aa.",
+      "id": "tax_crawler_crawler_main_rationale_439"
     },
     {
       "label": "portal_autoever.py",
@@ -7604,9 +7604,9 @@
       "file_type": "rationale",
       "source_file": "web_v1\\backend\\erp_runner.py",
       "source_location": "L812",
-      "id": "backend_erp_runner_rationale_812",
       "community": 4,
-      "norm_label": "the legacy ui module imports fitz at module load, but erp input does not use it"
+      "norm_label": "the legacy ui module imports fitz at module load, but erp input does not use it",
+      "id": "backend_erp_runner_rationale_812"
     },
     {
       "label": "expense_excel_export.py",
@@ -12015,7 +12015,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "manager_server\\\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
-      "source_location": "L2846",
+      "source_location": "L2858",
       "weight": 1.0,
       "_src": "manager_server_v6_2_py",
       "_tgt": "manager_server_v6_2_appmanager",
@@ -12027,7 +12027,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "manager_server\\\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
-      "source_location": "L2977",
+      "source_location": "L2989",
       "weight": 1.0,
       "_src": "manager_server_v6_2_py",
       "_tgt": "manager_server_v6_2_erpautoapp",
@@ -12039,7 +12039,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "manager_server\\\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
-      "source_location": "L3449",
+      "source_location": "L3461",
       "weight": 1.0,
       "_src": "manager_server_v6_2_py",
       "_tgt": "manager_server_v6_2_to_int",
@@ -12051,7 +12051,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "manager_server\\\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
-      "source_location": "L3459",
+      "source_location": "L3471",
       "weight": 1.0,
       "_src": "manager_server_v6_2_py",
       "_tgt": "manager_server_v6_2_is_sane_amount",
@@ -12063,7 +12063,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "manager_server\\\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
-      "source_location": "L3463",
+      "source_location": "L3475",
       "weight": 1.0,
       "_src": "manager_server_v6_2_py",
       "_tgt": "manager_server_v6_2_normalize_biz_no",
@@ -12075,7 +12075,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "manager_server\\\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
-      "source_location": "L3499",
+      "source_location": "L3511",
       "weight": 1.0,
       "_src": "manager_server_v6_2_py",
       "_tgt": "manager_server_v6_2_normalize_issue_date",
@@ -54558,8 +54558,8 @@
       "source_file": "web_v1\\backend\\tools\\AccountingWebRequiredSetup.cs",
       "source_location": "L37",
       "weight": 1.0,
-      "_src": "tools_accountingwebrequiredsetup_program_main",
-      "_tgt": "backend_worker_jobworker_start",
+      "_src": "backend_worker_jobworker_start",
+      "_tgt": "tools_accountingwebrequiredsetup_program_main",
       "source": "backend_worker_jobworker_start",
       "target": "tools_accountingwebrequiredsetup_program_main"
     },

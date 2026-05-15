@@ -1883,15 +1883,17 @@ class ERPLoginBot:
             compact_vendor = re.sub(r"\s+", "", vendor_name)
             vendor_target_biz_no = ""
             vendor_search_name = vendor_name
-            if vendor_biz_no:
+            vendor_target_optional = False
+            if is_kt_vendor:
+                vendor_target_biz_no = "102-81-42945"
+                vendor_search_name = "케이티"
+                vendor_target_optional = True
+            elif vendor_biz_no:
                 digits = re.sub(r"[^0-9]", "", vendor_biz_no)
                 vendor_target_biz_no = f"{digits[:3]}-{digits[3:5]}-{digits[5:]}" if len(digits) == 10 else vendor_biz_no
             elif "동양정보통신" in compact_vendor:
                 vendor_target_biz_no = "402-81-23213"
                 vendor_search_name = "동양정보통신"
-            elif is_kt_vendor:
-                vendor_target_biz_no = "102-81-42945"
-                vendor_search_name = "케이티"
 
             self.logger.info(
                 f"  [MGMT-XY] {row_no}행 관리항목 조건판정: raw_account={account_name}, "
@@ -1920,12 +1922,14 @@ class ERPLoginBot:
                     pyautogui.press('enter')
                     time.sleep(ERP_FORM_WAIT)
                     picked = False
+                    popup_seen = False
                     try:
                         for win in Desktop(backend="uia").windows():
                             try:
                                 title = win.window_text() or ""
                                 if "거래처" not in title:
                                     continue
+                                popup_seen = True
                                 for cell in win.descendants():
                                     try:
                                         cell_text = (cell.window_text() or "").strip()
@@ -1955,6 +1959,14 @@ class ERPLoginBot:
                     except Exception as e:
                         self.logger.warning(f"  [MGMT-XY] {label}: 거래처 사업자번호 행 탐색 실패: {e}")
                     if not picked:
+                        if vendor_target_optional:
+                            self.logger.warning(
+                                f"  [MGMT-XY] {label}: KT vendor business no {target_biz_no} not found; PASS"
+                            )
+                            if popup_seen:
+                                pyautogui.press('esc')
+                            time.sleep(ERP_FORM_WAIT)
+                            return
                         self.logger.warning(
                             f"  [MGMT-XY] {label}: 거래처 사업자번호 {target_biz_no} 미검출, 이름 입력 후 Enter fallback"
                         )
