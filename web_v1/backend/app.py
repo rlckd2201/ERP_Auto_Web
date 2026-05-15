@@ -1833,6 +1833,7 @@ def api_update_regular_data(invoice_id: int, request: RegularDataUpdate) -> dict
         account = str(source.get("account") or "지급수수료").strip()
         row = {
             "account": account if account in allowed_accounts else "지급수수료",
+            "account_manual": bool(source.get("account_manual") or source.get("manual_account")),
             "name": str(source.get("name") or source.get("item_name") or "정기 서비스").strip() or "정기 서비스",
             "qty": max(1, int(source.get("qty") or source.get("quantity") or 1)),
             "supply": int(source.get("supply") or source.get("supply_amount") or 0),

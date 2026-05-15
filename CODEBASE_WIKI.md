@@ -1,4 +1,4 @@
-# CODEBASE WIKI
+﻿# CODEBASE WIKI
 
 Updated: 2026-05-15
 
@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-15, WEB/Agent files are at `1.0.98`. The latest local deployment ZIP is:
+As of 2026-05-15, WEB/Agent files are at `1.0.99`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip
+C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip
 ```
 
 Known deployment hosts:
@@ -39,7 +39,7 @@ Current active product work: the first WEB `정기 처리` pass is implemented i
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
@@ -476,7 +476,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.98
+1.0.99
 ```
 
 ## Safe Change Checklist
@@ -541,3 +541,16 @@ Before release:
 | Cash report generation | `output_set.py`, `expense_excel_export.py`, Agent `run_expense_report_task()` |
 | Frontend simple/detail UI | `frontend/app.js`, `frontend/styles.css`, `admin-only`, `detailMode` |
 | Version mismatch | `VERSION`, `erp_agent.py`, `install_operating_server.ps1`, `versioning.py`, setup status Agent bundle check |
+## Fix111 Regular Processing Notes
+
+- WEB regular processing must follow the legacy CS 담당자용/서버용 regular rules, not crawler temporary defaults.
+- `web_v1/backend/erp_runner.py` recalculates the regular item account from item/vendor unless `account_manual` is true. This fixes Daou Office/groupware invoices that were previously carried into ERP as `소모품비`; they now enter as `지급수수료` by default.
+- `web_v1/frontend/app.js` keeps the default account in `data-account-default` and only saves `account_manual=true` when the user changes it.
+- `web_v1/backend/app.py` persists `account_manual` from regular detail saves.
+- `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` now receives `vendor_biz_no`/`supplier_biz_no` and can select the ERP 거래처 popup row by business number for generic regular vendors such as Daou Technology.
+- The latest fix111 deployment ZIP is 
+C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip
+.
+
+
+

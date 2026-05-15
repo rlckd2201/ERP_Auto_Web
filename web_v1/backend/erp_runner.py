@@ -265,6 +265,20 @@ def _guess_account(item_name: str, vendor_name: str = "") -> str:
     return "지급수수료"
 
 
+def _regular_account_from_item(item: dict[str, Any], item_name: str, vendor_name: str) -> str:
+    guessed = _guess_account(item_name, vendor_name)
+    account = _clean_text(item.get("account"))
+    manual = bool(
+        item.get("account_manual")
+        or item.get("manual_account")
+        or str(item.get("account_source") or "").strip().lower() == "manual"
+    )
+    allowed = {"지급수수료", "통신비", "소모품비", "컴퓨터소프트웨어", "집기비품"}
+    if manual and account in allowed:
+        return account
+    return guessed
+
+
 def _regular_period_label(data: dict[str, Any]) -> str:
     pdf_name = Path(str(data.get("pdf_path") or "")).name
     match = re.search(r"_(\d{4}년\s*\d{1,2}월(?:\s*\d차)?|\d{4}년\s*\d{1,2}~\d{1,2}월\s*\d차)(?:_\d+)?\.pdf$", pdf_name)
@@ -558,6 +572,8 @@ def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         "pdf_path": pdf_path,
         "site_name": site,
         "vendor_name": vendor,
+        "vendor_biz_no": vendor_biz_no or "",
+        "supplier_biz_no": vendor_biz_no or "",
         "buyer_biz_no": buyer_biz_no or "",
         "invoice_date": invoice_date,
         "target_supply": target_supply,
@@ -588,6 +604,15 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         "매입처",
     )
     buyer_biz_no = data.get("buyer_biz_no") or data.get("buyer_business_no") or raw.get("buyer_biz_no")
+    vendor_biz_no = (
+        data.get("vendor_biz_no")
+        or data.get("supplier_biz_no")
+        or data.get("supplier_business_no")
+        or data.get("supplier_business_number")
+        or raw.get("vendor_biz_no")
+        or raw.get("supplier_biz_no")
+        or raw.get("supplier_business_no")
+    )
     site = _resolve_site(data, raw, invoice, pdf_path) or "사업장미확인"
     invoice_date = _extract_invoice_date(data, pdf_path)
     if not invoice_date:
@@ -644,7 +669,8 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
                 "qty": qty,
                 "inc_vat": inc_vat,
                 "supply": supply,
-                "account": _clean_text(item.get("account")) or _guess_account(name, vendor),
+                "account": _regular_account_from_item(item, name, vendor),
+                "account_manual": bool(item.get("account_manual") or item.get("manual_account")),
             }
         )
 
@@ -683,6 +709,8 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         "pdf_path": pdf_path,
         "site_name": site,
         "vendor_name": vendor,
+        "vendor_biz_no": vendor_biz_no or "",
+        "supplier_biz_no": vendor_biz_no or "",
         "buyer_biz_no": buyer_biz_no or "",
         "invoice_date": invoice_date,
         "target_supply": target_supply,

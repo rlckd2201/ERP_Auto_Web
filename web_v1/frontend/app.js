@@ -1066,6 +1066,23 @@ function guessRegularAccount(itemName, vendorName = "") {
   const compact = `${itemName || ""}${vendorName || ""}`.replace(/\s+/g, "");
   if (compact.includes("동양정보통신") || compact.includes("대신아이씨티")) return "지급수수료";
   if (["kt", "케이티", "통신", "vpn", "sdwan", "오토에버", "autoever", "704100", "w001"].some((key) => text.includes(key))) return "통신비";
+  if ([
+    "nac",
+    "dlp",
+    "watching-on",
+    "watchingon",
+    "acronis",
+    "그룹웨어",
+    "다우오피스",
+    "k-system",
+    "ksystem",
+    "helpu",
+    "원격지원",
+    "자산관리",
+    "adobe",
+    "cloudoc",
+    "문서중앙화",
+  ].some((key) => text.includes(key))) return "지급수수료";
   return "지급수수료";
 }
 
@@ -1081,6 +1098,8 @@ function regularItemsForDisplay(data, invoice) {
   let maxIndex = 0;
   let maxAmount = -1;
   const rows = source.map((item, index) => {
+    const defaultAccount = guessRegularAccount(item.name || item.item_name, data.vendor_name || invoice?.vendor_name);
+    const manualAccount = item.account_manual === true || item.manual_account === true || item.account_source === "manual";
     const incVat = Number(item.inc_vat || item.amount || item.total || 0) || 0;
     let supply = Number(item.supply || item.supply_amount || 0) || 0;
     if (!supply && totalSupply && totalIncVat) supply = Math.floor(totalSupply * (incVat / totalIncVat));
@@ -1092,7 +1111,8 @@ function regularItemsForDisplay(data, invoice) {
     }
     supplyRemainder -= supply;
     return {
-      account: item.account || guessRegularAccount(item.name || item.item_name, data.vendor_name || invoice?.vendor_name),
+      account: manualAccount && item.account ? item.account : defaultAccount,
+      default_account: defaultAccount,
       name: item.name || item.item_name || "정기 서비스",
       qty: Math.max(1, Number(item.qty || item.quantity || 1) || 1),
       supply,
@@ -1152,7 +1172,7 @@ function renderRegularDetail(invoice) {
         <tbody>
           ${items.length ? items.map((item, index) => `
             <tr data-regular-index="${index}">
-              <td><select data-item-field="account">${regularAccountOptions(item.account || "지급수수료")}</select></td>
+              <td><select data-item-field="account" data-account-default="${escapeHtml(item.default_account || item.account || "지급수수료")}">${regularAccountOptions(item.account || "지급수수료")}</select></td>
               <td><input data-item-field="name" value="${escapeHtml(item.name || "")}"></td>
               <td><input data-item-field="qty" value="${escapeHtml(item.qty || 1)}"></td>
               <td><input data-item-field="supply" value="${escapeHtml(item.supply || 0)}"></td>
@@ -1307,6 +1327,8 @@ function collectRegularForm() {
       const key = input.dataset.itemField;
       item[key] = ["qty", "supply", "inc_vat"].includes(key) ? Number(String(input.value).replace(/[^0-9-]/g, "")) || 0 : input.value.trim();
     });
+    const accountInput = row.querySelector('[data-item-field="account"]');
+    item.account_manual = Boolean(accountInput && item.account && item.account !== accountInput.dataset.accountDefault);
     if (!item.inc_vat && item.supply) item.inc_vat = Math.round(item.supply * 1.1);
     return item;
   });

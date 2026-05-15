@@ -60,7 +60,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.98"
+AGENT_BUNDLE_VERSION = "1.0.99"
 _MUTEX_HANDLE: Any = None
 
 
@@ -255,6 +255,7 @@ class AgentTray:
         except Exception as exc:
             log(f"tray notify event failed: {exc}")
         return 0
+
 
 def _agent_bundle_hash() -> str:
     try:

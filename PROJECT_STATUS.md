@@ -1,4 +1,4 @@
-# Project Status
+﻿# Project Status
 
 Updated: 2026-05-15
 
@@ -38,7 +38,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.98`.
+- Current WEB/Agent version in files: `1.0.99`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -47,6 +47,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after resident tray Agent / auto-update fix: C:\Tmp\accounting_web_v1_agent_tray_autoupdate_fix108_20260515_082707.zip.
 - Latest local deployment ZIP after required setup EXE / tray menu fix109: C:\Tmp\accounting_web_v1_required_setup_exe_tray_fix109_20260515_110534.zip.
 - Latest local deployment ZIP after tray right-click menu fix110: `C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip`.
+- Latest local deployment ZIP after regular legacy-rule fix111: `C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -180,4 +181,18 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - User expects clean command blocks without `1.`/`2.` prefixes inside the commands.
 - Large feature updates or high-volume work should be committed and pushed to `origin` (`https://github.com/rlckd2201/ERP_Auto_Web`) after verification, using a focused commit that excludes pycache, temporary ZIPs, and unrelated backup folders.
 - Keep Graphify current: inspect `graphify-out/GRAPH_REPORT.md` before architecture/codebase questions and run `graphify update .` after meaningful code changes.
+## Current Session Fix111
+
+- Active WEB/Agent files are now `1.0.99`.
+- Latest fix111 ZIP: 
+C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip
+.
+- fix111 aligns WEB regular ERP rows with the legacy CS manager/server regular-processing 기준: stale crawler/default item accounts are ignored unless the user manually changes the account in the WEB regular detail form.
+- Daou Office/groupware regular invoices now default to `지급수수료`, then `부가세대급금`, then `미지급금(원화)`.
+- Regular ERP payload now passes `vendor_biz_no` / `supplier_biz_no` to the Agent, and the Agent-side ERP management popup can select a generic regular vendor by supplier business number instead of leaving the 거래처 search popup open.
+- fix110 tray right-click menu handling was preserved while bumping Agent/installer version to `1.0.99`.
+- Verification passed: Python `py_compile` for `web_v1/backend/erp_runner.py`, `web_v1/backend/app.py`, `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`, `web_v1/agent/erp_agent.py`; `node --check web_v1/frontend/app.js`; Daou Technology regular ERP regression; ZIP content verification.
+- `graphify update .` was attempted after fix111, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (`1247` vs `1274`). Existing graph/report were left untouched.
+
+
 

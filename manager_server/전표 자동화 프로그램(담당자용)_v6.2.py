@@ -1866,6 +1866,12 @@ class ERPLoginBot:
 
         def _fill_management_for_current_row(row_no, account_name):
             vendor_name = str(form_data.get('vendor_name', '') or '').strip()
+            vendor_biz_no = str(
+                form_data.get('vendor_biz_no')
+                or form_data.get('supplier_biz_no')
+                or form_data.get('supplier_business_no')
+                or ''
+            ).strip()
             supply_amount = _value_text(form_data.get('target_supply', 0), comma=False)
             business_query = _business_query_for_management(site_name)
             account_key, corp, plan = _management_plan(account_name)
@@ -1877,7 +1883,10 @@ class ERPLoginBot:
             compact_vendor = re.sub(r"\s+", "", vendor_name)
             vendor_target_biz_no = ""
             vendor_search_name = vendor_name
-            if "동양정보통신" in compact_vendor:
+            if vendor_biz_no:
+                digits = re.sub(r"[^0-9]", "", vendor_biz_no)
+                vendor_target_biz_no = f"{digits[:3]}-{digits[3:5]}-{digits[5:]}" if len(digits) == 10 else vendor_biz_no
+            elif "동양정보통신" in compact_vendor:
                 vendor_target_biz_no = "402-81-23213"
                 vendor_search_name = "동양정보통신"
             elif is_kt_vendor:
@@ -1919,7 +1928,10 @@ class ERPLoginBot:
                                     continue
                                 for cell in win.descendants():
                                     try:
-                                        if (cell.window_text() or "").strip() != target_biz_no:
+                                        cell_text = (cell.window_text() or "").strip()
+                                        cell_digits = re.sub(r"[^0-9]", "", cell_text)
+                                        target_digits = re.sub(r"[^0-9]", "", target_biz_no)
+                                        if cell_text != target_biz_no and cell_digits != target_digits:
                                             continue
                                         rect = cell.rectangle()
                                         pyautogui.doubleClick(
