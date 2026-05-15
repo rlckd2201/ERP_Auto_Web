@@ -2,7 +2,7 @@
 
 Updated: 2026-05-15
 
-This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1274 nodes, 4072 edges, and 32 communities, so use the graph for navigation, then verify behavior in the active source before editing.
+This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1330 nodes, 4238 edges, and 79 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
 ## Reading Rules
 
@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-15, WEB/Agent files are at `1.0.101`. The latest local deployment ZIP is:
+As of 2026-05-15, WEB/Agent files are at `1.0.102`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip
+C:\Tmp\accounting_web_v1_tray_menu_daou_vendor_fix114_20260515_140924.zip
 ```
 
 Known deployment hosts:
@@ -39,12 +39,14 @@ Current active product work: WEB `정기 처리` is implemented in the active so
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_tray_menu_daou_vendor_fix114_20260515_140924.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
 - `start_user_erp_agent.ps1` registers `accountingweb://start` and `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\AccountingWebAgent`, then starts the Agent hidden with `pythonw.exe` when available.
 - `erp_agent.py` owns the tray process. Its right-click menu is `내 상태 확인`, `수동 업데이트`, `버전확인`, `종료`; double-click still opens the WEB URL.
+- fix114 changes the tray separator menu item from `None` to an empty string because pywin32 rejected `None` and prevented the right-click menu from opening.
+- Graphify update completed after fix114 and refreshed `graphify-out`.
 - Agent update checks are throttled separately from the normal heartbeat loop: default `--update-interval` is 60 seconds, and `/api/version` now includes `agent_update_notes`.
 - fix110 changes the tray right-click path to handle both tray callback right-click and Windows context-menu messages, tolerate `SetForegroundWindow()` failure, and dispatch the selected menu id directly.
 - Graphify update was attempted for fix109 and fix110, but it refused to overwrite because the AST-only rebuild had fewer nodes than the existing graph.
@@ -245,6 +247,7 @@ Current active WEB support:
 - `invoice_db.detect_invoice_type()` classifies regular vendors and crawler/XML results.
 - `mail_collector.py` keeps known regular mail/XML flows as `invoice_type=regular`.
 - `erp_runner.build_regular_erp_payload()` builds WEB-side regular ERP rows with legacy account/summary rules and `미지급금(원화)`.
+- Regular ERP payload vendor names are normalized before Agent management-item input; for example `(주)다우기술` is passed to ERP as `다우기술`.
 - `run_invoice_erp_input()` chooses `build_regular_erp_payload()` for non-purchase invoices.
 - `output_set.py` supports regular output sets with only `전표` and `세금계산서`.
 
@@ -478,7 +481,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.100
+1.0.102
 ```
 
 ## Safe Change Checklist

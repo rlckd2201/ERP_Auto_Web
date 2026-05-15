@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.101`.
+- Current WEB/Agent version in files: `1.0.102`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -48,6 +48,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after tray right-click menu fix110: `C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip`.
 - Latest local deployment ZIP after regular account-rule fix112: `C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip`.
 - Latest local deployment ZIP after SMILE EDI regular 지급수수료 integration fix113: `C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip`.
+- Latest local deployment ZIP after tray menu / Daou vendor fix114: `C:\Tmp\accounting_web_v1_tray_menu_daou_vendor_fix114_20260515_140924.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -87,6 +88,8 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - SMILE EDI approval handling remains opt-in via the CLI `--approve`; WEB automatic mail collection does not approve unapproved invoices and only stores approved invoices with saved PDF/XML.
 - SMILE EDI approved invoices are stored as regular invoices with `지급수수료` items, so regular ERP/output uses only `전표 + 세금계산서`.
 - SMILE EDI is not part of the purchase cash-withdrawal flow. It must not require a quote, approval PDF, or `현금출금결의서`.
+- `fix114` fixes the Agent tray right-click menu crash caused by passing `None` to the pywin32 separator menu item.
+- `fix114` normalizes regular ERP `vendor_name` before Agent management-item input, so `(주)다우기술` is sent as `다우기술`.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -217,4 +220,15 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - SMILE EDI는 구매 분석/견적서/품의/현금출금결의서 흐름에 연결하지 않는다.
 - Verification passed: changed-file Python py_compile, `node --check web_v1/frontend/app.js`, and a SMILE EDI integration regression covering link extraction, handler detection, regular invoice classification, 지급수수료 ERP rows, and 미지급금 row.
 - `graphify update .` was attempted after fix113, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (`1255` vs `1318`). Existing graph/report were left untouched.
+
+
+## Current Session Fix114
+
+- Active WEB/Agent files are now 1.0.102.
+- Latest fix114 ZIP: C:\Tmp\accounting_web_v1_tray_menu_daou_vendor_fix114_20260515_140924.zip.
+- Fixed Agent tray right-click menu creation: `AppendMenu(..., MF_SEPARATOR, 0, "")` no longer raises `None is not a valid string in this context`.
+- Fixed regular ERP payload vendor normalization: Daou regular invoices now pass `vendor_name=다우기술` to the Agent/ERP management-item input instead of `(주)다우기술`.
+- Local Agent was temporarily stopped and the HKCU Run entry removed during the patch because server 1.0.101 self-update was overwriting the development workspace back to fix113. Deploy the 1.0.102 server ZIP before restarting the Agent.
+- Verification passed: Python `py_compile` for `web_v1/agent/erp_agent.py` and `web_v1/backend/erp_runner.py`; tray separator pywin32 smoke check; Daou regular ERP payload regression.
+- Graphify update completed after fix114: 1330 nodes, 4238 edges, 79 communities.
 

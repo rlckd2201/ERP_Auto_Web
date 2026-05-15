@@ -597,13 +597,14 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         data.update(invoice.get("data") or {})
 
     pdf_path = str(invoice.get("pdf_path") or data.get("pdf_path") or raw.get("pdf_path") or "")
-    vendor = _clean_text(
+    raw_vendor = _clean_text(
         data.get("vendor_name")
         or data.get("supplier_name")
         or invoice.get("vendor_name")
         or invoice.get("subject"),
         "매입처",
     )
+    vendor = _regular_vendor_display(raw_vendor)
     buyer_biz_no = data.get("buyer_biz_no") or data.get("buyer_business_no") or raw.get("buyer_biz_no")
     vendor_biz_no = (
         data.get("vendor_biz_no")

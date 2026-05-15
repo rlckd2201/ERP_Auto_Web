@@ -60,7 +60,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.101"
+AGENT_BUNDLE_VERSION = "1.0.102"
 _MUTEX_HANDLE: Any = None
 
 
@@ -217,7 +217,7 @@ class AgentTray:
                 win32gui.AppendMenu(menu, win32con.MF_STRING, 1001, "내 상태 확인")
                 win32gui.AppendMenu(menu, win32con.MF_STRING, 1002, "수동 업데이트")
                 win32gui.AppendMenu(menu, win32con.MF_STRING, 1003, "버전확인")
-                win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, None)
+                win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
                 win32gui.AppendMenu(menu, win32con.MF_STRING, 1004, "종료")
                 pos = win32gui.GetCursorPos()
                 try:
