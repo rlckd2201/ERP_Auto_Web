@@ -12,11 +12,10 @@ Updated: 2026-05-15
 ## Current Goal
 
 WEB v1.0 accounting automation is replacing the old CS desktop accounting flow.
-Purchase one-click processing, automatic mail collection, simplified manager UI, and the first WEB regular-processing (`정기 처리`) pass are implemented enough for source-level review and next operational E2E. A standalone SMILE EDI crawler prototype also exists before wiring anything into operations:
+Purchase one-click processing, automatic mail collection, simplified manager UI, WEB regular-processing (`정기 처리`), and SMILE EDI regular invoice intake are implemented enough for source-level review and next operational E2E:
 
-- New crawler prototype name: `SMILE EDI`.
-- Build the crawler first, do not wire it into automatic mail collection or the operating WEB flow yet.
-- First target: open SMILE EDI `DtiEmail.do` mail links, try D1~D3 business numbers inferred from the mail buyer name, detect unapproved invoices, and approve only when explicitly requested during manual testing.
+- SMILE EDI `DtiEmail.do` mail links are collected through the active crawler flow.
+- SMILE EDI tries D1~D3 business numbers inferred from the mail buyer name, detects unapproved invoices, and approves only when explicitly requested during standalone manual testing.
 - Approval cannot be reverted, so default crawler runs must be dry-run for approval.
 - Multiple selected purchase invoices should run through one simple `one-click processing` flow.
 - One-click should cover ERP input, ERP voucher PDF save/upload, cash withdrawal report creation, output-set refresh, and selected output target.
@@ -38,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.100`.
+- Current WEB/Agent version in files: `1.0.101`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -48,6 +47,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after required setup EXE / tray menu fix109: C:\Tmp\accounting_web_v1_required_setup_exe_tray_fix109_20260515_110534.zip.
 - Latest local deployment ZIP after tray right-click menu fix110: `C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip`.
 - Latest local deployment ZIP after regular account-rule fix112: `C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip`.
+- Latest local deployment ZIP after SMILE EDI regular 지급수수료 integration fix113: `C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -83,8 +83,10 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix109` registers `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\AccountingWebAgent`, so reboot/login brings the Agent back automatically.
 - `fix109` includes the cash withdrawal report Excel templates from `support/*.xlsx` in the user-PC payload; the Agent still installs the template to `%APPDATA%\양식_현금출금정산서.xlsx` without overwriting an existing file.
 - `fix110` fixes the Agent tray right-click menu by handling Windows context-menu events, tolerating foreground-window failures, and executing the selected menu command directly from `TrackPopupMenu`.
-- `tax_crawler/portal_smileedi.py` has been added as a standalone SMILE EDI crawler prototype. It is intentionally not registered in `crawler_main.py` yet.
-- SMILE EDI approval handling is opt-in via the prototype CLI `--approve`; without that flag it records unapproved status and debug HTML/screenshots only.
+- `tax_crawler/portal_smileedi.py` is now registered through `tax_crawler/crawler_main.py` for SMILE EDI `DtiEmail.do` mail links.
+- SMILE EDI approval handling remains opt-in via the CLI `--approve`; WEB automatic mail collection does not approve unapproved invoices and only stores approved invoices with saved PDF/XML.
+- SMILE EDI approved invoices are stored as regular invoices with `지급수수료` items, so regular ERP/output uses only `전표 + 세금계산서`.
+- SMILE EDI is not part of the purchase cash-withdrawal flow. It must not require a quote, approval PDF, or `현금출금결의서`.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -167,8 +169,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
   - edited regular fields/items/accounts reaching ERP,
   - existing regular `전표 + 세금계산서` output skip path,
   - merged PDF and Agent-side 평택/김제 print targets.
-- For SMILE EDI, collect debug HTML/screenshots from one dry-run test after business-number authentication. Confirm the actual 승인 button/confirm-dialog DOM before running a real `--approve` test.
-- After SMILE EDI approval is verified manually, decide whether to add the handler to `crawler_main.py` and `extract_links_from_mail()`.
+- For SMILE EDI, run operational E2E with one already-approved mail link and one unapproved mail link. Already-approved should save PDF/XML and appear in regular processing as `지급수수료`; unapproved should fail safely without clicking 승인.
 - After deploying this ZIP, manager PCs may require Agent update because the Agent bundle hash changes with backend/agent/version files.
 
 ## Operational Cautions
@@ -203,4 +204,17 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Latest fix112 ZIP: C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip.
 - Rechecked the CS legacy _guess_regular_account() rule list. WEB now includes the full regular account keyword set, including the previously missing crobat 지급수수료 keyword.
 - Verification passed for Python py_compile, frontend node syntax, and regular account regression covering Daou/groupware, Acrobat, KT/VPN, and manual override.
+
+
+## Current Session Fix113
+
+- Active WEB/Agent files are now 1.0.101.
+- Latest fix113 ZIP: C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip.
+- SMILE EDI `DtiEmail.do` links are now extracted from mail bodies and routed through `SmileEdiHandler`.
+- WEB auto collection still does not approve SMILE EDI invoices. 미승인 계산서는 안전하게 실패 처리하고, 승인 완료된 계산서만 PDF/XML 저장 후 DB에 저장한다.
+- 승인 완료된 SMILE EDI 계산서는 정기건으로 저장되며, 품목 계정은 `지급수수료`, `erp_ready=true`로 들어간다.
+- 정기 ERP payload는 `지급수수료`, `부가세대급금`, `미지급금(원화)` 행을 만들고 정기 출력 세트는 `전표 + 세금계산서`만 요구한다.
+- SMILE EDI는 구매 분석/견적서/품의/현금출금결의서 흐름에 연결하지 않는다.
+- Verification passed: changed-file Python py_compile, `node --check web_v1/frontend/app.js`, and a SMILE EDI integration regression covering link extraction, handler detection, regular invoice classification, 지급수수료 ERP rows, and 미지급금 row.
+- `graphify update .` was attempted after fix113, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (`1255` vs `1318`). Existing graph/report were left untouched.
 

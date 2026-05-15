@@ -1,9 +1,9 @@
 """
-SMILE EDI tax invoice crawler prototype.
+SMILE EDI tax invoice crawler.
 
-This module is intentionally not registered in crawler_main.py yet.  It can be
-tested directly, and approval is opt-in because SMILE EDI approval cannot be
-rolled back to an unapproved state.
+Approval is opt-in because SMILE EDI approval cannot be rolled back to an
+unapproved state.  Automatic mail collection only stores invoices that are
+already approved and can be saved as PDF/XML.
 """
 import argparse
 import base64
@@ -131,25 +131,50 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
         pdf_error = None
         xml_path = None
         xml_error = None
-        if approval.get("approved") or self._approval_state(driver) == "approved":
+        approved = bool(approval.get("approved") or self._approval_state(driver) == "approved")
+        if approved:
             xml_path, xml_parsed, xml_error = self._download_and_parse_xml(driver, parsed, dump_dir)
             if xml_parsed:
                 parsed = {**parsed, **xml_parsed}
             pdf_path, pdf_error = self._save_invoice_pdf(driver, parsed, dump_dir)
+        else:
+            result.update(
+                {
+                    "ok": False,
+                    "subject": self._build_subject(parsed),
+                    "data": self._build_data(parsed, matched_biz_no),
+                    "approval": approval,
+                    "matched_biz_key": matched_key,
+                    "matched_biz_no": matched_biz_no,
+                    "matched_site_name": self._site_name_from_biz_no(matched_biz_no),
+                    "error": approval.get("message")
+                    or "SMILE EDI 미승인 계산서는 --approve 옵션 없이 자동 저장하지 않습니다.",
+                }
+            )
+            return
+
+        data = self._build_data(parsed, matched_biz_no)
+        if pdf_path:
+            data["pdf_path"] = str(pdf_path)
+        if xml_path:
+            data["xml_path"] = str(xml_path)
 
         result.update(
             {
-                "ok": True,
+                "ok": bool(pdf_path),
+                "invoice_type": "regular",
                 "pdf_path": str(pdf_path) if pdf_path else None,
                 "xml_path": str(xml_path) if xml_path else None,
                 "subject": self._build_subject(parsed),
-                "data": self._build_data(parsed, matched_biz_no),
+                "data": data,
                 "approval": approval,
                 "matched_biz_key": matched_key,
                 "matched_biz_no": matched_biz_no,
                 "matched_site_name": self._site_name_from_biz_no(matched_biz_no),
             }
         )
+        if not pdf_path:
+            result["error"] = pdf_error or "SMILE EDI PDF 저장 파일을 만들지 못했습니다."
         if xml_error:
             result["xml_error"] = xml_error
         if pdf_error:
@@ -859,36 +884,60 @@ class SmileEdiHandler(BaseTaxInvoiceHandler):
 
     def _build_data(self, parsed: dict, matched_biz_no: str) -> dict:
         buyer_biz_no = parsed.get("buyer_biz_no") or matched_biz_no
+        supplier_biz_no = parsed.get("supplier_biz_no") or ""
         site_name = self._site_name_from_biz_no(buyer_biz_no) or parsed.get("buyer_name") or ""
         total_sum = self._to_int(parsed.get("total_sum"))
         parsed_items = parsed.get("items") or []
         item_name = parsed.get("item_name") or (parsed_items[0].get("name") if parsed_items else "") or "세금계산서"
+
+        def item_inc_vat(item: dict) -> int:
+            supply = self._to_int(item.get("supply") or item.get("supply_amount"))
+            tax = self._to_int(item.get("tax") or item.get("tax_amount"))
+            return self._to_int(item.get("inc_vat")) or (supply + tax) or total_sum
+
         items = [
             {
                 "name": item.get("name") or item_name,
                 "qty": item.get("qty") or 1,
-                "inc_vat": item.get("inc_vat") or total_sum,
-                "account": "소모품비",
+                "supply": self._to_int(item.get("supply") or item.get("supply_amount")),
+                "tax": self._to_int(item.get("tax") or item.get("tax_amount")),
+                "inc_vat": item_inc_vat(item),
+                "account": "지급수수료",
+                "is_a": False,
+                "dept": "",
             }
             for item in parsed_items
         ] or [
             {
                 "name": item_name,
                 "qty": 1,
+                "supply": self._to_int(parsed.get("target_supply")),
+                "tax": self._to_int(parsed.get("total_tax")),
                 "inc_vat": total_sum,
-                "account": "소모품비",
+                "account": "지급수수료",
+                "is_a": False,
+                "dept": "",
             }
         ]
         return {
+            "invoice_type": "regular",
+            "portal": "smileedi",
+            "source": "smileedi",
             "vendor_name": parsed.get("supplier_name") or "",
+            "supplier_name": parsed.get("supplier_name") or "",
+            "supplier_biz_no": supplier_biz_no,
+            "vendor_biz_no": supplier_biz_no,
             "site_name": site_name,
             "business_no": buyer_biz_no,
+            "buyer_biz_no": buyer_biz_no,
             "matched_biz_no": matched_biz_no,
             "invoice_date": parsed.get("issue_date") or "",
+            "item_name": item_name,
             "target_supply": self._to_int(parsed.get("target_supply")),
             "total_tax": self._to_int(parsed.get("total_tax")),
             "total_sum": total_sum,
             "items": items,
+            "erp_ready": True,
             "raw": {
                 "smileedi": parsed,
             },

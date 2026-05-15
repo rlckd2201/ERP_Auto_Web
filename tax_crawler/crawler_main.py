@@ -98,6 +98,11 @@ def XmlAttachmentHandler():
 def SmartBillHandler():
     return _LazyHandler("portal_smartbill", "SmartBillHandler")
 
+
+def SmileEdiHandler():
+    return _LazyHandler("portal_smileedi", "SmileEdiHandler")
+
+
 _HANDLERS = [
     UplusHandler(),
     XmlAttachmentHandler(),
@@ -107,6 +112,7 @@ _HANDLERS = [
     AutoEverHandler(),
     KtAttachmentHandler(),
     SmartBillHandler(),
+    SmileEdiHandler(),
     HometaxHandler(),   # 마지막 file:// URL 감지
 ]
 
@@ -118,6 +124,8 @@ _LINK_DOMAINS = [
 ]
 _WEHAGO_INVOICE_PREFIX = "https://www.wehago.com/invoice/"
 _CSBILL_LINK_PREFIX = "https://www.csbill.co.kr/"
+_SMILEEDI_DOMAIN = "smileedi.com"
+_SMILEEDI_PATH_HINT = "/dtiemail.do"
 _LINK_ASSET_EXTENSIONS = (".png", ".jpg", ".gif", ".jpeg", ".css", ".js")
 
 
@@ -340,7 +348,11 @@ def extract_links_from_mail(body: str) -> list[str]:
         if lower_link.startswith(_WEHAGO_INVOICE_PREFIX):
             valid.append(link)
             continue
-            
+
+        if _SMILEEDI_DOMAIN in lower_link and _SMILEEDI_PATH_HINT in lower_link:
+            valid.append(link)
+            continue
+
         if "smartbill.co.kr" in lower_link:
             if "smartbill.co.kr/xdti/n_mem" in lower_link:
                 valid.append(link)

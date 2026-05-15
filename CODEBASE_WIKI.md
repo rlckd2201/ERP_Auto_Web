@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-15, WEB/Agent files are at `1.0.100`. The latest local deployment ZIP is:
+As of 2026-05-15, WEB/Agent files are at `1.0.101`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
+C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip
 ```
 
 Known deployment hosts:
@@ -35,11 +35,11 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - The frontend no longer force-refreshes selected purchase detail/logs during job follow-up refreshes.
 - One-click auto-saves the open purchase analysis form before ERP, and `erp_runner.py` now prioritizes saved screen edits for ERP payload fields.
 
-Current active product work: the first WEB `정기 처리` pass is implemented in the active source. Standalone `SMILE EDI` crawler development also exists as a separate prototype before wiring into mail collection or operating WEB flow.
+Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
@@ -368,14 +368,16 @@ Crawler-related Graphify hubs:
 - `KtAttachmentHandler`
 - `AutoEverHandler`
 
-SMILE EDI prototype:
+SMILE EDI integration:
 
 - File: `tax_crawler/portal_smileedi.py`.
-- Status: standalone prototype only; intentionally not registered in `crawler_main.py` yet.
+- Status: registered in `tax_crawler/crawler_main.py` and `extract_links_from_mail()` for `DtiEmail.do` mail links.
 - Target links: `https://www.smileedi.com/DtiEmail.do?...`.
 - Auth rule: infer buyer company from mail body and try the configured business numbers in order, such as D1~D3 for `(주)대승`.
-- Approval rule: default runs are dry-run for approval. The crawler records unapproved status and debug HTML/screenshots; it clicks approval only when explicitly run with `--approve`.
-- Next data needed from manual testing: authenticated page HTML/screenshots before and after approval so the final approval selectors and confirmation handling can be locked down safely.
+- Approval rule: WEB automatic mail collection never clicks approval. The crawler clicks approval only when explicitly run with the standalone `--approve` option.
+- Storage rule: unapproved invoices fail safely without DB insert; approved/already-approved invoices save XML/PDF and insert as regular invoices.
+- Account rule: SMILE EDI regular data defaults to `지급수수료` and `erp_ready=true`.
+- ERP/output rule: regular ERP payloads use `지급수수료`, `부가세대급금`, `미지급금(원화)`, and the output set requires only `전표 + 세금계산서`.
 
 When changing crawler behavior, prefer active `tax_crawler` files over backup copies.
 

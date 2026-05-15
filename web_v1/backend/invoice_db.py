@@ -267,7 +267,8 @@ def _row_to_invoice(row: sqlite3.Row) -> dict[str, Any]:
 def detect_invoice_type(subject: str, result: dict[str, Any]) -> str:
     data = _invoice_data(result)
     vendor = str(data.get("vendor_name") or data.get("supplier_name") or "")
-    text = f"{subject}\n{result.get('subject', '')}\n{vendor}".lower()
+    portal = str(result.get("portal") or data.get("portal") or "")
+    text = f"{subject}\n{result.get('subject', '')}\n{vendor}\n{portal}".lower()
     purchase_tokens = ("컴퓨존", "compuzone", "쿠팡", "아이코다", "오피스디포", "가비아", "naver", "npay")
     if any(token.lower() in text for token in purchase_tokens):
         return "purchase"
@@ -282,10 +283,11 @@ def detect_invoice_type(subject: str, result: dict[str, Any]) -> str:
         "wehago",
         "hometax",
         "nts_etaxinvoice",
+        "smileedi",
     )
     if any(token.lower() in text for token in regular_tokens):
         return "regular"
-    explicit = str(result.get("invoice_type") or "").strip().lower()
+    explicit = str(result.get("invoice_type") or data.get("invoice_type") or "").strip().lower()
     return explicit if explicit in {"purchase", "regular"} else "regular"
 
 
