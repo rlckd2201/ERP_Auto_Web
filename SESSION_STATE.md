@@ -22,11 +22,12 @@
 - WEB/Agent 버전 1.0.103 bump
 - 업데이트 노트 fix115 갱신
 - changed-file py_compile, frontend node syntax check, graphify update 완료
+- fix115 ZIP 생성 및 내용 검증 완료: C:\Tmp\accounting_web_v1_kt_vendor_bizno_fix115_20260515_144302.zip
+- fix115 커밋/푸시 완료: ff1b0c8 Fix KT regular vendor selection
 
 ## 다음 작업
-- fix115 ZIP 생성 및 내용 검증
-- 관련 파일만 stage/commit/push
 - 운영서버 172.17.39.121 배포 명령 제공
+- 운영서버 배포 후 담당자 PC Agent 재시작/업데이트 확인
 
 ## 주의사항
 - active source는 web_v1, active Agent-side ERP GUI source는 manager_server/전표 자동화 프로그램(담당자용)_v6.2.py

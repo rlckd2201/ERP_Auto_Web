@@ -243,5 +243,6 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - If the popup does not appear or the 102-81-42945 row is not found, the Agent passes without pressing Enter on the highlighted first row.
 - User stopped the local Agent before final packaging; `pythonw.exe` was no longer running. Deploy the 1.0.103 operating-server ZIP before restarting/patching the manager PC Agent.
 - Verification passed: Python py_compile for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` and `web_v1/agent/erp_agent.py`; `node --check web_v1/frontend/app.js`.
+- fix115 ZIP content verification passed for `web_v1/VERSION=1.0.103`, KT business-number/pass markers, setup EXE, frontend assets, and no `graphify-out`/backup/hotfix/release/pycache files.
 - Graphify update completed after fix115: 1330 nodes, 4238 edges.
 
