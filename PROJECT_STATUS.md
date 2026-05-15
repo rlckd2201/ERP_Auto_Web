@@ -1,4 +1,4 @@
-# Project Status
+﻿# Project Status
 
 Updated: 2026-05-15
 
@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.103`.
+- Current WEB/Agent version in files: `1.0.104`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -50,6 +50,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after SMILE EDI regular 지급수수료 integration fix113: `C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip`.
 - Latest local deployment ZIP after tray menu / Daou vendor fix114: `C:\Tmp\accounting_web_v1_tray_menu_daou_vendor_fix114_20260515_140924.zip`.
 - Latest local deployment ZIP after KT vendor business-number fix115: `C:\Tmp\accounting_web_v1_kt_vendor_bizno_fix115_20260515_144302.zip`.
+- Latest local deployment ZIP after voucher duplicate-page output fix116: `C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -92,6 +93,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix114` fixes the Agent tray right-click menu crash caused by passing `None` to the pywin32 separator menu item.
 - `fix114` normalizes regular ERP `vendor_name` before Agent management-item input, so `(주)다우기술` is sent as `다우기술`.
 - `fix115` changes regular Agent-side ERP management-item vendor input for KT/케이티. If the ERP 거래처 search popup returns duplicates, the Agent selects the row whose business number is `102-81-42945`; if that row is not visible, it closes the popup and passes instead of selecting the wrong first row. This applies across 대승, 대승정밀, and 일강 because the rule is vendor-based, not company-specific.
+- `fix116` stops output-set generation from re-merging an existing `output_sets/.../01_전표.pdf` with the original ERP voucher. Single-source documents such as voucher, tax invoice, and cash report now pick one source; only approval documents still merge multiple PDFs.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -245,4 +247,14 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Verification passed: Python py_compile for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` and `web_v1/agent/erp_agent.py`; `node --check web_v1/frontend/app.js`.
 - fix115 ZIP content verification passed for `web_v1/VERSION=1.0.103`, KT business-number/pass markers, setup EXE, frontend assets, and no `graphify-out`/backup/hotfix/release/pycache files.
 - Graphify update completed after fix115: 1330 nodes, 4238 edges.
+
+## Current Session Fix116
+
+- Active WEB/Agent files are now 1.0.104.
+- Latest fix116 ZIP: C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip.
+- User-provided samples `C:\Users\user\Downloads\73\01_전표.pdf` and `C:\Users\user\Downloads\77\01_전표.pdf` were 4 pages each, with all pages identical. The matching source ERP voucher PDFs under `C:\ERP_DB\erp_outputs` were 1 page each.
+- Root cause: output-set voucher candidates included existing `output_sets/.../01_전표.pdf`; repeated output generation could merge the already-built output-set voucher back with the original voucher.
+- Fix: `_copy_or_merge_doc()` removes the target file from merge inputs, prefers non-output-set sources for single-document outputs, and only preserves multi-PDF merging for `approval_docs`.
+- Verification passed: Python py_compile for `web_v1/backend/output_set.py`; regression test confirmed voucher stays 1 page while approval docs still merge to 2 pages.
+- Graphify update completed after fix116: 1334 nodes, 4247 edges, 35 communities.
 

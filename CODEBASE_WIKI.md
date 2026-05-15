@@ -1,8 +1,8 @@
-# CODEBASE WIKI
+﻿# CODEBASE WIKI
 
 Updated: 2026-05-15
 
-This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1330 nodes, 4238 edges, and 79 communities, so use the graph for navigation, then verify behavior in the active source before editing.
+This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1334 nodes, 4247 edges, and 35 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
 ## Reading Rules
 
@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-15, WEB/Agent files are at `1.0.103`. The latest local deployment ZIP is:
+As of 2026-05-15, WEB/Agent files are at `1.0.104`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_kt_vendor_bizno_fix115_20260515_144302.zip
+C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip
 ```
 
 Known deployment hosts:
@@ -39,7 +39,7 @@ Current active product work: WEB `정기 처리` is implemented in the active so
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_kt_vendor_bizno_fix115_20260515_144302.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
@@ -482,7 +482,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.103
+1.0.104
 ```
 
 ## Safe Change Checklist

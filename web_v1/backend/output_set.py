@@ -766,6 +766,37 @@ def merge_pdfs(paths: list[str], output_path: str | Path) -> str:
     return str(output)
 
 
+def _path_key(path: Path) -> str:
+    try:
+        return str(path.resolve()).lower()
+    except OSError:
+        return str(path).lower()
+
+
+def _is_output_set_path(path: Path) -> bool:
+    try:
+        path.resolve().relative_to((settings.erp_db_dir / "output_sets").resolve())
+        return True
+    except (OSError, ValueError):
+        return False
+
+
+def _without_target_path(paths: list[str], target: Path) -> list[str]:
+    target_key = _path_key(target)
+    filtered = [path for path in paths if _path_key(Path(path)) != target_key]
+    return filtered or paths
+
+
+def _single_doc_source(paths: list[str], target: Path) -> str:
+    candidates = _without_target_path(paths, target)
+    non_output_set = [path for path in candidates if not _is_output_set_path(Path(path))]
+    if non_output_set:
+        return non_output_set[0]
+    if candidates:
+        return candidates[0]
+    return paths[0]
+
+
 def _copy_or_merge_doc(doc: dict[str, Any], target_dir: Path) -> str:
     target = target_dir / str(doc["filename"])
     paths: list[str] = []
@@ -784,6 +815,9 @@ def _copy_or_merge_doc(doc: dict[str, Any], target_dir: Path) -> str:
         paths.append(str(path))
     if not paths:
         raise RuntimeError(f"{doc['label']} 파일이 없습니다.")
+    paths = _without_target_path(paths, target)
+    if str(doc.get("key") or "") != "approval_docs":
+        paths = [_single_doc_source(paths, target)]
     target.parent.mkdir(parents=True, exist_ok=True)
     if len(paths) == 1:
         source = Path(paths[0])
