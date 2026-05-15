@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-15, WEB/Agent files are at `1.0.104`. The latest local deployment ZIP is:
+As of 2026-05-15, WEB/Agent files are at `1.0.105`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip
+C:\Tmp\accounting_web_v1_noop_save_status_fix117_20260515_161724.zip
 ```
 
 Known deployment hosts:
@@ -34,12 +34,13 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - Output-set PDF merge now writes to a temporary file before replacing the target, so rediscovered output-set PDFs are not deleted before being read.
 - The frontend no longer force-refreshes selected purchase detail/logs during job follow-up refreshes.
 - One-click auto-saves the open purchase analysis form before ERP, and `erp_runner.py` now prioritizes saved screen edits for ERP payload fields.
+- The auto-save APIs reset invoice status only when editable purchase/regular screen data actually changed. Existing completed document-set printing should not turn rows back to `대기중`.
 
 Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_noop_save_status_fix117_20260515_161724.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
@@ -482,7 +483,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.104
+1.0.105
 ```
 
 ## Safe Change Checklist

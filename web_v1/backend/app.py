@@ -114,6 +114,85 @@ def _invoice_data(invoice: dict[str, Any] | None) -> dict[str, Any]:
     return merged
 
 
+def _edit_text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _edit_int(value: Any) -> int:
+    if isinstance(value, bool):
+        return int(value)
+    if isinstance(value, int):
+        return value
+    text = str(value or "").strip()
+    if not text:
+        return 0
+    text = "".join(ch for ch in text if ch.isdigit() or ch == "-")
+    try:
+        return int(text or 0)
+    except Exception:
+        return 0
+
+
+def _edit_bool(value: Any) -> bool:
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
+    return bool(value)
+
+
+def _purchase_edit_snapshot(data: dict[str, Any]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for source in data.get("items") or []:
+        if not isinstance(source, dict):
+            continue
+        items.append(
+            {
+                "account": _edit_text(source.get("account")),
+                "dept": _edit_text(source.get("dept") or source.get("department")),
+                "name": _edit_text(source.get("name") or source.get("item_name")),
+                "qty": _edit_int(source.get("qty") or source.get("quantity")),
+                "supply": _edit_int(source.get("supply") or source.get("supply_amount")),
+                "inc_vat": _edit_int(source.get("inc_vat") or source.get("total") or source.get("amount")),
+            }
+        )
+    return {
+        "site_name": _edit_text(data.get("site_name")),
+        "vendor_name": _edit_text(data.get("vendor_name")),
+        "invoice_date": _edit_text(data.get("invoice_date")),
+        "order_no": _edit_text(data.get("order_no")),
+        "target_supply": _edit_int(data.get("target_supply")),
+        "total_tax": _edit_int(data.get("total_tax")),
+        "total_sum": _edit_int(data.get("total_sum")),
+        "approval_pdf_paths": tuple(sorted(_edit_text(path) for path in data.get("approval_pdf_paths") or [] if _edit_text(path))),
+        "items": items,
+    }
+
+
+def _regular_edit_snapshot(data: dict[str, Any]) -> dict[str, Any]:
+    items: list[dict[str, Any]] = []
+    for source in data.get("items") or []:
+        if not isinstance(source, dict):
+            continue
+        items.append(
+            {
+                "account": _edit_text(source.get("account")),
+                "account_manual": _edit_bool(source.get("account_manual") or source.get("manual_account")),
+                "name": _edit_text(source.get("name") or source.get("item_name")),
+                "qty": _edit_int(source.get("qty") or source.get("quantity")),
+                "supply": _edit_int(source.get("supply") or source.get("supply_amount")),
+                "inc_vat": _edit_int(source.get("inc_vat") or source.get("total") or source.get("amount")),
+            }
+        )
+    return {
+        "site_name": _edit_text(data.get("site_name")),
+        "vendor_name": _edit_text(data.get("vendor_name")),
+        "invoice_date": _edit_text(data.get("invoice_date")),
+        "target_supply": _edit_int(data.get("target_supply")),
+        "total_tax": _edit_int(data.get("total_tax")),
+        "total_sum": _edit_int(data.get("total_sum")),
+        "items": items,
+    }
+
+
 def _expense_report_exists(invoice: dict[str, Any] | None) -> bool:
     data = _invoice_data(invoice)
     path = str(data.get("expense_report_pdf_path") or "").strip()
@@ -1785,6 +1864,7 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
     invoice = get_invoice(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
+    before_snapshot = _purchase_edit_snapshot(_invoice_data(invoice))
     raw = dict(invoice.get("raw") or {})
     data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
     quote_path = data.get("quote_path") or raw.get("quote_path") or ""
@@ -1807,6 +1887,12 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
             "erp_ready": bool(payload.get("items")),
         }
     )
+    changed = before_snapshot != _purchase_edit_snapshot(payload)
+    if not changed:
+        refreshed = get_invoice(invoice_id) or invoice
+        if isinstance(refreshed, dict):
+            refreshed["output_docs"] = build_output_set_status(refreshed, persist=True)
+        return refreshed
     learned_count = learn_dictionary_items(list(payload.get("items") or []))
     updated = update_invoice_json(invoice_id, payload, message="구매 분석 결과를 화면에서 수정 저장했습니다.")
     if learned_count:
@@ -1824,6 +1910,7 @@ def api_update_regular_data(invoice_id: int, request: RegularDataUpdate) -> dict
         raise HTTPException(status_code=404, detail="Invoice not found")
     if str(invoice.get("invoice_type") or "").strip().lower() != "regular":
         raise HTTPException(status_code=400, detail="정기 처리 건만 수정 저장할 수 있습니다.")
+    before_snapshot = _regular_edit_snapshot(_invoice_data(invoice))
     payload = request.model_dump()
     clean_items: list[dict[str, Any]] = []
     allowed_accounts = {"지급수수료", "통신비", "소모품비", "컴퓨터소프트웨어", "집기비품"}
@@ -1845,6 +1932,12 @@ def api_update_regular_data(invoice_id: int, request: RegularDataUpdate) -> dict
     payload["items"] = clean_items
     payload["invoice_type"] = "regular"
     payload["erp_ready"] = bool(clean_items or payload.get("total_sum"))
+    changed = before_snapshot != _regular_edit_snapshot(payload)
+    if not changed:
+        refreshed = get_invoice(invoice_id) or invoice
+        if isinstance(refreshed, dict):
+            refreshed["output_docs"] = build_output_set_status(refreshed, persist=True)
+        return refreshed
     updated = update_invoice_json(invoice_id, payload, message="정기 처리 전표 데이터가 화면에서 수정 저장되었습니다.")
     reset_invoice(invoice_id)
     refreshed = get_invoice(invoice_id) or updated or {"id": invoice_id}

@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.104`.
+- Current WEB/Agent version in files: `1.0.105`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -50,7 +50,8 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after SMILE EDI regular 지급수수료 integration fix113: `C:\Tmp\accounting_web_v1_smileedi_regular_fee_fix113_20260515_125918.zip`.
 - Latest local deployment ZIP after tray menu / Daou vendor fix114: `C:\Tmp\accounting_web_v1_tray_menu_daou_vendor_fix114_20260515_140924.zip`.
 - Latest local deployment ZIP after KT vendor business-number fix115: `C:\Tmp\accounting_web_v1_kt_vendor_bizno_fix115_20260515_144302.zip`.
-- Latest local deployment ZIP after voucher duplicate-page output fix116: `C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip`.
+- Previous local deployment ZIP after voucher duplicate-page output fix116: `C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip`.
+- Latest local deployment ZIP after no-op auto-save status reset fix117: `C:\Tmp\accounting_web_v1_noop_save_status_fix117_20260515_161724.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -94,6 +95,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix114` normalizes regular ERP `vendor_name` before Agent management-item input, so `(주)다우기술` is sent as `다우기술`.
 - `fix115` changes regular Agent-side ERP management-item vendor input for KT/케이티. If the ERP 거래처 search popup returns duplicates, the Agent selects the row whose business number is `102-81-42945`; if that row is not visible, it closes the popup and passes instead of selecting the wrong first row. This applies across 대승, 대승정밀, and 일강 because the rule is vendor-based, not company-specific.
 - `fix116` stops output-set generation from re-merging an existing `output_sets/.../01_전표.pdf` with the original ERP voucher. Single-source documents such as voucher, tax invoice, and cash report now pick one source; only approval documents still merge multiple PDFs.
+- `fix117` stops the purchase/regular auto-save APIs from resetting invoice status to `대기중` when the submitted screen payload is identical to the current saved data. Printing already-complete output sets should no longer make the 수신 내역 look pending just because the frontend auto-saved before one-click.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -189,6 +191,12 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - User expects clean command blocks without `1.`/`2.` prefixes inside the commands.
 - Large feature updates or high-volume work should be committed and pushed to `origin` (`https://github.com/rlckd2201/ERP_Auto_Web`) after verification, using a focused commit that excludes pycache, temporary ZIPs, and unrelated backup folders.
 - Keep Graphify current: inspect `graphify-out/GRAPH_REPORT.md` before architecture/codebase questions and run `graphify update .` after meaningful code changes.
+- Work rhythm standard after fix116:
+  - Do not create separate handoff-only commits after every feature commit. Update docs once near the end and include them in the same feature commit when a commit is needed.
+  - Do not run Graphify for simple investigation, command handoff, or documentation wording changes. Run it only after meaningful code changes.
+  - Keep `.codex/hooks.json` without the repetitive PreToolUse graphify reminder; follow `AGENTS.md` manually instead.
+  - Before staging, use `git diff --name-status HEAD --` to identify real changed files, because `git status` may show noisy modified paths in this workspace.
+  - For each fix, make one verified ZIP after tests pass. If the ZIP must be rebuilt after more changes, bump to the next fix number instead of repeatedly repackaging the same handoff.
 ## Current Session Fix111
 
 - Active WEB/Agent files are now `1.0.99`.
@@ -258,4 +266,14 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Verification passed: Python py_compile for `web_v1/backend/output_set.py`; regression test confirmed voucher stays 1 page while approval docs still merge to 2 pages.
 - fix116 ZIP content verification passed for `web_v1/VERSION=1.0.104`, single-document voucher guard markers, setup EXE, frontend assets, and no `graphify-out`/backup/hotfix/release/pycache files.
 - Graphify update completed after fix116: 1334 nodes, 4247 edges, 35 communities.
+
+## Current Session Fix117
+
+- Active WEB/Agent files are now 1.0.105.
+- Latest fix117 ZIP: C:\Tmp\accounting_web_v1_noop_save_status_fix117_20260515_161724.zip.
+- Root cause: `startErpQueue()` auto-saves the selected regular/purchase detail before one-click. The backend save APIs then called `reset_invoice()` unconditionally, so already-complete invoices could become `대기중` even when the user only printed existing document sets.
+- Fix: `PATCH /api/invoices/{invoice_id}/purchase-analysis` and `PATCH /api/invoices/{invoice_id}/regular-data` now compare normalized editable snapshots. If the screen payload is unchanged, they refresh output docs and return without updating JSON or resetting status.
+- Verification passed: Python py_compile for `web_v1/backend/app.py` and `web_v1/agent/erp_agent.py`; frontend `node --check web_v1/frontend/app.js`; regular snapshot regression for same-value/no-change versus changed vendor.
+- fix117 ZIP content verification passed for `web_v1/VERSION=1.0.105`, no-op save snapshot guard markers, setup EXE, frontend assets, and no `graphify-out`/`__pycache__`/`.pyc` files.
+- Graphify update completed after fix117: 1339 nodes, 4264 edges, 81 communities.
 
