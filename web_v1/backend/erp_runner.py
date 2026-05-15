@@ -256,6 +256,7 @@ def _guess_account(item_name: str, vendor_name: str = "") -> str:
             "helpu",
             "원격지원",
             "자산관리",
+            "acrobat",
             "adobe",
             "cloudoc",
             "문서중앙화",
@@ -923,3 +924,4 @@ def run_invoice_erp_input(invoice: dict[str, Any], *, job_id: str, progress: Pro
         }
     finally:
         logger.removeHandler(handler)
+

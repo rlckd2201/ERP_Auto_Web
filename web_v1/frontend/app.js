@@ -1079,6 +1079,7 @@ function guessRegularAccount(itemName, vendorName = "") {
     "helpu",
     "원격지원",
     "자산관리",
+    "acrobat",
     "adobe",
     "cloudoc",
     "문서중앙화",
@@ -1835,3 +1836,4 @@ async function bootstrap() {
 }
 
 bootstrap();
+

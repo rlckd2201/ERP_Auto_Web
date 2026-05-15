@@ -1,4 +1,4 @@
-﻿# CODEBASE WIKI
+# CODEBASE WIKI
 
 Updated: 2026-05-15
 
@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-15, WEB/Agent files are at `1.0.99`. The latest local deployment ZIP is:
+As of 2026-05-15, WEB/Agent files are at `1.0.100`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip
+C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 ```
 
 Known deployment hosts:
@@ -39,7 +39,7 @@ Current active product work: the first WEB `정기 처리` pass is implemented i
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
@@ -476,7 +476,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.99
+1.0.100
 ```
 
 ## Safe Change Checklist
@@ -549,8 +549,14 @@ Before release:
 - `web_v1/backend/app.py` persists `account_manual` from regular detail saves.
 - `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` now receives `vendor_biz_no`/`supplier_biz_no` and can select the ERP 거래처 popup row by business number for generic regular vendors such as Daou Technology.
 - The latest fix111 deployment ZIP is 
-C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip
+C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 .
 
 
+
+
+## Fix112 Regular Account Rule Completion
+
+- Regular 계정 추정 규칙 now matches the legacy CS _guess_regular_account() keyword list: 통신비 uses KT/통신/VPN/SD-WAN/오토에버 identifiers; 지급수수료 uses 동양정보통신/대신아이씨티 and NAC/DLP/Watching-On/Acronis/그룹웨어/다우오피스/K-System/HelpU/원격지원/자산관리/Acrobat/Adobe/Cloudoc/문서중앙화 identifiers, defaulting to 지급수수료.
+- Latest fix112 ZIP: C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip.
 

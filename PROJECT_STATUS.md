@@ -1,4 +1,4 @@
-﻿# Project Status
+# Project Status
 
 Updated: 2026-05-15
 
@@ -38,7 +38,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.99`.
+- Current WEB/Agent version in files: `1.0.100`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -47,7 +47,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after resident tray Agent / auto-update fix: C:\Tmp\accounting_web_v1_agent_tray_autoupdate_fix108_20260515_082707.zip.
 - Latest local deployment ZIP after required setup EXE / tray menu fix109: C:\Tmp\accounting_web_v1_required_setup_exe_tray_fix109_20260515_110534.zip.
 - Latest local deployment ZIP after tray right-click menu fix110: `C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip`.
-- Latest local deployment ZIP after regular legacy-rule fix111: `C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip`.
+- Latest local deployment ZIP after regular account-rule fix112: `C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -185,7 +185,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 - Active WEB/Agent files are now `1.0.99`.
 - Latest fix111 ZIP: 
-C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip
+C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 .
 - fix111 aligns WEB regular ERP rows with the legacy CS manager/server regular-processing 기준: stale crawler/default item accounts are ignored unless the user manually changes the account in the WEB regular detail form.
 - Daou Office/groupware regular invoices now default to `지급수수료`, then `부가세대급금`, then `미지급금(원화)`.
@@ -195,4 +195,12 @@ C:\Tmp\accounting_web_v1_regular_legacy_rules_fix111_20260515_121226.zip
 - `graphify update .` was attempted after fix111, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (`1247` vs `1274`). Existing graph/report were left untouched.
 
 
+
+
+## Current Session Fix112
+
+- Active WEB/Agent files are now 1.0.100.
+- Latest fix112 ZIP: C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip.
+- Rechecked the CS legacy _guess_regular_account() rule list. WEB now includes the full regular account keyword set, including the previously missing crobat 지급수수료 keyword.
+- Verification passed for Python py_compile, frontend node syntax, and regular account regression covering Daou/groupware, Acrobat, KT/VPN, and manual override.
 

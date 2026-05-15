@@ -74,7 +74,7 @@ $ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } 
 $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($gjAuto) { $gjAuto } else { Read-Host "김제 프린터 이름 입력(Get-Printer 결과와 동일)" }
 
 @"
-APP_VERSION=1.0.99
+APP_VERSION=1.0.100
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
@@ -111,3 +111,4 @@ Write-Host "[WEB v1.0] Start command:"
 Write-Host "powershell -ExecutionPolicy Bypass -File `"$RepoRoot\web_v1\deploy\start_operating_server.ps1`""
 Write-Host "[WEB v1.0] Browser URL:"
 Write-Host "https://$DefaultServerIp:8080"
+
