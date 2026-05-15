@@ -453,20 +453,18 @@ function stopMailCollectMonitor() {
 }
 
 function downloadUserPcInstaller() {
-  const serverUrl = window.location.origin;
-  const command = [
-    "$ServerUrl = \"" + serverUrl + "\"",
-    "$Bootstrap = \"$env:TEMP\\accounting_web_user_pc_bootstrap.ps1\"",
-    "curl.exe -k -L --fail --output $Bootstrap \"$ServerUrl/api/setup/user-pc-bootstrap.ps1\"",
-    "powershell -ExecutionPolicy Bypass -File $Bootstrap",
-  ].join("\n");
-  if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(command).catch(() => {});
-  }
+  const url = `${window.location.origin}/api/setup/user-pc-installer.exe`;
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = "AccountingWebRequiredSetup.exe";
+  link.style.display = "none";
+  document.body.appendChild(link);
+  link.click();
+  setTimeout(() => link.remove(), 1000);
   if (els.setupSummary) {
-    els.setupSummary.textContent = "담당자 PC 필수 프로그램 설치 명령을 클립보드에 복사했습니다. PowerShell에 붙여넣어 실행한 뒤 다시 점검을 누르세요.";
+    els.setupSummary.textContent = "담당자 PC 필수 프로그램 설치 파일을 다운로드했습니다. 다운로드된 EXE 파일을 열어 설치하세요.";
   }
-  alert(`PowerShell에 아래 명령을 붙여넣어 실행하세요.\n\n${command}`);
+  alert("다운로드된 AccountingWebRequiredSetup.exe 파일을 열어 설치하세요. 설치가 끝나면 트레이 아이콘으로 자동 실행됩니다.");
 }
 
 function requestAgentStartByProtocol() {
@@ -484,7 +482,7 @@ function autoStartAgentAfterLogin({ downloadFallback = false } = {}) {
   if (!state.agentAutoStartAttempted) {
     state.agentAutoStartAttempted = true;
     if (els.setupSummary) {
-      els.setupSummary.textContent = "담당자 PC 필수 프로그램 자동 실행을 요청했습니다. 브라우저 확인창이 나오면 열기를 누르세요.";
+      els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 브라우저 확인창이 나오면 열기를 누르세요.";
     }
     requestAgentStartByProtocol();
   }
@@ -546,7 +544,7 @@ function renderSetupStatus(status) {
   const missingInstallers = missingCompanies.filter((company) => !installerMap[company]);
   if (els.setupInstallButton) {
     const agentUpdateRequired = agentUpdateRequiredFromSetup();
-    els.setupInstallButton.textContent = !agentConnected || agentUpdateRequired ? "필수 프로그램 최신버전 설치파일 다운로드" : (status.ready ? "설치 완료" : "필수 프로그램 설치");
+    els.setupInstallButton.textContent = !agentConnected || agentUpdateRequired ? "필수 프로그램 설치파일 다운로드" : (status.ready ? "설치 완료" : "필수 프로그램 설치");
     els.setupInstallButton.disabled = Boolean(status.ready);
     els.setupInstallButton.title = !agentConnected
       ? "담당자 PC 필수 프로그램 설치 파일을 다운로드합니다."

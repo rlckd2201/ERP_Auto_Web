@@ -24,7 +24,18 @@ function Resolve-PythonExe {
     throw "Python 3.11 이상을 찾지 못했습니다. Python 설치 후 다시 실행하세요."
 }
 
+function Resolve-PythonwExe([string]$PythonExe) {
+    try {
+        if ($PythonExe -and $PythonExe -like "*\python.exe") {
+            $Candidate = Join-Path (Split-Path -Parent $PythonExe) "pythonw.exe"
+            if (Test-Path $Candidate) { return $Candidate }
+        }
+    } catch {}
+    return $PythonExe
+}
+
 $Python = Resolve-PythonExe
+$AgentPython = Resolve-PythonwExe $Python
 
 try {
     $RunScript = Join-Path $RepoRoot "담당자PC_필수프로그램_실행.ps1"
@@ -34,7 +45,7 @@ try {
 `$Root = "$RepoRoot"
 `$env:WEB_SERVER_URL = "$ServerUrl"
 `$env:PYTHON_EXE = "$Python"
-powershell -ExecutionPolicy Bypass -File "`$Root\web_v1\deploy\start_user_erp_agent.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "`$Root\web_v1\deploy\start_user_erp_agent.ps1"
 "@ | Set-Content -Path $RunScript -Encoding UTF8
     }
     $ProtocolKey = "HKCU:\Software\Classes\accountingweb"
@@ -43,7 +54,11 @@ powershell -ExecutionPolicy Bypass -File "`$Root\web_v1\deploy\start_user_erp_ag
     Set-Item -Path $ProtocolKey -Value "URL:Accounting WEB 필수 프로그램"
     New-ItemProperty -Path $ProtocolKey -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
     $PowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-    Set-Item -Path $CommandKey -Value "`"$PowerShellExe`" -NoProfile -ExecutionPolicy Bypass -File `"$RunScript`""
+    $RunCommand = "`"$PowerShellExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`""
+    Set-Item -Path $CommandKey -Value $RunCommand
+    $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    New-Item -Path $RunKey -Force | Out-Null
+    Set-ItemProperty -Path $RunKey -Name "AccountingWebAgent" -Value $RunCommand -Force
     Write-Host "[WEB v1.0] Login auto-start registered: accountingweb://start"
 } catch {
     Write-Host "[WEB v1.0] Login auto-start registration skipped: $($_.Exception.Message)"
@@ -52,10 +67,10 @@ powershell -ExecutionPolicy Bypass -File "`$Root\web_v1\deploy\start_user_erp_ag
 Write-Host "[WEB v1.0] Starting user PC ERP Agent"
 Write-Host "[WEB v1.0] Server: $ServerUrl"
 Write-Host "[WEB v1.0] Agent: $Agent"
-Write-Host "[WEB v1.0] Python: $Python"
+Write-Host "[WEB v1.0] Python: $AgentPython"
 
 & $Python -m pip install -r (Join-Path $RepoRoot "web_v1\backend\requirements.txt")
 
 $AgentArgs = "`"$Agent`" --server `"$ServerUrl`" --insecure"
-Start-Process -FilePath $Python -ArgumentList $AgentArgs -WindowStyle Hidden
+Start-Process -FilePath $AgentPython -ArgumentList $AgentArgs -WindowStyle Hidden
 Write-Host "[WEB v1.0] User PC ERP Agent started in background tray mode"

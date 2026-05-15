@@ -60,7 +60,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.96"
+AGENT_BUNDLE_VERSION = "1.0.98"
 _MUTEX_HANDLE: Any = None
 
 
@@ -96,6 +96,8 @@ class AgentTray:
         self.server_url = server_url
         self.status = "Starting"
         self.stop_requested = False
+        self.manual_update_requested = False
+        self.update_message = ""
         self._hwnd = None
         self._notify_id = None
         self._thread: threading.Thread | None = None
@@ -110,15 +112,40 @@ class AgentTray:
         self.status = status
         self._modify()
 
+    def set_update_message(self, message: str) -> None:
+        self.update_message = message
+
+    def consume_manual_update_request(self) -> bool:
+        requested = self.manual_update_requested
+        self.manual_update_requested = False
+        return requested
+
+    def notify(self, title: str, message: str) -> None:
+        if not self._hwnd:
+            return
+        try:
+            import win32con
+            import win32gui
+            data = (self._hwnd, 0, win32gui.NIF_INFO, win32con.WM_USER + 20, 0, f"Accounting WEB Agent - {self.status}"[:127], 0, 0, message[:255], title[:63], getattr(win32gui, "NIIF_INFO", 1))
+            win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, data)
+        except Exception as exc:
+            log(f"tray notify failed: {exc}")
+
+    def _message_box(self, title: str, body: str) -> None:
+        try:
+            ctypes.windll.user32.MessageBoxW(0, body, title, 0x40)
+        except Exception as exc:
+            log(f"tray message box failed: {exc}")
+
     def _run(self) -> None:
         try:
             import win32api
             import win32con
             import win32gui
-
             message_map = {
                 win32con.WM_DESTROY: self._on_destroy,
                 win32con.WM_COMMAND: self._on_command,
+                win32con.WM_CONTEXTMENU: self._on_context_menu,
                 win32con.WM_USER + 20: self._on_notify,
             }
             wc = win32gui.WNDCLASS()
@@ -128,14 +155,7 @@ class AgentTray:
             class_atom = win32gui.RegisterClass(wc)
             self._hwnd = win32gui.CreateWindow(class_atom, "Accounting WEB Agent", 0, 0, 0, 0, 0, 0, 0, wc.hInstance, None)
             icon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
-            self._notify_id = (
-                self._hwnd,
-                0,
-                win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP,
-                win32con.WM_USER + 20,
-                icon,
-                f"Accounting WEB Agent - {self.status}",
-            )
+            self._notify_id = (self._hwnd, 0, win32gui.NIF_ICON | win32gui.NIF_MESSAGE | win32gui.NIF_TIP, win32con.WM_USER + 20, icon, f"Accounting WEB Agent - {self.status}")
             win32gui.Shell_NotifyIcon(win32gui.NIM_ADD, self._notify_id)
             win32gui.PumpMessages()
         except Exception as exc:
@@ -146,7 +166,6 @@ class AgentTray:
             return
         try:
             import win32gui
-
             data = list(self._notify_id)
             data[5] = f"Accounting WEB Agent - {self.status}"[:127]
             self._notify_id = tuple(data)
@@ -157,7 +176,6 @@ class AgentTray:
     def _on_destroy(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
         try:
             import win32gui
-
             if self._notify_id:
                 win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, self._notify_id)
             win32gui.PostQuitMessage(0)
@@ -167,39 +185,76 @@ class AgentTray:
 
     def _on_command(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
         command_id = int(wparam) & 0xFFFF
+        self._handle_menu_command(command_id, hwnd)
+        return 0
+
+    def _handle_menu_command(self, command_id: int, hwnd: int) -> None:
         if command_id == 1001:
-            try:
-                os.startfile(self.server_url)
-            except Exception as exc:
-                log(f"open WEB failed: {exc}")
+            self._message_box("회계업무 WEB 내 상태", f"상태: {self.status}\n서버: {self.server_url}\nAgent 버전: {AGENT_BUNDLE_VERSION}")
         elif command_id == 1002:
+            self.manual_update_requested = True
+            self.notify("회계업무 WEB", "최신 버전 확인을 시작합니다.")
+        elif command_id == 1003:
+            message = f"Agent 버전: {AGENT_BUNDLE_VERSION}"
+            if self.update_message:
+                message += f"\n\n최근 업데이트 안내:\n{self.update_message}"
+            self._message_box("회계업무 WEB 버전", message)
+        elif command_id == 1004:
             self.stop_requested = True
             try:
                 import win32gui
-
                 win32gui.DestroyWindow(hwnd)
             except Exception:
                 pass
+
+    def _show_menu(self, hwnd: int) -> None:
+        try:
+            import win32con
+            import win32gui
+
+            menu = win32gui.CreatePopupMenu()
+            try:
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 1001, "내 상태 확인")
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 1002, "수동 업데이트")
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 1003, "버전확인")
+                win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, None)
+                win32gui.AppendMenu(menu, win32con.MF_STRING, 1004, "종료")
+                pos = win32gui.GetCursorPos()
+                try:
+                    win32gui.SetForegroundWindow(hwnd)
+                except Exception as exc:
+                    log(f"tray foreground skipped: {exc}")
+                flags = win32con.TPM_LEFTALIGN | win32con.TPM_RIGHTBUTTON | getattr(win32con, "TPM_RETURNCMD", 0x0100)
+                command_id = win32gui.TrackPopupMenu(menu, flags, pos[0], pos[1], 0, hwnd, None)
+                try:
+                    win32gui.PostMessage(hwnd, win32con.WM_NULL, 0, 0)
+                except Exception:
+                    pass
+                if command_id:
+                    self._handle_menu_command(int(command_id), hwnd)
+            finally:
+                try:
+                    win32gui.DestroyMenu(menu)
+                except Exception:
+                    pass
+        except Exception as exc:
+            log(f"tray menu failed: {exc}")
+
+    def _on_context_menu(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
+        self._show_menu(hwnd)
         return 0
 
     def _on_notify(self, hwnd: int, msg: int, wparam: int, lparam: int) -> int:
         try:
             import win32con
-            import win32gui
-
-            if lparam == win32con.WM_LBUTTONDBLCLK:
+            event = int(lparam) & 0xFFFF
+            if event == win32con.WM_LBUTTONDBLCLK:
                 os.startfile(self.server_url)
-            elif lparam == win32con.WM_RBUTTONUP:
-                menu = win32gui.CreatePopupMenu()
-                win32gui.AppendMenu(menu, win32con.MF_STRING, 1001, "Open WEB")
-                win32gui.AppendMenu(menu, win32con.MF_STRING, 1002, "Exit Agent")
-                pos = win32gui.GetCursorPos()
-                win32gui.SetForegroundWindow(hwnd)
-                win32gui.TrackPopupMenu(menu, win32con.TPM_LEFTALIGN, pos[0], pos[1], 0, hwnd, None)
-        except Exception:
-            pass
+            elif event in {win32con.WM_RBUTTONUP, win32con.WM_CONTEXTMENU}:
+                self._show_menu(hwnd)
+        except Exception as exc:
+            log(f"tray notify event failed: {exc}")
         return 0
-
 
 def _agent_bundle_hash() -> str:
     try:
@@ -1263,20 +1318,31 @@ def _server_version_payload(server: str, verify: bool) -> dict[str, Any]:
     return response.json() if response.content else {}
 
 
-def _agent_update_required(server: str, capabilities: dict[str, Any], verify: bool) -> bool:
+def _format_update_notes(payload: dict[str, Any]) -> str:
+    version = str(payload.get("version") or "").strip()
+    notes = str(payload.get("agent_update_notes") or "").strip()
+    lines: list[str] = []
+    if version:
+        lines.append(f"서버 버전: {version}")
+    if notes:
+        lines.append(notes)
+    return "\n".join(lines) or "담당자 PC 필수 프로그램 최신 패치가 있습니다."
+
+
+def _agent_update_required(server: str, capabilities: dict[str, Any], verify: bool) -> dict[str, Any] | None:
     try:
         payload = _server_version_payload(server, verify)
     except Exception as exc:
         log(f"version check failed: {exc}")
-        return False
+        return None
     expected_hash = str(payload.get("agent_bundle_hash") or "")
     current_hash = str(capabilities.get("agent_bundle_hash") or "")
     if not expected_hash or not current_hash or current_hash.startswith("error:"):
-        return False
+        return None
     if expected_hash == current_hash:
-        return False
+        return None
     log(f"agent update required: current={current_hash[:12]} expected={expected_hash[:12]}")
-    return True
+    return payload
 
 
 def _run_self_update(server: str, verify: bool) -> bool:
@@ -1295,12 +1361,7 @@ def _run_self_update(server: str, verify: bool) -> bool:
         if not setup_script.exists():
             raise RuntimeError(f"setup script not found in payload: {temp_root}")
         powershell = str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
-        subprocess.Popen(
-            [powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(setup_script)],
-            cwd=str(temp_root),
-            close_fds=True,
-            creationflags=getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
-        )
+        subprocess.Popen([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(setup_script)], cwd=str(temp_root), close_fds=True, creationflags=(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)))
         log("agent self-update started; current process will exit")
         return True
     except Exception as exc:
@@ -1313,6 +1374,7 @@ def main() -> int:
     parser.add_argument("--server", default=os.getenv("WEB_SERVER_URL", "https://172.17.39.121:8080"))
     parser.add_argument("--agent-id", default=os.getenv("ERP_AGENT_ID", f"{socket.gethostname()}-{os.getenv('USERNAME', 'user')}"))
     parser.add_argument("--interval", type=float, default=3.0)
+    parser.add_argument("--update-interval", type=float, default=60.0)
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--preflight-only", action="store_true")
     parser.add_argument("--no-tray", action="store_true")
@@ -1331,6 +1393,8 @@ def main() -> int:
         capabilities = preflight(args.server)
         print(json.dumps(capabilities, ensure_ascii=False, indent=2))
         return 0 if capabilities["ok"] else 2
+    next_update_check_at = 0.0
+    last_notified_update_hash = ""
     while True:
         capabilities = preflight(args.server)
         tray.update("Checking")
@@ -1344,10 +1408,23 @@ def main() -> int:
         except Exception as exc:
             log(f"heartbeat failed: {exc}")
             tray.update("Disconnected")
-        if not args.once and _agent_update_required(args.server, capabilities, verify):
-            tray.update("Updating")
-            if _run_self_update(args.server, verify):
-                return 10
+        manual_update_requested = tray.consume_manual_update_request()
+        update_check_due = time.monotonic() >= next_update_check_at
+        if not args.once and (manual_update_requested or update_check_due):
+            next_update_check_at = time.monotonic() + max(15.0, args.update_interval)
+            update_payload = _agent_update_required(args.server, capabilities, verify)
+            if update_payload:
+                expected_hash = str(update_payload.get("agent_bundle_hash") or "")
+                update_notes = _format_update_notes(update_payload)
+                tray.set_update_message(update_notes)
+                if manual_update_requested or expected_hash != last_notified_update_hash:
+                    tray.notify("회계업무 WEB 업데이트", update_notes)
+                    last_notified_update_hash = expected_hash
+                tray.update("Updating")
+                if _run_self_update(args.server, verify):
+                    return 10
+            elif manual_update_requested:
+                tray.notify("회계업무 WEB", f"현재 최신버전입니다.\nAgent 버전: {AGENT_BUNDLE_VERSION}")
         install_job = heartbeat_payload.get("install_job") if isinstance(heartbeat_payload.get("install_job"), dict) else None
         if install_job:
             tray.update("Installing")

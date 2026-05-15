@@ -97,6 +97,7 @@ FRONTEND_DIR = WEB_ROOT / "frontend"
 INSTALLER_EXE_PATH = WEB_ROOT / "backend" / "tools" / "AccountingWebRequiredSetup.exe"
 INSTALLER_EXE_OVERLAY_BEGIN = b"\r\n--ACCOUNTING-WEB-SERVER-URL-BEGIN--\r\n"
 INSTALLER_EXE_OVERLAY_END = b"\r\n--ACCOUNTING-WEB-SERVER-URL-END--\r\n"
+UPDATE_NOTES_PATH = WEB_ROOT / "backend" / "UPDATE_NOTES.txt"
 _MAIL_COLLECT_INTERVAL_SECONDS = 60
 _mail_collect_scheduler_started = False
 _mail_collect_scheduler_lock = threading.RLock()
@@ -345,13 +346,7 @@ foreach ($Name in @("web_v1", "manager_server", "support")) {
 }
 
 function Resolve-PythonExe {
-    $candidates = @(
-        $env:PYTHON_EXE,
-        "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
-        "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
-        "python",
-        "py"
-    )
+    $candidates = @($env:PYTHON_EXE, "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe", "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe", "python", "py")
     foreach ($candidate in $candidates) {
         if (-not $candidate) { continue }
         try {
@@ -369,19 +364,13 @@ if (-not $Python -and (Get-Command winget -ErrorAction SilentlyContinue)) {
     winget install --id Python.Python.3.11 -e --accept-package-agreements --accept-source-agreements
     $Python = Resolve-PythonExe
 }
-if (-not $Python) {
-    throw "Python 3.11 이상을 찾지 못했습니다. Python 설치 후 이 파일을 다시 실행하세요."
-}
+if (-not $Python) { throw "Python 3.11 이상을 찾지 못했습니다. Python 설치 후 이 파일을 다시 실행하세요." }
 
 Write-Host "[회계업무 WEB] Python 패키지를 확인합니다."
 $RequirementsPath = Join-Path $InstallRoot "web_v1\backend\requirements.txt"
-if (-not (Test-Path $RequirementsPath)) {
-    throw "requirements.txt not found after setup copy: $RequirementsPath"
-}
+if (-not (Test-Path $RequirementsPath)) { throw "requirements.txt not found after setup copy: $RequirementsPath" }
 & $Python -m pip install -r $RequirementsPath
-if ($LASTEXITCODE -ne 0) {
-    throw "Python package install failed. ExitCode=$LASTEXITCODE"
-}
+if ($LASTEXITCODE -ne 0) { throw "Python package install failed. ExitCode=$LASTEXITCODE" }
 
 Write-Host "[회계업무 WEB] WEB HTTPS 인증서를 신뢰 저장소에 등록합니다."
 $CertDir = "C:\ERP_DB\certs"
@@ -399,30 +388,23 @@ $Cert = New-Object System.Security.Cryptography.X509Certificates.X509Certificate
 $Store = New-Object System.Security.Cryptography.X509Certificates.X509Store("Root", "CurrentUser")
 $Store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadOnly)
 $AlreadyTrusted = $false
-foreach ($Item in $Store.Certificates) {
-    if ($Item.Thumbprint -eq $Cert.Thumbprint) {
-        $AlreadyTrusted = $true
-        break
-    }
-}
+foreach ($Item in $Store.Certificates) { if ($Item.Thumbprint -eq $Cert.Thumbprint) { $AlreadyTrusted = $true; break } }
 $Store.Close()
-if ($AlreadyTrusted) {
-    Write-Host "[회계업무 WEB] WEB HTTPS 인증서가 이미 등록되어 있습니다."
-} else {
+if (-not $AlreadyTrusted) {
     & certutil.exe -user -addstore Root $CertPath | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "WEB HTTPS 인증서 등록 실패: certutil exit code $LASTEXITCODE"
-    }
+    if ($LASTEXITCODE -ne 0) { throw "WEB HTTPS 인증서 등록 실패: certutil exit code $LASTEXITCODE" }
 }
 
+$PowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
 $RunScript = Join-Path $InstallRoot "담당자PC_필수프로그램_실행.ps1"
 @"
 `$ErrorActionPreference = "Stop"
 `$Root = "$InstallRoot"
 `$env:WEB_SERVER_URL = "$ServerUrl"
 `$env:PYTHON_EXE = "$Python"
-powershell -ExecutionPolicy Bypass -File "`$Root\web_v1\deploy\start_user_erp_agent.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "`$Root\web_v1\deploy\start_user_erp_agent.ps1"
 "@ | Set-Content -Path $RunScript -Encoding UTF8
+$RunCommand = "`"$PowerShellExe`" -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`""
 
 try {
     $ProtocolKey = "HKCU:\Software\Classes\accountingweb"
@@ -430,34 +412,28 @@ try {
     New-Item -Path $CommandKey -Force | Out-Null
     Set-Item -Path $ProtocolKey -Value "URL:Accounting WEB 필수 프로그램"
     New-ItemProperty -Path $ProtocolKey -Name "URL Protocol" -Value "" -PropertyType String -Force | Out-Null
-    $PowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-    $ProtocolCommand = "`"$PowerShellExe`" -NoProfile -ExecutionPolicy Bypass -File `"$RunScript`""
-    Set-Item -Path $CommandKey -Value $ProtocolCommand
-    Write-Host "[회계업무 WEB] 로그인 자동 실행 연결을 등록했습니다: accountingweb://start"
-} catch {
-    Write-Host "[회계업무 WEB] 로그인 자동 실행 연결 등록은 건너뜁니다: $($_.Exception.Message)"
-}
+    Set-Item -Path $CommandKey -Value $RunCommand
+} catch { Write-Host "[회계업무 WEB] 로그인 자동 실행 연결 등록은 건너뜁니다: $($_.Exception.Message)" }
+
+try {
+    $RunKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+    New-Item -Path $RunKey -Force | Out-Null
+    Set-ItemProperty -Path $RunKey -Name "AccountingWebAgent" -Value $RunCommand -Force
+} catch { Write-Host "[회계업무 WEB] Windows 로그인 자동 실행 등록은 건너뜁니다: $($_.Exception.Message)" }
 
 try {
     $ShortcutPath = Join-Path ([Environment]::GetFolderPath("Desktop")) "회계업무 WEB 필수프로그램 실행.lnk"
     $Shell = New-Object -ComObject WScript.Shell
     $Shortcut = $Shell.CreateShortcut($ShortcutPath)
-    $Shortcut.TargetPath = "powershell.exe"
-    $Shortcut.Arguments = "-ExecutionPolicy Bypass -File `"$RunScript`""
+    $Shortcut.TargetPath = $PowerShellExe
+    $Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`""
     $Shortcut.WorkingDirectory = $InstallRoot
+    $Shortcut.WindowStyle = 7
     $Shortcut.Save()
-    Write-Host "[회계업무 WEB] 바탕화면 실행 아이콘을 만들었습니다: $ShortcutPath"
-} catch {
-    Write-Host "[회계업무 WEB] 바탕화면 아이콘 생성은 건너뜁니다: $($_.Exception.Message)"
-}
+} catch { Write-Host "[회계업무 WEB] 바탕화면 아이콘 생성은 건너뜁니다: $($_.Exception.Message)" }
 
-Write-Host ""
 Write-Host "[회계업무 WEB] 설치 완료. 필수 프로그램을 실행합니다."
-Write-Host "[회계업무 WEB] 이 창은 업무 중 닫지 마세요."
-& powershell -ExecutionPolicy Bypass -File $RunScript
-if ($LASTEXITCODE -ne 0) {
-    throw "Accounting WEB agent exited with error. ExitCode=$LASTEXITCODE"
-}
+Start-Process -FilePath $PowerShellExe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$RunScript`"" -WindowStyle Hidden
 '''.strip().replace("__SERVER_URL__", server_url)
 
 
@@ -624,9 +600,9 @@ def _build_user_pc_payload_zip(server_url: str) -> bytes:
     with zipfile.ZipFile(buffer, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         archive.writestr("0_먼저_읽어주세요.txt", (
             "회계업무 WEB 담당자 PC 필수 프로그램 설치 파일입니다.\r\n\r\n"
-            "이 파일은 웹에서 내려받은 설치 스크립트가 자동으로 사용합니다.\r\n"
-            "수동으로 받은 경우 1_필수프로그램_설치_실행.ps1 파일을 우클릭 후 PowerShell에서 실행하세요.\r\n"
-            "설치가 끝나면 열린 PowerShell 창은 업무 중 닫지 마세요.\r\n"
+            "웹 화면에서 받은 EXE 설치 파일이 이 압축 내용을 자동으로 사용합니다.\r\n"
+            "설치가 끝나면 담당자 PC 필수 프로그램은 트레이 아이콘으로 실행됩니다.\r\n"
+            "압축 파일을 직접 열어 설치하지 말고 웹 화면의 EXE 설치 파일을 사용하세요.\r\n"
         ).encode("utf-8-sig"))
         installer_script = _agent_installer_script(server_url).encode("utf-8-sig")
         archive.writestr("setup.ps1", installer_script)
@@ -648,6 +624,16 @@ def client_ip(request: Request) -> str:
     forwarded = str(request.headers.get("x-forwarded-for") or "").split(",", 1)[0].strip()
     return forwarded or (request.client.host if request.client else "")
 
+
+
+
+def _agent_update_notes() -> str:
+    try:
+        if UPDATE_NOTES_PATH.exists():
+            return UPDATE_NOTES_PATH.read_text(encoding="utf-8").strip()
+    except Exception:
+        logging.exception("Failed to read update notes")
+    return "담당자 PC 필수 프로그램 최신 패치입니다."
 
 def require_setup_ready(request: Request) -> dict[str, Any]:
     status = setup_status(client_ip=client_ip(request))
@@ -1112,6 +1098,7 @@ def version() -> dict[str, Any]:
         "product": "회계업무 자동화 WEB",
         "version": settings.app_version,
         "agent_bundle_hash": expected_agent_bundle_hash(),
+        "agent_update_notes": _agent_update_notes(),
     }
 
 

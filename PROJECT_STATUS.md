@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-05-14
+Updated: 2026-05-15
 
 ## How To Use This File
 
@@ -38,13 +38,15 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.96`.
+- Current WEB/Agent version in files: `1.0.98`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
 - Previous local deployment ZIP after first WEB regular-processing pass: `C:\Tmp\accounting_web_v1_regular_processing_fix106_20260514_155214.zip`.
 - Previous local deployment ZIP after regular PDF 작성일자 fallback fix: `C:\Tmp\accounting_web_v1_regular_pdf_date_fix107_20260514_165139.zip`.
-- Latest local deployment ZIP after resident tray Agent / auto-update fix: `C:\Tmp\accounting_web_v1_agent_tray_autoupdate_fix108_20260515_082707.zip`.
+- Latest local deployment ZIP after resident tray Agent / auto-update fix: C:\Tmp\accounting_web_v1_agent_tray_autoupdate_fix108_20260515_082707.zip.
+- Latest local deployment ZIP after required setup EXE / tray menu fix109: C:\Tmp\accounting_web_v1_required_setup_exe_tray_fix109_20260515_110534.zip.
+- Latest local deployment ZIP after tray right-click menu fix110: `C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -74,6 +76,12 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix108` starts the manager PC Agent as a hidden background process with a Windows tray icon and a single-instance mutex.
 - `fix108` makes the Agent compare its bundle hash with `/api/version` and download/run the latest payload in the background when the server bundle changes.
 - `fix108` changes the setup install button from blocked EXE download to a copied PowerShell bootstrap command.
+- `fix109` adds a real `AccountingWebRequiredSetup.exe` endpoint artifact and removes user-facing PowerShell copy/paste from the setup UI.
+- `fix109` makes the manager PC Agent run as a resident tray process with right-click menu items: `내 상태 확인`, `수동 업데이트`, `버전확인`, `종료`.
+- `fix109` checks server Agent bundle updates every 1 minute, shows update notes from `/api/version`, and starts the self-update script hidden in the background.
+- `fix109` registers `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\AccountingWebAgent`, so reboot/login brings the Agent back automatically.
+- `fix109` includes the cash withdrawal report Excel templates from `support/*.xlsx` in the user-PC payload; the Agent still installs the template to `%APPDATA%\양식_현금출금정산서.xlsx` without overwriting an existing file.
+- `fix110` fixes the Agent tray right-click menu by handling Windows context-menu events, tolerating foreground-window failures, and executing the selected menu command directly from `TrackPopupMenu`.
 - `tax_crawler/portal_smileedi.py` has been added as a standalone SMILE EDI crawler prototype. It is intentionally not registered in `crawler_main.py` yet.
 - SMILE EDI approval handling is opt-in via the prototype CLI `--approve`; without that flag it records unapproved status and debug HTML/screenshots only.
 - Frontend has one-click output target combo and localStorage preference.
@@ -107,6 +115,10 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `web_v1/VERSION`
 - `tax_crawler/portal_smileedi.py`
 - `PROJECT_STATUS.md`
+- `web_v1/backend/UPDATE_NOTES.txt`
+- `web_v1/backend/tools/AccountingWebRequiredSetup.cs`
+- `web_v1/backend/tools/AccountingWebRequiredSetup.exe`
+- `web_v1/deploy/start_user_erp_agent.ps1`
 
 ## Verification Results
 
@@ -130,6 +142,13 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix106` browser mock smoke test passed: regular mode loaded, one regular invoice rendered, row selection opened regular detail with account/item/output-set content, and `정기 원클릭 처리` became enabled.
 - `py_compile` passed for `tax_crawler/portal_smileedi.py`.
 - SMILE EDI URL detection unit check passed for `https://www.smileedi.com/DtiEmail.do?...`.
+- `fix109` changed-file `py_compile` passed for `web_v1/backend/app.py`, `web_v1/backend/setup_state.py`, and `web_v1/agent/erp_agent.py`.
+- `fix109` `node --check web_v1/frontend/app.js` passed.
+- `fix109` built `web_v1/backend/tools/AccountingWebRequiredSetup.exe` with .NET `csc.exe` and verified the ZIP contains the EXE, `UPDATE_NOTES.txt`, frontend app, `web_v1/VERSION`, and cash-report Excel templates.
+- `graphify update .` was attempted after `fix109`, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (`1245` vs `1274`). Existing graph/report were left untouched.
+- `fix110` changed-file `py_compile` passed for `web_v1/agent/erp_agent.py`.
+- `fix110` ZIP content verification passed for `web_v1/VERSION=1.0.98`, tray context-menu markers, setup EXE, update notes, and cash-report Excel templates; no `__pycache__`/`.pyc` or backup/hotfix/release folders were included.
+- `graphify update .` was attempted after `fix110`, but Graphify again refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (`1247` vs `1274`). Existing graph/report were left untouched.
 
 ## Open Work
 
@@ -157,7 +176,8 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
   - `C:\Users\Administrator\Desktop\전표 자동화 프로그램_WEB_Version`
 - Local development path:
   - `C:\Users\user\Desktop\개발파일\회계업무 자동화_WEB_Version`
-- Because backend files are included in the Agent bundle hash, manager PCs may show latest-version-required after this update. Run the required setup/installer on manager PCs after deploying the server ZIP.
+- Because backend files are included in the Agent bundle hash, manager PCs may show latest-version-required after this update. Run the required setup/installer on manager PCs after deploying the server ZIP. For `fix109` and later, the setup UI should download `AccountingWebRequiredSetup.exe`; do not give 담당자 PowerShell copy/paste instructions.
 - User expects clean command blocks without `1.`/`2.` prefixes inside the commands.
 - Large feature updates or high-volume work should be committed and pushed to `origin` (`https://github.com/rlckd2201/ERP_Auto_Web`) after verification, using a focused commit that excludes pycache, temporary ZIPs, and unrelated backup folders.
 - Keep Graphify current: inspect `graphify-out/GRAPH_REPORT.md` before architecture/codebase questions and run `graphify update .` after meaningful code changes.
+

@@ -1,6 +1,6 @@
 # CODEBASE WIKI
 
-Updated: 2026-05-14
+Updated: 2026-05-15
 
 This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1274 nodes, 4072 edges, and 32 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-15, WEB/Agent files are at `1.0.96`. The latest local deployment ZIP is:
+As of 2026-05-15, WEB/Agent files are at `1.0.98`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_agent_tray_autoupdate_fix108_20260515_082707.zip
+C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip
 ```
 
 Known deployment hosts:
@@ -36,6 +36,19 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - One-click auto-saves the open purchase analysis form before ERP, and `erp_runner.py` now prioritizes saved screen edits for ERP payload fields.
 
 Current active product work: the first WEB `정기 처리` pass is implemented in the active source. Standalone `SMILE EDI` crawler development also exists as a separate prototype before wiring into mail collection or operating WEB flow.
+
+fix109/fix110 setup/install handoff:
+
+- Latest ZIP: `C:\Tmp\accounting_web_v1_tray_right_click_fix110_20260515_112408.zip`.
+- The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
+- The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
+- The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
+- `start_user_erp_agent.ps1` registers `accountingweb://start` and `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\AccountingWebAgent`, then starts the Agent hidden with `pythonw.exe` when available.
+- `erp_agent.py` owns the tray process. Its right-click menu is `내 상태 확인`, `수동 업데이트`, `버전확인`, `종료`; double-click still opens the WEB URL.
+- Agent update checks are throttled separately from the normal heartbeat loop: default `--update-interval` is 60 seconds, and `/api/version` now includes `agent_update_notes`.
+- fix110 changes the tray right-click path to handle both tray callback right-click and Windows context-menu messages, tolerate `SetForegroundWindow()` failure, and dispatch the selected menu id directly.
+- Graphify update was attempted for fix109 and fix110, but it refused to overwrite because the AST-only rebuild had fewer nodes than the existing graph.
+
 
 ## Mental Model
 
@@ -463,7 +476,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.96
+1.0.98
 ```
 
 ## Safe Change Checklist
