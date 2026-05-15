@@ -256,5 +256,6 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Root cause: output-set voucher candidates included existing `output_sets/.../01_전표.pdf`; repeated output generation could merge the already-built output-set voucher back with the original voucher.
 - Fix: `_copy_or_merge_doc()` removes the target file from merge inputs, prefers non-output-set sources for single-document outputs, and only preserves multi-PDF merging for `approval_docs`.
 - Verification passed: Python py_compile for `web_v1/backend/output_set.py`; regression test confirmed voucher stays 1 page while approval docs still merge to 2 pages.
+- fix116 ZIP content verification passed for `web_v1/VERSION=1.0.104`, single-document voucher guard markers, setup EXE, frontend assets, and no `graphify-out`/backup/hotfix/release/pycache files.
 - Graphify update completed after fix116: 1334 nodes, 4247 edges, 35 communities.
 

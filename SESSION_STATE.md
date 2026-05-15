@@ -24,11 +24,10 @@
 - 업데이트 노트 fix116 갱신
 - py_compile 및 임시 PDF 회귀 테스트 통과
 - graphify update 완료: 1334 nodes, 4247 edges, 35 communities
+- fix116 커밋/푸시 완료: fecafaf Prevent voucher output-set self merge
+- fix116 ZIP 생성 및 내용 검증 완료: C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip
 
 ## 다음 작업
-- frontend/setup 필수 파일 복원 여부 확인
-- fix116 ZIP 생성 및 내용 검증
-- 관련 파일만 stage/commit/push
 - 운영서버 172.17.39.121 배포 명령 제공
 
 ## 주의사항
