@@ -242,6 +242,38 @@ def _is_monitor_accessory(text: str) -> bool:
     return any(token in compact for token in ("모니터암", "모니터받침", "모니터스탠드", "모니터거치대"))
 
 
+def _simplify_purchase_item_name(value: Any) -> str:
+    text = _clean_text(value)
+    if not text:
+        return ""
+    stripped = re.sub(r"\[[^\]]+\]\s*", " ", text)
+    stripped = re.sub(r"\([^)]*\)\s*", " ", stripped)
+    stripped = re.sub(r"\{[^}]*\}\s*", " ", stripped)
+    stripped = re.sub(r"\b(?:화이트|블랙|실버|그레이|그린|레드|블루|색상선택|색상|옵션|벌크)\b.*$", " ", stripped, flags=re.IGNORECASE)
+    stripped = re.sub(r"\s+", " ", stripped).strip(" -_/.,")
+    compact = re.sub(r"\s+", "", stripped)
+    upper = stripped.upper()
+
+    if "멀티탭" in compact and "USB" in upper:
+        outlet = re.search(r"(\d+)\s*구", stripped)
+        return f"USB {outlet.group(1)}구 멀티탭" if outlet else "USB 멀티탭"
+    if "블루투스" in compact and "스피커" in compact:
+        return "블루투스 스피커"
+    if "차량용" in compact and "공기청정" in compact:
+        return "차량용 공기청정기"
+    if "차량용" in compact and "무선충전" in compact and "거치대" in compact:
+        return "차량용 무선충전 거치대"
+    if "모니터" in compact and "받침" in compact:
+        return "모니터 받침대"
+    if "충전기" in compact and "차량용" in compact:
+        return "차량용 충전기"
+    if "마우스" in compact:
+        return "마우스"
+    if "키보드" in compact:
+        return "키보드"
+    return ""
+
+
 def _process_items_with_db(items: list[dict[str, Any]], db_rows: list[tuple[str, str, bool, str]]) -> tuple[list[dict[str, Any]], list[str]]:
     db = [
         {
@@ -292,7 +324,13 @@ def _process_items_with_db(items: list[dict[str, Any]], db_rows: list[tuple[str,
             item["raw_desc"] = best_match["original_text"]
             item["learned_match"] = True
         else:
-            unknown.append(str(item.get("name") or item.get("raw_desc") or ""))
+            original_name = str(item.get("name") or item.get("raw_desc") or "")
+            simplified_name = _simplify_purchase_item_name(original_name)
+            if simplified_name:
+                item.setdefault("raw_desc", original_name)
+                item["name"] = simplified_name
+                item["system_adjustment"] = True
+            unknown.append(original_name)
         final.append(item)
 
     processed: list[dict[str, Any]] = []
@@ -941,7 +979,7 @@ def analyze_purchase_documents(invoice: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("구매 분석을 위해 견적서 PDF를 먼저 첨부해야 합니다.")
     fast_data = _fast_parse(tax_path, quote_path, existing)
     fast_unknown = [value for value in list(fast_data.get("analysis_unknown_items") or []) if str(value).strip()]
-    ai_data = None
+    ai_data = _ai_parse(tax_path, quote_path, fast_data) if fast_unknown else None
     result = {**fast_data, **(ai_data or {})}
     if ai_data:
         prepared_items, unknown = _process_items_with_db(list(result.get("items") or []), _load_dictionary_rows())
