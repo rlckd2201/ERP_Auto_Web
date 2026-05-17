@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>회계업무 자동화 WEB DB 보기</title>
+  <link rel="stylesheet" href="/assets/styles.css?v=20260518_fix119_admin_db">
+  <link rel="stylesheet" href="/assets/admin_db.css?v=20260518_fix119_admin_db">
+</head>
+<body class="admin-db-body">
+  <main class="admin-db-shell">
+    <header class="admin-db-header">
+      <div>
+        <h1>DB 보기</h1>
+        <p id="dbPath">DB 경로 확인 중</p>
+      </div>
+      <div class="admin-db-actions">
+        <a class="button secondary" href="/">업무 화면</a>
+        <button id="refreshButton" class="button primary" type="button">새로고침</button>
+      </div>
+    </header>
+
+    <section class="admin-db-layout">
+      <aside class="admin-db-sidebar">
+        <h2>테이블</h2>
+        <div id="tableList" class="admin-db-table-list"></div>
+      </aside>
+
+      <section class="admin-db-panel">
+        <div class="admin-db-toolbar">
+          <div>
+            <h2 id="tableTitle">테이블 선택</h2>
+            <p id="tableSummary">왼쪽에서 테이블을 선택하세요.</p>
+          </div>
+          <div class="admin-db-search">
+            <input id="searchInput" type="search" placeholder="검색어">
+            <select id="limitSelect" aria-label="표시 건수">
+              <option value="50">50건</option>
+              <option value="100" selected>100건</option>
+              <option value="200">200건</option>
+              <option value="500">500건</option>
+            </select>
+            <button id="searchButton" class="button secondary" type="button">검색</button>
+          </div>
+        </div>
+
+        <div id="errorBox" class="admin-db-error hidden"></div>
+        <div class="admin-db-table-wrap">
+          <table id="dataTable" class="admin-db-table">
+            <thead></thead>
+            <tbody>
+              <tr><td class="empty-cell">데이터를 불러오세요.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </section>
+  </main>
+  <script src="/assets/admin_db.js?v=20260518_fix119_admin_db" defer></script>
+</body>
+</html>

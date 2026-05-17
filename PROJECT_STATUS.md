@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.106`.
+- Current WEB/Agent version in files: `1.0.107`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -52,7 +52,8 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after KT vendor business-number fix115: `C:\Tmp\accounting_web_v1_kt_vendor_bizno_fix115_20260515_144302.zip`.
 - Previous local deployment ZIP after voucher duplicate-page output fix116: `C:\Tmp\accounting_web_v1_voucher_single_doc_fix116_20260515_153227.zip`.
 - Previous local deployment ZIP after no-op auto-save status reset fix117: `C:\Tmp\accounting_web_v1_noop_save_status_fix117_20260515_161724.zip`.
-- Latest local deployment ZIP after Compuzone AI/item-name fix118: `C:\Tmp\accounting_web_v1_compuzone_ai_item_names_fix118_20260518_081512.zip`.
+- Previous local deployment ZIP after Compuzone AI/item-name fix118: `C:\Tmp\accounting_web_v1_compuzone_ai_item_names_fix118_20260518_081512.zip`.
+- Latest local deployment ZIP after admin DB viewer fix119: `C:\Tmp\accounting_web_v1_admin_db_view_fix119_20260518_083745.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -98,6 +99,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix116` stops output-set generation from re-merging an existing `output_sets/.../01_전표.pdf` with the original ERP voucher. Single-source documents such as voucher, tax invoice, and cash report now pick one source; only approval documents still merge multiple PDFs.
 - `fix117` stops the purchase/regular auto-save APIs from resetting invoice status to `대기중` when the submitted screen payload is identical to the current saved data. Printing already-complete output sets should no longer make the 수신 내역 look pending just because the frontend auto-saved before one-click.
 - `fix118` reconnects the disabled Gemini purchase analysis call for unknown purchase items and adds deterministic Compuzone fallback item-name simplification, so first-time low-cost items do not stay as raw quote lines.
+- `fix119` adds a browser-based read-only DB viewer at `/admin-db`, backed by `/api/admin/db/overview` and `/api/admin/db/table`, so the current `C:\ERP_DB\learned_data.db` contents can be inspected without the old CS `admin_viewer.py`.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -289,3 +291,12 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - fix118 ZIP content verification passed for `web_v1/VERSION=1.0.106`, Gemini call marker, Compuzone item-name simplifier markers, setup EXE, frontend assets, and no `graphify-out`/`__pycache__`/`.pyc` files.
 - Graphify update completed after fix118: 1347 nodes, 4277 edges, 81 communities.
 
+## Current Session Fix119
+
+- Active WEB/Agent files are now 1.0.107.
+- Latest fix119 ZIP: C:\Tmp\accounting_web_v1_admin_db_view_fix119_20260518_083745.zip.
+- Root cause: the old CS `admin_viewer.py` called removed endpoints such as `/api/dictionary`, `/api/update_dict`, and `/api/delete_dict`, and was not aligned with the current WEB v1 database/API surface.
+- Fix: added a read-only WEB DB viewer at `/admin-db`, plus `/api/admin/db/overview` and `/api/admin/db/table` for safe table/count/row inspection of `C:\ERP_DB\learned_data.db`.
+- The main WEB UI now injects a detail-mode `DB 보기` button that opens `/admin-db` in a new tab.
+- Verification passed: Python py_compile for `web_v1/backend/app.py` and `web_v1/agent/erp_agent.py`; `node --check` for `web_v1/frontend/app.js` and `web_v1/frontend/admin_db.js`; FastAPI TestClient confirmed overview/table APIs return current DB tables and invoice rows.
+- Graphify update completed after fix119: 1363 nodes, 4323 edges, 79 communities.

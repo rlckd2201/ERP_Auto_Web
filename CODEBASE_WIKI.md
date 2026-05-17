@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-18, WEB/Agent files are at `1.0.106`. The latest local deployment ZIP is:
+As of 2026-05-18, WEB/Agent files are at `1.0.107`. The latest local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_compuzone_ai_item_names_fix118_20260518_081512.zip
+C:\Tmp\accounting_web_v1_admin_db_view_fix119_20260518_083745.zip
 ```
 
 Known deployment hosts:
@@ -36,12 +36,13 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - One-click auto-saves the open purchase analysis form before ERP, and `erp_runner.py` now prioritizes saved screen edits for ERP payload fields.
 - The auto-save APIs reset invoice status only when editable purchase/regular screen data actually changed. Existing completed document-set printing should not turn rows back to `대기중`.
 - Purchase analysis now actually calls Gemini for unknown purchase items when `GEMINI_API_KEY` is configured. Compuzone fallback parsing also simplifies common low-cost item names instead of keeping the full raw quote line.
+- The current WEB database can be inspected in a browser through `/admin-db`; the old CS `admin_viewer.py` endpoints are not part of the current WEB v1 API.
 
 Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_compuzone_ai_item_names_fix118_20260518_081512.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_admin_db_view_fix119_20260518_083745.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
@@ -133,6 +134,7 @@ Known Graphify noise:
 | `web_v1/frontend/index.html` | Static UI shell. |
 | `web_v1/frontend/app.js` | Main browser state machine and UI actions. |
 | `web_v1/frontend/styles.css` | UI styling, simple/detail mode visibility. |
+| `web_v1/frontend/admin_db.html`, `admin_db.js`, `admin_db.css` | Read-only browser DB viewer for `C:\ERP_DB\learned_data.db`. |
 | `tax_crawler/` | Portal handlers and crawler entry points for tax invoice PDF capture/parsing. |
 | `manager_server/` | Legacy/manager-side desktop automation reference. |
 | `web_v1/deploy/` | Operating server and manager PC setup scripts. |
@@ -175,6 +177,9 @@ High-value routes:
 | `POST /api/invoices/manual-purchase` | Manual purchase intake from uploaded PDFs. |
 | `PATCH /api/invoices/{invoice_id}/purchase-analysis` | Save edited analysis/item data. |
 | `PATCH /api/invoices/{invoice_id}/regular-data` | Save edited regular ERP fields/items/accounts. |
+| `GET /admin-db` | Browser DB viewer page. |
+| `GET /api/admin/db/overview` | Lists current SQLite tables, row counts, and columns. |
+| `GET /api/admin/db/table` | Read-only table rows with keyword search and limit. |
 | `GET /api/jobs/{job_id}/events` | Server-sent job progress events. |
 
 ## Job Lifecycle

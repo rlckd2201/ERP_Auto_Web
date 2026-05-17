@@ -6,6 +6,7 @@ import io
 import json
 import logging
 import shutil
+import sqlite3
 import threading
 import time
 import zipfile
@@ -1181,6 +1182,14 @@ def version() -> dict[str, Any]:
     }
 
 
+@app.get("/admin-db", include_in_schema=False)
+def admin_db_page() -> FileResponse:
+    page = FRONTEND_DIR / "admin_db.html"
+    if not page.exists():
+        raise HTTPException(status_code=404, detail="DB viewer page not found")
+    return FileResponse(page)
+
+
 @app.get("/", include_in_schema=False)
 def frontend_index() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
@@ -1437,6 +1446,83 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
     )
     worker.submit(job)
     return job.to_response()
+
+
+def _admin_db_conn() -> sqlite3.Connection:
+    if not settings.sqlite_db_path.exists():
+        raise HTTPException(status_code=404, detail=f"DB file not found: {settings.sqlite_db_path}")
+    conn = sqlite3.connect(str(settings.sqlite_db_path), timeout=10.0)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def _quote_identifier(value: str) -> str:
+    return '"' + value.replace('"', '""') + '"'
+
+
+def _admin_table_names(conn: sqlite3.Connection) -> list[str]:
+    cur = conn.execute(
+        """
+        SELECT name
+        FROM sqlite_master
+        WHERE type='table'
+          AND name NOT LIKE 'sqlite_%'
+        ORDER BY name
+        """
+    )
+    return [str(row["name"]) for row in cur.fetchall()]
+
+
+@app.get("/api/admin/db/overview")
+def api_admin_db_overview() -> dict[str, Any]:
+    with _admin_db_conn() as conn:
+        tables = []
+        for table_name in _admin_table_names(conn):
+            quoted = _quote_identifier(table_name)
+            count = int(conn.execute(f"SELECT COUNT(*) AS count FROM {quoted}").fetchone()["count"])
+            columns = [
+                {"name": str(row["name"]), "type": str(row["type"] or "")}
+                for row in conn.execute(f"PRAGMA table_info({quoted})").fetchall()
+            ]
+            tables.append({"name": table_name, "count": count, "columns": columns})
+    return {"db_path": str(settings.sqlite_db_path), "tables": tables}
+
+
+@app.get("/api/admin/db/table")
+def api_admin_db_table(
+    table: str = Query(..., min_length=1, max_length=80),
+    q: str = Query(default="", max_length=200),
+    limit: int = Query(default=100, ge=1, le=500),
+    offset: int = Query(default=0, ge=0),
+) -> dict[str, Any]:
+    with _admin_db_conn() as conn:
+        table_names = set(_admin_table_names(conn))
+        if table not in table_names:
+            raise HTTPException(status_code=404, detail="Unknown table")
+        quoted = _quote_identifier(table)
+        column_rows = conn.execute(f"PRAGMA table_info({quoted})").fetchall()
+        columns = [str(row["name"]) for row in column_rows]
+        where = ""
+        params: list[Any] = []
+        keyword = q.strip()
+        if keyword and columns:
+            where = " WHERE " + " OR ".join(f"CAST({_quote_identifier(col)} AS TEXT) LIKE ?" for col in columns)
+            params = [f"%{keyword}%"] * len(columns)
+        total = int(conn.execute(f"SELECT COUNT(*) AS count FROM {quoted}{where}", params).fetchone()["count"])
+        order_column = "id" if "id" in columns else (columns[0] if columns else "rowid")
+        rows = conn.execute(
+            f"SELECT * FROM {quoted}{where} ORDER BY {_quote_identifier(order_column)} DESC LIMIT ? OFFSET ?",
+            [*params, limit, offset],
+        ).fetchall()
+    return {
+        "db_path": str(settings.sqlite_db_path),
+        "table": table,
+        "columns": columns,
+        "rows": [{column: row[column] for column in columns} for row in rows],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
 
 
 @app.get("/api/invoices")

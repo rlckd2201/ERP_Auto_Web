@@ -104,6 +104,20 @@ const els = {
   stages: [...document.querySelectorAll("[data-stage]")],
 };
 
+function ensureAdminDbButton() {
+  if (document.querySelector("#adminDbButton")) return;
+  const host = document.querySelector(".top-actions");
+  if (!host) return;
+  const button = document.createElement("a");
+  button.id = "adminDbButton";
+  button.className = "button secondary admin-only";
+  button.href = "/admin-db";
+  button.target = "_blank";
+  button.rel = "noopener";
+  button.textContent = "DB 보기";
+  host.insertBefore(button, els.purchaseCollectButton || els.demoButton || null);
+}
+
 function isLocalhost() {
   return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
 }
@@ -1822,6 +1836,7 @@ els.statusFilterButtons.forEach((button) => {
 });
 
 async function bootstrap() {
+  ensureAdminDbButton();
   applyDetailMode();
   registerServiceWorker();
   if (!state.user?.id) {
