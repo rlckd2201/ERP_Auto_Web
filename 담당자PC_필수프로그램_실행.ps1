@@ -2,4 +2,4 @@
 $Root = "C:\Users\user\Desktop\개발파일\회계업무 자동화_WEB_Version"
 $env:WEB_SERVER_URL = "https://172.17.39.121:8080"
 $env:PYTHON_EXE = "C:\Users\user\AppData\Local\Programs\Python\Python311\python.exe"
-powershell -ExecutionPolicy Bypass -File "$Root\web_v1\deploy\start_user_erp_agent.ps1"
+powershell -NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File "$Root\web_v1\deploy\start_user_erp_agent.ps1"

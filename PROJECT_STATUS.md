@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.112`.
+- Current WEB/Agent version in files: `1.0.113`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -59,6 +59,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after expense report settlement/payee fix122: `C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip`.
 - Latest local deployment ZIP after selective output document fix123: `C:\Tmp\accounting_web_v1_selective_output_docs_fix123_20260518_111609.zip`.
 - Latest local deployment ZIP after KT vendor business-number row selection fix124: `C:\Tmp\accounting_web_v1_kt_vendor_biz_select_fix124_20260518_113617.zip`.
+- Latest local deployment ZIP after KT UIA-object vendor selection fix125: `C:\Tmp\accounting_web_v1_kt_vendor_uia_select_fix125_20260518_115418.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -109,7 +110,8 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix121` fixes purchase one-click ERP payload creation when supplier/vendor business number is absent. `build_purchase_erp_payload()` now defines `vendor_biz_no` before returning it to the Agent queue, so Compuzone-style purchase invoices no longer fail with `name 'vendor_biz_no' is not defined`.
 - `fix122` fills 현금출금결의서 정산금액 with the same value as 청구금액 and fills 지불처 from the purchase vendor name.
 - `fix123` adds selectable document-set cards in purchase detail and sends `selected_doc_keys` through the output-set API/worker so `개별 PDF 저장` and `개별 출력` only process the checked documents. `기존 문서 출력` and `통합본 PDF 저장` keep their full-set behavior.
-- `fix124` strengthens the KT/케이티 ERP 거래처 popup selection: matching now accepts row text that contains business number `102-81-42945` and double-clicks the matched row y-position instead of leaving the first highlighted vendor.
+- `fix124` strengthens the KT/케이티 ERP 거래처 popup selection: matching now accepts row text that contains business number `102-81-42945`.
+- `fix125` removes the row y-coordinate click heuristic for KT selection. It now finds UIA controls whose text/digits contain `102-81-42945`, walks candidate parent row controls, and activates the matched UI object with select/invoke/double-click/click fallback.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -356,4 +358,13 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Latest fix124 ZIP: C:\Tmp\accounting_web_v1_kt_vendor_biz_select_fix124_20260518_113617.zip.
 - Manager ERP automation now matches KT popup rows by contained digits/text for `102-81-42945`, so row-level UIA text like `3894 ... 102-81-42945 ...` is accepted.
 - The matched row y-coordinate is clicked/double-clicked from the left row area, avoiding accidental selection of the first highlighted row.
+- Verified `py_compile` for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`.
+
+## 2026-05-18 fix125 KT vendor business-number popup search
+
+- Active WEB/Agent files are now 1.0.113.
+- Latest fix125 ZIP: C:\Tmp\accounting_web_v1_kt_vendor_biz_search_fix125_20260518_121024.zip.
+- KT/케이티 duplicate vendor selection no longer guesses a row from popup y-coordinates or activates a result-row object.
+- For KT only, the Agent leaves the ERP vendor field blank, double-clicks it to open the 거래처 popup, changes the popup search condition to 사업자번호, enters `% 102-81-42945`, then presses Enter twice to search and confirm the exact vendor.
+- This applies across 대승, 대승정밀, and 일강 because the rule is vendor-based.
 - Verified `py_compile` for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`.
