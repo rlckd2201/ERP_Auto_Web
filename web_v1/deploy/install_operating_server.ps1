@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
@@ -59,6 +59,10 @@ Write-Host "[WEB v1.0] HTTPS certificate trusted for current Windows user"
 $emailId = if ($env:EMAIL_ID) { $env:EMAIL_ID } else { $DefaultEmailId }
 $emailPw = if ($env:EMAIL_PW) { $env:EMAIL_PW } else { $DefaultEmailPw }
 $geminiKey = if ($env:GEMINI_API_KEY) { $env:GEMINI_API_KEY } else { $DefaultGeminiApiKey }
+$passwordResetDomain = if ($env:PASSWORD_RESET_MAIL_DOMAIN) { $env:PASSWORD_RESET_MAIL_DOMAIN } else { "dae-seung.co.kr" }
+$passwordResetUser = if ($env:PASSWORD_RESET_SMTP_USER) { $env:PASSWORD_RESET_SMTP_USER } elseif ($emailId -like "*@*") { ($emailId -split "@")[0] } else { $emailId }
+$passwordResetPw = if ($env:PASSWORD_RESET_SMTP_PW) { $env:PASSWORD_RESET_SMTP_PW } else { $emailPw }
+$passwordResetFrom = if ($env:PASSWORD_RESET_FROM) { $env:PASSWORD_RESET_FROM } elseif ($passwordResetUser -like "*@*") { $passwordResetUser } else { "$passwordResetUser@$passwordResetDomain" }
 
 $printers = @()
 try {
@@ -74,7 +78,7 @@ $ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } 
 $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($gjAuto) { $gjAuto } else { Read-Host "김제 프린터 이름 입력(Get-Printer 결과와 동일)" }
 
 @"
-APP_VERSION=1.0.107
+APP_VERSION=1.0.108
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
@@ -91,6 +95,13 @@ SQLITE_DB_PATH=C:\ERP_DB\learned_data.db
 IMAP_SERVER=imap.gmail.com
 EMAIL_ID=$emailId
 EMAIL_PW=$emailPw
+
+PASSWORD_RESET_MAIL_DOMAIN=$passwordResetDomain
+PASSWORD_RESET_SMTP_SERVER=35.216.76.148
+PASSWORD_RESET_SMTP_PORT=25
+PASSWORD_RESET_SMTP_USER=$passwordResetUser
+PASSWORD_RESET_SMTP_PW=$passwordResetPw
+PASSWORD_RESET_FROM=$passwordResetFrom
 
 GEMINI_API_KEY=$geminiKey
 

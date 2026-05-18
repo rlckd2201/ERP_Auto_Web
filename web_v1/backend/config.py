@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import os
 from dataclasses import dataclass
@@ -93,6 +93,12 @@ class Settings:
     imap_server: str = _env("IMAP_SERVER", "imap.gmail.com")
     email_id: str = _env("EMAIL_ID")
     email_pw: str = _env("EMAIL_PW")
+    password_reset_mail_domain: str = _env("PASSWORD_RESET_MAIL_DOMAIN", "dae-seung.co.kr")
+    password_reset_smtp_server: str = _env("PASSWORD_RESET_SMTP_SERVER", "35.216.76.148")
+    password_reset_smtp_port: int = _env_int("PASSWORD_RESET_SMTP_PORT", 25)
+    password_reset_smtp_user: str = _env("PASSWORD_RESET_SMTP_USER", _env("EMAIL_ID").split("@")[0])
+    password_reset_smtp_pw: str = _env("PASSWORD_RESET_SMTP_PW", _env("EMAIL_PW"))
+    password_reset_from: str = _env("PASSWORD_RESET_FROM", _env("EMAIL_ID") or "noreply@dae-seung.co.kr")
     gemini_api_key: str = _env("GEMINI_API_KEY")
     print_target_pyeongtaek: str = _env("PRINT_TARGET_PYEONGTAEK")
     print_target_gimje: str = _env("PRINT_TARGET_GIMJE")

@@ -15,7 +15,7 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-18, WEB/Agent files are at `1.0.107`. The latest local deployment ZIP is:
+As of 2026-05-18, WEB/Agent files are at `1.0.108`. The latest completed local deployment ZIP before the current password fix is:
 
 ```text
 C:\Tmp\accounting_web_v1_admin_db_view_fix119_20260518_083745.zip
@@ -37,6 +37,7 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - The auto-save APIs reset invoice status only when editable purchase/regular screen data actually changed. Existing completed document-set printing should not turn rows back to `대기중`.
 - Purchase analysis now actually calls Gemini for unknown purchase items when `GEMINI_API_KEY` is configured. Compuzone fallback parsing also simplifies common low-cost item names instead of keeping the full raw quote line.
 - The current WEB database can be inspected in a browser through `/admin-db`; the old CS `admin_viewer.py` endpoints are not part of the current WEB v1 API.
+- fix120 restores account recovery: deployment resets existing users once to `eotmd12!@`, first login forces a new password, and forgotten passwords require a mail verification code before setting a new password.
 
 Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
@@ -158,6 +159,9 @@ High-value routes:
 | `GET /health` | Server liveness/version/environment check. |
 | `GET /api/mail-collect/status` | Current automatic mail collection status. |
 | `POST /api/login` | User login plus setup status. |
+| `POST /api/password/change-initial` | Changes the forced first-login password after the user authenticates with the initial password. |
+| `POST /api/password/find` | Sends a password reset verification code to the user's company mail address. |
+| `POST /api/password/reset-with-code` | Verifies the mailed code and stores a new password. |
 | `GET /api/setup/status` | Required program / Agent / printer readiness. |
 | `POST /api/setup/printers` | Save printer mapping for 평택/김제/PDF targets. |
 | `POST /api/agent/heartbeat` | Manager PC Agent capability heartbeat. |

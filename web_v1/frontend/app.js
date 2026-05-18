@@ -10,6 +10,7 @@ const state = {
     }
   })(),
   setupStatus: null,
+  pendingLoginData: null,
   appLoaded: false,
   currentJobId: null,
   eventSource: null,
@@ -40,6 +41,22 @@ const els = {
   loginUserId: document.querySelector("#loginUserId"),
   loginPassword: document.querySelector("#loginPassword"),
   loginMessage: document.querySelector("#loginMessage"),
+  forgotPasswordButton: document.querySelector("#forgotPasswordButton"),
+  passwordChangeModal: document.querySelector("#passwordChangeModal"),
+  passwordChangeForm: document.querySelector("#passwordChangeForm"),
+  currentPasswordInput: document.querySelector("#currentPasswordInput"),
+  newPasswordInput: document.querySelector("#newPasswordInput"),
+  newPasswordConfirmInput: document.querySelector("#newPasswordConfirmInput"),
+  passwordChangeMessage: document.querySelector("#passwordChangeMessage"),
+  passwordFindModal: document.querySelector("#passwordFindModal"),
+  passwordFindForm: document.querySelector("#passwordFindForm"),
+  passwordFindUserId: document.querySelector("#passwordFindUserId"),
+  passwordCodeSendButton: document.querySelector("#passwordCodeSendButton"),
+  passwordResetCode: document.querySelector("#passwordResetCode"),
+  passwordFindNewPassword: document.querySelector("#passwordFindNewPassword"),
+  passwordFindNewPasswordConfirm: document.querySelector("#passwordFindNewPasswordConfirm"),
+  passwordFindMessage: document.querySelector("#passwordFindMessage"),
+  passwordFindCloseButton: document.querySelector("#passwordFindCloseButton"),
   setupSummary: document.querySelector("#setupSummary"),
   setupChecks: document.querySelector("#setupChecks"),
   setupRefreshButton: document.querySelector("#setupRefreshButton"),
@@ -394,6 +411,46 @@ function showView(name) {
   els.setupNavButton?.classList.toggle("active", name === "setup");
 }
 
+function setPasswordChangeOpen(open, data = null) {
+  if (!els.passwordChangeModal) return;
+  els.passwordChangeModal.classList.toggle("hidden", !open);
+  document.body.classList.toggle("modal-open", open);
+  if (!open) return;
+  state.pendingLoginData = data || state.pendingLoginData;
+  if (els.currentPasswordInput) els.currentPasswordInput.value = els.loginPassword?.value || "";
+  if (els.newPasswordInput) els.newPasswordInput.value = "";
+  if (els.newPasswordConfirmInput) els.newPasswordConfirmInput.value = "";
+  if (els.passwordChangeMessage) els.passwordChangeMessage.textContent = "";
+  setTimeout(() => els.newPasswordInput?.focus(), 50);
+}
+
+function setPasswordFindOpen(open) {
+  if (!els.passwordFindModal) return;
+  els.passwordFindModal.classList.toggle("hidden", !open);
+  document.body.classList.toggle("modal-open", open);
+  if (!open) return;
+  if (els.passwordFindUserId && els.loginUserId?.value) els.passwordFindUserId.value = els.loginUserId.value.trim();
+  if (els.passwordResetCode) els.passwordResetCode.value = "";
+  if (els.passwordFindNewPassword) els.passwordFindNewPassword.value = "";
+  if (els.passwordFindNewPasswordConfirm) els.passwordFindNewPasswordConfirm.value = "";
+  if (els.passwordFindMessage) els.passwordFindMessage.textContent = "";
+  setTimeout(() => els.passwordFindUserId?.focus(), 50);
+}
+
+async function continueAfterLogin(data) {
+  state.pendingLoginData = null;
+  state.user = data.user;
+  localStorage.setItem("accountingWebUser", JSON.stringify(data.user));
+  renderSetupStatus(data.setup);
+  if (data.setup?.ready) await showApp();
+  else {
+    showView("setup");
+    if (!agentConnectedFromSetup()) {
+      autoStartAgentAfterLogin({ downloadFallback: true });
+    }
+  }
+}
+
 function checkClass(check) {
   return check.ok ? "ok" : "warn";
 }
@@ -645,18 +702,85 @@ async function handleLogin(event) {
         password: els.loginPassword.value,
       }),
     });
-    state.user = data.user;
-    localStorage.setItem("accountingWebUser", JSON.stringify(data.user));
-    renderSetupStatus(data.setup);
-    if (data.setup?.ready) await showApp();
-    else {
-      showView("setup");
-      if (!agentConnectedFromSetup()) {
-        autoStartAgentAfterLogin({ downloadFallback: true });
-      }
+    if (data.password_change_required || data.user?.is_initial) {
+      setPasswordChangeOpen(true, data);
+      return;
     }
+    await continueAfterLogin(data);
   } catch (error) {
     if (els.loginMessage) els.loginMessage.textContent = error.message;
+  }
+}
+
+async function handleInitialPasswordChange(event) {
+  event.preventDefault();
+  if (els.passwordChangeMessage) els.passwordChangeMessage.textContent = "";
+  const newPassword = els.newPasswordInput?.value || "";
+  const confirmPassword = els.newPasswordConfirmInput?.value || "";
+  if (newPassword !== confirmPassword) {
+    if (els.passwordChangeMessage) els.passwordChangeMessage.textContent = "새 비밀번호가 서로 다릅니다.";
+    return;
+  }
+  try {
+    const data = await requestJson("/api/password/change-initial", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: state.pendingLoginData?.user?.id || els.loginUserId.value.trim(),
+        current_password: els.currentPasswordInput?.value || els.loginPassword.value,
+        new_password: newPassword,
+      }),
+    });
+    setPasswordChangeOpen(false);
+    if (els.loginPassword) els.loginPassword.value = "";
+    await continueAfterLogin(data);
+  } catch (error) {
+    if (els.passwordChangeMessage) els.passwordChangeMessage.textContent = error.message;
+  }
+}
+
+async function sendPasswordResetCode() {
+  if (els.passwordFindMessage) els.passwordFindMessage.textContent = "";
+  const userId = els.passwordFindUserId?.value.trim() || "";
+  if (!userId) {
+    if (els.passwordFindMessage) els.passwordFindMessage.textContent = "아이디를 입력하세요.";
+    return;
+  }
+  try {
+    const data = await requestJson("/api/password/find", {
+      method: "POST",
+      body: JSON.stringify({ user_id: userId }),
+    });
+    if (els.passwordFindMessage) els.passwordFindMessage.textContent = data.message || "인증코드를 발송했습니다.";
+    setTimeout(() => els.passwordResetCode?.focus(), 50);
+  } catch (error) {
+    if (els.passwordFindMessage) els.passwordFindMessage.textContent = error.message;
+  }
+}
+
+async function handlePasswordResetWithCode(event) {
+  event.preventDefault();
+  if (els.passwordFindMessage) els.passwordFindMessage.textContent = "";
+  const newPassword = els.passwordFindNewPassword?.value || "";
+  const confirmPassword = els.passwordFindNewPasswordConfirm?.value || "";
+  if (newPassword !== confirmPassword) {
+    if (els.passwordFindMessage) els.passwordFindMessage.textContent = "새 비밀번호가 서로 다릅니다.";
+    return;
+  }
+  try {
+    const data = await requestJson("/api/password/reset-with-code", {
+      method: "POST",
+      body: JSON.stringify({
+        user_id: els.passwordFindUserId?.value.trim() || "",
+        code: els.passwordResetCode?.value.trim() || "",
+        new_password: newPassword,
+      }),
+    });
+    if (els.passwordFindMessage) els.passwordFindMessage.textContent = data.message || "비밀번호를 변경했습니다.";
+    if (els.loginUserId && els.passwordFindUserId) els.loginUserId.value = els.passwordFindUserId.value.trim();
+    if (els.loginPassword) els.loginPassword.value = "";
+    setTimeout(() => setPasswordFindOpen(false), 900);
+  } catch (error) {
+    if (els.passwordFindMessage) els.passwordFindMessage.textContent = error.message;
   }
 }
 
@@ -1651,6 +1775,14 @@ function selectSingleInvoice(invoiceId) {
 }
 
 els.loginForm?.addEventListener("submit", handleLogin);
+els.passwordChangeForm?.addEventListener("submit", handleInitialPasswordChange);
+els.forgotPasswordButton?.addEventListener("click", () => setPasswordFindOpen(true));
+els.passwordFindCloseButton?.addEventListener("click", () => setPasswordFindOpen(false));
+els.passwordFindModal?.addEventListener("click", (event) => {
+  if (event.target === els.passwordFindModal) setPasswordFindOpen(false);
+});
+els.passwordCodeSendButton?.addEventListener("click", sendPasswordResetCode);
+els.passwordFindForm?.addEventListener("submit", handlePasswordResetWithCode);
 els.setupRefreshButton?.addEventListener("click", () => loadSetupStatus({ showReadyApp: false }));
 els.setupSavePrintersButton?.addEventListener("click", savePrinterMapping);
 els.setupInstallButton?.addEventListener("click", requestSetupInstall);
@@ -1727,7 +1859,10 @@ if (els.manualUploadModal) {
 }
 els.manualCreatePurchaseButton?.addEventListener("click", createManualPurchaseInvoice);
 document.addEventListener("keydown", (event) => {
-  if (event.key === "Escape") setManualUploadOpen(false);
+  if (event.key === "Escape") {
+    setManualUploadOpen(false);
+    setPasswordFindOpen(false);
+  }
 });
 if (els.taxInvoiceFileInput) els.taxInvoiceFileInput.addEventListener("change", async (event) => {
   const invoiceId = singleSelectedInvoiceId();

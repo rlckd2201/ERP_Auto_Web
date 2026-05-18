@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 import json
+import random
 import sqlite3
+import smtplib
+import string
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
+from email.mime.text import MIMEText
+from email.utils import formatdate, make_msgid
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +33,8 @@ DEFAULT_USERS = [
     ("tuy1120", "담당자", "eotmd12!@", 1),
     ("rlckd9646", "김기창", "eotmd12!@", 1),
 ]
+INITIAL_PASSWORD = "eotmd12!@"
+AUTH_RESET_MARKER = "fix120_initial_password_reset_eotmd12"
 
 
 def now_text() -> str:
@@ -76,10 +83,40 @@ def init_auth_db() -> None:
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_meta (
+                key TEXT PRIMARY KEY,
+                value TEXT,
+                updated_at TEXT
+            )
+            """
+        )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS password_reset_codes (
+                user_id TEXT PRIMARY KEY,
+                code TEXT,
+                expires_at TEXT,
+                created_at TEXT
+            )
+            """
+        )
         for user_id, name, password, is_initial in DEFAULT_USERS:
             conn.execute(
                 "INSERT OR IGNORE INTO users (id, name, pw, is_initial) VALUES (?, ?, ?, ?)",
                 (user_id, name, password, is_initial),
+            )
+        marker = conn.execute("SELECT value FROM auth_meta WHERE key = 'initial_password_reset_marker'").fetchone()
+        if not marker or marker["value"] != AUTH_RESET_MARKER:
+            conn.execute("UPDATE users SET pw = ?, is_initial = 1", (INITIAL_PASSWORD,))
+            conn.execute(
+                """
+                INSERT INTO auth_meta (key, value, updated_at)
+                VALUES ('initial_password_reset_marker', ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                (AUTH_RESET_MARKER, now_text()),
             )
         conn.commit()
 
@@ -132,6 +169,114 @@ def authenticate_user(user_id: str, password: str) -> dict[str, Any] | None:
     if not row:
         return None
     return {"id": row["id"], "name": row["name"] or row["id"], "is_initial": bool(row["is_initial"])}
+
+
+def _password_reset_email(user_id: str) -> str:
+    if "@" in user_id:
+        return user_id
+    return f"{user_id}@{settings.password_reset_mail_domain}"
+
+
+def _send_password_reset_code(email: str, code: str) -> None:
+    msg = MIMEText(
+        f"회계업무 자동화 WEB 비밀번호 변경 인증코드입니다.\n\n인증코드: {code}\n\n10분 안에 화면에 입력하고 새 비밀번호로 변경하세요.",
+        _charset="utf-8",
+    )
+    msg["Subject"] = "[전산팀] 회계업무 자동화 WEB 비밀번호 변경 인증코드"
+    msg["From"] = settings.password_reset_from
+    msg["To"] = email
+    msg["Date"] = formatdate(localtime=True)
+    msg["Message-ID"] = make_msgid()
+    with smtplib.SMTP(settings.password_reset_smtp_server, settings.password_reset_smtp_port, timeout=10) as smtp:
+        smtp.ehlo()
+        if smtp.has_extn("STARTTLS"):
+            smtp.starttls()
+            smtp.ehlo()
+        if settings.password_reset_smtp_user and settings.password_reset_smtp_pw:
+            smtp.login(settings.password_reset_smtp_user, settings.password_reset_smtp_pw)
+        smtp.send_message(msg)
+
+
+def request_password_reset_code(user_id: str) -> dict[str, Any] | None:
+    init_auth_db()
+    user_id = str(user_id or "").strip()
+    if not user_id:
+        return None
+    code = "".join(random.choices(string.digits, k=6))
+    created_at = now_text()
+    expires_at = (datetime.now() + timedelta(minutes=10)).isoformat(timespec="seconds")
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, name FROM users WHERE id = ?", (user_id,)).fetchone()
+        if not row:
+            return None
+        email = _password_reset_email(str(row["id"]))
+        conn.execute(
+            """
+            INSERT INTO password_reset_codes (user_id, code, expires_at, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                code = excluded.code,
+                expires_at = excluded.expires_at,
+                created_at = excluded.created_at
+            """,
+            (user_id, code, expires_at, created_at),
+        )
+        conn.commit()
+    _send_password_reset_code(email, code)
+    return {"id": row["id"], "name": row["name"] or row["id"], "email": email}
+
+
+def reset_password_with_code(user_id: str, code: str, new_password: str) -> dict[str, Any]:
+    init_auth_db()
+    user_id = str(user_id or "").strip()
+    code = str(code or "").strip()
+    new_password = str(new_password or "").strip()
+    if not user_id or not code or not new_password:
+        raise ValueError("아이디, 인증코드, 새 비밀번호를 모두 입력하세요.")
+    if len(new_password) < 8:
+        raise ValueError("새 비밀번호는 8자 이상으로 입력하세요.")
+    if new_password == INITIAL_PASSWORD:
+        raise ValueError("초기 비밀번호와 다른 새 비밀번호를 입력하세요.")
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, name FROM users WHERE id = ?", (user_id,)).fetchone()
+        reset = conn.execute("SELECT code, expires_at FROM password_reset_codes WHERE user_id = ?", (user_id,)).fetchone()
+        if not row or not reset:
+            raise ValueError("인증코드를 먼저 받아주세요.")
+        try:
+            expired = datetime.fromisoformat(str(reset["expires_at"])) < datetime.now()
+        except Exception:
+            expired = True
+        if expired:
+            raise ValueError("인증코드 유효시간이 지났습니다. 다시 받아주세요.")
+        if str(reset["code"]) != code:
+            raise ValueError("인증코드가 맞지 않습니다.")
+        conn.execute("UPDATE users SET pw = ?, is_initial = 0 WHERE id = ?", (new_password, user_id))
+        conn.execute("DELETE FROM password_reset_codes WHERE user_id = ?", (user_id,))
+        conn.commit()
+    return {"id": row["id"], "name": row["name"] or row["id"], "is_initial": False}
+
+
+def change_initial_password(user_id: str, current_password: str, new_password: str) -> dict[str, Any]:
+    init_auth_db()
+    user_id = str(user_id or "").strip()
+    current_password = str(current_password or "").strip()
+    new_password = str(new_password or "").strip()
+    if not user_id or not current_password or not new_password:
+        raise ValueError("아이디, 현재 비밀번호, 새 비밀번호를 모두 입력하세요.")
+    if len(new_password) < 8:
+        raise ValueError("새 비밀번호는 8자 이상으로 입력하세요.")
+    if new_password == INITIAL_PASSWORD:
+        raise ValueError("초기 비밀번호와 다른 새 비밀번호를 입력하세요.")
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, name, is_initial FROM users WHERE id = ? AND pw = ?",
+            (user_id, current_password),
+        ).fetchone()
+        if not row:
+            raise ValueError("현재 비밀번호가 맞지 않습니다.")
+        conn.execute("UPDATE users SET pw = ?, is_initial = 0 WHERE id = ?", (new_password, user_id))
+        conn.commit()
+    return {"id": row["id"], "name": row["name"] or row["id"], "is_initial": False}
 
 
 def record_agent_heartbeat(agent_id: str, capabilities: dict[str, Any] | None, client_ip: str = "") -> dict[str, Any]:

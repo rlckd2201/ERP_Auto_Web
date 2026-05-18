@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>회계업무 자동화 WEB v1.0</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=20260515_fix113_smileedi">
+  <link rel="stylesheet" href="/assets/styles.css?v=20260518_fix120_password">
 </head>
 <body>
   <section id="loginView" class="gate-view">
@@ -21,6 +21,7 @@
         <label>비밀번호<input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
         <button class="button primary" type="submit">로그인</button>
       </form>
+      <button id="forgotPasswordButton" class="button ghost login-link-button" type="button">비밀번호 찾기</button>
       <p id="loginMessage" class="gate-message"></p>
     </div>
   </section>
@@ -299,6 +300,45 @@
     </div>
   </div>
 
-  <script src="/assets/app.js?v=20260515_fix113_smileedi" defer></script>
+  <div id="passwordChangeModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="passwordChangeTitle">
+    <div class="modal-card password-modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 id="passwordChangeTitle">초기 비밀번호 변경</h2>
+          <p>처음 로그인한 계정은 새 비밀번호로 바꾼 뒤 사용할 수 있습니다.</p>
+        </div>
+      </div>
+      <form id="passwordChangeForm" class="login-form">
+        <label>현재 비밀번호<input id="currentPasswordInput" name="current_password" type="password" autocomplete="current-password" required></label>
+        <label>새 비밀번호<input id="newPasswordInput" name="new_password" type="password" autocomplete="new-password" minlength="8" required></label>
+        <label>새 비밀번호 확인<input id="newPasswordConfirmInput" name="new_password_confirm" type="password" autocomplete="new-password" minlength="8" required></label>
+        <button class="button primary" type="submit">비밀번호 변경</button>
+      </form>
+      <p id="passwordChangeMessage" class="gate-message"></p>
+    </div>
+  </div>
+
+  <div id="passwordFindModal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="passwordFindTitle">
+    <div class="modal-card password-modal-card">
+      <div class="modal-header">
+        <div>
+          <h2 id="passwordFindTitle">비밀번호 찾기</h2>
+          <p>아이디를 입력해 인증코드를 받은 뒤 새 비밀번호로 변경합니다.</p>
+        </div>
+        <button id="passwordFindCloseButton" class="button ghost icon-button" type="button" aria-label="닫기">×</button>
+      </div>
+      <form id="passwordFindForm" class="login-form">
+        <label>아이디<input id="passwordFindUserId" name="user_id" autocomplete="username" required></label>
+        <button id="passwordCodeSendButton" class="button secondary" type="button">인증코드 받기</button>
+        <label>인증코드<input id="passwordResetCode" name="code" inputmode="numeric" maxlength="6" autocomplete="one-time-code"></label>
+        <label>새 비밀번호<input id="passwordFindNewPassword" name="new_password" type="password" autocomplete="new-password" minlength="8"></label>
+        <label>새 비밀번호 확인<input id="passwordFindNewPasswordConfirm" name="new_password_confirm" type="password" autocomplete="new-password" minlength="8"></label>
+        <button class="button primary" type="submit">새 비밀번호로 변경</button>
+      </form>
+      <p id="passwordFindMessage" class="gate-message"></p>
+    </div>
+  </div>
+
+  <script src="/assets/app.js?v=20260518_fix120_password" defer></script>
 </body>
 </html>

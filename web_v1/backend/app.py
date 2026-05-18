@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import base64
@@ -42,6 +42,7 @@ from .purchase_analysis import (
 )
 from .setup_state import (
     authenticate_user,
+    change_initial_password,
     claim_install_job,
     complete_install_job,
     create_install_job,
@@ -50,6 +51,8 @@ from .setup_state import (
     init_auth_db,
     init_setup_db,
     record_agent_heartbeat,
+    request_password_reset_code,
+    reset_password_with_code,
     save_printer_mapping,
     setup_status,
     touch_agent_seen,
@@ -785,6 +788,62 @@ async def api_login(request: Request) -> dict[str, Any]:
     user = authenticate_user(user_id, password)
     if not user:
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
+    status = setup_status(user_id=user["id"], client_ip=client_ip(request))
+    return {
+        "ok": True,
+        "user": user,
+        "password_change_required": bool(user.get("is_initial")),
+        "setup_required": not status["ready"],
+        "setup": status,
+    }
+
+
+@app.post("/api/password/find")
+async def api_password_find(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    user_id = str(payload.get("user_id") or payload.get("id") or "").strip()
+    try:
+        user = request_password_reset_code(user_id)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"인증코드 메일 발송에 실패했습니다: {exc}") from exc
+    if not user:
+        raise HTTPException(status_code=404, detail="등록된 아이디를 찾지 못했습니다.")
+    return {
+        "ok": True,
+        "user": user,
+        "message": f"인증코드를 사내 메일({user.get('email')})로 발송했습니다.",
+    }
+
+
+@app.post("/api/password/reset-with-code")
+async def api_password_reset_with_code(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    try:
+        user = reset_password_with_code(
+            str(payload.get("user_id") or payload.get("id") or "").strip(),
+            str(payload.get("code") or "").strip(),
+            str(payload.get("new_password") or "").strip(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {
+        "ok": True,
+        "user": user,
+        "message": "비밀번호를 변경했습니다. 새 비밀번호로 로그인하세요.",
+    }
+
+
+@app.post("/api/password/change-initial")
+async def api_password_change_initial(request: Request) -> dict[str, Any]:
+    payload = await request.json()
+    try:
+        user = change_initial_password(
+            str(payload.get("user_id") or payload.get("id") or "").strip(),
+            str(payload.get("current_password") or payload.get("password") or "").strip(),
+            str(payload.get("new_password") or "").strip(),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     status = setup_status(user_id=user["id"], client_ip=client_ip(request))
     return {"ok": True, "user": user, "setup_required": not status["ready"], "setup": status}
 
