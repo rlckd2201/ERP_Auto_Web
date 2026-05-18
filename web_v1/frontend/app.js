@@ -27,6 +27,7 @@ const state = {
   mailCollectTimer: null,
   setupWasReady: false,
   agentAutoStartAttempted: false,
+  setupDownloadPrompted: false,
   approvalPollTimer: null,
   oneClickOutputTarget: localStorage.getItem(ONE_CLICK_OUTPUT_STORAGE_KEY) || "",
   detailMode: localStorage.getItem("accountingWebDetailMode") === "1",
@@ -446,7 +447,7 @@ async function continueAfterLogin(data) {
   else {
     showView("setup");
     if (!agentConnectedFromSetup()) {
-      autoStartAgentAfterLogin({ downloadFallback: true });
+      autoStartAgentAfterLogin({ downloadFallback: false });
     }
   }
 }
@@ -538,6 +539,28 @@ function downloadUserPcInstaller() {
   alert("다운로드된 AccountingWebRequiredSetup.exe 파일을 열어 설치하세요. 설치가 끝나면 트레이 아이콘으로 자동 실행됩니다.");
 }
 
+async function requestInstalledAgentStart({ offerDownload = false } = {}) {
+  state.setupDownloadPrompted = false;
+  requestAgentStartByProtocol();
+  if (els.setupSummary) {
+    els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 브라우저 확인창이 나오면 열기를 누르세요.";
+  }
+  setTimeout(async () => {
+    if (!state.user?.id || agentConnectedFromSetup()) return;
+    try {
+      const status = await loadSetupStatus({ showReadyApp: false });
+      if (status?.ready || agentConnectedFromSetup()) return;
+    } catch {}
+    if (!offerDownload || state.setupDownloadPrompted) return;
+    state.setupDownloadPrompted = true;
+    const shouldDownload = window.confirm(
+      "설치된 필수 프로그램이 아직 연결되지 않았습니다.\n\n처음 설치하는 PC이거나 바탕화면 실행 아이콘도 없을 때만 설치 EXE를 다시 다운로드하세요.\n설치 파일을 다운로드할까요?"
+    );
+    if (shouldDownload) downloadUserPcInstaller();
+  }, 7000);
+}
+
+
 function requestAgentStartByProtocol() {
   const url = `accountingweb://start?server=${encodeURIComponent(window.location.origin)}`;
   const link = document.createElement("a");
@@ -563,10 +586,14 @@ function autoStartAgentAfterLogin({ downloadFallback = false } = {}) {
     try {
       const status = await loadSetupStatus({ showReadyApp: false });
       if (status && !agentConnectedFromSetup()) {
-        downloadUserPcInstaller();
+        if (els.setupSummary) {
+          els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 처음 설치하는 PC라면 설치 버튼을 눌러 EXE를 다운로드하세요.";
+        }
       }
     } catch {
-      downloadUserPcInstaller();
+      if (els.setupSummary) {
+        els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 처음 설치하는 PC라면 설치 버튼을 눌러 EXE를 다운로드하세요.";
+      }
     }
   }, 7000);
 }
@@ -804,7 +831,7 @@ async function savePrinterMapping() {
 
 async function requestSetupInstall() {
   if (!agentConnectedFromSetup() || agentUpdateRequiredFromSetup()) {
-    downloadUserPcInstaller();
+    await requestInstalledAgentStart({ offerDownload: !agentConnectedFromSetup() });
     return;
   }
   const companies = missingCompaniesFromSetup();

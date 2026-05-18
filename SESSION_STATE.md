@@ -1,10 +1,10 @@
 # SESSION STATE
 
 ## 현재 작업
-- fix127 KT/케이티 거래처 마지막 Enter 2회 수정
+- fix128 필수 프로그램 EXE 반복 다운로드 방지
 
 ## 현재 수정중 파일
-- manager_server/전표 자동화 프로그램(담당자용)_v6.2.py
+- web_v1/frontend/app.js
 - web_v1/VERSION
 - web_v1/agent/erp_agent.py
 - web_v1/deploy/install_operating_server.ps1
@@ -13,16 +13,18 @@
 - CODEBASE_WIKI.md
 
 ## 방금 수정한 내용
-- KT 거래처 키보드 시퀀스 마지막 확정을 Enter 1회에서 Enter 2회로 변경
-- WEB/Agent 버전 1.0.115 bump
+- 로그인 후 Agent 미연결 시 EXE 자동 다운로드 fallback 제거
+- 설치 버튼은 먼저 accountingweb://start 프로토콜로 기존 설치 실행기를 호출
+- 연결 실패 시 처음 설치 PC인지 확인 후에만 EXE 다운로드
+- WEB/Agent 버전 1.0.116 bump
 
 ## 다음 작업
+- frontend node syntax 검증
 - py_compile 검증
 - Graphify update
-- fix127 ZIP 생성/검증
+- fix128 ZIP 생성/검증
 - 관련 파일만 stage/commit/push
-- 운영서버 배포 명령어 제공
 
 ## 주의사항
-- 결과 행 좌표 선택 금지
-- 최종 시퀀스는 102-81-42945, Tab 4, ↓ 5, ↑ 1, Tab 3, Enter 2
+- 이미 설치된 PC는 같은 EXE를 다시 받을 필요 없음
+- EXE 자체는 실행 시 최신 payload를 서버에서 다운로드하는 bootstrapper

@@ -1,11 +1,11 @@
 # Graph Report - 회계업무 자동화_WEB_Version  (2026-05-18)
 
 ## Corpus Check
-- 233 files · ~269,180 words
+- 233 files · ~269,538 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1382 nodes · 4372 edges · 36 communities detected
+- 1383 nodes · 4374 edges · 36 communities detected
 - Extraction: 83% EXTRACTED · 17% INFERRED · 0% AMBIGUOUS · INFERRED: 757 edges (avg confidence: 0.78)
 - Token cost: 0 input · 0 output
 
@@ -75,7 +75,7 @@
 
 ### Community 0 - "Community 0"
 Cohesion: 0.04
-Nodes (20): _start_mail_collect_scheduler(), loadOverview(), loadTable(), renderRows(), renderTables(), requestJson(), showError(), AppManager (+12 more)
+Nodes (24): api_agent_job_event(), api_agent_next_task(), _start_mail_collect_scheduler(), write_output_print_queue(), JobWorker, loadOverview(), loadTable(), renderRows() (+16 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.07
@@ -86,28 +86,28 @@ Cohesion: 0.04
 Nodes (55): ABC, _add_months(), BaseTaxInvoiceHandler, digits_only(), _do_process(), _get_chromedriver_service(), _is_stable(), _period_rule_key() (+47 more)
 
 ### Community 3 - "Community 3"
-Cohesion: 0.07
-Nodes (72): _add_installer_file(), _add_installer_tree(), _admin_db_conn(), _admin_table_names(), _agent_bootstrap_script(), _agent_cmd_launcher(), _agent_exe_launcher(), _agent_installer_script() (+64 more)
+Cohesion: 0.06
+Nodes (75): _add_installer_file(), _add_installer_tree(), _admin_db_conn(), _admin_table_names(), _agent_bootstrap_script(), _agent_cmd_launcher(), _agent_exe_launcher(), _agent_installer_script() (+67 more)
 
 ### Community 4 - "Community 4"
-Cohesion: 0.07
-Nodes (76): _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task(), _task_files(), update_erp_task(), _write_task(), api_agent_job_complete() (+68 more)
-
-### Community 5 - "Community 5"
 Cohesion: 0.08
 Nodes (74): api_create_manual_purchase_invoice(), _check_playwright_runtime(), fetch_approval_documents(), build_purchase_erp_payload(), build_regular_erp_payload(), _clean_text(), _configure_pyautogui_for_server(), _corp_codes() (+66 more)
 
-### Community 6 - "Community 6"
+### Community 5 - "Community 5"
 Cohesion: 0.07
 Nodes (19): _site_name_from_biz_no(), _clean_html_cell(), _clean_text(), _date_after(), _element_label(), _field_after(), _font_rows(), _format_biz_no() (+11 more)
 
-### Community 7 - "Community 7"
-Cohesion: 0.1
-Nodes (23): _app_version(), _env(), _env_bool(), _env_int(), _legacy_manager_path(), _load_env_file(), Settings, _version_file_default() (+15 more)
+### Community 6 - "Community 6"
+Cohesion: 0.14
+Nodes (55): _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task(), _task_files(), update_erp_task(), _write_task(), api_agent_job_complete() (+47 more)
 
-### Community 8 - "Community 8"
+### Community 7 - "Community 7"
 Cohesion: 0.08
 Nodes (45): _acquire_single_instance(), _agent_bundle_hash(), _agent_update_required(), AgentTray, _apply_server_setup_config(), _cert_cache_path(), _cert_store_has_thumbprint(), _cert_thumbprint() (+37 more)
+
+### Community 8 - "Community 8"
+Cohesion: 0.11
+Nodes (21): _app_version(), _env(), _env_bool(), _env_int(), _legacy_manager_path(), _load_env_file(), Settings, _version_file_default() (+13 more)
 
 ### Community 9 - "Community 9"
 Cohesion: 0.1
@@ -126,8 +126,8 @@ Cohesion: 0.1
 Nodes (37): AutoEverHandler(), crawl_invoice(), _csbill_link_bill_no(), _csbill_link_priority(), CsbillHandler(), decode_mime_header(), _dedupe_csbill_links(), detect_handler() (+29 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.34
-Nodes (26): add_invoice_log(), _clean_int(), _columns(), delete_invoice(), detect_invoice_type(), _ensure_column(), get_conn(), get_invoice_by_pdf_path() (+18 more)
+Cohesion: 0.11
+Nodes (42): _aggregate_expense_items(), _appdata_template_candidates(), _build_expense_report_text(), _clean_expense_item_name(), _clean_path(), _copy_or_merge_doc(), _docs_for_output(), _ensure_appdata_expense_template() (+34 more)
 
 ### Community 14 - "Community 14"
 Cohesion: 0.17
@@ -248,12 +248,10 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `SmileEdiHandler` connect `Community 6` to `Community 2`, `Community 19`?**
+- **Why does `SmileEdiHandler` connect `Community 5` to `Community 2`, `Community 19`?**
   _High betweenness centrality (0.034) - this node is a cross-community bridge._
-- **Why does `BaseTaxInvoiceHandler` connect `Community 2` to `Community 6`, `Community 9`, `Community 14`, `Community 19`, `Community 21`?**
+- **Why does `BaseTaxInvoiceHandler` connect `Community 2` to `Community 5`, `Community 9`, `Community 14`, `Community 19`, `Community 21`?**
   _High betweenness centrality (0.022) - this node is a cross-community bridge._
-- **Why does `HometaxHandler` connect `Community 9` to `Community 10`, `Community 2`, `Community 19`?**
-  _High betweenness centrality (0.017) - this node is a cross-community bridge._
 - **Are the 44 inferred relationships involving `RuntimeError` (e.g. with `.run()` and `._setup_slip_form()`) actually correct?**
   _`RuntimeError` has 44 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 26 inferred relationships involving `BaseTaxInvoiceHandler` (e.g. with `AutoEverHandler` and `CsbillHandler`) actually correct?**
@@ -262,3 +260,5 @@ _Questions this graph is uniquely positioned to answer:_
   _`get_invoice()` has 29 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`, `지정된 경로의 세금계산서 XML을 파싱하여 딕셔너리 3개를 반환합니다.`, `LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름` to the rest of the system?**
   _36 weakly-connected nodes found - possible documentation gaps or missing edges._
+- **Should `Community 0` be split into smaller, more focused modules?**
+  _Cohesion score 0.04 - nodes in this community are weakly interconnected._

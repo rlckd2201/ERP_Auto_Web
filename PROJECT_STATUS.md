@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.113`.
+- Current WEB/Agent version in files: `1.0.116`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -390,3 +390,11 @@ NaN
 - Latest fix127 ZIP: C:\Tmp\accounting_web_v1_kt_vendor_enter2_fix127_20260518_133540.zip.
 - KT 거래처 키보드 시퀀스 final confirmation now sends Enter twice after Tab x3.
 - Current KT sequence: double-click relation-item value, type `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter x2.
+
+## 2026-05-18 fix128 setup installer reuse
+
+- Active WEB/Agent files are now 1.0.116.
+- Latest fix128 ZIP: C:\Tmp\accounting_web_v1_setup_reuse_fix128_20260518_141900.zip.
+- The setup EXE is a bootstrapper: every run downloads the latest `/api/setup/user-pc-payload.zip` from the server and installs it into the fixed manager PC runtime folder.
+- Frontend no longer auto-downloads a fresh `AccountingWebRequiredSetup.exe` after login when the Agent is missing. It first calls the installed `accountingweb://start` protocol handler.
+- The setup/install button also calls the installed protocol first; only when the Agent still does not connect does it ask the user whether to download the EXE for first-time install.
