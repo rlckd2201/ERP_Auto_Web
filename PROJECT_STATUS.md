@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.107`.
+- Current WEB/Agent version in files: `1.0.109`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -54,7 +54,8 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Previous local deployment ZIP after no-op auto-save status reset fix117: `C:\Tmp\accounting_web_v1_noop_save_status_fix117_20260515_161724.zip`.
 - Previous local deployment ZIP after Compuzone AI/item-name fix118: `C:\Tmp\accounting_web_v1_compuzone_ai_item_names_fix118_20260518_081512.zip`.
 - Latest local deployment ZIP after admin DB viewer fix119: `C:\Tmp\accounting_web_v1_admin_db_view_fix119_20260518_083745.zip`.
-- Current work fix120 adds password recovery and first-login password change. The deploy ZIP will be created after verification.
+- Latest local deployment ZIP after password recovery fix120: `C:\Tmp\accounting_web_v1_password_recovery_fix120_20260518_094634.zip`.
+- Latest local deployment ZIP after purchase `vendor_biz_no` payload hotfix fix121: `C:\Tmp\accounting_web_v1_purchase_vendor_biz_fix121_20260518_101330.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -102,6 +103,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix118` reconnects the disabled Gemini purchase analysis call for unknown purchase items and adds deterministic Compuzone fallback item-name simplification, so first-time low-cost items do not stay as raw quote lines.
 - `fix119` adds a browser-based read-only DB viewer at `/admin-db`, backed by `/api/admin/db/overview` and `/api/admin/db/table`, so the current `C:\ERP_DB\learned_data.db` contents can be inspected without the old CS `admin_viewer.py`.
 - `fix120` resets existing WEB users to the initial password `eotmd12!@` once after deployment, marks them as initial-password users, forces a new-password change after login, and restores password recovery as a mail verification-code flow before setting a new password.
+- `fix121` fixes purchase one-click ERP payload creation when supplier/vendor business number is absent. `build_purchase_erp_payload()` now defines `vendor_biz_no` before returning it to the Agent queue, so Compuzone-style purchase invoices no longer fail with `name 'vendor_biz_no' is not defined`.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -310,4 +312,16 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Password recovery now sends a 6-digit verification code to `{user_id}@dae-seung.co.kr` by default and changes the password only after the code is confirmed.
 - SMTP password is not hardcoded in source. The server uses `PASSWORD_RESET_SMTP_PW`, or falls back to existing `EMAIL_PW`. For operation, deploy with `PASSWORD_RESET_SMTP_USER/PW=admpdm` and `PASSWORD_RESET_FROM=admpdm@dae-seung.co.kr`.
 - Verification passed: Python py_compile for `web_v1/backend/app.py`, `web_v1/backend/setup_state.py`, `web_v1/backend/config.py`, and `web_v1/agent/erp_agent.py`; `node --check web_v1/frontend/app.js`; FastAPI TestClient auth regression for initial-password login, forced change, code issue, and reset-with-code.
-- `install_operating_server.ps1` writes `PASSWORD_RESET_*` values into the server `.env`; set `PASSWORD_RESET_SMTP_USER/PW` before install when a dedicated SMTP account should be used.`r`n- Graphify update completed after fix120: 1377 nodes, 4363 edges, 80 communities.
+- `install_operating_server.ps1` writes `PASSWORD_RESET_*` values into the server `.env`; set `PASSWORD_RESET_SMTP_USER/PW` before install when a dedicated SMTP account should be used.
+- Graphify update completed after fix120: 1377 nodes, 4363 edges, 80 communities.
+
+## Current Session Fix121
+
+- Active WEB/Agent files are now 1.0.109.
+- Latest fix121 ZIP: C:\Tmp\accounting_web_v1_purchase_vendor_biz_fix121_20260518_101330.zip.
+- Root cause: fix111 regular-processing vendor business-number payload fields were later mirrored into the purchase ERP payload return, but `build_purchase_erp_payload()` did not define `vendor_biz_no` before returning it.
+- Fix: purchase ERP payload now extracts `vendor_biz_no` from current data/raw supplier fields and falls back to an empty string when absent.
+- Important local note: the resident local `pythonw.exe` Agent was running against the development folder and reverted source while editing. It was stopped before the real file patch was applied and verified.
+- Verification passed: Python py_compile for `web_v1/backend/erp_runner.py` and `web_v1/agent/erp_agent.py`; #78-like Compuzone purchase payload regression confirmed `vendor_biz_no=''` and ERP rows are generated.
+
+- Graphify update was attempted after fix121, but Graphify refused to overwrite because the AST-only rebuild had fewer nodes than the existing graph (1291 vs 1377). Existing graph/report were left untouched.

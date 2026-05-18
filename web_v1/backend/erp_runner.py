@@ -474,6 +474,17 @@ def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
     vendor = re.sub(r"\(주\)|㈜|\(유\)|유한회사|주식회사", "", vendor).strip() or "매입처"
     validate_purchase_invoice_for_erp(invoice)
     buyer_biz_no = data.get("buyer_biz_no") or data.get("buyer_business_no") or raw.get("buyer_biz_no")
+    vendor_biz_no = (
+        data.get("vendor_biz_no")
+        or data.get("supplier_biz_no")
+        or data.get("supplier_business_no")
+        or data.get("supplier_business_number")
+        or raw.get("vendor_biz_no")
+        or raw.get("supplier_biz_no")
+        or raw.get("supplier_business_no")
+        or raw.get("supplier_business_number")
+        or ""
+    )
     site = _resolve_site(data, raw, invoice, pdf_path)
     invoice_date = _extract_invoice_date(data, pdf_path)
     if not invoice_date:
