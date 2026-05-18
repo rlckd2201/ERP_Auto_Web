@@ -839,18 +839,49 @@ def _copy_or_merge_doc(doc: dict[str, Any], target_dir: Path) -> str:
     return str(target)
 
 
-def prepare_output_documents(invoice: dict[str, Any], *, existing_only: bool = False) -> dict[str, Any]:
+def _normalize_selected_doc_keys(selected_doc_keys: list[str] | None) -> set[str]:
+    return {str(key).strip() for key in (selected_doc_keys or []) if str(key).strip()}
+
+
+def _docs_for_output(status: dict[str, Any], selected_doc_keys: list[str] | None = None) -> list[dict[str, Any]]:
+    selected = _normalize_selected_doc_keys(selected_doc_keys)
+    docs = list(status.get("docs") or [])
+    if not selected:
+        return docs
+    by_key = {str(doc.get("key") or ""): doc for doc in docs}
+    missing = sorted(key for key in selected if key not in by_key)
+    if missing:
+        raise RuntimeError(f"선택한 문서를 찾을 수 없습니다: {', '.join(missing)}")
+    chosen = [doc for doc in docs if str(doc.get("key") or "") in selected]
+    blockers = [doc for doc in chosen if doc.get("status") not in {"exists", "generate_needed"}]
+    if blockers:
+        missing_labels = ", ".join(str(doc.get("label") or doc.get("key") or "") for doc in blockers)
+        raise RuntimeError(f"선택한 문서가 준비되지 않았습니다: {missing_labels}")
+    return chosen
+
+
+def prepare_output_documents(
+    invoice: dict[str, Any],
+    *,
+    existing_only: bool = False,
+    selected_doc_keys: list[str] | None = None,
+) -> dict[str, Any]:
     invoice_id = int(invoice.get("id") or 0)
     status = build_output_set_status(invoice)
-    if existing_only and not status["ready"]:
+    selected = _normalize_selected_doc_keys(selected_doc_keys)
+    docs_to_output = _docs_for_output(status, selected_doc_keys)
+    if existing_only and not selected and not status["ready"]:
         missing = ", ".join(doc["label"] for doc in status["missing"]) or "필수 문서"
         raise RuntimeError(f"기존 문서 출력은 저장된 필수 문서가 모두 있어야 합니다: {missing}")
-    if not status["can_output"]:
+    if existing_only and selected and any(doc.get("status") != "exists" for doc in docs_to_output):
+        missing = ", ".join(str(doc.get("label") or doc.get("key") or "") for doc in docs_to_output if doc.get("status") != "exists")
+        raise RuntimeError(f"기존 문서 출력은 선택한 문서가 이미 저장되어 있어야 합니다: {missing}")
+    if not selected and not status["can_output"]:
         missing = ", ".join(doc["label"] for doc in status["blockers"])
         raise RuntimeError(f"필수 문서가 없습니다: {missing}")
 
     expense_doc = next((doc for doc in status["docs"] if doc["key"] == "expense_report"), None)
-    if expense_doc and expense_doc["status"] == "generate_needed":
+    if expense_doc and expense_doc["status"] == "generate_needed" and (not selected or "expense_report" in selected):
         try:
             path = generate_expense_report_pdf(invoice)
             update_invoice_json(
@@ -870,17 +901,21 @@ def prepare_output_documents(invoice: dict[str, Any], *, existing_only: bool = F
 
     invoice = get_invoice(invoice_id) or invoice
     status = build_output_set_status(invoice)
-    if existing_only and not status["ready"]:
+    docs_to_output = _docs_for_output(status, selected_doc_keys)
+    if existing_only and not selected and not status["ready"]:
         missing = ", ".join(doc["label"] for doc in status["missing"]) or "필수 문서"
         raise RuntimeError(f"기존 문서 출력은 저장된 필수 문서가 모두 있어야 합니다: {missing}")
-    if not status["can_output"]:
+    if existing_only and selected and any(doc.get("status") != "exists" for doc in docs_to_output):
+        missing = ", ".join(str(doc.get("label") or doc.get("key") or "") for doc in docs_to_output if doc.get("status") != "exists")
+        raise RuntimeError(f"기존 문서 출력은 선택한 문서가 이미 저장되어 있어야 합니다: {missing}")
+    if not selected and not status["can_output"]:
         missing = ", ".join(doc["label"] for doc in status["blockers"])
         raise RuntimeError(f"필수 문서가 없습니다: {missing}")
 
     target_dir = _output_set_dir(invoice_id, status["mode"])
     target_dir.mkdir(parents=True, exist_ok=True)
     files: list[str] = []
-    for doc in status["docs"]:
+    for doc in docs_to_output:
         files.append(_copy_or_merge_doc(doc, target_dir))
     final_status = build_output_set_status(get_invoice(invoice_id) or invoice)
     final_status["individual_files"] = files
@@ -912,6 +947,7 @@ def run_output_set_job(
     action: str,
     printer_name: str = "",
     existing_only: bool = False,
+    selected_doc_keys: list[str] | None = None,
     job_id: str = "",
     progress: Progress | None = None,
 ) -> dict[str, Any]:
@@ -931,7 +967,11 @@ def run_output_set_job(
                 raise RuntimeError(f"계산서 건을 찾지 못했습니다: #{invoice_id}")
             if progress:
                 progress("printing", min(95, base), f"문서 세트 준비: #{invoice_id}")
-            status = prepare_output_documents(invoice, existing_only=existing_only)
+            status = prepare_output_documents(
+                invoice,
+                existing_only=existing_only,
+                selected_doc_keys=selected_doc_keys,
+            )
             files = [str(path) for path in status.get("individual_files") or []]
             merged_path = ""
             if action == "merged_pdf":

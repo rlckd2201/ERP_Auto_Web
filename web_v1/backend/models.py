@@ -27,6 +27,7 @@ class OutputSetRequest(BaseModel):
     printer_key: Literal["pyeongtaek", "gimje", "pdf"] = "pdf"
     processor: str = Field(default="WEB v1.0", max_length=80)
     existing_only: bool = False
+    selected_doc_keys: list[str] = Field(default_factory=list)
 
 
 class PurchaseAnalysisUpdate(BaseModel):

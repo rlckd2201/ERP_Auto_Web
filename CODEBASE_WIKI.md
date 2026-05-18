@@ -1,6 +1,6 @@
-﻿# CODEBASE WIKI
+# CODEBASE WIKI
 
-Updated: 2026-05-15
+Updated: 2026-05-18
 
 This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1334 nodes, 4247 edges, and 35 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-18, WEB/Agent files are at `1.0.110`. The latest completed local deployment ZIP is:
+As of 2026-05-18, WEB/Agent files are at `1.0.111`. The latest completed local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip
+C:\Tmp\accounting_web_v1_selective_output_docs_fix123_20260518_111609.zip
 ```
 
 Known deployment hosts:
@@ -40,6 +40,7 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - fix120 restores account recovery: deployment resets existing users once to `eotmd12!@`, first login forces a new password, and forgotten passwords require a mail verification code before setting a new password.
 - fix121 fixes purchase one-click ERP payload creation for vendors without a stored business number by defining `vendor_biz_no` in `build_purchase_erp_payload()` before it is returned to the Agent queue.
 - fix122 fills 현금출금결의서 정산금액 from 청구금액 and 지불처 from the purchase 거래처/vendor name in both Excel export and WEB fallback PDF generation.
+- fix123 makes document-set cards selectable and scopes `개별 PDF 저장` / `개별 출력` to selected documents via `selected_doc_keys`; full-set buttons remain unchanged.
 
 Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 

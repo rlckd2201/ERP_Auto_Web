@@ -1476,6 +1476,7 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="출력 세트를 만들 건을 선택해야 합니다.")
     setup = require_setup_ready(request)
+    selected_doc_keys = [str(key).strip() for key in body.selected_doc_keys if str(key).strip()]
     printer_name = ""
     if body.action == "print_individual":
         mapping = setup.get("capabilities", {}).get("printer_mapping", {})
@@ -1500,6 +1501,7 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
                 "target_agent_id": setup.get("agent_id") or "",
                 "target_client_ip": setup.get("client_ip") or client_ip(request),
                 "existing_only": body.existing_only,
+                "selected_doc_keys": selected_doc_keys,
             },
         )
     )

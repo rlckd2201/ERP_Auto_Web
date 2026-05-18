@@ -1134,6 +1134,7 @@ function renderOutputSetPanel(outputSet, invoiceId) {
   const docs = Array.isArray(outputSet?.docs) ? outputSet.docs : [];
   const ready = Boolean(outputSet?.ready);
   const canOutput = Boolean(outputSet?.can_output);
+  const selectableStatuses = new Set(["exists", "generate_needed"]);
   const blockers = Array.isArray(outputSet?.blockers) ? outputSet.blockers : [];
   const outputMode = outputSet?.mode || (state.invoiceMode === "regular" ? "regular" : "purchase");
   const isPurchaseSet = outputMode === "purchase";
@@ -1160,21 +1161,42 @@ function renderOutputSetPanel(outputSet, invoiceId) {
           <button class="button secondary" type="button" data-output-action="refresh">세트 상태 갱신</button>
           ${isPurchaseSet ? '<button class="button secondary" type="button" data-output-action="generate_expense_report">현금결의서 생성</button>' : ""}
           <button class="button primary" type="button" data-output-action="merged_pdf" ${canOutput ? "" : "disabled"}>통합본 PDF 저장</button>
-          <button class="button secondary admin-only" type="button" data-output-action="individual_pdf" ${canOutput ? "" : "disabled"}>개별 PDF 저장</button>
-          <button class="button secondary admin-only" type="button" data-output-action="print_individual" ${canOutput ? "" : "disabled"}>개별 출력</button>
+          <button class="button secondary admin-only" type="button" data-output-action="individual_pdf" disabled>개별 PDF 저장</button>
+          <button class="button secondary admin-only" type="button" data-output-action="print_individual" disabled>개별 출력</button>
         </div>
       </div>
       <div class="output-doc-grid">
-        ${docs.length ? docs.map((doc) => `
-          <article class="output-doc-card ${outputStatusClass(doc.status)}">
-            <span>${escapeHtml(outputStatusText(doc.status))}</span>
+        ${docs.length ? docs.map((doc) => {
+          const selectable = selectableStatuses.has(String(doc.status || ""));
+          return `
+          <article class="output-doc-card ${outputStatusClass(doc.status)} ${selectable ? "selectable" : ""}">
+            <label class="output-doc-select-wrap">
+              <input class="output-doc-select" type="checkbox" data-output-doc-key="${escapeHtml(doc.key || "")}" ${selectable ? "" : "disabled"}>
+              <span class="output-doc-status">${escapeHtml(outputStatusText(doc.status))}</span>
+            </label>
             <strong>${escapeHtml(doc.label || doc.key || "")}</strong>
             <p title="${escapeHtml((doc.paths || []).join(", ") || doc.path || doc.message || "")}">${escapeHtml(doc.message || doc.path || "-")}</p>
           </article>
-        `).join("") : '<div class="empty-cell">문서 세트 상태를 불러오지 못했습니다.</div>'}
+        `;
+        }).join("") : '<div class="empty-cell">문서 세트 상태를 불러오지 못했습니다.</div>'}
       </div>
     </section>
   `;
+}
+
+function selectedOutputDocKeys() {
+  return [...document.querySelectorAll("#outputSetPanel .output-doc-select:checked")]
+    .map((input) => String(input.dataset.outputDocKey || "").trim())
+    .filter(Boolean);
+}
+
+function updateOutputDocActionState(panel = document.querySelector("#outputSetPanel")) {
+  if (!panel) return;
+  const hasSelected = panel.querySelectorAll(".output-doc-select:checked").length > 0;
+  panel.querySelectorAll('[data-output-action="individual_pdf"], [data-output-action="print_individual"]')
+    .forEach((button) => {
+      button.disabled = !hasSelected;
+    });
 }
 
 async function loadOutputSet(invoiceId) {
@@ -1615,6 +1637,7 @@ async function startOutputSet(action, options = {}) {
     printer_key: printerKey,
     processor: "WEB v1.0",
     existing_only: Boolean(options.existingOnly),
+    selected_doc_keys: Array.isArray(options.selectedDocKeys) ? options.selectedDocKeys : [],
   });
 }
 
@@ -1885,6 +1908,15 @@ if (els.expenseReportFileInput) els.expenseReportFileInput.addEventListener("cha
   await uploadInvoiceFile(invoiceId, event.target, `/api/invoices/${invoiceId}/expense-report-file`);
 });
 els.purchaseDetailBody.addEventListener("click", async (event) => {
+  const docCard = event.target.closest(".output-doc-card.selectable");
+  if (docCard && !event.target.closest(".output-doc-select-wrap")) {
+    const checkbox = docCard.querySelector(".output-doc-select");
+    if (checkbox && !checkbox.disabled) {
+      checkbox.checked = !checkbox.checked;
+      updateOutputDocActionState(docCard.closest("#outputSetPanel"));
+    }
+    return;
+  }
   const button = event.target.closest("[data-output-action]");
   if (!button) return;
   const action = button.dataset.outputAction;
@@ -1902,9 +1934,22 @@ els.purchaseDetailBody.addEventListener("click", async (event) => {
     await startSavedOutputSet();
     return;
   }
+  if (action === "individual_pdf" || action === "print_individual") {
+    const selectedDocKeys = selectedOutputDocKeys();
+    if (!selectedDocKeys.length) {
+      alert("출력할 문서를 하나 이상 선택해 주세요.");
+      return;
+    }
+    await startOutputSet(action, { selectedDocKeys });
+    return;
+  }
   await startOutputSet(action);
 });
 els.purchaseDetailBody.addEventListener("change", async (event) => {
+  if (event.target.matches?.(".output-doc-select")) {
+    updateOutputDocActionState(event.target.closest("#outputSetPanel"));
+    return;
+  }
   if (event.target.matches?.("[data-output-voucher-input]")) {
     const invoiceIds = [...state.selectedInvoiceIds];
     const file = event.target.files?.[0];

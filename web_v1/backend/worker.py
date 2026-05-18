@@ -392,7 +392,11 @@ class JobWorker:
         action = str(job.payload.get("action") or "merged_pdf")
         printer_name = str(job.payload.get("printer_name") or "")
         existing_only = bool(job.payload.get("existing_only") or job.payload.get("one_click_existing_only"))
-
+        selected_doc_keys = [
+            str(key).strip()
+            for key in (job.payload.get("selected_doc_keys") or [])
+            if str(key).strip()
+        ]
         def progress(status: str, value: int, message: str) -> None:
             self.store.add_event(job.id, status, value, message)
 
@@ -403,6 +407,7 @@ class JobWorker:
             action=prepare_action,
             printer_name=printer_name,
             existing_only=existing_only,
+            selected_doc_keys=selected_doc_keys,
             job_id=job.id,
             progress=progress,
         )
