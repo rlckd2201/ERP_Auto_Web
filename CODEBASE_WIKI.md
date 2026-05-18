@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-18, WEB/Agent files are at `1.0.109`. The latest completed local deployment ZIP is:
+As of 2026-05-18, WEB/Agent files are at `1.0.110`. The latest completed local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_purchase_vendor_biz_fix121_20260518_101330.zip
+C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip
 ```
 
 Known deployment hosts:
@@ -39,12 +39,13 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - The current WEB database can be inspected in a browser through `/admin-db`; the old CS `admin_viewer.py` endpoints are not part of the current WEB v1 API.
 - fix120 restores account recovery: deployment resets existing users once to `eotmd12!@`, first login forces a new password, and forgotten passwords require a mail verification code before setting a new password.
 - fix121 fixes purchase one-click ERP payload creation for vendors without a stored business number by defining `vendor_biz_no` in `build_purchase_erp_payload()` before it is returned to the Agent queue.
+- fix122 fills 현금출금결의서 정산금액 from 청구금액 and 지불처 from the purchase 거래처/vendor name in both Excel export and WEB fallback PDF generation.
 
 Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
 fix109/fix110 setup/install handoff:
 
-- Latest ZIP: `C:\Tmp\accounting_web_v1_purchase_vendor_biz_fix121_20260518_101330.zip`.
+- Latest ZIP: `C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip`.
 - The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
 - The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
@@ -494,7 +495,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.109
+1.0.110
 ```
 
 ## Safe Change Checklist

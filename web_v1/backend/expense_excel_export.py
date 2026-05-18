@@ -12,8 +12,15 @@ CELLS = {
     "title": "D7",
     "basis": "D8",
     "amount": "D9",
+    "settlement_amount": "I9",
+    "payee": "N9",
     "body": "C11",
     "footer": "B19",
+}
+
+EXTRA_CELLS = {
+    "settlement_amount": ("I8", "I28", "I29"),
+    "payee": ("N8", "N28"),
 }
 
 
@@ -67,6 +74,14 @@ def main() -> int:
             sheet = workbook.Worksheets(1)
         for key, cell in CELLS.items():
             sheet.Range(cell).Value = payload.get(key, "")
+        for key, cells in EXTRA_CELLS.items():
+            value = payload.get(key, "")
+            if value:
+                for cell in cells:
+                    try:
+                        sheet.Range(cell).Value = value
+                    except Exception:
+                        pass
         sheet.Range(CELLS["body"]).WrapText = True
         if output_pdf.exists():
             output_pdf.unlink()

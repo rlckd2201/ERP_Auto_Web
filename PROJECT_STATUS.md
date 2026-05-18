@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.109`.
+- Current WEB/Agent version in files: `1.0.110`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -56,6 +56,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after admin DB viewer fix119: `C:\Tmp\accounting_web_v1_admin_db_view_fix119_20260518_083745.zip`.
 - Latest local deployment ZIP after password recovery fix120: `C:\Tmp\accounting_web_v1_password_recovery_fix120_20260518_094634.zip`.
 - Latest local deployment ZIP after purchase `vendor_biz_no` payload hotfix fix121: `C:\Tmp\accounting_web_v1_purchase_vendor_biz_fix121_20260518_101330.zip`.
+- Latest local deployment ZIP after expense report settlement/payee fix122: `C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -104,6 +105,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix119` adds a browser-based read-only DB viewer at `/admin-db`, backed by `/api/admin/db/overview` and `/api/admin/db/table`, so the current `C:\ERP_DB\learned_data.db` contents can be inspected without the old CS `admin_viewer.py`.
 - `fix120` resets existing WEB users to the initial password `eotmd12!@` once after deployment, marks them as initial-password users, forces a new-password change after login, and restores password recovery as a mail verification-code flow before setting a new password.
 - `fix121` fixes purchase one-click ERP payload creation when supplier/vendor business number is absent. `build_purchase_erp_payload()` now defines `vendor_biz_no` before returning it to the Agent queue, so Compuzone-style purchase invoices no longer fail with `name 'vendor_biz_no' is not defined`.
+- `fix122` fills 현금출금결의서 정산금액 with the same value as 청구금액 and fills 지불처 from the purchase vendor name.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -325,3 +327,13 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Verification passed: Python py_compile for `web_v1/backend/erp_runner.py` and `web_v1/agent/erp_agent.py`; #78-like Compuzone purchase payload regression confirmed `vendor_biz_no=''` and ERP rows are generated.
 
 - Graphify update was attempted after fix121, but Graphify refused to overwrite because the AST-only rebuild had fewer nodes than the existing graph (1291 vs 1377). Existing graph/report were left untouched.
+
+## Current Session Fix122
+
+- Active WEB/Agent files are now 1.0.110.
+- Latest fix122 ZIP: C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip.
+- Root cause: 현금출금결의서 payload only carried `amount`; Excel helper and WEB fallback PDF did not receive fields for 정산금액 or 지불처.
+- Fix: `_expense_payload()` now emits `settlement_amount=amount` and `payee=vendor_name`; Excel export writes `I9/N9` plus common-template candidate cells, and fallback PDF draws the same values.
+- Verification passed: Python py_compile for `web_v1/backend/output_set.py`, `web_v1/backend/expense_excel_export.py`, and `web_v1/agent/erp_agent.py`; #78-like payload regression confirmed amount/settlement_amount both `￦80,920` and payee `컴퓨존`.
+- Local Agent was stopped again and HKCU Run entry removed temporarily because it restarted from the deployed server bundle and overwrote the development workspace.
+- Graphify update was attempted after fix122, but Graphify refused to overwrite because the AST-only rebuild had fewer nodes than the existing graph (1291 vs 1377). Existing graph/report were left untouched.

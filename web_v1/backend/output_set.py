@@ -537,6 +537,14 @@ def _expense_payload(invoice: dict[str, Any]) -> dict[str, str]:
     )
     if not total:
         total = sum(_int_value(item.get("inc_vat")) for item in items)
+    amount_text = f"￦{total:,}"
+    payee = str(
+        data.get("vendor_name")
+        or data.get("supplier_name")
+        or invoice.get("vendor_name")
+        or invoice.get("supplier_name")
+        or ""
+    ).strip()
     dominant_account, body = _build_expense_report_text(items, total)
     title_map = {
         "소모품비": "소모품 구매 건",
@@ -550,7 +558,9 @@ def _expense_payload(invoice: dict[str, Any]) -> dict[str, str]:
         "author": str(data.get("processor") or invoice.get("processor") or "").strip(),
         "title": title,
         "basis": "품의 결재본",
-        "amount": f"￦{total:,}",
+        "amount": amount_text,
+        "settlement_amount": amount_text,
+        "payee": payee,
         "body": body,
         "footer": _expense_footer(site),
     }
@@ -633,7 +643,8 @@ def _generate_expense_report_pdf_plain(output_pdf: Path, payload: dict[str, str]
         draw_cell(left + value_w + 55, y, ax0, y + 25, "정산\n금액", size=8)
         draw_cell(ax0, y, right, y + 25, "지  출  처", size=8)
         draw_cell(left + value_w, y + 25, left + value_w + 55, y + 50, "사후정산불요", size=8)
-        draw_cell(left + value_w + 55, y + 25, ax0, y + 50, "", size=8)
+        draw_cell(left + value_w + 55, y + 25, ax0, y + 50, payload.get("settlement_amount", payload.get("amount", "")), size=10)
+        draw_cell(ax0 + 50, y, right, y + 25, payload.get("payee", ""), size=9)
         draw_cell(ax0, y + 25, right, y + 50, "출금시기", size=8)
         y += 50
 
