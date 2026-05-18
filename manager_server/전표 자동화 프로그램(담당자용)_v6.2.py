@@ -1924,38 +1924,48 @@ class ERPLoginBot:
                     picked = False
                     popup_seen = False
                     try:
-                        for win in Desktop(backend="uia").windows():
-                            try:
-                                title = win.window_text() or ""
-                                if "거래처" not in title:
-                                    continue
-                                popup_seen = True
-                                for cell in win.descendants():
-                                    try:
-                                        cell_text = (cell.window_text() or "").strip()
-                                        cell_digits = re.sub(r"[^0-9]", "", cell_text)
-                                        target_digits = re.sub(r"[^0-9]", "", target_biz_no)
-                                        if cell_text != target_biz_no and cell_digits != target_digits:
-                                            continue
-                                        rect = cell.rectangle()
-                                        pyautogui.doubleClick(
-                                            rect.left + rect.width() // 2,
-                                            rect.top + rect.height() // 2,
-                                            interval=0.05,
-                                        )
-                                        time.sleep(ERP_CLICK_WAIT)
-                                        pyautogui.press('enter')
-                                        picked = True
-                                        self.logger.info(
-                                            f"  [MGMT-XY] {label}: 거래처 사업자번호 {target_biz_no} 행 선택"
-                                        )
+                        target_digits = re.sub(r"[^0-9]", "", target_biz_no)
+                        for _popup_try in range(12):
+                            for win in Desktop(backend="uia").windows():
+                                try:
+                                    title = win.window_text() or ""
+                                    if "거래처" not in title:
+                                        continue
+                                    popup_seen = True
+                                    win_rect = win.rectangle()
+                                    for cell in win.descendants():
+                                        try:
+                                            cell_text = (cell.window_text() or "").strip()
+                                            cell_digits = re.sub(r"[^0-9]", "", cell_text)
+                                            if (
+                                                target_biz_no not in cell_text
+                                                and cell_text != target_biz_no
+                                                and (not target_digits or target_digits not in cell_digits)
+                                                and cell_digits != target_digits
+                                            ):
+                                                continue
+                                            rect = cell.rectangle()
+                                            row_y = rect.top + rect.height() // 2
+                                            row_x = min(max(win_rect.left + 90, win_rect.left + 20), win_rect.right - 20)
+                                            pyautogui.click(row_x, row_y)
+                                            time.sleep(ERP_CLICK_WAIT)
+                                            pyautogui.doubleClick(row_x, row_y, interval=0.05)
+                                            time.sleep(ERP_CLICK_WAIT)
+                                            pyautogui.press('enter')
+                                            picked = True
+                                            self.logger.info(
+                                                f"  [MGMT-XY] {label}: 거래처 사업자번호 {target_biz_no} 행 선택"
+                                            )
+                                            break
+                                        except Exception:
+                                            pass
+                                    if picked:
                                         break
-                                    except:
-                                        pass
-                                if picked:
-                                    break
-                            except:
-                                pass
+                                except Exception:
+                                    pass
+                            if picked or popup_seen:
+                                break
+                            time.sleep(0.15)
                     except Exception as e:
                         self.logger.warning(f"  [MGMT-XY] {label}: 거래처 사업자번호 행 탐색 실패: {e}")
                     if not picked:

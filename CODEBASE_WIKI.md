@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-18, WEB/Agent files are at `1.0.111`. The latest completed local deployment ZIP is:
+As of 2026-05-18, WEB/Agent files are at `1.0.112`. The latest completed local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_selective_output_docs_fix123_20260518_111609.zip
+C:\Tmp\accounting_web_v1_kt_vendor_biz_select_fix124_20260518_113617.zip
 ```
 
 Known deployment hosts:
@@ -41,6 +41,7 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - fix121 fixes purchase one-click ERP payload creation for vendors without a stored business number by defining `vendor_biz_no` in `build_purchase_erp_payload()` before it is returned to the Agent queue.
 - fix122 fills 현금출금결의서 정산금액 from 청구금액 and 지불처 from the purchase 거래처/vendor name in both Excel export and WEB fallback PDF generation.
 - fix123 makes document-set cards selectable and scopes `개별 PDF 저장` / `개별 출력` to selected documents via `selected_doc_keys`; full-set buttons remain unchanged.
+- fix124 reinforces KT/케이티 duplicate 거래처 popup handling so the Agent selects the `102-81-42945` row even when UIA exposes the business number inside a combined row string.
 
 Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
@@ -54,6 +55,7 @@ fix109/fix110 setup/install handoff:
 - `erp_agent.py` owns the tray process. Its right-click menu is `내 상태 확인`, `수동 업데이트`, `버전확인`, `종료`; double-click still opens the WEB URL.
 - fix114 changes the tray separator menu item from `None` to an empty string because pywin32 rejected `None` and prevented the right-click menu from opening.
 - fix115 changes regular Agent-side ERP management-item vendor input for KT/케이티: duplicate 거래처 rows must select business number `102-81-42945`; if that row is not visible, the Agent passes instead of selecting the highlighted first row.
+- fix124 reinforces that same KT rule by accepting popup row text that contains `102-81-42945` and selecting the matched row by coordinates, because ERP may expose the whole row rather than a standalone business-number cell.
 - Graphify update completed after fix115 and refreshed `graphify-out`.
 - Agent update checks are throttled separately from the normal heartbeat loop: default `--update-interval` is 60 seconds, and `/api/version` now includes `agent_update_notes`.
 - fix110 changes the tray right-click path to handle both tray callback right-click and Windows context-menu messages, tolerate `SetForegroundWindow()` failure, and dispatch the selected menu id directly.

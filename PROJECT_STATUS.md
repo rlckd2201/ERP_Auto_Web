@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.111`.
+- Current WEB/Agent version in files: `1.0.112`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -58,6 +58,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after purchase `vendor_biz_no` payload hotfix fix121: `C:\Tmp\accounting_web_v1_purchase_vendor_biz_fix121_20260518_101330.zip`.
 - Latest local deployment ZIP after expense report settlement/payee fix122: `C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip`.
 - Latest local deployment ZIP after selective output document fix123: `C:\Tmp\accounting_web_v1_selective_output_docs_fix123_20260518_111609.zip`.
+- Latest local deployment ZIP after KT vendor business-number row selection fix124: `C:\Tmp\accounting_web_v1_kt_vendor_biz_select_fix124_20260518_113617.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -108,6 +109,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - `fix121` fixes purchase one-click ERP payload creation when supplier/vendor business number is absent. `build_purchase_erp_payload()` now defines `vendor_biz_no` before returning it to the Agent queue, so Compuzone-style purchase invoices no longer fail with `name 'vendor_biz_no' is not defined`.
 - `fix122` fills 현금출금결의서 정산금액 with the same value as 청구금액 and fills 지불처 from the purchase vendor name.
 - `fix123` adds selectable document-set cards in purchase detail and sends `selected_doc_keys` through the output-set API/worker so `개별 PDF 저장` and `개별 출력` only process the checked documents. `기존 문서 출력` and `통합본 PDF 저장` keep their full-set behavior.
+- `fix124` strengthens the KT/케이티 ERP 거래처 popup selection: matching now accepts row text that contains business number `102-81-42945` and double-clicks the matched row y-position instead of leaving the first highlighted vendor.
 - Frontend has one-click output target combo and localStorage preference.
 - Frontend routes purchase ERP button to `/api/jobs/purchase-one-click`.
 - Frontend detail mode now has `기존 문서 출력` with output target combo; it only enables when 전표/세금계산서/품의/현금결의서 are all already saved.
@@ -347,3 +349,11 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Document-set cards are selectable; `개별 PDF 저장` and `개별 출력` remain disabled until at least one available document is checked.
 - The frontend sends `selected_doc_keys`, the backend validates selected document readiness, and output preparation copies/queues only selected PDFs.
 - Verified `node --check web_v1/frontend/app.js`, Python `py_compile`, and a function-level selected tax-invoice output test that produced only `02_세금계산서.pdf`.
+
+## 2026-05-18 fix124 KT vendor business-number row selection
+
+- Active WEB/Agent files are now 1.0.112.
+- Latest fix124 ZIP: C:\Tmp\accounting_web_v1_kt_vendor_biz_select_fix124_20260518_113617.zip.
+- Manager ERP automation now matches KT popup rows by contained digits/text for `102-81-42945`, so row-level UIA text like `3894 ... 102-81-42945 ...` is accepted.
+- The matched row y-coordinate is clicked/double-clicked from the left row area, avoiding accidental selection of the first highlighted row.
+- Verified `py_compile` for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`.
