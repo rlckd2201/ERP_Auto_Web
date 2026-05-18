@@ -383,3 +383,10 @@ NaN
 - Root cause: KT 거래처 popup search/edit/UIA targeting was still unreliable and the visible `%` markers are not normal editable text.
 - Fix: KT vendor selection now uses the confirmed ERP keyboard sequence only after the vendor field double-click opens the 거래처 popup: enter `102-81-42945`, press Tab 4, Down 5, Up 1, Tab 3, then Enter.
 - The old KT search-condition/search-text path is bypassed for KT.
+
+## 2026-05-18 fix127 KT vendor final double-enter
+
+- Active WEB/Agent files are now 1.0.115.
+- Latest fix127 ZIP: C:\Tmp\accounting_web_v1_kt_vendor_enter2_fix127_20260518_133540.zip.
+- KT 거래처 키보드 시퀀스 final confirmation now sends Enter twice after Tab x3.
+- Current KT sequence: double-click relation-item value, type `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter x2.

@@ -18,7 +18,7 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 As of 2026-05-18, WEB/Agent files are at `1.0.113`. The latest completed local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_kt_vendor_keyboard_fix126_20260518_132500.zip
+C:\Tmp\accounting_web_v1_kt_vendor_enter2_fix127_20260518_133540.zip
 ```
 
 Known deployment hosts:
@@ -593,3 +593,8 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 
 - KT/케이티 no longer relies on UIA result rows, search condition controls, or editable `%` text.
 - After the 거래처 relation-item field double-click opens the popup, the Agent sends the confirmed sequence: `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter.
+
+## Fix127 KT Vendor Final Confirm
+
+- KT/케이티 keyboard sequence final confirmation is Enter x2, not Enter x1.
+- Full sequence: `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter x2.

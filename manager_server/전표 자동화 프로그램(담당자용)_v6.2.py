@@ -2027,9 +2027,9 @@ class ERPLoginBot:
                 time.sleep(mgmt_key_wait)
                 pyautogui.press('tab', presses=3, interval=0.04)
                 time.sleep(mgmt_key_wait)
-                pyautogui.press('enter')
+                pyautogui.press('enter', presses=2, interval=0.08)
                 time.sleep(ERP_FORM_WAIT)
-                self.logger.info(f"  [MGMT-XY] {label}: KT 거래처 키보드 시퀀스 확정: {target_biz_no}")
+                self.logger.info(f"  [MGMT-XY] {label}: KT 거래처 키보드 시퀀스 확정(Enter 2회): {target_biz_no}")
                 return True
 
             def _input_vendor_value_xy(x, y, label):
