@@ -2014,18 +2014,22 @@ class ERPLoginBot:
                     popup.set_focus()
                 except Exception:
                     pass
-                if not _select_vendor_popup_business_filter(popup):
-                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업 검색조건을 사업자번호로 변경 실패")
-                search_text = f"% {target_biz_no}"
-                if not _input_vendor_popup_search_text(popup, search_text):
-                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업 사업자번호 검색어 입력 실패")
-                    pyautogui.press('esc')
-                    return False
-                pyautogui.press('enter')
-                time.sleep(max(ERP_FORM_WAIT, 0.15))
+
+                # KT 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 키보드 흐름을 그대로 사용합니다.
+                # 순서: 사업자번호 입력 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter.
+                pyautogui.write(target_biz_no, interval=0.01)
+                time.sleep(mgmt_key_wait)
+                pyautogui.press('tab', presses=4, interval=0.04)
+                time.sleep(mgmt_key_wait)
+                pyautogui.press('down', presses=5, interval=0.04)
+                time.sleep(mgmt_key_wait)
+                pyautogui.press('up', presses=1, interval=0.04)
+                time.sleep(mgmt_key_wait)
+                pyautogui.press('tab', presses=3, interval=0.04)
+                time.sleep(mgmt_key_wait)
                 pyautogui.press('enter')
                 time.sleep(ERP_FORM_WAIT)
-                self.logger.info(f"  [MGMT-XY] {label}: KT 거래처 사업자번호 검색 확정: {target_biz_no}")
+                self.logger.info(f"  [MGMT-XY] {label}: KT 거래처 키보드 시퀀스 확정: {target_biz_no}")
                 return True
 
             def _input_vendor_value_xy(x, y, label):

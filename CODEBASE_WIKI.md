@@ -18,7 +18,7 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 As of 2026-05-18, WEB/Agent files are at `1.0.113`. The latest completed local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_kt_vendor_biz_search_fix125_20260518_121024.zip
+C:\Tmp\accounting_web_v1_kt_vendor_keyboard_fix126_20260518_132500.zip
 ```
 
 Known deployment hosts:
@@ -42,7 +42,7 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - fix122 fills 현금출금결의서 정산금액 from 청구금액 and 지불처 from the purchase 거래처/vendor name in both Excel export and WEB fallback PDF generation.
 - fix123 makes document-set cards selectable and scopes `개별 PDF 저장` / `개별 출력` to selected documents via `selected_doc_keys`; full-set buttons remain unchanged.
 - fix124 reinforces KT/케이티 duplicate 거래처 popup handling so the Agent selects the `102-81-42945` row even when UIA exposes the business number inside a combined row string.
-- fix125 changes KT/케이티 handling to open the 거래처 popup from a blank vendor field, switch the popup search condition to 사업자번호, search `% 102-81-42945`, and confirm with Enter twice. It no longer clicks or activates a guessed result row.
+- fix125 changes KT/케이티 handling to open the 거래처 popup from a blank vendor field, switch the popup search condition to 사업자번호, search `% 102-81-42945`, and confirm with Enter twice. fix126 fixes the search-box focus step so the Agent clears the default `%` and directly types the full business-number search text before confirming. It no longer clicks or activates a guessed result row.
 
 Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
@@ -583,3 +583,13 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Regular 계정 추정 규칙 now matches the legacy CS _guess_regular_account() keyword list: 통신비 uses KT/통신/VPN/SD-WAN/오토에버 identifiers; 지급수수료 uses 동양정보통신/대신아이씨티 and NAC/DLP/Watching-On/Acronis/그룹웨어/다우오피스/K-System/HelpU/원격지원/자산관리/Acrobat/Adobe/Cloudoc/문서중앙화 identifiers, defaulting to 지급수수료.
 - Latest fix112 ZIP: C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip.
 
+
+## Fix126 KT Search Input Note
+
+- The ERP 거래처 popup shows fixed `%` wildcard markers around the search input. The Agent must not type or clear that marker.
+- For KT/케이티, after selecting 사업자번호, the Agent now enters only `102-81-42945` into the search input and then presses Enter twice.
+
+## Fix126 KT Vendor Keyboard Sequence
+
+- KT/케이티 no longer relies on UIA result rows, search condition controls, or editable `%` text.
+- After the 거래처 relation-item field double-click opens the popup, the Agent sends the confirmed sequence: `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter.

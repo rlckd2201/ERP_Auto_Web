@@ -368,3 +368,18 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - For KT only, the Agent leaves the ERP vendor field blank, double-clicks it to open the 거래처 popup, changes the popup search condition to 사업자번호, enters `% 102-81-42945`, then presses Enter twice to search and confirm the exact vendor.
 - This applies across 대승, 대승정밀, and 일강 because the rule is vendor-based.
 - Verified `py_compile` for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`.
+NaN
+## 2026-05-18 fix126 KT vendor search input
+
+- Active WEB/Agent files are now 1.0.114.
+- Latest fix126 ZIP: C:\Tmp\accounting_web_v1_kt_vendor_keyboard_fix126_20260518_132500.zip.
+- Root cause: in the ERP 거래처 popup, the visible `%` is a fixed wildcard marker, not editable search text. The previous fix tried to write `% 102-81-42945`, so the business number was not entered correctly.
+- Fix: after switching the search condition to 사업자번호, the Agent targets the popup search input and writes only `102-81-42945`. It still confirms by pressing Enter twice and still avoids choosing a result row by y-coordinate.
+
+## 2026-05-18 fix126 KT vendor keyboard sequence
+
+- Active WEB/Agent files are now 1.0.114.
+- Latest fix126 ZIP: C:\Tmp\accounting_web_v1_kt_vendor_keyboard_fix126_20260518_132500.zip.
+- Root cause: KT 거래처 popup search/edit/UIA targeting was still unreliable and the visible `%` markers are not normal editable text.
+- Fix: KT vendor selection now uses the confirmed ERP keyboard sequence only after the vendor field double-click opens the 거래처 popup: enter `102-81-42945`, press Tab 4, Down 5, Up 1, Tab 3, then Enter.
+- The old KT search-condition/search-text path is bypassed for KT.
