@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-18, WEB/Agent files are at `1.0.116`. The latest completed local deployment ZIP is:
+As of 2026-05-18, WEB/Agent files are at `1.0.117`. The latest completed local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_setup_reuse_fix128_20260518_141900.zip
+C:\Tmp\accounting_web_v1_chrome_notifications_fix129_20260518_142900.zip
 ```
 
 Known deployment hosts:
@@ -499,7 +499,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.116
+1.0.117
 ```
 
 ## Safe Change Checklist
@@ -604,3 +604,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - `AccountingWebRequiredSetup.exe` is a bootstrapper. Running the same EXE downloads the latest server payload and reinstalls/updates the manager PC runtime.
 - The frontend should prefer `accountingweb://start` for already-installed PCs and should not automatically create repeated browser downloads.
 - A new EXE download is now offered only after the installed protocol launch does not reconnect the Agent and the user confirms it is a first-time/missing install case.
+
+## Fix129 Chrome Notifications
+
+- The normal top bar exposes the Chrome notification permission button.
+- `startJob()` requests notification permission once when permission is still pending.
+- `web_v1/frontend/sw.js`NaN

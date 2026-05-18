@@ -28,6 +28,7 @@ const state = {
   setupWasReady: false,
   agentAutoStartAttempted: false,
   setupDownloadPrompted: false,
+  notificationPromptedThisSession: false,
   approvalPollTimer: null,
   oneClickOutputTarget: localStorage.getItem(ONE_CLICK_OUTPUT_STORAGE_KEY) || "",
   detailMode: localStorage.getItem("accountingWebDetailMode") === "1",
@@ -857,20 +858,29 @@ async function requestSetupInstall() {
 
 function syncNotificationState() {
   if (!("Notification" in window)) {
-    els.notifyState.textContent = "미지원";
-    els.notifyButton.disabled = true;
+    if (els.notifyState) els.notifyState.textContent = "미지원";
+    if (els.notifyButton) {
+      els.notifyButton.textContent = "알림 미지원";
+      els.notifyButton.disabled = true;
+    }
     return;
   }
   if (notificationNeedsHttps()) {
-    els.notifyState.textContent = "HTTPS 필요";
-    els.notifyButton.disabled = false;
+    if (els.notifyState) els.notifyState.textContent = "HTTPS 필요";
+    if (els.notifyButton) {
+      els.notifyButton.textContent = "알림 HTTPS 필요";
+      els.notifyButton.disabled = false;
+    }
     return;
   }
-  if (Notification.permission === "granted") els.notifyState.textContent = "허용됨";
-  else if (Notification.permission === "denied") els.notifyState.textContent = "차단됨";
-  else els.notifyState.textContent = "대기";
+  const labels = { granted: "허용됨", denied: "차단됨", default: "대기" };
+  if (els.notifyState) els.notifyState.textContent = labels[Notification.permission] || "대기";
+  if (els.notifyButton) {
+    els.notifyButton.textContent = Notification.permission === "granted" ? "알림 허용됨" : "알림 허용";
+    els.notifyButton.disabled = Notification.permission === "denied";
+    els.notifyButton.title = Notification.permission === "denied" ? "Chrome 사이트 설정에서 알림 차단을 해제해야 합니다." : "작업 완료/실패를 Windows 알림으로 받습니다.";
+  }
 }
-
 function setBusy(isBusy) {
   const gateBlocked = !setupReady();
   if (els.purchaseCollectButton) els.purchaseCollectButton.disabled = isBusy || gateBlocked;
@@ -936,23 +946,40 @@ function showNotification(title, body) {
   new Notification(title, options);
 }
 
-async function requestNotification() {
+async function requestNotification({ quiet = false } = {}) {
   if (!("Notification" in window)) {
-    els.notifyState.textContent = "미지원";
-    return;
+    if (els.notifyState) els.notifyState.textContent = "미지원";
+    if (!quiet) alert("이 Chrome 환경에서는 알림을 지원하지 않습니다.");
+    return false;
   }
   if (notificationNeedsHttps()) {
-    els.notifyState.textContent = "HTTPS 필요";
-    alert("운영서버 IP 접속은 HTTPS가 필요합니다. HTTPS 주소로 접속한 뒤 알림을 허용하세요.");
-    return;
+    if (els.notifyState) els.notifyState.textContent = "HTTPS 필요";
+    if (!quiet) alert("Chrome 알림은 HTTPS 접속에서만 동작합니다. https://172.17.39.121:8080 주소로 다시 접속한 뒤 알림을 허용하세요.");
+    syncNotificationState();
+    return false;
+  }
+  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "denied") {
+    syncNotificationState();
+    if (!quiet) alert("Chrome에서 이 사이트 알림이 차단되어 있습니다. 주소창 왼쪽 사이트 설정에서 알림을 허용으로 바꿔야 합니다.");
+    return false;
   }
   const permission = await Notification.requestPermission();
   syncNotificationState();
   if (permission === "granted") {
-    showNotification("알림 허용 완료", "작업 완료 알림을 받을 수 있습니다.");
+    showNotification("알림 허용 완료", "작업 완료/실패 알림을 Windows 오른쪽 하단에서 받을 수 있습니다.");
+    return true;
   }
+  return false;
 }
 
+async function ensureJobNotificationPermission() {
+  if (state.notificationPromptedThisSession) return;
+  if (!("Notification" in window) || notificationNeedsHttps()) return;
+  if (Notification.permission !== "default") return;
+  state.notificationPromptedThisSession = true;
+  await requestNotification({ quiet: true });
+}
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) return;
   if (!window.isSecureContext) return;
@@ -1603,6 +1630,7 @@ async function startJob(url, body = null) {
     alert("필수 프로그램 점검이 완료되어야 업무 기능을 사용할 수 있습니다.");
     return;
   }
+  await ensureJobNotificationPermission();
   setBusy(true);
   els.logList.innerHTML = "";
   setBadge("queued");

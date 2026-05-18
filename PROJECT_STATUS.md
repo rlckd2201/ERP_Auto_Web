@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.116`.
+- Current WEB/Agent version in files: `1.0.117`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -398,3 +398,12 @@ NaN
 - The setup EXE is a bootstrapper: every run downloads the latest `/api/setup/user-pc-payload.zip` from the server and installs it into the fixed manager PC runtime folder.
 - Frontend no longer auto-downloads a fresh `AccountingWebRequiredSetup.exe` after login when the Agent is missing. It first calls the installed `accountingweb://start` protocol handler.
 - The setup/install button also calls the installed protocol first; only when the Agent still does not connect does it ask the user whether to download the EXE for first-time install.
+
+## 2026-05-18 fix129 Chrome notifications
+
+- Active WEB/Agent files are now 1.0.117.
+- Latest fix129 ZIP: C:\Tmp\accounting_web_v1_chrome_notifications_fix129_20260518_142900.zip.
+- The Chrome notification permission button is visible in the normal top bar, not only detail/admin mode.
+- Starting a job asks for notification permission once when Chrome permission is still pending.
+- Job completion/failure notifications use the Notification API and a frontend service worker so background tabs can show Windows toast notifications.
+- Chrome notifications still require HTTPS access, so users should open https://172.17.39.121:8080 rather than plain HTTP.

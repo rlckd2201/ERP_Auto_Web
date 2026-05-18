@@ -1,10 +1,12 @@
 # SESSION STATE
 
 ## 현재 작업
-- fix128 필수 프로그램 EXE 반복 다운로드 방지
+- fix129 Chrome/Windows 작업 완료 알림 추가
 
 ## 현재 수정중 파일
 - web_v1/frontend/app.js
+- web_v1/frontend/index.html
+- web_v1/frontend/sw.js
 - web_v1/VERSION
 - web_v1/agent/erp_agent.py
 - web_v1/deploy/install_operating_server.ps1
@@ -13,18 +15,18 @@
 - CODEBASE_WIKI.md
 
 ## 방금 수정한 내용
-- 로그인 후 Agent 미연결 시 EXE 자동 다운로드 fallback 제거
-- 설치 버튼은 먼저 accountingweb://start 프로토콜로 기존 설치 실행기를 호출
-- 연결 실패 시 처음 설치 PC인지 확인 후에만 EXE 다운로드
-- WEB/Agent 버전 1.0.116 bump
+- 알림 허용 버튼을 일반 화면에 노출
+- 작업 시작 시 Chrome 알림 권한을 1회 요청
+- 작업 완료/실패 알림을 서비스워커 기반 Windows 알림으로 표시
+- WEB/Agent 버전 1.0.117 bump
 
 ## 다음 작업
-- frontend node syntax 검증
+- node syntax 검증
 - py_compile 검증
 - Graphify update
-- fix128 ZIP 생성/검증
+- fix129 ZIP 생성/검증
 - 관련 파일만 stage/commit/push
 
 ## 주의사항
-- 이미 설치된 PC는 같은 EXE를 다시 받을 필요 없음
-- EXE 자체는 실행 시 최신 payload를 서버에서 다운로드하는 bootstrapper
+- Chrome 알림은 HTTPS 접속에서만 정상 동작
+- 로컬 Agent가 개발 frontend를 지우는 증상이 있어 개발 중에는 Agent를 임시 중지함
