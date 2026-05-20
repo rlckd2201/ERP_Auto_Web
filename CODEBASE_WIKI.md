@@ -642,3 +642,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Purchase analysis still uses fast parsing first, then calls Gemini when `analysis_unknown_items` is non-empty.
 - `web_v1/backend/purchase_analysis.py` now records `analysis_ai_attempted`, `analysis_ai_error`, and `analysis_warning` so Gemini failures are not hidden.
 - `web_v1/backend/worker.py` surfaces the failure in the job log as `Gemini 분석 실패/미사용: ...`.
+
+## Fix136 Gemini Env Key
+
+- Do not hardcode Gemini API keys in source or deployment scripts.
+- Purchase analysis reads Gemini only from runtime config: `settings.gemini_api_key` / backend `.env` `GEMINI_API_KEY`.
+- `install_operating_server.ps1` preserves an existing key or accepts `$env:GEMINI_API_KEY` during deployment.

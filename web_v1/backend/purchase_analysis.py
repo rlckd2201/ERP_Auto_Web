@@ -15,9 +15,6 @@ from .erp_runner import FACTORY_MAP, _site_from_biz_no, _to_int
 ACCOUNT_CHOICES = {"소모품비", "집기비품", "컴퓨터소프트웨어"}
 
 
-DEFAULT_GEMINI_API_KEY = "AIzaSyAKPjmvjgP4BzvEzrBJqer9F2DM7onhrcU"
-
-
 def safe_filename(name: str, fallback: str = "purchase_file.pdf") -> str:
     clean = re.sub(r'[\\/:*?"<>|]+', "_", str(name or "").strip())
     clean = re.sub(r"\s+", " ", clean).strip()
@@ -935,7 +932,7 @@ def _fast_parse(tax_path: str, quote_path: str, existing: dict[str, Any]) -> dic
 def _ai_parse(tax_path: str, quote_path: str, fast_data: dict[str, Any]) -> dict[str, Any] | None:
     fast_data["analysis_ai_attempted"] = True
     fast_data["analysis_ai_error"] = ""
-    api_key = settings.gemini_api_key or DEFAULT_GEMINI_API_KEY
+    api_key = settings.gemini_api_key
     if not api_key:
         message = "GEMINI_API_KEY missing"
         fast_data["analysis_ai_error"] = message

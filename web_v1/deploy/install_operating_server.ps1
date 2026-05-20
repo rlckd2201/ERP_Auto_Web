@@ -7,7 +7,7 @@ $EnvPath = Join-Path $BackendDir ".env"
 
 $DefaultEmailId = "mailsendds@gmail.com"
 $DefaultEmailPw = "ttsjfjkqhfwemcfq"
-$DefaultGeminiApiKey = "AIzaSyAKPjmvjgP4BzvEzrBJqer9F2DM7onhrcU"
+$DefaultGeminiApiKey = ""
 $DefaultServerIp = if ($env:WEB_SERVER_IP) { $env:WEB_SERVER_IP } else { "172.17.39.121" }
 $CertDir = "C:\ERP_DB\certs"
 $SslCertFile = Join-Path $CertDir "web_v1.cert.pem"
@@ -58,7 +58,14 @@ Write-Host "[WEB v1.0] HTTPS certificate trusted for current Windows user"
 
 $emailId = if ($env:EMAIL_ID) { $env:EMAIL_ID } else { $DefaultEmailId }
 $emailPw = if ($env:EMAIL_PW) { $env:EMAIL_PW } else { $DefaultEmailPw }
-$geminiKey = if ($env:GEMINI_API_KEY) { $env:GEMINI_API_KEY } else { $DefaultGeminiApiKey }
+$existingGeminiKey = ""
+if (Test-Path -LiteralPath $EnvPath) {
+    $existingGeminiLine = Get-Content -LiteralPath $EnvPath | Where-Object { $_ -match "^GEMINI_API_KEY=" } | Select-Object -First 1
+    if ($existingGeminiLine) {
+        $existingGeminiKey = ($existingGeminiLine -replace "^GEMINI_API_KEY=", "").Trim()
+    }
+}
+$geminiKey = if ($env:GEMINI_API_KEY) { $env:GEMINI_API_KEY } elseif ($existingGeminiKey) { $existingGeminiKey } else { $DefaultGeminiApiKey }
 $passwordResetDomain = if ($env:PASSWORD_RESET_MAIL_DOMAIN) { $env:PASSWORD_RESET_MAIL_DOMAIN } else { "dae-seung.co.kr" }
 $passwordResetUser = if ($env:PASSWORD_RESET_SMTP_USER) { $env:PASSWORD_RESET_SMTP_USER } elseif ($emailId -like "*@*") { ($emailId -split "@")[0] } else { $emailId }
 $passwordResetPw = if ($env:PASSWORD_RESET_SMTP_PW) { $env:PASSWORD_RESET_SMTP_PW } else { $emailPw }
@@ -78,7 +85,7 @@ $ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } 
 $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($gjAuto) { $gjAuto } else { Read-Host "김제 프린터 이름 입력(Get-Printer 결과와 동일)" }
 
 @"
-APP_VERSION=1.0.123
+APP_VERSION=1.0.124
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
@@ -122,4 +129,5 @@ Write-Host "[WEB v1.0] Start command:"
 Write-Host "powershell -ExecutionPolicy Bypass -File `"$RepoRoot\web_v1\deploy\start_operating_server.ps1`""
 Write-Host "[WEB v1.0] Browser URL:"
 Write-Host "https://$DefaultServerIp:8080"
+
 

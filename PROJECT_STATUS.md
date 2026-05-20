@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.123`.
+- Current WEB/Agent version in files: `1.0.124`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -64,6 +64,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after ERP entry-start wait tuning fix133: `C:\Tmp\accounting_web_v1_erp_entry_start_wait_fix133_20260520_111236.zip`.
 - Latest local deployment ZIP after AutoEver/KT vendor business-number paste fix134: `C:\Tmp\accounting_web_v1_vendor_biz_paste_fix134_20260520_114023.zip`.
 - Latest local deployment ZIP after purchase Gemini attempt logging fix135: `C:\Tmp\accounting_web_v1_purchase_gemini_attempt_fix135_20260520_151927.zip`.
+- Latest local deployment ZIP after Gemini env-key fix136: `C:\Tmp\accounting_web_v1_gemini_env_key_fix136_20260520_154045.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -483,3 +484,13 @@ NaN
 - fix135 ZIP verification passed for `web_v1/VERSION=1.0.123`, frontend/setup EXE presence, Gemini attempt/error markers, and no `graphify-out`/backup/hotfix/release/pycache directories.
 - `graphify update .` was attempted after fix135, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383). Existing graph/report were left untouched.
 
+
+## 2026-05-20 fix136 Gemini Env Key
+
+- Active WEB/Agent files are now 1.0.124.
+- Latest fix136 ZIP: C:\Tmp\accounting_web_v1_gemini_env_key_fix136_20260520_154045.zip.
+- Removed the leaked Gemini default key from source and install script. Purchase analysis now uses only `settings.gemini_api_key` from runtime `.env`.
+- `install_operating_server.ps1` preserves an existing `GEMINI_API_KEY` from `.env`, or accepts a new key from `$env:GEMINI_API_KEY` during deployment. It no longer writes a hardcoded default key.
+- Verification passed: Python py_compile for `purchase_analysis.py` and Agent; source scan confirmed no `AIzaSy` / `DEFAULT_GEMINI_API_KEY` remains under `web_v1/backend` or `web_v1/deploy`.
+- fix136 ZIP verification passed for `web_v1/VERSION=1.0.124`, frontend/setup EXE presence, no Gemini API key in source/ZIP, existing `.env` Gemini key preservation marker, and no `graphify-out`/backup/hotfix/release/pycache directories.
+- `graphify update .` was attempted after fix136, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383). Existing graph/report were left untouched.
