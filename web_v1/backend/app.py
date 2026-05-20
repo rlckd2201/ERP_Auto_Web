@@ -1829,7 +1829,7 @@ def api_analyze_purchase(invoice_id: int) -> dict[str, Any]:
         analysis = analyze_purchase_documents(invoice)
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    ai_note = "AI 분석 사용" if analysis.get("analysis_ai_used") else "학습 DB/빠른 파싱 사용"
+    ai_note = "AI 분석 사용" if analysis.get("analysis_ai_used") else ("AI 분석 시도 후 빠른 파싱 사용" if analysis.get("analysis_ai_attempted") else "학습 DB/빠른 파싱 사용")
     updated = update_invoice_json(invoice_id, analysis, message=f"구매 세금계산서/견적서 분석 결과가 저장되었습니다. ({ai_note})")
     reset_invoice(invoice_id)
     return get_invoice(invoice_id) or updated or {"ok": True, "invoice_id": invoice_id, "analysis": analysis}

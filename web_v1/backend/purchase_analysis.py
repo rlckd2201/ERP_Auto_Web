@@ -15,6 +15,9 @@ from .erp_runner import FACTORY_MAP, _site_from_biz_no, _to_int
 ACCOUNT_CHOICES = {"소모품비", "집기비품", "컴퓨터소프트웨어"}
 
 
+DEFAULT_GEMINI_API_KEY = "AIzaSyAKPjmvjgP4BzvEzrBJqer9F2DM7onhrcU"
+
+
 def safe_filename(name: str, fallback: str = "purchase_file.pdf") -> str:
     clean = re.sub(r'[\\/:*?"<>|]+', "_", str(name or "").strip())
     clean = re.sub(r"\s+", " ", clean).strip()
@@ -930,12 +933,18 @@ def _fast_parse(tax_path: str, quote_path: str, existing: dict[str, Any]) -> dic
 
 
 def _ai_parse(tax_path: str, quote_path: str, fast_data: dict[str, Any]) -> dict[str, Any] | None:
-    if not settings.gemini_api_key:
+    fast_data["analysis_ai_attempted"] = True
+    fast_data["analysis_ai_error"] = ""
+    api_key = settings.gemini_api_key or DEFAULT_GEMINI_API_KEY
+    if not api_key:
+        message = "GEMINI_API_KEY missing"
+        fast_data["analysis_ai_error"] = message
+        fast_data["analysis_warning"] = message
         return None
     try:
         import google.generativeai as genai
 
-        genai.configure(api_key=settings.gemini_api_key)
+        genai.configure(api_key=api_key)
         prompt = """
 세금계산서와 견적서를 함께 분석해 JSON만 반환하세요.
 필드: site_name, buyer_biz_no, vendor_name, invoice_date, target_supply, total_tax, total_sum,
@@ -956,11 +965,15 @@ account는 소모품비, 집기비품, 컴퓨터소프트웨어 중 하나만 �
                     pass
         if isinstance(parsed, dict):
             parsed["analysis_source"] = "gemini"
+            parsed["analysis_ai_attempted"] = True
+            parsed["analysis_ai_error"] = ""
             if parsed.get("vendor_name"):
                 parsed["vendor_name"] = _strip_vendor_name(parsed.get("vendor_name"))
             return parsed
     except Exception as exc:
-        fast_data["analysis_warning"] = f"AI 분석 실패, 기본 파싱값 사용: {exc}"
+        message = f"AI analysis failed, using fast parse: {exc}"
+        fast_data["analysis_ai_error"] = message
+        fast_data["analysis_warning"] = message
     return None
 
 
@@ -979,6 +992,7 @@ def analyze_purchase_documents(invoice: dict[str, Any]) -> dict[str, Any]:
         raise RuntimeError("구매 분석을 위해 견적서 PDF를 먼저 첨부해야 합니다.")
     fast_data = _fast_parse(tax_path, quote_path, existing)
     fast_unknown = [value for value in list(fast_data.get("analysis_unknown_items") or []) if str(value).strip()]
+    fast_data["analysis_ai_attempted"] = bool(fast_unknown)
     ai_data = _ai_parse(tax_path, quote_path, fast_data) if fast_unknown else None
     result = {**fast_data, **(ai_data or {})}
     if ai_data:
@@ -992,6 +1006,7 @@ def analyze_purchase_documents(invoice: dict[str, Any]) -> dict[str, Any]:
         result["analysis_source"] = "learned_fast_parse" if not fast_unknown else "fast_parse"
         result["analysis_unknown_items"] = fast_unknown
     result["analysis_ai_used"] = bool(ai_data)
+    result["analysis_ai_attempted"] = bool(fast_unknown)
     result["vendor_name"] = _strip_vendor_name(result.get("vendor_name"))
     result["quote_path"] = quote_path
     result["quote_pdf_path"] = quote_path

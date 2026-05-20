@@ -1,4 +1,4 @@
-# CODEBASE WIKI
+﻿# CODEBASE WIKI
 
 Updated: 2026-05-18
 
@@ -34,28 +34,28 @@ Recent purchase-side changes are intentionally paused for later operational bug 
 - Output-set PDF merge now writes to a temporary file before replacing the target, so rediscovered output-set PDFs are not deleted before being read.
 - The frontend no longer force-refreshes selected purchase detail/logs during job follow-up refreshes.
 - One-click auto-saves the open purchase analysis form before ERP, and `erp_runner.py` now prioritizes saved screen edits for ERP payload fields.
-- The auto-save APIs reset invoice status only when editable purchase/regular screen data actually changed. Existing completed document-set printing should not turn rows back to `대기중`.
+- The auto-save APIs reset invoice status only when editable purchase/regular screen data actually changed. Existing completed document-set printing should not turn rows back to `?湲곗쨷`.
 - Purchase analysis now actually calls Gemini for unknown purchase items when `GEMINI_API_KEY` is configured. Compuzone fallback parsing also simplifies common low-cost item names instead of keeping the full raw quote line.
 - The current WEB database can be inspected in a browser through `/admin-db`; the old CS `admin_viewer.py` endpoints are not part of the current WEB v1 API.
 - fix120 restores account recovery: deployment resets existing users once to `eotmd12!@`, first login forces a new password, and forgotten passwords require a mail verification code before setting a new password.
 - fix121 fixes purchase one-click ERP payload creation for vendors without a stored business number by defining `vendor_biz_no` in `build_purchase_erp_payload()` before it is returned to the Agent queue.
-- fix122 fills 현금출금결의서 정산금액 from 청구금액 and 지불처 from the purchase 거래처/vendor name in both Excel export and WEB fallback PDF generation.
-- fix123 makes document-set cards selectable and scopes `개별 PDF 저장` / `개별 출력` to selected documents via `selected_doc_keys`; full-set buttons remain unchanged.
-- fix124 reinforces KT/케이티 duplicate 거래처 popup handling so the Agent selects the `102-81-42945` row even when UIA exposes the business number inside a combined row string.
-- fix125 changes KT/케이티 handling to open the 거래처 popup from a blank vendor field, switch the popup search condition to 사업자번호, search `% 102-81-42945`, and confirm with Enter twice. fix126 fixes the search-box focus step so the Agent clears the default `%` and directly types the full business-number search text before confirming. It no longer clicks or activates a guessed result row.
+- fix122 fills ?꾧툑異쒓툑寃곗쓽???뺤궛湲덉븸 from 泥?뎄湲덉븸 and 吏遺덉쿂 from the purchase 嫄곕옒泥?vendor name in both Excel export and WEB fallback PDF generation.
+- fix123 makes document-set cards selectable and scopes `媛쒕퀎 PDF ??? / `媛쒕퀎 異쒕젰` to selected documents via `selected_doc_keys`; full-set buttons remain unchanged.
+- fix124 reinforces KT/耳?댄떚 duplicate 嫄곕옒泥?popup handling so the Agent selects the `102-81-42945` row even when UIA exposes the business number inside a combined row string.
+- fix125 changes KT/耳?댄떚 handling to open the 嫄곕옒泥?popup from a blank vendor field, switch the popup search condition to ?ъ뾽?먮쾲?? search `% 102-81-42945`, and confirm with Enter twice. fix126 fixes the search-box focus step so the Agent clears the default `%` and directly types the full business-number search text before confirming. It no longer clicks or activates a guessed result row.
 
-Current active product work: WEB `정기 처리` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
+Current active product work: WEB `?뺢린 泥섎━` is implemented in the active source, and SMILE EDI mail links are now wired into the regular-processing crawler flow.
 
 fix109/fix110 setup/install handoff:
 
 - Latest ZIP: `C:\Tmp\accounting_web_v1_expense_payee_settlement_fix122_20260518_104156.zip`.
-- The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to 담당자 users.
+- The setup page downloads `AccountingWebRequiredSetup.exe` from `GET /api/setup/user-pc-installer.exe`; it must not show PowerShell copy/paste instructions to ?대떦??users.
 - The EXE base file lives at `web_v1/backend/tools/AccountingWebRequiredSetup.exe`; `app.py` appends the current server URL overlay before returning it.
-- The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\양식_현금출금정산서.xlsx` only when missing.
+- The user-PC payload still contains `web_v1`, `manager_server`, and `support`; cash-report templates are included through `support/*.xlsx` and installed by the Agent to `%APPDATA%\?묒떇_?꾧툑異쒓툑?뺤궛??xlsx` only when missing.
 - `start_user_erp_agent.ps1` registers `accountingweb://start` and `HKCU\Software\Microsoft\Windows\CurrentVersion\Run\AccountingWebAgent`, then starts the Agent hidden with `pythonw.exe` when available.
-- `erp_agent.py` owns the tray process. Its right-click menu is `내 상태 확인`, `수동 업데이트`, `버전확인`, `종료`; double-click still opens the WEB URL.
+- `erp_agent.py` owns the tray process. Its right-click menu is `???곹깭 ?뺤씤`, `?섎룞 ?낅뜲?댄듃`, `踰꾩쟾?뺤씤`, `醫낅즺`; double-click still opens the WEB URL.
 - fix114 changes the tray separator menu item from `None` to an empty string because pywin32 rejected `None` and prevented the right-click menu from opening.
-- fix115 changes regular Agent-side ERP management-item vendor input for KT/케이티: duplicate 거래처 rows must select business number `102-81-42945`; if that row is not visible, the Agent passes instead of selecting the highlighted first row.
+- fix115 changes regular Agent-side ERP management-item vendor input for KT/耳?댄떚: duplicate 嫄곕옒泥?rows must select business number `102-81-42945`; if that row is not visible, the Agent passes instead of selecting the highlighted first row.
 - fix124 first reinforced that same KT rule by accepting popup row text that contains `102-81-42945`; fix125 supersedes result-row activation entirely by searching the popup by business number and confirming the single filtered result.
 - Graphify update completed after fix115 and refreshed `graphify-out`.
 - Agent update checks are throttled separately from the normal heartbeat loop: default `--update-interval` is 60 seconds, and `/api/version` now includes `agent_update_notes`.
@@ -169,7 +169,7 @@ High-value routes:
 | `POST /api/password/find` | Sends a password reset verification code to the user's company mail address. |
 | `POST /api/password/reset-with-code` | Verifies the mailed code and stores a new password. |
 | `GET /api/setup/status` | Required program / Agent / printer readiness. |
-| `POST /api/setup/printers` | Save printer mapping for 평택/김제/PDF targets. |
+| `POST /api/setup/printers` | Save printer mapping for ?됲깮/源??PDF targets. |
 | `POST /api/agent/heartbeat` | Manager PC Agent capability heartbeat. |
 | `POST /api/agent/erp/next` | Agent claims the next targeted ERP or expense-report task. |
 | `POST /api/agent/jobs/{job_id}/voucher` | Agent uploads saved ERP voucher PDF. |
@@ -210,7 +210,7 @@ Main job types:
 | `purchase_analyze` | `JobWorker._run_purchase_analyze()` | Ensures quote, analyzes purchase docs, starts background approval fetch. |
 | `purchase_one_click` | `JobWorker._run_purchase_erp_input()` | Queues ERP for non-complete purchase invoices; output is queued after Agent completion/report generation. |
 | `purchase_erp_input` | `JobWorker._run_purchase_erp_input()` | Direct ERP queue path, mostly admin/detail mode. |
-| `regular_one_click` | `JobWorker._run_purchase_erp_input()` | Queues regular ERP, then uses regular output-set readiness for `전표 + 세금계산서`. |
+| `regular_one_click` | `JobWorker._run_purchase_erp_input()` | Queues regular ERP, then uses regular output-set readiness for `?꾪몴 + ?멸툑怨꾩궛??. |
 | `regular_erp_input` | `JobWorker._run_purchase_erp_input()` | Direct regular ERP queue path. Queue files use `regular_erp_input`. |
 | `expense_report` | Agent-side task | Written to queue by server and executed by manager PC Agent. |
 | `output_set` | `JobWorker._run_output_set()` | Builds document set, saves merged PDF, saves individual files, or queues Agent printing. |
@@ -224,8 +224,8 @@ Current expected behavior:
 - Frontend posts to `POST /api/jobs/purchase-one-click` with `invoice_ids`, `output_target`, and `processor`.
 - Server resolves output target:
   - `pdf` -> `merged_pdf`
-  - `pyeongtaek` -> `print_individual` with mapped 평택 printer
-  - `gimje` -> `print_individual` with mapped 김제 printer
+  - `pyeongtaek` -> `print_individual` with mapped ?됲깮 printer
+  - `gimje` -> `print_individual` with mapped 源??printer
 - Server partitions selected invoices:
   - If a purchase invoice already has all required output docs, it skips ERP and cash-report regeneration.
   - If every selected invoice is already ready, server creates an `output_set` job directly with `existing_only=true`.
@@ -248,11 +248,11 @@ Edited purchase analysis rule:
 
 ## Regular Processing Flow
 
-`정기 처리` is now a first-class WEB mode in the shared frontend shell.
+`?뺢린 泥섎━` is now a first-class WEB mode in the shared frontend shell.
 
 Current active WEB support:
 
-- `web_v1/frontend/index.html` enables the `정기 처리` nav button.
+- `web_v1/frontend/index.html` enables the `?뺢린 泥섎━` nav button.
 - `frontend/app.js` switches between purchase and regular modes, loading `/api/invoices?mode=regular`.
 - Regular detail renders editable site/vendor/date/amount fields and item/account rows.
 - The frontend auto-saves the selected regular detail form before regular one-click ERP.
@@ -264,16 +264,16 @@ Current active WEB support:
 - `worker._run_purchase_erp_input()` now handles both purchase and regular job types, validating regular invoices by building a regular ERP payload.
 - `invoice_db.detect_invoice_type()` classifies regular vendors and crawler/XML results.
 - `mail_collector.py` keeps known regular mail/XML flows as `invoice_type=regular`.
-- `erp_runner.build_regular_erp_payload()` builds WEB-side regular ERP rows with legacy account/summary rules and `미지급금(원화)`.
-- Regular ERP payload vendor names are normalized before Agent management-item input; for example `(주)다우기술` is passed to ERP as `다우기술`.
+- `erp_runner.build_regular_erp_payload()` builds WEB-side regular ERP rows with legacy account/summary rules and `誘몄?湲됯툑(?먰솕)`.
+- Regular ERP payload vendor names are normalized before Agent management-item input; for example `(二??ㅼ슦湲곗닠` is passed to ERP as `?ㅼ슦湲곗닠`.
 - `run_invoice_erp_input()` chooses `build_regular_erp_payload()` for non-purchase invoices.
-- `output_set.py` supports regular output sets with only `전표` and `세금계산서`.
+- `output_set.py` supports regular output sets with only `?꾪몴` and `?멸툑怨꾩궛??.
 
 Legacy behavior to port/reference:
 
-- `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` has the old regular tab.
+- `manager_server/?꾪몴 ?먮룞???꾨줈洹몃옩(?대떦?먯슜)_v6.2.py` has the old regular tab.
 - Start at `create_regular_tab()`, `_extract_regular_payload()`, `_guess_regular_account()`, `copy_regular_erp()`, and `run_regular_print_set()`.
-- Legacy regular flow includes dashboard, multi-select, manual complete/delete, item/account editing, ERP voucher creation, tax PDF preview/print, and `전표 + 세금계산서` output set.
+- Legacy regular flow includes dashboard, multi-select, manual complete/delete, item/account editing, ERP voucher creation, tax PDF preview/print, and `?꾪몴 + ?멸툑怨꾩궛?? output set.
 
 Remaining regular gaps:
 
@@ -288,17 +288,17 @@ Remaining regular gaps:
 Required purchase documents:
 
 ```text
-01_전표.pdf
-02_세금계산서.pdf
-03_전자결재품의.pdf
-04_현금출금결의서.pdf
+01_?꾪몴.pdf
+02_?멸툑怨꾩궛??pdf
+03_?꾩옄寃곗옱?덉쓽.pdf
+04_?꾧툑異쒓툑寃곗쓽??pdf
 ```
 
 Required regular documents:
 
 ```text
-01_전표.pdf
-02_세금계산서.pdf
+01_?꾪몴.pdf
+02_?멸툑怨꾩궛??pdf
 ```
 
 Important functions:
@@ -320,9 +320,9 @@ Printer output rule:
 
 File roots:
 
-- Cash reports: `C:\ERP_DB\expense_reports\{invoice_id}\04_현금출금결의서.pdf`
+- Cash reports: `C:\ERP_DB\expense_reports\{invoice_id}\04_?꾧툑異쒓툑寃곗쓽??pdf`
 - Output sets: `C:\ERP_DB\output_sets\purchase\{invoice_id}` or `C:\ERP_DB\output_sets\regular\{invoice_id}`
-- Templates: `%APPDATA%\양식_현금출금정산서.xlsx`, `%APPDATA%\AccountingWeb`, `C:\ERP_DB\templates`, or `support`
+- Templates: `%APPDATA%\?묒떇_?꾧툑異쒓툑?뺤궛??xlsx`, `%APPDATA%\AccountingWeb`, `C:\ERP_DB\templates`, or `support`
 
 ## Agent Architecture
 
@@ -394,11 +394,11 @@ SMILE EDI integration:
 - File: `tax_crawler/portal_smileedi.py`.
 - Status: registered in `tax_crawler/crawler_main.py` and `extract_links_from_mail()` for `DtiEmail.do` mail links.
 - Target links: `https://www.smileedi.com/DtiEmail.do?...`.
-- Auth rule: infer buyer company from mail body and try the configured business numbers in order, such as D1~D3 for `(주)대승`.
+- Auth rule: infer buyer company from mail body and try the configured business numbers in order, such as D1~D3 for `(二????.
 - Approval rule: WEB automatic mail collection never clicks approval. The crawler clicks approval only when explicitly run with the standalone `--approve` option.
 - Storage rule: unapproved invoices fail safely without DB insert; approved/already-approved invoices save XML/PDF and insert as regular invoices.
-- Account rule: SMILE EDI regular data defaults to `지급수수료` and `erp_ready=true`.
-- ERP/output rule: regular ERP payloads use `지급수수료`, `부가세대급금`, `미지급금(원화)`, and the output set requires only `전표 + 세금계산서`.
+- Account rule: SMILE EDI regular data defaults to `吏湲됱닔?섎즺` and `erp_ready=true`.
+- ERP/output rule: regular ERP payloads use `吏湲됱닔?섎즺`, `遺媛?몃?湲됯툑`, `誘몄?湲됯툑(?먰솕)`, and the output set requires only `?꾪몴 + ?멸툑怨꾩궛??.
 
 When changing crawler behavior, prefer active `tax_crawler` files over backup copies.
 
@@ -458,7 +458,7 @@ UI modes:
 - Job follow-up refreshes must not force-reload the selected purchase detail or selected invoice logs while the user is editing. Use list/status refreshes with `skipDetail` and let logs refresh only from explicit user actions or save/upload actions.
 - Before one-click ERP starts, the open single-invoice purchase analysis form is saved automatically so edited `invoice_date`, `vendor_name`, item/account/department values feed the ERP payload.
 
-The top-level manager flow should remain simple: select invoices, choose output target, click `원클릭 처리`.
+The top-level manager flow should remain simple: select invoices, choose output target, click `?먰겢由?泥섎━`.
 
 ## Configuration
 
@@ -566,11 +566,11 @@ Before release:
 | Version mismatch | `VERSION`, `erp_agent.py`, `install_operating_server.ps1`, `versioning.py`, setup status Agent bundle check |
 ## Fix111 Regular Processing Notes
 
-- WEB regular processing must follow the legacy CS 담당자용/서버용 regular rules, not crawler temporary defaults.
-- `web_v1/backend/erp_runner.py` recalculates the regular item account from item/vendor unless `account_manual` is true. This fixes Daou Office/groupware invoices that were previously carried into ERP as `소모품비`; they now enter as `지급수수료` by default.
+- WEB regular processing must follow the legacy CS ?대떦?먯슜/?쒕쾭??regular rules, not crawler temporary defaults.
+- `web_v1/backend/erp_runner.py` recalculates the regular item account from item/vendor unless `account_manual` is true. This fixes Daou Office/groupware invoices that were previously carried into ERP as `?뚮え?덈퉬`; they now enter as `吏湲됱닔?섎즺` by default.
 - `web_v1/frontend/app.js` keeps the default account in `data-account-default` and only saves `account_manual=true` when the user changes it.
 - `web_v1/backend/app.py` persists `account_manual` from regular detail saves.
-- `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py` now receives `vendor_biz_no`/`supplier_biz_no` and can select the ERP 거래처 popup row by business number for generic regular vendors such as Daou Technology.
+- `manager_server/?꾪몴 ?먮룞???꾨줈洹몃옩(?대떦?먯슜)_v6.2.py` now receives `vendor_biz_no`/`supplier_biz_no` and can select the ERP 嫄곕옒泥?popup row by business number for generic regular vendors such as Daou Technology.
 - The latest fix111 deployment ZIP is 
 C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 .
@@ -580,23 +580,23 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 
 ## Fix112 Regular Account Rule Completion
 
-- Regular 계정 추정 규칙 now matches the legacy CS _guess_regular_account() keyword list: 통신비 uses KT/통신/VPN/SD-WAN/오토에버 identifiers; 지급수수료 uses 동양정보통신/대신아이씨티 and NAC/DLP/Watching-On/Acronis/그룹웨어/다우오피스/K-System/HelpU/원격지원/자산관리/Acrobat/Adobe/Cloudoc/문서중앙화 identifiers, defaulting to 지급수수료.
+- Regular 怨꾩젙 異붿젙 洹쒖튃 now matches the legacy CS _guess_regular_account() keyword list: ?듭떊鍮?uses KT/?듭떊/VPN/SD-WAN/?ㅽ넗?먮쾭 identifiers; 吏湲됱닔?섎즺 uses ?숈뼇?뺣낫?듭떊/??좎븘?댁뵪??and NAC/DLP/Watching-On/Acronis/洹몃９?⑥뼱/?ㅼ슦?ㅽ뵾??K-System/HelpU/?먭꺽吏???먯궛愿由?Acrobat/Adobe/Cloudoc/臾몄꽌以묒븰??identifiers, defaulting to 吏湲됱닔?섎즺.
 - Latest fix112 ZIP: C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip.
 
 
 ## Fix126 KT Search Input Note
 
-- The ERP 거래처 popup shows fixed `%` wildcard markers around the search input. The Agent must not type or clear that marker.
-- For KT/케이티, after selecting 사업자번호, the Agent now enters only `102-81-42945` into the search input and then presses Enter twice.
+- The ERP 嫄곕옒泥?popup shows fixed `%` wildcard markers around the search input. The Agent must not type or clear that marker.
+- For KT/耳?댄떚, after selecting ?ъ뾽?먮쾲?? the Agent now enters only `102-81-42945` into the search input and then presses Enter twice.
 
 ## Fix126 KT Vendor Keyboard Sequence
 
-- KT/케이티 no longer relies on UIA result rows, search condition controls, or editable `%` text.
-- After the 거래처 relation-item field double-click opens the popup, the Agent sends the confirmed sequence: `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter.
+- KT/耳?댄떚 no longer relies on UIA result rows, search condition controls, or editable `%` text.
+- After the 嫄곕옒泥?relation-item field double-click opens the popup, the Agent sends the confirmed sequence: `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter.
 
 ## Fix127 KT Vendor Final Confirm
 
-- KT/케이티 keyboard sequence final confirmation is Enter x2, not Enter x1.
+- KT/耳?댄떚 keyboard sequence final confirmation is Enter x2, not Enter x1.
 - Full sequence: `102-81-42945`, Tab x4, Down x5, Up x1, Tab x3, Enter x2.
 
 ## Fix128 Setup EXE Reuse
@@ -613,7 +613,7 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 ## Fix130 AutoEver Password Extraction
 
 - AutoEver/eTax crawler passwords are extracted only from password-labelled mail content, including special-character passwords like `20260520cr8wn7yw!plp`.
-- Numeric-only values such as tax invoice numbers are rejected so `세금계산서번호 : 1400357162` is not submitted as the login password.
+- Numeric-only values such as tax invoice numbers are rejected so `?멸툑怨꾩궛?쒕쾲??: 1400357162` is not submitted as the login password.
 
 ## Fix131 AutoEver Password Pattern
 
@@ -622,17 +622,23 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 
 ## Fix132 AutoEver Vendor Business Number
 
-- AutoEver/현대오토에버 regular ERP vendor input must not rely on the ERP 거래처명 popup search, because `현대오토에버시스템즈` can return no row.
-- The active Agent-side manager automation now treats AutoEver like the KT special case: open the 거래처 popup from a blank relation-item value, type business number `104-81-53190`, then run the confirmed keyboard sequence `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
+- AutoEver/?꾨??ㅽ넗?먮쾭 regular ERP vendor input must not rely on the ERP 嫄곕옒泥섎챸 popup search, because `?꾨??ㅽ넗?먮쾭?쒖뒪?쒖쫰` can return no row.
+- The active Agent-side manager automation now treats AutoEver like the KT special case: open the 嫄곕옒泥?popup from a blank relation-item value, type business number `104-81-53190`, then run the confirmed keyboard sequence `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
 - `web_v1/backend/erp_runner.py` also injects `vendor_biz_no`/`supplier_biz_no=104-81-53190` for AutoEver regular payloads when source crawler data does not contain a supplier business number.
 
 ## Fix133 ERP Entry Start Wait Tuning
 
-- `분개전표입력` click handling no longer sleeps 0.8 seconds every time. It polls for the slip form to be ready and moves on as soon as the `신규`/회계 fields are visible.
+- `遺꾧컻?꾪몴?낅젰` click handling no longer sleeps 0.8 seconds every time. It polls for the slip form to be ready and moves on as soon as the `?좉퇋`/?뚭퀎 fields are visible.
 - `ERP_SLIP_OPEN_WAIT` controls the maximum slip-form wait and defaults to `0.45`.
-- `신규` click follow-up wait now uses `ERP_NEW_FORM_WAIT`, default `0.12`, instead of a hardcoded `0.4`.
+- `?좉퇋` click follow-up wait now uses `ERP_NEW_FORM_WAIT`, default `0.12`, instead of a hardcoded `0.4`.
 ## Fix134 Vendor Business Number Paste
 
 - KT/AutoEver ERP vendor lookup must use clipboard paste for the business number, not per-character typing.
 - Current special-case sequence is: relation-item value double-click, paste `102-81-42945` or `104-81-53190`, `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
 - AutoEver is special-cased both by vendor name and by business number digits `1048153190`, so crawler/payload naming variations still take the same confirmed route.
+
+## Fix135 Purchase Gemini Attempt Logging
+
+- Purchase analysis still uses fast parsing first, then calls Gemini when `analysis_unknown_items` is non-empty.
+- `web_v1/backend/purchase_analysis.py` now records `analysis_ai_attempted`, `analysis_ai_error`, and `analysis_warning` so Gemini failures are not hidden.
+- `web_v1/backend/worker.py` surfaces the failure in the job log as `Gemini 분석 실패/미사용: ...`.

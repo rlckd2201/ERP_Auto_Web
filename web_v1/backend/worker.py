@@ -185,17 +185,21 @@ class JobWorker:
         try:
             analysis = analyze_purchase_documents(invoice)
             source = str(analysis.get("analysis_source") or "-")
-            ai_used = "AI 사용" if analysis.get("analysis_ai_used") else "학습 DB/빠른 파싱"
+            ai_attempted = bool(analysis.get("analysis_ai_attempted"))
+            ai_error = str(analysis.get("analysis_ai_error") or analysis.get("analysis_warning") or "").strip()
+            ai_used = "AI 사용" if analysis.get("analysis_ai_used") else ("AI 시도 후 빠른 파싱" if ai_attempted else "학습 DB/빠른 파싱")
             item_count = len(analysis.get("items") or [])
             unknown = list(analysis.get("analysis_unknown_items") or [])
             self.store.add_event(job.id, "analyzing", 52, f"구매 분석 완료: {source} / {ai_used} / 품목 {item_count}건")
             if unknown:
                 self.store.add_event(job.id, "analyzing", 58, f"미학습 품목 확인: {', '.join(str(item) for item in unknown[:5])}")
+            if ai_attempted and not analysis.get("analysis_ai_used"):
+                self.store.add_event(job.id, "analyzing", 60, f"Gemini 분석 실패/미사용: {ai_error or '원인 미상'}")
             analysis["erp_ready"] = bool(analysis.get("items"))
             analysis["approval_fetch_status"] = "running"
             analysis["approval_fetch_error"] = ""
 
-            note = "AI 분석 사용" if analysis.get("analysis_ai_used") else "학습 DB/빠른 파싱 사용"
+            note = "AI 분석 사용" if analysis.get("analysis_ai_used") else ("AI 분석 시도 후 빠른 파싱 사용" if ai_attempted else "학습 DB/빠른 파싱 사용")
             note += ", 품의결재본 백그라운드 확보 시작"
             update_invoice_json(invoice_id, analysis, message=f"구매 세금계산서/견적서 분석 결과가 저장되었습니다. ({note})")
             self.store.add_event(job.id, "printing", 88, "구매 분석 결과 DB 저장 완료")
