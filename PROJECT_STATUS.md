@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.121`.
+- Current WEB/Agent version in files: `1.0.122`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -62,6 +62,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after KT UIA-object vendor selection fix125: `C:\Tmp\accounting_web_v1_kt_vendor_uia_select_fix125_20260518_115418.zip`.
 - Latest local deployment ZIP after AutoEver vendor business-number fix132: `C:\Tmp\accounting_web_v1_autoever_vendor_biz_fix132_20260520_110020.zip`.
 - Latest local deployment ZIP after ERP entry-start wait tuning fix133: `C:\Tmp\accounting_web_v1_erp_entry_start_wait_fix133_20260520_111236.zip`.
+- Latest local deployment ZIP after AutoEver/KT vendor business-number paste fix134: `C:\Tmp\accounting_web_v1_vendor_biz_paste_fix134_20260520_114023.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -458,3 +459,14 @@ NaN
 - Verification passed: Python py_compile for the manager ERP automation and Agent.
 - fix133 ZIP verification passed for `web_v1/VERSION=1.0.121`, frontend/setup EXE presence, slip-form polling markers, `ERP_NEW_FORM_WAIT`, removal of fixed `time.sleep(0.8)`, and no `graphify-out`/backup/hotfix/release/pycache entries.
 - `graphify update .` was attempted after fix133, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383). Existing graph/report were left untouched.
+
+## 2026-05-20 fix134 Vendor Business Number Paste
+
+- Active WEB/Agent files are now 1.0.122.
+- Latest fix134 ZIP: C:\Tmp\accounting_web_v1_vendor_biz_paste_fix134_20260520_114023.zip.
+- Root cause: the KT/AutoEver special vendor path used the confirmed key sequence, but entered the business number with `pyautogui.write()`. In the ERP popup this can miss characters or lose focus, causing the following keyboard navigation to confirm a wrong vendor row.
+- Fix: the manager automation now pastes the target business number through the clipboard before `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
+- AutoEver also enters the special path when the payload only carries business number `104-81-53190`, even if the normalized vendor name is unstable.
+- Verification passed: Python py_compile for the manager ERP automation and Agent.
+- fix134 ZIP verification passed for `web_v1/VERSION=1.0.122`, frontend/setup EXE presence, paste-based vendor business-number markers, removal of `pyautogui.write(target_biz_no)`, and no `graphify-out`/backup/hotfix/release/pycache directories.
+- `graphify update .` was attempted after fix134, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383). Existing graph/report were left untouched.

@@ -631,3 +631,8 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - `분개전표입력` click handling no longer sleeps 0.8 seconds every time. It polls for the slip form to be ready and moves on as soon as the `신규`/회계 fields are visible.
 - `ERP_SLIP_OPEN_WAIT` controls the maximum slip-form wait and defaults to `0.45`.
 - `신규` click follow-up wait now uses `ERP_NEW_FORM_WAIT`, default `0.12`, instead of a hardcoded `0.4`.
+## Fix134 Vendor Business Number Paste
+
+- KT/AutoEver ERP vendor lookup must use clipboard paste for the business number, not per-character typing.
+- Current special-case sequence is: relation-item value double-click, paste `102-81-42945` or `104-81-53190`, `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
+- AutoEver is special-cased both by vendor name and by business number digits `1048153190`, so crawler/payload naming variations still take the same confirmed route.

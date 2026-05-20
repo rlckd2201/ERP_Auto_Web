@@ -1897,17 +1897,18 @@ class ERPLoginBot:
             vendor_target_biz_no = ""
             vendor_search_name = vendor_name
             vendor_target_optional = False
+            vendor_biz_digits = re.sub(r"[^0-9]", "", vendor_biz_no or "")
+            is_autoever_biz_no = vendor_biz_digits == "1048153190"
             if is_kt_vendor:
                 vendor_target_biz_no = "102-81-42945"
                 vendor_search_name = "케이티"
                 vendor_target_optional = True
-            elif is_autoever_vendor:
+            elif is_autoever_vendor or is_autoever_biz_no:
                 vendor_target_biz_no = "104-81-53190"
                 vendor_search_name = "현대오토에버시스템즈"
                 vendor_target_optional = True
             elif vendor_biz_no:
-                digits = re.sub(r"[^0-9]", "", vendor_biz_no)
-                vendor_target_biz_no = f"{digits[:3]}-{digits[3:5]}-{digits[5:]}" if len(digits) == 10 else vendor_biz_no
+                vendor_target_biz_no = f"{vendor_biz_digits[:3]}-{vendor_biz_digits[3:5]}-{vendor_biz_digits[5:]}" if len(vendor_biz_digits) == 10 else vendor_biz_no
             elif "동양정보통신" in compact_vendor:
                 vendor_target_biz_no = "402-81-23213"
                 vendor_search_name = "동양정보통신"
@@ -2033,9 +2034,9 @@ class ERPLoginBot:
                     pass
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
-                # 순서: 사업자번호 입력 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter.
-                pyautogui.write(target_biz_no, interval=0.01)
-                time.sleep(mgmt_key_wait)
+                # 순서: 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.
+                _paste_text_fast(target_biz_no, f"{label} 거래처 사업자번호")
+                self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 붙여넣기: {target_biz_no}")
                 pyautogui.press('tab', presses=4, interval=0.04)
                 time.sleep(mgmt_key_wait)
                 pyautogui.press('down', presses=5, interval=0.04)
@@ -2052,7 +2053,7 @@ class ERPLoginBot:
             def _input_vendor_value_xy(x, y, label):
                 if not vendor_name:
                     return
-                if (is_kt_vendor or is_autoever_vendor) and vendor_target_biz_no:
+                if (is_kt_vendor or is_autoever_vendor or is_autoever_biz_no) and vendor_target_biz_no:
                     _input_vendor_by_business_no_keyboard(x, y, label, vendor_target_biz_no)
                     return
                 if vendor_target_biz_no:
