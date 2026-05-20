@@ -1,32 +1,31 @@
 # SESSION STATE
 
 ## 현재 작업
-- fix129 Chrome/Windows 작업 완료 알림 추가
+- fix130 AutoEver/eTax 비밀번호 추출 수정 완료
 
 ## 현재 수정중 파일
-- web_v1/frontend/app.js
-- web_v1/frontend/index.html
-- web_v1/frontend/sw.js
+- tax_crawler/portal_autoever.py
 - web_v1/VERSION
 - web_v1/agent/erp_agent.py
 - web_v1/deploy/install_operating_server.ps1
 - web_v1/backend/UPDATE_NOTES.txt
 - PROJECT_STATUS.md
 - CODEBASE_WIKI.md
+- SESSION_STATE.md
 
 ## 방금 수정한 내용
-- 알림 허용 버튼을 일반 화면에 노출
-- 작업 시작 시 Chrome 알림 권한을 1회 요청
-- 작업 완료/실패 알림을 서비스워커 기반 Windows 알림으로 표시
-- WEB/Agent 버전 1.0.117 bump
+- AutoEver/eTax 메일 비밀번호 추출을 비밀번호 라벨 주변으로 제한
+- 특수문자 포함 비밀번호 예: 20260520cr8wn7yw!plp 허용
+- 세금계산서번호 같은 숫자-only 후보는 비밀번호로 사용하지 않게 차단
+- WEB/Agent 버전 1.0.118 bump
+- fix130 ZIP 생성: C:\Tmp\accounting_web_v1_autoever_password_fix130_20260520_091900.zip
 
 ## 다음 작업
-- node syntax 검증
-- py_compile 검증
-- Graphify update
-- fix129 ZIP 생성/검증
 - 관련 파일만 stage/commit/push
+- 운영서버에 fix130 ZIP 배포
 
 ## 주의사항
-- Chrome 알림은 HTTPS 접속에서만 정상 동작
-- 로컬 Agent가 개발 frontend를 지우는 증상이 있어 개발 중에는 Agent를 임시 중지함
+- backup/hotfix/release 폴더 수정 금지
+- 현재 워크트리에는 unrelated dirty 파일이 많으므로 관련 파일만 stage
+- Graphify update는 1295 vs 1383 노드 감소로 거부되어 기존 graph를 유지함
+- AutoEver 실제 운영 메일은 비밀번호에 ! 같은 특수문자가 포함됨

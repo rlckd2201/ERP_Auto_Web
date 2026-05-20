@@ -109,17 +109,48 @@ class AutoEverHandler(BaseTaxInvoiceHandler):
         )
 
     def _extract_password(self, mail_text: str) -> str:
-        text = str(mail_text or "")
-        patterns = [
-            r"비밀번호\s*[:：]?\s*([0-9A-Za-z]{10,})",
-            r"로그인시\s*사용하는\s*비밀번호[^0-9A-Za-z]*([0-9A-Za-z]{10,})",
+        parts = [getattr(self, "_mail_subject", ""), mail_text]
+        text = html_lib.unescape("\n".join(str(part or "") for part in parts))
+        text = re.sub(r"<[^>]+>", " ", text)
+        text = text.replace("\xa0", " ")
+        text = re.sub(r"\s+", " ", text).strip()
+        if not text:
+            return ""
+
+        label_patterns = [
+            r"(?:비밀번호|임시비밀번호|암호|password|pass\s*word|pwd)\s*(?:는|은|입니다|:|：|=|-)?\s*([0-9A-Za-z!@#$%^&*._~+\-]{10,40})",
+            r"(?:로그인\s*시|로그인시)\s*(?:사용하는\s*)?(?:비밀번호|암호)[^0-9A-Za-z!@#$%^&*._~+\-]{0,40}([0-9A-Za-z!@#$%^&*._~+\-]{10,40})",
         ]
-        for pat in patterns:
-            m = re.search(pat, text, re.I)
-            if m:
-                return m.group(1).strip()
-        candidates = re.findall(r"\b[0-9]{8}[0-9A-Za-z]{6,}\b", text)
-        return candidates[0].strip() if candidates else ""
+        for pat in label_patterns:
+            for match in re.finditer(pat, text, re.I):
+                candidate = self._clean_password_candidate(match.group(1))
+                if self._valid_password_candidate(candidate):
+                    return candidate
+
+        for label in ("비밀번호", "임시비밀번호", "암호", "password", "pass word", "pwd"):
+            for match in re.finditer(label, text, re.I):
+                window = text[match.end():match.end() + 120]
+                for token in re.findall(r"[0-9A-Za-z!@#$%^&*._~+\-]{10,40}", window):
+                    candidate = self._clean_password_candidate(token)
+                    if self._valid_password_candidate(candidate):
+                        return candidate
+
+        return ""
+
+    @staticmethod
+    def _clean_password_candidate(value: str) -> str:
+        return re.sub(r"[^0-9A-Za-z!@#$%^&*._~+\-]", "", str(value or "")).strip()
+
+    @staticmethod
+    def _valid_password_candidate(value: str) -> bool:
+        if not value or not (10 <= len(value) <= 40):
+            return False
+        lower = value.lower()
+        if lower.startswith(("http", "https")):
+            return False
+        if value.isdigit():
+            return False
+        return bool(re.search(r"[A-Za-z]", value) and re.search(r"\d", value))
 
     def _ensure_non_member_tab(self, driver) -> None:
         xpaths = [

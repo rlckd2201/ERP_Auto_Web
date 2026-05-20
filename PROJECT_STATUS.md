@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.117`.
+- Current WEB/Agent version in files: `1.0.118`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -407,3 +407,16 @@ NaN
 - Starting a job asks for notification permission once when Chrome permission is still pending.
 - Job completion/failure notifications use the Notification API and a frontend service worker so background tabs can show Windows toast notifications.
 - Chrome notifications still require HTTPS access, so users should open https://172.17.39.121:8080 rather than plain HTTP.
+
+## 2026-05-20 fix130 AutoEver Password Extraction
+
+- Active WEB/Agent files are now 1.0.118.
+- Latest fix130 ZIP: C:\Tmp\accounting_web_v1_autoever_password_fix130_20260520_091900.zip.
+- AutoEver/eTax password extraction now accepts special-character passwords such as `20260520cr8wn7yw!plp` and refuses numeric-only invoice numbers such as `1400357162`.
+
+### Fix130 Verification
+
+- AutoEver password extraction regression passed: `20260520cr8wn7yw!plp` is kept intact, and numeric-only invoice number `1400357162` is rejected.
+- Python py_compile passed for `tax_crawler/portal_autoever.py` and `web_v1/agent/erp_agent.py`.
+- fix130 ZIP verification passed for `web_v1/VERSION=1.0.118`, Agent/install version markers, AutoEver special-character password regex, numeric-only rejection, and no `graphify-out`/pycache/pyc/zip entries.
+- `graphify update .` was attempted after fix130, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1295 vs 1383). Existing graph/report were left untouched.
