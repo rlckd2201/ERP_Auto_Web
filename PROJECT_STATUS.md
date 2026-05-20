@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.118`.
+- Current WEB/Agent version in files: `1.0.119`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -420,3 +420,18 @@ NaN
 - Python py_compile passed for `tax_crawler/portal_autoever.py` and `web_v1/agent/erp_agent.py`.
 - fix130 ZIP verification passed for `web_v1/VERSION=1.0.118`, Agent/install version markers, AutoEver special-character password regex, numeric-only rejection, and no `graphify-out`/pycache/pyc/zip entries.
 - `graphify update .` was attempted after fix130, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1295 vs 1383). Existing graph/report were left untouched.
+
+## 2026-05-20 fix131 AutoEver Password Pattern
+
+- Active WEB/Agent files are now 1.0.119.
+- Latest fix131 ZIP: C:\Tmp\accounting_web_v1_autoever_password_pattern_fix131_20260520_094000.zip.
+- AutoEver/eTax password extraction now follows the real mail rule: an exact 20-character token composed of an 8-digit `YYYYMMDD` date plus a 12-character suffix. The suffix may start with a number, letter, or special character.
+- Verified with three provided AutoEver EML files: `20260320zs!tblan1af@`, `2026042098s6hv0m399p`, and `20260520cr8wn7yw!plp`.
+
+### Fix131 Verification
+
+- Parsed the three provided AutoEver EML files and verified exact passwords: `20260320zs!tblan1af@`, `2026042098s6hv0m399p`, `20260520cr8wn7yw!plp`.
+- Rejected malformed AutoEver password candidates such as tax invoice number `1400357162` and short token `20260520short`.
+- Python py_compile passed for `tax_crawler/portal_autoever.py` and `web_v1/agent/erp_agent.py`.
+- `graphify update .` was attempted after fix131, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1295 vs 1383). Existing graph/report were left untouched.
+- fix131 ZIP verification passed for `web_v1/VERSION=1.0.119`, Agent/install version markers, AutoEver exact 20-character password pattern, date validation, and no `graphify-out`/pycache/pyc/zip entries.
