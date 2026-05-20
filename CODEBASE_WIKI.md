@@ -654,3 +654,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Purchase analysis now treats Gemini as an assistant, not the final authority for item labels. If Gemini returns a raw Compuzone line, `purchase_analysis.py` still applies deterministic ERP item-name cleanup before saving.
 - Canon/PIXMA/잉크젯/복합기/프린터 raw lines are saved as concise names such as `잉크젯복합기`, while `raw_desc` keeps the original quote text for traceability.
 - Items corrected by deterministic simplification are no longer re-added to `analysis_unknown_items`, so the job log should not say the same cleaned item is still unlearned.
+
+## Graphify Baseline Reset
+
+- As of 2026-05-20, the active Graphify baseline was force-refreshed after repeated normal-update refusals from the stale 1383-node graph.
+- Current baseline: 230 files, 1298 nodes, 4074 edges, 41 communities.
+- Treat this as the new code-navigation graph. If future node counts drop materially from 1298, investigate file discovery/exclusion before accepting another force refresh.

@@ -503,3 +503,9 @@ NaN
 - Gemini prompt now explicitly tells the model to keep `raw_desc` as the original and make `items[].name` a short ERP item name without brand/model/options/product code.
 
 - Verification passed: Python py_compile for purchase_analysis.py and Agent; #90-like Canon PIXMA regression confirmed final item name '잉크젯복합기', account '집기비품', unknown list empty; fix137 ZIP verification passed with no Gemini key literals and required frontend/setup files present; graphify update was attempted but refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383).
+
+## 2026-05-20 Graphify Baseline Reset
+
+- Graphify was force-refreshed with `force=True` because the previous baseline contained stale/historical graph state and repeatedly refused normal AST-only updates.
+- New accepted baseline: 230 files, 263,076 words, 1298 nodes, 4074 edges, 41 communities, report date 2026-05-20.
+- Future Graphify update warnings should be judged against this baseline instead of the older 1383-node graph.
