@@ -476,6 +476,10 @@ function agentUpdateRequiredFromSetup() {
   return (state.setupStatus?.checks || []).some((check) => check.key === "agent_update" && !check.ok);
 }
 
+function setupNeedsAgentStart() {
+  return !agentConnectedFromSetup() || agentUpdateRequiredFromSetup();
+}
+
 function clearLoginAndShowLogin(message = "") {
   localStorage.removeItem("accountingWebUser");
   state.user = null;
@@ -572,21 +576,20 @@ function requestAgentStartByProtocol() {
   setTimeout(() => link.remove(), 1000);
 }
 
-function autoStartAgentAfterLogin({ downloadFallback = false } = {}) {
-  if (agentConnectedFromSetup()) return;
-  if (!state.agentAutoStartAttempted) {
-    state.agentAutoStartAttempted = true;
-    if (els.setupSummary) {
-      els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 브라우저 확인창이 나오면 열기를 누르세요.";
-    }
-    requestAgentStartByProtocol();
+function autoStartAgentAfterLogin({ downloadFallback = false, force = false } = {}) {
+  if (!setupNeedsAgentStart()) return;
+  if (!force && state.agentAutoStartAttempted) return;
+  state.agentAutoStartAttempted = true;
+  if (els.setupSummary) {
+    els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 브라우저 확인창이 나오면 열기를 누르세요.";
   }
+  requestAgentStartByProtocol();
   if (!downloadFallback) return;
   setTimeout(async () => {
-    if (!state.user?.id || agentConnectedFromSetup()) return;
+    if (!state.user?.id || !setupNeedsAgentStart()) return;
     try {
       const status = await loadSetupStatus({ showReadyApp: false });
-      if (status && !agentConnectedFromSetup()) {
+      if (status && setupNeedsAgentStart()) {
         if (els.setupSummary) {
           els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 처음 설치하는 PC라면 설치 버튼을 눌러 EXE를 다운로드하세요.";
         }
@@ -674,9 +677,18 @@ async function loadSetupStatus({ showReadyApp = true } = {}) {
     showApp();
   } else if (!status.ready) {
     showView("setup");
-    if (!agentConnectedFromSetup() && state.setupWasReady) {
+    if (setupNeedsAgentStart()) {
       autoStartAgentAfterLogin();
     }
+  }
+  return status;
+}
+
+async function refreshSetupAndStartAgent() {
+  state.agentAutoStartAttempted = false;
+  const status = await loadSetupStatus({ showReadyApp: false });
+  if (status && !status.ready && setupNeedsAgentStart()) {
+    autoStartAgentAfterLogin({ force: true });
   }
   return status;
 }
@@ -721,7 +733,6 @@ async function handleLogin(event) {
   if (els.loginMessage) els.loginMessage.textContent = "";
   state.setupStatus = null;
   state.agentAutoStartAttempted = false;
-  autoStartAgentAfterLogin();
   try {
     const data = await requestJson("/api/login", {
       method: "POST",
@@ -1861,7 +1872,7 @@ els.passwordFindModal?.addEventListener("click", (event) => {
 });
 els.passwordCodeSendButton?.addEventListener("click", sendPasswordResetCode);
 els.passwordFindForm?.addEventListener("submit", handlePasswordResetWithCode);
-els.setupRefreshButton?.addEventListener("click", () => loadSetupStatus({ showReadyApp: false }));
+els.setupRefreshButton?.addEventListener("click", () => refreshSetupAndStartAgent().catch((error) => alert(error.message)));
 els.setupSavePrintersButton?.addEventListener("click", savePrinterMapping);
 els.setupInstallButton?.addEventListener("click", requestSetupInstall);
 els.setupContinueButton?.addEventListener("click", () => {

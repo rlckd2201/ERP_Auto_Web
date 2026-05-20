@@ -509,3 +509,11 @@ NaN
 - Graphify was force-refreshed with `force=True` because the previous baseline contained stale/historical graph state and repeatedly refused normal AST-only updates.
 - New accepted baseline: 230 files, 263,076 words, 1298 nodes, 4074 edges, 41 communities, report date 2026-05-20.
 - Future Graphify update warnings should be judged against this baseline instead of the older 1383-node graph.
+
+## 2026-05-20 fix138 Agent Autostart Recheck
+
+- Active WEB/Agent files are now 1.0.126.
+- Root cause: the frontend called `autoStartAgentAfterLogin()` before login data/setup status existed, consuming the one-shot `agentAutoStartAttempted` flag. After login, the real setup screen could show the Agent missing/update-needed state but would not retry `accountingweb://start`.
+- Fix: login no longer consumes the auto-start attempt early. After setup status is loaded, missing/update-needed Agent states request `accountingweb://start`; the `다시 점검` button now refreshes setup status and force-retries the installed Agent launch when needed.
+- Frontend cache busting was bumped to `20260520_fix138_agent_autostart`.
+- Graphify updated normally after the baseline reset: 233 files, 271,963 words, 1388 nodes, 4385 edges, 38 communities.

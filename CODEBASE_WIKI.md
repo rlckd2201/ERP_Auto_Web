@@ -660,3 +660,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - As of 2026-05-20, the active Graphify baseline was force-refreshed after repeated normal-update refusals from the stale 1383-node graph.
 - Current baseline: 230 files, 1298 nodes, 4074 edges, 41 communities.
 - Treat this as the new code-navigation graph. If future node counts drop materially from 1298, investigate file discovery/exclusion before accepting another force refresh.
+
+## Fix138 Agent Autostart/Recheck
+
+- Login must not call `accountingweb://start` before `/api/login` returns setup status, because that consumes the one-shot frontend guard too early.
+- The setup page now uses `setupNeedsAgentStart()` so both missing Agent and Agent-version mismatch trigger the installed protocol launcher.
+- The `다시 점검` button now refreshes setup status and force-retries `accountingweb://start` when the Agent is still missing or update-required.
