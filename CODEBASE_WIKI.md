@@ -648,3 +648,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Do not hardcode Gemini API keys in source or deployment scripts.
 - Purchase analysis reads Gemini only from runtime config: `settings.gemini_api_key` / backend `.env` `GEMINI_API_KEY`.
 - `install_operating_server.ps1` preserves an existing key or accepts `$env:GEMINI_API_KEY` during deployment.
+
+## Fix137 Purchase Gemini Item Cleanup
+
+- Purchase analysis now treats Gemini as an assistant, not the final authority for item labels. If Gemini returns a raw Compuzone line, `purchase_analysis.py` still applies deterministic ERP item-name cleanup before saving.
+- Canon/PIXMA/잉크젯/복합기/프린터 raw lines are saved as concise names such as `잉크젯복합기`, while `raw_desc` keeps the original quote text for traceability.
+- Items corrected by deterministic simplification are no longer re-added to `analysis_unknown_items`, so the job log should not say the same cleaned item is still unlearned.

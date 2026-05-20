@@ -491,6 +491,15 @@ NaN
 - Latest fix136 ZIP: C:\Tmp\accounting_web_v1_gemini_env_key_fix136_20260520_154045.zip.
 - Removed the leaked Gemini default key from source and install script. Purchase analysis now uses only `settings.gemini_api_key` from runtime `.env`.
 - `install_operating_server.ps1` preserves an existing `GEMINI_API_KEY` from `.env`, or accepts a new key from `$env:GEMINI_API_KEY` during deployment. It no longer writes a hardcoded default key.
-- Verification passed: Python py_compile for `purchase_analysis.py` and Agent; source scan confirmed no `AIzaSy` / `DEFAULT_GEMINI_API_KEY` remains under `web_v1/backend` or `web_v1/deploy`.
+- Verification passed: Python py_compile for `purchase_analysis.py` and Agent; source scan confirmed no Gemini key literal/default-key marker remains under `web_v1/backend` or `web_v1/deploy`.
 - fix136 ZIP verification passed for `web_v1/VERSION=1.0.124`, frontend/setup EXE presence, no Gemini API key in source/ZIP, existing `.env` Gemini key preservation marker, and no `graphify-out`/backup/hotfix/release/pycache directories.
 - `graphify update .` was attempted after fix136, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383). Existing graph/report were left untouched.
+
+## 2026-05-20 fix137 Purchase Gemini Item Cleanup
+
+- Active WEB/Agent files are now 1.0.125.
+- Root cause: Gemini could succeed, but purchase analysis still saved a raw Compuzone line when Gemini returned the original product name, and `_process_items_with_db()` kept simplified items in `analysis_unknown_items`.
+- Fix: Canon/PIXMA/inkjet/printer/copier style purchase items are normalized before DB save, for example `[Canon] PIXMA TS3690 잉크젯복합기 (잉크포함) -1148112` becomes `잉크젯복합기`; successfully simplified items no longer remain in the unknown-item list.
+- Gemini prompt now explicitly tells the model to keep `raw_desc` as the original and make `items[].name` a short ERP item name without brand/model/options/product code.
+
+- Verification passed: Python py_compile for purchase_analysis.py and Agent; #90-like Canon PIXMA regression confirmed final item name '잉크젯복합기', account '집기비품', unknown list empty; fix137 ZIP verification passed with no Gemini key literals and required frontend/setup files present; graphify update was attempted but refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383).

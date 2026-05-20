@@ -257,6 +257,12 @@ def _simplify_purchase_item_name(value: Any) -> str:
     if "멀티탭" in compact and "USB" in upper:
         outlet = re.search(r"(\d+)\s*구", stripped)
         return f"USB {outlet.group(1)}구 멀티탭" if outlet else "USB 멀티탭"
+    if any(token in compact for token in ("복합기", "프린터", "잉크젯")) or any(token in upper for token in ("PIXMA", "CANON", "INKJET")):
+        if any(token in compact for token in ("복합기", "잉크젯")) or "PIXMA" in upper:
+            return "잉크젯복합기"
+        if "잉크" in compact:
+            return "프린터 잉크"
+        return "프린터"
     if "블루투스" in compact and "스피커" in compact:
         return "블루투스 스피커"
     if "차량용" in compact and "공기청정" in compact:
@@ -330,7 +336,8 @@ def _process_items_with_db(items: list[dict[str, Any]], db_rows: list[tuple[str,
                 item.setdefault("raw_desc", original_name)
                 item["name"] = simplified_name
                 item["system_adjustment"] = True
-            unknown.append(original_name)
+            else:
+                unknown.append(original_name)
         final.append(item)
 
     processed: list[dict[str, Any]] = []
@@ -947,6 +954,8 @@ def _ai_parse(tax_path: str, quote_path: str, fast_data: dict[str, Any]) -> dict
 필드: site_name, buyer_biz_no, vendor_name, invoice_date, target_supply, total_tax, total_sum,
 items 배열(raw_desc, name, qty, inc_vat, supply, account, is_a, dept).
 account는 소모품비, 집기비품, 컴퓨터소프트웨어 중 하나만 사용하세요.
+items[].name은 ERP 입력용 품목명으로 짧게 정리하세요. 브랜드, 모델명, 옵션, 상품코드, 대괄호/괄호 문구를 그대로 쓰지 마세요.
+예: "[Canon] PIXMA TS3690 잉크젯복합기 (잉크포함) -1148112" -> name "잉크젯복합기", raw_desc는 원문 유지.
 부서는 알 수 없으면 빈 문자열로 두세요.
 """
         model = genai.GenerativeModel("gemini-2.5-flash", generation_config={"response_mime_type": "application/json"})
