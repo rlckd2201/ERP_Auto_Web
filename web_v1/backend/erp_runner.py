@@ -326,12 +326,21 @@ def _regular_vendor_display(vendor: Any) -> str:
         ("케이티", "KT"),
         ("kt", "KT"),
         ("오토에버", "현대오토에버시스템즈"),
+        ("autoever", "현대오토에버시스템즈"),
         ("비엔아이", "비엔아이"),
     ]
     for key, label in rules:
         if key in compact:
             return label
     return re.sub(r"\(주\)|㈜|\(유\)|유한회사|주식회사", "", raw).strip() or "업체명"
+
+
+def _regular_vendor_biz_no_override(*values: Any) -> str:
+    text = " ".join(str(value or "") for value in values).lower()
+    compact = re.sub(r"\s+", "", text)
+    if "오토에버" in compact or "autoever" in compact or "현대오토에버" in compact:
+        return "104-81-53190"
+    return ""
 
 
 def _site_short_name(site: str) -> str:
@@ -625,6 +634,13 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         or raw.get("vendor_biz_no")
         or raw.get("supplier_biz_no")
         or raw.get("supplier_business_no")
+    )
+    vendor_biz_no = vendor_biz_no or _regular_vendor_biz_no_override(
+        raw_vendor,
+        vendor,
+        data.get("subject"),
+        data.get("item_name"),
+        data.get("item"),
     )
     site = _resolve_site(data, raw, invoice, pdf_path) or "사업장미확인"
     invoice_date = _extract_invoice_date(data, pdf_path)

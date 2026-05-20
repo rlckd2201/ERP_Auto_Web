@@ -1875,18 +1875,28 @@ class ERPLoginBot:
             supply_amount = _value_text(form_data.get('target_supply', 0), comma=False)
             business_query = _business_query_for_management(site_name)
             account_key, corp, plan = _management_plan(account_name)
-            is_kt_vendor = bool(vendor_name) and (
-                vendor_name.upper() == "KT"
-                or "케이티" in vendor_name
-                or "KT" in vendor_name.upper()
-            )
+            vendor_upper = vendor_name.upper()
             compact_vendor = re.sub(r"\s+", "", vendor_name)
+            is_kt_vendor = bool(vendor_name) and (
+                vendor_upper == "KT"
+                or "케이티" in vendor_name
+                or "KT" in vendor_upper
+            )
+            is_autoever_vendor = bool(vendor_name) and (
+                "오토에버" in compact_vendor
+                or "현대오토에버" in compact_vendor
+                or "AUTOEVER" in vendor_upper
+            )
             vendor_target_biz_no = ""
             vendor_search_name = vendor_name
             vendor_target_optional = False
             if is_kt_vendor:
                 vendor_target_biz_no = "102-81-42945"
                 vendor_search_name = "케이티"
+                vendor_target_optional = True
+            elif is_autoever_vendor:
+                vendor_target_biz_no = "104-81-53190"
+                vendor_search_name = "현대오토에버시스템즈"
                 vendor_target_optional = True
             elif vendor_biz_no:
                 digits = re.sub(r"[^0-9]", "", vendor_biz_no)
@@ -2000,7 +2010,7 @@ class ERPLoginBot:
                 except Exception:
                     return False
 
-            def _input_kt_vendor_by_business_no(x, y, label, target_biz_no):
+            def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
                 _click_form_xy(x, y, label, wait=mgmt_click_wait)
                 _release_modifiers(f"{label} 클릭 후", wait=False)
                 time.sleep(mgmt_focus_wait)
@@ -2008,14 +2018,14 @@ class ERPLoginBot:
                 time.sleep(ERP_FORM_WAIT)
                 popup = _find_vendor_popup(timeout=3.0)
                 if not popup:
-                    self.logger.warning(f"  [MGMT-XY] {label}: KT 거래처 팝업을 열지 못해 PASS")
+                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업을 열지 못해 PASS")
                     return False
                 try:
                     popup.set_focus()
                 except Exception:
                     pass
 
-                # KT 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 키보드 흐름을 그대로 사용합니다.
+                # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
                 # 순서: 사업자번호 입력 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter.
                 pyautogui.write(target_biz_no, interval=0.01)
                 time.sleep(mgmt_key_wait)
@@ -2029,14 +2039,14 @@ class ERPLoginBot:
                 time.sleep(mgmt_key_wait)
                 pyautogui.press('enter', presses=2, interval=0.08)
                 time.sleep(ERP_FORM_WAIT)
-                self.logger.info(f"  [MGMT-XY] {label}: KT 거래처 키보드 시퀀스 확정(Enter 2회): {target_biz_no}")
+                self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 키보드 시퀀스 확정(Enter 2회): {target_biz_no}")
                 return True
 
             def _input_vendor_value_xy(x, y, label):
                 if not vendor_name:
                     return
-                if is_kt_vendor and vendor_target_biz_no:
-                    _input_kt_vendor_by_business_no(x, y, label, vendor_target_biz_no)
+                if (is_kt_vendor or is_autoever_vendor) and vendor_target_biz_no:
+                    _input_vendor_by_business_no_keyboard(x, y, label, vendor_target_biz_no)
                     return
                 if vendor_target_biz_no:
                     target_biz_no = vendor_target_biz_no
@@ -3928,6 +3938,7 @@ class ERPAutoApp:
             ("케이티", "KT"),
             ("kt", "KT"),
             ("오토에버", "현대오토에버시스템즈"),
+            ("autoever", "현대오토에버시스템즈"),
             ("비엔아이", "비엔아이"),
         ]
         for key, label in rules:

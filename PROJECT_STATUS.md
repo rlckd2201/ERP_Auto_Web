@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.119`.
+- Current WEB/Agent version in files: `1.0.120`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -60,6 +60,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after selective output document fix123: `C:\Tmp\accounting_web_v1_selective_output_docs_fix123_20260518_111609.zip`.
 - Latest local deployment ZIP after KT vendor business-number row selection fix124: `C:\Tmp\accounting_web_v1_kt_vendor_biz_select_fix124_20260518_113617.zip`.
 - Latest local deployment ZIP after KT UIA-object vendor selection fix125: `C:\Tmp\accounting_web_v1_kt_vendor_uia_select_fix125_20260518_115418.zip`.
+- Latest local deployment ZIP after AutoEver vendor business-number fix132: `C:\Tmp\accounting_web_v1_autoever_vendor_biz_fix132_20260520_110020.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -435,3 +436,14 @@ NaN
 - Python py_compile passed for `tax_crawler/portal_autoever.py` and `web_v1/agent/erp_agent.py`.
 - `graphify update .` was attempted after fix131, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1295 vs 1383). Existing graph/report were left untouched.
 - fix131 ZIP verification passed for `web_v1/VERSION=1.0.119`, Agent/install version markers, AutoEver exact 20-character password pattern, date validation, and no `graphify-out`/pycache/pyc/zip entries.
+
+## 2026-05-20 fix132 AutoEver Vendor Business Number
+
+- Active WEB/Agent files are now 1.0.120.
+- Latest fix132 ZIP: C:\Tmp\accounting_web_v1_autoever_vendor_biz_fix132_20260520_110020.zip.
+- AutoEver/현대오토에버 regular ERP vendor input now uses the confirmed business-number keyboard sequence with `104-81-53190`, matching the KT-style flow instead of searching by `현대오토에버시스템즈`.
+- Regular ERP payload generation now fills `vendor_biz_no` and `supplier_biz_no` with `104-81-53190` for AutoEver/현대오토에버 vendors when crawler data does not provide it.
+- AutoEver English vendor text is normalized to `현대오토에버시스템즈` before ERP payload/output summary creation.
+- Verification passed: Python py_compile for the manager ERP automation, backend ERP runner, and Agent; AutoEver regular payload regression confirmed `vendor_biz_no=104-81-53190`.
+- fix132 ZIP verification passed for `web_v1/VERSION=1.0.120`, frontend/setup EXE presence, AutoEver business-number markers, and no `graphify-out`/backup/hotfix/release/pycache entries.
+- `graphify update .` was attempted after fix132, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1297 vs 1383). Existing graph/report were left untouched.

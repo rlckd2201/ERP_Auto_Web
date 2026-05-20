@@ -15,10 +15,10 @@ This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphif
 
 ## Current Handoff
 
-As of 2026-05-18, WEB/Agent files are at `1.0.119`. The latest completed local deployment ZIP is:
+As of 2026-05-20, WEB/Agent files are at `1.0.120`. The latest completed local deployment ZIP is:
 
 ```text
-C:\Tmp\accounting_web_v1_chrome_notifications_fix129_20260518_142900.zip
+C:\Tmp\accounting_web_v1_autoever_vendor_biz_fix132_20260520_110020.zip
 ```
 
 Known deployment hosts:
@@ -499,7 +499,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.119
+1.0.120
 ```
 
 ## Safe Change Checklist
@@ -619,3 +619,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 
 - AutoEver/eTax crawler password extraction is now anchored to the actual mail format: `YYYYMMDD` plus exactly 12 non-space/non-parenthesis characters.
 - This accepts monthly passwords such as `20260320zs!tblan1af@`, `2026042098s6hv0m399p`, and `20260520cr8wn7yw!plp`, while rejecting invoice numbers and malformed short tokens.
+
+## Fix132 AutoEver Vendor Business Number
+
+- AutoEver/현대오토에버 regular ERP vendor input must not rely on the ERP 거래처명 popup search, because `현대오토에버시스템즈` can return no row.
+- The active Agent-side manager automation now treats AutoEver like the KT special case: open the 거래처 popup from a blank relation-item value, type business number `104-81-53190`, then run the confirmed keyboard sequence `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
+- `web_v1/backend/erp_runner.py` also injects `vendor_biz_no`/`supplier_biz_no=104-81-53190` for AutoEver regular payloads when source crawler data does not contain a supplier business number.
