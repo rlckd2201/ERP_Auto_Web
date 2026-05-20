@@ -849,7 +849,6 @@ class ERPLoginBot:
                                 if str(el.window_text() or "").strip() == "분개전표입력":
                                     rect = el.rectangle()
                                     pyautogui.click((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
-                                    time.sleep(0.8)
                                     self.logger.info(
                                         f"  [TREE-UIA] 분개전표입력 UI 요소 클릭 전송: "
                                         f"rect=({rect.left},{rect.top})-({rect.right},{rect.bottom})"
@@ -877,6 +876,14 @@ class ERPLoginBot:
                         except Exception as e:
                             self.logger.warning(f"  [TREE-VERIFY] 분개전표입력 화면 검증 중 오류: {e}")
                         return False
+
+                    def _wait_slip_form_ready(timeout=0.45):
+                        end_at = time.time() + max(0.05, timeout)
+                        while time.time() < end_at:
+                            if _slip_form_ready():
+                                return True
+                            time.sleep(0.05)
+                        return _slip_form_ready()
 
                     # Step 1~3: 실제 사용자 동선 그대로 메뉴 -> 왼쪽 회계관리>> -> 메뉴 내부 회계관리 타일 선택
                     if not _tree_has("전표"):
@@ -911,17 +918,17 @@ class ERPLoginBot:
                     if not _click_slip_menu_by_uia():
                         _click_rel(155, 166, "분개전표입력")
                         self.logger.info("  [TREE-XY] 분개전표입력 좌표 클릭 전송")
-                        time.sleep(0.8)
 
-                    opened_slip_form = _slip_form_ready()
+                    opened_slip_form = _wait_slip_form_ready(
+                        float(os.getenv("ERP_SLIP_OPEN_WAIT", "0.45") or "0.45")
+                    )
                     if not opened_slip_form:
                         self.logger.warning("  [TREE-VERIFY] 분개전표입력 화면 검증 실패. UIA 재클릭 후 Enter 재시도")
                         if _click_slip_menu_by_uia():
-                            opened_slip_form = _slip_form_ready()
+                            opened_slip_form = _wait_slip_form_ready(0.35)
                         if not opened_slip_form:
                             pyautogui.press("enter")
-                            time.sleep(0.8)
-                            opened_slip_form = _slip_form_ready()
+                            opened_slip_form = _wait_slip_form_ready(0.35)
                     if opened_slip_form:
                         self.logger.info("  [TREE-VERIFY] 분개전표입력 화면 진입 확인")
                             
@@ -1043,7 +1050,7 @@ class ERPLoginBot:
             if btn_new and btn_new.is_visible():
                 btn_new.click_input()
                 self.logger.info("  ✅ [신규] 클릭")
-                time.sleep(0.4)
+                time.sleep(max(0.03, float(os.getenv("ERP_NEW_FORM_WAIT", "0.12") or "0.12")))
         except Exception as e:
             self.logger.warning(f"  [신규] 클릭 실패: {e}")
 

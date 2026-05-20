@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.120`.
+- Current WEB/Agent version in files: `1.0.121`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -61,6 +61,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after KT vendor business-number row selection fix124: `C:\Tmp\accounting_web_v1_kt_vendor_biz_select_fix124_20260518_113617.zip`.
 - Latest local deployment ZIP after KT UIA-object vendor selection fix125: `C:\Tmp\accounting_web_v1_kt_vendor_uia_select_fix125_20260518_115418.zip`.
 - Latest local deployment ZIP after AutoEver vendor business-number fix132: `C:\Tmp\accounting_web_v1_autoever_vendor_biz_fix132_20260520_110020.zip`.
+- Latest local deployment ZIP after ERP entry-start wait tuning fix133: `C:\Tmp\accounting_web_v1_erp_entry_start_wait_fix133_20260520_111236.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -447,3 +448,13 @@ NaN
 - Verification passed: Python py_compile for the manager ERP automation, backend ERP runner, and Agent; AutoEver regular payload regression confirmed `vendor_biz_no=104-81-53190`.
 - fix132 ZIP verification passed for `web_v1/VERSION=1.0.120`, frontend/setup EXE presence, AutoEver business-number markers, and no `graphify-out`/backup/hotfix/release/pycache entries.
 - `graphify update .` was attempted after fix132, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1297 vs 1383). Existing graph/report were left untouched.
+
+## 2026-05-20 fix133 ERP Entry Start Wait Tuning
+
+- Active WEB/Agent files are now 1.0.121.
+- Latest fix133 ZIP: C:\Tmp\accounting_web_v1_erp_entry_start_wait_fix133_20260520_111236.zip.
+- Reduced the fixed wait after clicking `분개전표입력`: instead of sleeping 0.8 seconds unconditionally, the manager automation now polls the slip-form readiness for up to `ERP_SLIP_OPEN_WAIT` seconds, default `0.45`.
+- Reduced the fixed wait after clicking `신규` from 0.4 seconds to configurable `ERP_NEW_FORM_WAIT`, default `0.12`.
+- Verification passed: Python py_compile for the manager ERP automation and Agent.
+- fix133 ZIP verification passed for `web_v1/VERSION=1.0.121`, frontend/setup EXE presence, slip-form polling markers, `ERP_NEW_FORM_WAIT`, removal of fixed `time.sleep(0.8)`, and no `graphify-out`/backup/hotfix/release/pycache entries.
+- `graphify update .` was attempted after fix133, but Graphify refused to overwrite because the new AST-only graph had fewer nodes than the existing graph (1298 vs 1383). Existing graph/report were left untouched.
