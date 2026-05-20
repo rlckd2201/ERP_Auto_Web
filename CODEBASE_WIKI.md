@@ -666,3 +666,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Login must not call `accountingweb://start` before `/api/login` returns setup status, because that consumes the one-shot frontend guard too early.
 - The setup page now uses `setupNeedsAgentStart()` so both missing Agent and Agent-version mismatch trigger the installed protocol launcher.
 - The `다시 점검` button now refreshes setup status and force-retries `accountingweb://start` when the Agent is still missing or update-required.
+
+## Fix139 Agent Protocol Gesture
+
+- Chrome external protocol calls such as `accountingweb://start` must be triggered directly from a user gesture. Calling them only after async `/api/login` or `/api/setup/status` can be ignored.
+- `frontend/app.js` now sends a direct protocol kick on login submit and sends another direct kick at the start of `다시 점검`, then waits briefly and reloads setup status.
+- If this regresses, inspect whether the frontend is calling `requestAgentStartByProtocol()` before the first awaited network request in the click/submit handler.

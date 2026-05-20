@@ -517,3 +517,16 @@ NaN
 - Fix: login no longer consumes the auto-start attempt early. After setup status is loaded, missing/update-needed Agent states request `accountingweb://start`; the `다시 점검` button now refreshes setup status and force-retries the installed Agent launch when needed.
 - Frontend cache busting was bumped to `20260520_fix138_agent_autostart`.
 - Graphify updated normally after the baseline reset: 233 files, 271,963 words, 1388 nodes, 4385 edges, 38 communities.
+
+## 2026-05-21 fix139 Agent Protocol Gesture
+
+- Active WEB/Agent files are now 1.0.127.
+- Root cause: fix138 retried `accountingweb://start` only after async setup/login status checks. Chrome can block external protocol launches that are not directly tied to the user's click, so login/recheck still appeared to do nothing.
+- Fix: login submit immediately sends one protocol kick without consuming the retry guard; `다시 점검` now sends `accountingweb://start` synchronously from the click handler before waiting and reloading setup status.
+- The local interfering `pythonw.exe` Agent process was stopped because it was deleting/restoring active frontend files in the development workspace.
+
+### Fix139 Verification
+
+- Verification passed: 
+ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python after local Python returned access denied; graphify update . completed normally: 234 files / 1393 nodes / 4394 edges / 84 communities.
+- Latest fix139 ZIP: C:\Tmp\accounting_web_v1_agent_protocol_gesture_fix139_20260521_085057.zip.

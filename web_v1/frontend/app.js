@@ -576,14 +576,19 @@ function requestAgentStartByProtocol() {
   setTimeout(() => link.remove(), 1000);
 }
 
-function autoStartAgentAfterLogin({ downloadFallback = false, force = false } = {}) {
-  if (!setupNeedsAgentStart()) return;
-  if (!force && state.agentAutoStartAttempted) return;
+function requestAgentStartNow({ force = false } = {}) {
+  if (!force && state.agentAutoStartAttempted) return false;
   state.agentAutoStartAttempted = true;
   if (els.setupSummary) {
     els.setupSummary.textContent = "설치된 담당자 PC 필수 프로그램 실행을 요청했습니다. 브라우저 확인창이 나오면 열기를 누르세요.";
   }
   requestAgentStartByProtocol();
+  return true;
+}
+
+function autoStartAgentAfterLogin({ downloadFallback = false, force = false } = {}) {
+  if (!setupNeedsAgentStart()) return;
+  if (!requestAgentStartNow({ force })) return;
   if (!downloadFallback) return;
   setTimeout(async () => {
     if (!state.user?.id || !setupNeedsAgentStart()) return;
@@ -686,6 +691,10 @@ async function loadSetupStatus({ showReadyApp = true } = {}) {
 
 async function refreshSetupAndStartAgent() {
   state.agentAutoStartAttempted = false;
+  if (setupNeedsAgentStart()) {
+    requestAgentStartNow({ force: true });
+    await new Promise((resolve) => setTimeout(resolve, 1200));
+  }
   const status = await loadSetupStatus({ showReadyApp: false });
   if (status && !status.ready && setupNeedsAgentStart()) {
     autoStartAgentAfterLogin({ force: true });
@@ -733,6 +742,7 @@ async function handleLogin(event) {
   if (els.loginMessage) els.loginMessage.textContent = "";
   state.setupStatus = null;
   state.agentAutoStartAttempted = false;
+  requestAgentStartByProtocol();
   try {
     const data = await requestJson("/api/login", {
       method: "POST",
