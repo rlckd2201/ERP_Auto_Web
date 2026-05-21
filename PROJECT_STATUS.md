@@ -561,3 +561,11 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Root cause: after the click-count guard, the ERP vendor popup could open quickly but the search input was not always ready before paste/Tab started.
 - Fix: added 0.1-second buffers around popup detection and business-number paste: first popup-open wait/timeout increased by 0.1, fallback wait/timeout increased by 0.1, plus 0.1 before paste and 0.1 after paste before Tab navigation.
 - Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix143 ZIP verification passed for version 1.0.131, 0.1-second timing buffers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.
+## 2026-05-21 fix144 ERP Form UIA Cache
+
+- Active WEB/Agent files are now 1.0.132.
+- Latest fix144 ZIP: C:\Tmp\accounting_web_v1_form_uia_cache_fix144_20260521_144639.zip.
+- Root cause under investigation: K-System could raise COM/UIA event errors while the automation was entering top form fields such as 전표관리단위 and 회계일. The failure happened before vendor popup selection, so it is handled as a form-field stability issue rather than a KT/AutoEver vendor lookup issue.
+- Fix: the manager automation now caches the main K-System window rectangle once when the slip form setup starts and uses that cached rectangle by default for coordinate-first field clicks. This avoids repeated UIA rectangle calls during critical top-field input.
+- Important field paste stability wait default was increased to 0.2 seconds via ERP_CRITICAL_FIELD_WAIT.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix144 ZIP verification passed for version 1.0.132, form UIA-cache markers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.

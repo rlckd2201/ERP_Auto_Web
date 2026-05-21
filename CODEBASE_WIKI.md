@@ -691,3 +691,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - KT/AutoEver vendor popup click handling keeps the fix142 click guard, but now adds small timing buffers for ERP popup readiness.
 - The first popup-open click waits 0.28s and searches for 0.35s; fallback waits ERP_FORM_WAIT + 0.1 and searches for 3.1s.
 - After the popup is detected, wait 0.1s before pasting the business number, and wait 0.1s after paste before starting Tab/arrow navigation.
+## Fix144 ERP Form UIA Cache
+
+- 전표관리단위/회계일 입력 중 K-System이 COM/UIA 이벤트 예외를 내는 경우가 있어, 분개전표입력 폼 세팅 시작 시 메인 창 좌표를 캐시하고 좌표 우선 입력에서는 기본적으로 이 캐시를 사용한다.
+- `ERP_FORM_STATIC_RECT=1`이 기본값이며, 필요 시 0으로 끄면 기존처럼 매번 `main_win.rectangle()`을 다시 조회한다.
+- `ERP_CRITICAL_FIELD_WAIT` 기본값은 0.20초로 늘렸다. 상단 필드가 커서/확정 처리 중 튕기는 증상이 있으면 이 값을 먼저 조정한다.
+- Latest fix144 ZIP: C:\Tmp\accounting_web_v1_form_uia_cache_fix144_20260521_144639.zip.

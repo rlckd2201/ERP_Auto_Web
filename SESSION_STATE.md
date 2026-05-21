@@ -1,7 +1,7 @@
 # SESSION STATE
 
 ## 현재 작업
-- fix143 Vendor Popup Timing Buffer 작업중
+- fix144 ERP 상단 폼 UIA/COM 안정화 작업중
 
 ## 현재 수정중 파일
 - manager_server/전표 자동화 프로그램(담당자용)_v6.2.py
@@ -14,15 +14,13 @@
 - SESSION_STATE.md
 
 ## 방금 수정한 내용
-- AutoEver/KT 거래처 팝업 열기/감지/붙여넣기 주변에 0.1초 여유 추가
-- 첫 팝업 감지 wait/timeout을 0.18/0.25에서 0.28/0.35로 조정
-- fallback wait/timeout을 ERP_FORM_WAIT/3.0에서 ERP_FORM_WAIT+0.1/3.1로 조정
-- 팝업 감지 후 붙여넣기 전 0.1초, 붙여넣기 후 Tab 전 0.1초 추가
-- WEB/Agent 버전 1.0.131로 bump`r`n- Graphify 갱신 완료`r`n- fix143 ZIP 생성/검증 완료: C:\Tmp\accounting_web_v1_vendor_popup_timing_fix143_20260521_132030.zip
+- 전표관리단위/회계일 같은 중요 상단 필드 입력 전후 안정 대기 기본값을 0.20초로 조정
+- 분개전표입력 폼 세팅 시작 시 K-System 메인 창 좌표를 캐시하고 좌표 우선 입력에서는 캐시 좌표를 사용하도록 변경
+- WEB/Agent 버전 1.0.132로 bump
+- py_compile/Graphify 검증 완료
+- fix144 ZIP 생성/검증 완료: C:\Tmp\accounting_web_v1_form_uia_cache_fix144_20260521_144639.zip
 
 ## 다음 작업
-- Graphify 갱신
-- fix143 ZIP 생성 및 검증
 - 관련 파일만 stage/commit/push
 - 운영서버 배포 명령어 전달
 
@@ -30,4 +28,4 @@
 - manager_server active source만 수정
 - backup/hotfix/release 폴더 수정 금지
 - 기존 unrelated dirty 파일은 stage하지 않음
-- 줄 단위 PowerShell 편집으로 한글이 깨질 수 있어 UTF-8 원문 복구 후 작은 diff만 재적용함
+- 상단 필드 튕김은 거래처 팝업 문제가 아니라 K-System UIA/COM 안정화 문제로 분리해서 본다

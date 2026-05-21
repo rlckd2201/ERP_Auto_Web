@@ -987,7 +987,7 @@ class ERPLoginBot:
         verbose_keysafe = _env_flag("ERP_VERBOSE_KEYSAFE", "0")
         verbose_management_clear = _env_flag("ERP_VERBOSE_MGMT_CLEAR", "0")
         quick_wait = 0.02 if fast_input else 0.05
-        critical_field_wait = max(0.08, float(os.getenv("ERP_CRITICAL_FIELD_WAIT", "0.10") or "0.10"))
+        critical_field_wait = max(0.12, float(os.getenv("ERP_CRITICAL_FIELD_WAIT", "0.20") or "0.20"))
         mgmt_key_default = "0.025" if fast_management else "0.05"
         mgmt_commit_default = "0.06" if fast_management else "0.10"
         mgmt_focus_default = "0.03" if fast_management else "0.05"
@@ -1061,9 +1061,16 @@ class ERPLoginBot:
             time.sleep(0.02 if fast_input else 0.04)
 
         main_rect_cache = None
+        static_form_rect = _env_flag("ERP_FORM_STATIC_RECT", "1")
+        try:
+            main_rect_cache = main_win.rectangle()
+        except Exception as e:
+            self.logger.warning(f"  [UIA-FALLBACK] 초기 메인 창 좌표 확보 실패: {e}")
 
         def _main_rect():
             nonlocal main_rect_cache
+            if static_form_rect and main_rect_cache is not None:
+                return main_rect_cache
             try:
                 main_rect_cache = main_win.rectangle()
                 return main_rect_cache
@@ -1427,6 +1434,8 @@ class ERPLoginBot:
                 pyautogui.press('backspace')
                 time.sleep(quick_wait)
             _safe_paste(str(text or ""))
+            if is_critical:
+                time.sleep(critical_field_wait)
             if enter:
                 pyautogui.press('enter')
                 if is_critical:
