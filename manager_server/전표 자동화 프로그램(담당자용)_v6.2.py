@@ -2054,10 +2054,11 @@ class ERPLoginBot:
                 if not popup:
                     self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업을 열지 못해 PASS")
                     return False
-                try:
-                    popup.set_focus()
-                except Exception:
-                    pass
+                # ERP vendor popup opens with the search text box focused.
+                # Do not call popup.set_focus(); it can move focus to the
+                # window/grid, so the business-number paste disappears and
+                # navigation confirms a wrong row.
+                self.logger.info(f"  [MGMT-XY] {label}: vendor popup opened; keeping default search-box focus")
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
                 # 순서: 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.

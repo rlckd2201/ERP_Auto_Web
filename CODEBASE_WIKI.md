@@ -1,4 +1,4 @@
-﻿# CODEBASE WIKI
+# CODEBASE WIKI
 
 Updated: 2026-05-18
 
@@ -678,3 +678,8 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - AutoEver regular ERP vendor lookup must follow the same confirmed keyboard path as KT, with only the business number changed to `104-81-53190`.
 - The Agent-side manager automation clears the relation-item value before opening the vendor popup, then pastes `104-81-53190` and sends `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
 - Special vendor routing is now based on the target business-number digits (`1028142945` or `1048153190`) so AutoEver cannot fall back to vendor-name row guessing when the payload name varies.
+## Fix141 Vendor Popup Default Focus
+
+- KT/AutoEver vendor popup handling must not call popup.set_focus() after the popup opens. The ERP popup opens with the search text box already focused.
+- The special business-number path now confirms only that the popup exists, keeps the default focus, pastes 102-81-42945 or 104-81-53190, then sends Tab x4, Down x5, Up x1, Tab x3, Enter x2.
+- If this regresses, first check whether any new focus/click/UIA action was inserted between _find_vendor_popup() and _paste_text_fast(target_biz_no, ...).

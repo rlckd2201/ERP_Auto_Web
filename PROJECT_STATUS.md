@@ -1,4 +1,4 @@
-﻿# Project Status
+# Project Status
 
 Updated: 2026-05-18
 
@@ -540,3 +540,10 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - AutoEver detection also checks business-number fields and nearby payload text for digits `1048153190`, so naming variations still enter the special path.
 - Verification passed: Python py_compile for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`, `web_v1/agent/erp_agent.py`, and `web_v1/backend/erp_runner.py`; fix140 ZIP verification passed for version `1.0.128`, manager special-keyboard markers, setup EXE presence, no backup/hotfix/release/graphify/pycache entries, and no Gemini key literal.
 - Graphify update completed after fix140: 234 files / 1393 nodes / 4394 edges / 84 communities.
+## 2026-05-21 fix141 Vendor Popup Default Focus
+
+- Active WEB/Agent files are now 1.0.129.
+- Latest fix141 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_focus_fix141_20260521_104145.zip.
+- Root cause: the KT/AutoEver special vendor popup already focuses the search text box when it opens, but the automation called popup.set_focus() after detecting the popup. That could move focus to the popup window/grid, so 104-81-53190 was not pasted into the search box and the later key sequence confirmed a wrong row.
+- Fix: the manager automation now uses the popup only as an open-confirmation signal. It keeps the default search-box focus and immediately pastes the business number, then runs Tab 4, Down 5, Up 1, Tab 3, Enter 2.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix141 ZIP verification passed for version 1.0.129, setup EXE/frontend presence, removed actual popup.set_focus() call, KT/AutoEver business-number markers, no forbidden entries, and no Gemini key literal.
