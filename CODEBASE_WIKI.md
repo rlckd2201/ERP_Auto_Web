@@ -704,3 +704,10 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Active behavior is restored to the fix143 form-entry flow. Do not reintroduce a sleep between `_safe_paste(str(text or ""))` and the subsequent Enter for `회계일`/`전표관리단위` without an ERP screen regression test.
 - Future COM/UIA fixes should be limited to exception handling and must not change the top-field paste/Enter sequence.
 - Latest fix145 ZIP: C:\Tmp\accounting_web_v1_revert_form_uia_cache_fix145_20260521_155204.zip.
+
+## Fix146 Vendor Popup Precheck
+
+- KT/AutoEver special vendor lookup must not click again after the vendor popup is already open. The ERP popup opens with the search text box focused; an extra click can hit the grid and prevent business-number paste.
+- `_input_vendor_by_business_no_keyboard()` now checks `_find_vendor_popup(timeout=0.25)` immediately after clearing the relation-item field. If present, skip popup-open click and paste `102-81-42945` or `104-81-53190` into the existing focused search box.
+- Popup-open fallback clicks use `_click_form_xy()` so relation-item coordinates remain relative to the K-System main window.
+- Latest fix146 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_precheck_fix146_20260522_082859.zip.

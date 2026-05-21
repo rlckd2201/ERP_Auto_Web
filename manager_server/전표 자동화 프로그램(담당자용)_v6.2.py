@@ -2049,8 +2049,13 @@ class ERPLoginBot:
                 except Exception as e:
                     self.logger.warning(f"  [MGMT-XY] {label}: 거래처 관계항목 기존값 삭제 실패, 계속 진행: {e}")
                 popup = None
+                popup = _find_vendor_popup(timeout=0.25)
+                if popup:
+                    self.logger.info(f"  [MGMT-XY] {label}: vendor popup already opened; skip popup-open click")
                 for open_try in range(2):
-                    pyautogui.click(x, y)
+                    if popup:
+                        break
+                    _click_form_xy(x, y, f"{label} 팝업 열기", wait=0.0)
                     time.sleep(0.28 if open_try == 0 else ERP_FORM_WAIT + 0.1)
                     popup = _find_vendor_popup(timeout=0.35 if open_try == 0 else 3.1)
                     if popup:
