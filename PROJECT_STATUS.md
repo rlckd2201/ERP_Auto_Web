@@ -569,3 +569,12 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Fix: the manager automation now caches the main K-System window rectangle once when the slip form setup starts and uses that cached rectangle by default for coordinate-first field clicks. This avoids repeated UIA rectangle calls during critical top-field input.
 - Important field paste stability wait default was increased to 0.2 seconds via ERP_CRITICAL_FIELD_WAIT.
 - Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix144 ZIP verification passed for version 1.0.132, form UIA-cache markers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.
+
+## 2026-05-21 fix145 Revert ERP Form UIA Cache
+
+- Active WEB/Agent files are now 1.0.133.
+- Latest fix145 ZIP: C:\Tmp\accounting_web_v1_revert_form_uia_cache_fix145_20260521_155204.zip.
+- Root cause: fix144 changed the timing around top-field paste/Enter handling. In K-System this allowed the accounting-date value to leak into the voucher grid/management fields, corrupting the entry screen.
+- Fix: reverted the fix144 ERP form changes and restored the fix143-proven top-field input flow. The version was bumped forward so manager PCs update away from 1.0.132.
+- The K-System COM/UIA event failure must be handled separately with a narrower guard that does not alter 회계일/전표관리단위 paste/Enter timing.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix145 ZIP verification passed for version 1.0.133, restored fix143 top-field timing markers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.

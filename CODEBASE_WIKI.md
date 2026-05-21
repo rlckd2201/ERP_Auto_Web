@@ -697,3 +697,10 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - `ERP_FORM_STATIC_RECT=1`이 기본값이며, 필요 시 0으로 끄면 기존처럼 매번 `main_win.rectangle()`을 다시 조회한다.
 - `ERP_CRITICAL_FIELD_WAIT` 기본값은 0.20초로 늘렸다. 상단 필드가 커서/확정 처리 중 튕기는 증상이 있으면 이 값을 먼저 조정한다.
 - Latest fix144 ZIP: C:\Tmp\accounting_web_v1_form_uia_cache_fix144_20260521_144639.zip.
+
+## Fix145 Revert ERP Form UIA Cache
+
+- fix144 is unsafe in production: its top-field timing/cache change can put 회계일 into ERP grid/관리항목 fields.
+- Active behavior is restored to the fix143 form-entry flow. Do not reintroduce a sleep between `_safe_paste(str(text or ""))` and the subsequent Enter for `회계일`/`전표관리단위` without an ERP screen regression test.
+- Future COM/UIA fixes should be limited to exception handling and must not change the top-field paste/Enter sequence.
+- Latest fix145 ZIP: C:\Tmp\accounting_web_v1_revert_form_uia_cache_fix145_20260521_155204.zip.
