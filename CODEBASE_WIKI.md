@@ -682,4 +682,8 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 
 - KT/AutoEver vendor popup handling must not call popup.set_focus() after the popup opens. The ERP popup opens with the search text box already focused.
 - The special business-number path now confirms only that the popup exists, keeps the default focus, pastes 102-81-42945 or 104-81-53190, then sends Tab x4, Down x5, Up x1, Tab x3, Enter x2.
-- If this regresses, first check whether any new focus/click/UIA action was inserted between _find_vendor_popup() and _paste_text_fast(target_biz_no, ...).
+- If this regresses, first check whether any new focus/click/UIA action was inserted between _find_vendor_popup() and _paste_text_fast(target_biz_no, ...).## Fix142 Vendor Popup Click Guard
+
+- The KT/AutoEver special vendor path must not use pyautogui.doubleClick(x, y) after clearing the relation-item field.
+- After delete, send one click to open the vendor popup, call _find_vendor_popup(), and stop further clicks as soon as the popup is detected. This prevents the second double-click event from hitting the already-open popup/grid.
+- Normal click count is now field-focus/delete click plus one popup-open click. The fallback second popup-open click only runs when the popup was not detected.

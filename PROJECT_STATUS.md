@@ -547,3 +547,11 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Root cause: the KT/AutoEver special vendor popup already focuses the search text box when it opens, but the automation called popup.set_focus() after detecting the popup. That could move focus to the popup window/grid, so 104-81-53190 was not pasted into the search box and the later key sequence confirmed a wrong row.
 - Fix: the manager automation now uses the popup only as an open-confirmation signal. It keeps the default search-box focus and immediately pastes the business number, then runs Tab 4, Down 5, Up 1, Tab 3, Enter 2.
 - Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix141 ZIP verification passed for version 1.0.129, setup EXE/frontend presence, removed actual popup.set_focus() call, KT/AutoEver business-number markers, no forbidden entries, and no Gemini key literal.
+
+## 2026-05-21 fix142 Vendor Popup Click Guard
+
+- Active WEB/Agent files are now 1.0.130.
+- Latest fix142 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_click_fix142_20260521_105500.zip.
+- Root cause: the KT/AutoEver special vendor path focused/deleted the relation-item field, then used a fixed doubleClick(x, y). Because the field was already focused, the first click could open the ERP vendor popup and the second double-click click could land after the popup was already open.
+- Fix: removed the fixed doubleClick. The automation now sends one popup-open click, checks whether the vendor popup opened, and stops immediately when it is detected. A second click is only used as a fallback when the popup did not open.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix142 ZIP verification passed for version 1.0.130, removed pyautogui.doubleClick(x, y), click-guard marker, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.
