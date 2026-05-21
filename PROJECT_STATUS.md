@@ -554,4 +554,10 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Latest fix142 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_click_fix142_20260521_105500.zip.
 - Root cause: the KT/AutoEver special vendor path focused/deleted the relation-item field, then used a fixed doubleClick(x, y). Because the field was already focused, the first click could open the ERP vendor popup and the second double-click click could land after the popup was already open.
 - Fix: removed the fixed doubleClick. The automation now sends one popup-open click, checks whether the vendor popup opened, and stops immediately when it is detected. A second click is only used as a fallback when the popup did not open.
-- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix142 ZIP verification passed for version 1.0.130, removed pyautogui.doubleClick(x, y), click-guard marker, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix142 ZIP verification passed for version 1.0.130, removed pyautogui.doubleClick(x, y), click-guard marker, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.## 2026-05-21 fix143 Vendor Popup Timing Buffer
+
+- Active WEB/Agent files are now 1.0.131.
+- Latest fix143 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_timing_fix143_20260521_132030.zip.
+- Root cause: after the click-count guard, the ERP vendor popup could open quickly but the search input was not always ready before paste/Tab started.
+- Fix: added 0.1-second buffers around popup detection and business-number paste: first popup-open wait/timeout increased by 0.1, fallback wait/timeout increased by 0.1, plus 0.1 before paste and 0.1 after paste before Tab navigation.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix143 ZIP verification passed for version 1.0.131, 0.1-second timing buffers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.

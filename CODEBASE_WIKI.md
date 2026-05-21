@@ -686,4 +686,8 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 
 - The KT/AutoEver special vendor path must not use pyautogui.doubleClick(x, y) after clearing the relation-item field.
 - After delete, send one click to open the vendor popup, call _find_vendor_popup(), and stop further clicks as soon as the popup is detected. This prevents the second double-click event from hitting the already-open popup/grid.
-- Normal click count is now field-focus/delete click plus one popup-open click. The fallback second popup-open click only runs when the popup was not detected.
+- Normal click count is now field-focus/delete click plus one popup-open click. The fallback second popup-open click only runs when the popup was not detected.## Fix143 Vendor Popup Timing Buffer
+
+- KT/AutoEver vendor popup click handling keeps the fix142 click guard, but now adds small timing buffers for ERP popup readiness.
+- The first popup-open click waits 0.28s and searches for 0.35s; fallback waits ERP_FORM_WAIT + 0.1 and searches for 3.1s.
+- After the popup is detected, wait 0.1s before pasting the business number, and wait 0.1s after paste before starting Tab/arrow navigation.
