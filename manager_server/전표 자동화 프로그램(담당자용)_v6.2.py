@@ -1875,8 +1875,11 @@ class ERPLoginBot:
             vendor_name = str(form_data.get('vendor_name', '') or '').strip()
             vendor_biz_no = str(
                 form_data.get('vendor_biz_no')
+                or form_data.get('vendor_business_no')
+                or form_data.get('vendor_business_number')
                 or form_data.get('supplier_biz_no')
                 or form_data.get('supplier_business_no')
+                or form_data.get('supplier_business_number')
                 or ''
             ).strip()
             supply_amount = _value_text(form_data.get('target_supply', 0), comma=False)
@@ -1898,7 +1901,22 @@ class ERPLoginBot:
             vendor_search_name = vendor_name
             vendor_target_optional = False
             vendor_biz_digits = re.sub(r"[^0-9]", "", vendor_biz_no or "")
-            is_autoever_biz_no = vendor_biz_digits == "1048153190"
+            vendor_probe_digits = re.sub(
+                r"[^0-9]",
+                "",
+                " ".join(
+                    str(value or "")
+                    for value in (
+                        vendor_name,
+                        vendor_biz_no,
+                        form_data.get('supplier_name'),
+                        form_data.get('summary'),
+                        form_data.get('slip_summary'),
+                        form_data.get('item_name'),
+                    )
+                ),
+            )
+            is_autoever_biz_no = vendor_biz_digits == "1048153190" or "1048153190" in vendor_probe_digits
             if is_kt_vendor:
                 vendor_target_biz_no = "102-81-42945"
                 vendor_search_name = "케이티"
@@ -1912,6 +1930,8 @@ class ERPLoginBot:
             elif "동양정보통신" in compact_vendor:
                 vendor_target_biz_no = "402-81-23213"
                 vendor_search_name = "동양정보통신"
+            vendor_target_digits = re.sub(r"[^0-9]", "", vendor_target_biz_no or "")
+            is_special_vendor_keyboard = vendor_target_digits in {"1028142945", "1048153190"}
 
             self.logger.info(
                 f"  [MGMT-XY] {row_no}행 관리항목 조건판정: raw_account={account_name}, "
@@ -2022,6 +2042,12 @@ class ERPLoginBot:
                 _click_form_xy(x, y, label, wait=mgmt_click_wait)
                 _release_modifiers(f"{label} 클릭 후", wait=False)
                 time.sleep(mgmt_focus_wait)
+                try:
+                    pyautogui.press('delete')
+                    time.sleep(mgmt_key_wait)
+                    self.logger.info(f"  [MGMT-XY] {label}: 거래처 관계항목 기존값 삭제 후 사업자번호 팝업 진입")
+                except Exception as e:
+                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 관계항목 기존값 삭제 실패, 계속 진행: {e}")
                 pyautogui.doubleClick(x, y, interval=0.05)
                 time.sleep(ERP_FORM_WAIT)
                 popup = _find_vendor_popup(timeout=3.0)
@@ -2051,9 +2077,9 @@ class ERPLoginBot:
                 return True
 
             def _input_vendor_value_xy(x, y, label):
-                if not vendor_name:
+                if not vendor_name and not vendor_target_biz_no:
                     return
-                if (is_kt_vendor or is_autoever_vendor or is_autoever_biz_no) and vendor_target_biz_no:
+                if is_special_vendor_keyboard and vendor_target_biz_no:
                     _input_vendor_by_business_no_keyboard(x, y, label, vendor_target_biz_no)
                     return
                 if vendor_target_biz_no:
@@ -2111,7 +2137,7 @@ class ERPLoginBot:
                     if not picked:
                         if vendor_target_optional:
                             self.logger.warning(
-                                f"  [MGMT-XY] {label}: KT vendor business no {target_biz_no} not found; PASS"
+                                f"  [MGMT-XY] {label}: special vendor business no {target_biz_no} not found; PASS"
                             )
                             if popup_seen:
                                 pyautogui.press('esc')

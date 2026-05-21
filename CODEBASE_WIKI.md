@@ -672,3 +672,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Chrome external protocol calls such as `accountingweb://start` must be triggered directly from a user gesture. Calling them only after async `/api/login` or `/api/setup/status` can be ignored.
 - `frontend/app.js` now sends a direct protocol kick on login submit and sends another direct kick at the start of `다시 점검`, then waits briefly and reloads setup status.
 - If this regresses, inspect whether the frontend is calling `requestAgentStartByProtocol()` before the first awaited network request in the click/submit handler.
+
+## Fix140 AutoEver Vendor Keyboard Selection
+
+- AutoEver regular ERP vendor lookup must follow the same confirmed keyboard path as KT, with only the business number changed to `104-81-53190`.
+- The Agent-side manager automation clears the relation-item value before opening the vendor popup, then pastes `104-81-53190` and sends `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
+- Special vendor routing is now based on the target business-number digits (`1028142945` or `1048153190`) so AutoEver cannot fall back to vendor-name row guessing when the payload name varies.

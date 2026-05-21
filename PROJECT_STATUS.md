@@ -530,3 +530,13 @@ NaN
 - Verification passed: 
 ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python after local Python returned access denied; graphify update . completed normally: 234 files / 1393 nodes / 4394 edges / 84 communities.
 - Latest fix139 ZIP: C:\Tmp\accounting_web_v1_agent_protocol_gesture_fix139_20260521_085057.zip.
+
+## 2026-05-21 fix140 AutoEver Vendor Keyboard Selection
+
+- Active WEB/Agent files are now 1.0.128.
+- Latest fix140 ZIP: C:\Tmp\accounting_web_v1_autoever_vendor_keyboard_fix140_20260521_095036.zip.
+- Root cause: AutoEver regular ERP vendor input could still behave like a vendor-name popup search when the relation-item value already contained a previous wrong vendor text, so the confirmed KT business-number path did not reliably start from a blank field.
+- Fix: the manager automation now treats KT and AutoEver as the same special business-number keyboard path by target business-number digits. It clears the relation-item value, opens the vendor popup, pastes `104-81-53190` for AutoEver, then sends `Tab x4`, `Down x5`, `Up x1`, `Tab x3`, `Enter x2`.
+- AutoEver detection also checks business-number fields and nearby payload text for digits `1048153190`, so naming variations still enter the special path.
+- Verification passed: Python py_compile for `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`, `web_v1/agent/erp_agent.py`, and `web_v1/backend/erp_runner.py`; fix140 ZIP verification passed for version `1.0.128`, manager special-keyboard markers, setup EXE presence, no backup/hotfix/release/graphify/pycache entries, and no Gemini key literal.
+- Graphify update completed after fix140: 234 files / 1393 nodes / 4394 edges / 84 communities.
