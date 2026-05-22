@@ -2055,7 +2055,7 @@ class ERPLoginBot:
                 for open_try in range(2):
                     if popup:
                         break
-                    _click_form_xy(x, y, f"{label} 팝업 열기", wait=0.0)
+                    _double_click_form_xy(x, y, f"{label} 팝업 열기", wait=0.15)
                     time.sleep(0.50 if open_try == 0 else ERP_FORM_WAIT + 0.35)
                     popup = _find_vendor_popup(timeout=0.80 if open_try == 0 else 3.5)
                     if popup:

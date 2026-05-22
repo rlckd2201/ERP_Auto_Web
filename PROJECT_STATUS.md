@@ -594,3 +594,11 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Root cause follow-up: fix146 prevents the extra grid click, but the ERP vendor popup search box can still become ready slightly later on some runs. When paste/Tab starts too quickly, the business number may not enter the search box consistently.
 - Fix: only the KT/AutoEver special vendor popup path was slowed down. Delete-settle wait, popup precheck, popup-open wait, before/after-paste waits, and Tab/arrow/Enter intervals were increased. Top slip-form fields such as 회계일 and 전표관리단위 were not changed.
 - Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix147 ZIP verification passed for version 1.0.135, slower vendor-popup timing markers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.
+
+## 2026-05-22 fix148 Vendor Popup Double Click Restore
+
+- Active WEB/Agent files are now 1.0.136.
+- Latest fix148 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_doubleclick_fix148_20260522_094339.zip.
+- Root cause follow-up: fix146/fix147 prechecked and slowed the special vendor popup path, but when the popup was not already open the fallback opener still used a single click. The K-System relation-item value cell requires a double-click to open the vendor information popup.
+- Fix: the special KT/AutoEver business-number path now keeps the already-open popup guard, but uses `_double_click_form_xy()` for the fallback popup opener.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix148 ZIP verification passed for version 1.0.136, special vendor double-click popup opener, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.

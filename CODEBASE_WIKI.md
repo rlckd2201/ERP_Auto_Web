@@ -718,3 +718,9 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Current special path timing: delete settle at least 0.18s, precheck timeout 0.70s, first popup-open wait/search 0.50s/0.80s, before paste 0.35s, after paste 0.35s, key interval 0.08s, Enter interval 0.12s.
 - Do not speed this path back up unless real ERP testing proves the business number is always typed into the popup search box.
 - Latest fix147 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_slow_timing_fix147_20260522_092748.zip.
+
+## Fix148 Vendor Popup Double Click Restore
+
+- KT/AutoEver special vendor lookup: after clearing the relation-item value, first check whether the popup is already open. If it is not open, use `_double_click_form_xy()` on the relation-item value cell to open it.
+- This preserves the fix146 guard against extra clicks on an already-open popup while restoring the K-System-required double-click opener.
+- Latest fix148 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_doubleclick_fix148_20260522_094339.zip.
