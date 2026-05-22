@@ -109,6 +109,12 @@ class Settings:
     erp_print_target: str = _env("ERP_PRINT_TARGET", _env("PRINT_TARGET_PDF", "Microsoft Print to PDF"))
     erp_execute_enabled: bool = _env("ERP_EXECUTE_ENABLED", "1").lower() not in {"0", "false", "no", "off"}
     erp_execution_mode: str = _env("ERP_EXECUTION_MODE", "agent").lower()  # agent | server
+    regular_auto_agent_ip: str = _env("REGULAR_AUTO_AGENT_IP")
+    regular_auto_printer_key: str = _env("REGULAR_AUTO_PRINTER_KEY", "pyeongtaek").lower()
+    regular_auto_enabled: bool = _env_bool("REGULAR_AUTO_ENABLED", bool(_env("REGULAR_AUTO_AGENT_IP")))
+    regular_auto_interval_seconds: int = _env_int("REGULAR_AUTO_INTERVAL_SECONDS", 60)
+    regular_auto_scan_limit: int = _env_int("REGULAR_AUTO_SCAN_LIMIT", 200)
+    regular_auto_max_batch: int = _env_int("REGULAR_AUTO_MAX_BATCH", 20)
     compuzone_id: str = _env("COMPUZONE_ID")
     compuzone_pw: str = _env("COMPUZONE_PW")
     compuzone_auto_quote_enabled: bool = _env_bool("COMPUZONE_AUTO_QUOTE_ENABLED", True)

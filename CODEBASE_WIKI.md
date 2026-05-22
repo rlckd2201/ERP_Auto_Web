@@ -1,6 +1,6 @@
 # CODEBASE WIKI
 
-Updated: 2026-05-18
+Updated: 2026-05-22
 
 This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1383 nodes, 4374 edges, and 36 communities, so use the graph for navigation, then verify behavior in the active source before editing.
 
@@ -724,3 +724,13 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - KT/AutoEver special vendor lookup: after clearing the relation-item value, first check whether the popup is already open. If it is not open, use `_double_click_form_xy()` on the relation-item value cell to open it.
 - This preserves the fix146 guard against extra clicks on an already-open popup while restoring the K-System-required double-click opener.
 - Latest fix148 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_doubleclick_fix148_20260522_094339.zip.
+## 2026-05-22 Regular Auto-Agent Notes
+
+- WEB/Agent version `1.0.137` adds unattended regular invoice processing for the dedicated robot PC `172.17.30.243`.
+- Runtime settings live in `web_v1/backend/config.py` and operating-server `.env` generation lives in `web_v1/deploy/install_operating_server.ps1`.
+- The scheduler starts from `web_v1/backend/app.py` startup via `_start_regular_auto_scheduler()`.
+- Candidate selection intentionally reuses `list_invoices(mode="regular")` and `build_regular_erp_payload()` before queueing.
+- Auto jobs use `regular_one_click` with `regular_auto=True`, `target_client_ip=172.17.30.243`, output action `print_individual`, and printer key `pyeongtaek`.
+- Duplicate prevention is stored per invoice under `regular_auto_dedupe_keys` and skip metadata. Keys include invoice id, approval/invoice number fields, PDF/XML paths, and XML `IssueID`.
+- ERP queue files now include `source_job_payload`; output print queue files include `regular_auto`. These fields let Agent completion callbacks continue the regular output step and mark Pyeongtaek output completion even when the in-memory source job is unavailable.
+- `GET /api/regular-auto/status` reports enablement, target Agent IP/profile age, printer key/name, and latest scheduler job state.

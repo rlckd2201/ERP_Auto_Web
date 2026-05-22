@@ -22,6 +22,7 @@ def _write_erp_queue(
     filename_prefix: str,
     target_agent_id: str = "",
     target_client_ip: str = "",
+    source_job_payload: dict[str, Any] | None = None,
 ) -> Path:
     payload = {
         "job_id": job_id,
@@ -34,6 +35,8 @@ def _write_erp_queue(
         "invoice_count": len(invoices),
         "invoices": invoices,
     }
+    if source_job_payload:
+        payload["source_job_payload"] = dict(source_job_payload)
     path = queue_dir() / f"{filename_prefix}_{job_id}.json"
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
     return path
@@ -45,6 +48,7 @@ def write_purchase_erp_queue(
     *,
     target_agent_id: str = "",
     target_client_ip: str = "",
+    source_job_payload: dict[str, Any] | None = None,
 ) -> Path:
     return _write_erp_queue(
         job_id,
@@ -53,6 +57,7 @@ def write_purchase_erp_queue(
         filename_prefix="purchase_erp",
         target_agent_id=target_agent_id,
         target_client_ip=target_client_ip,
+        source_job_payload=source_job_payload,
     )
 
 
@@ -62,6 +67,7 @@ def write_regular_erp_queue(
     *,
     target_agent_id: str = "",
     target_client_ip: str = "",
+    source_job_payload: dict[str, Any] | None = None,
 ) -> Path:
     return _write_erp_queue(
         job_id,
@@ -70,6 +76,7 @@ def write_regular_erp_queue(
         filename_prefix="regular_erp",
         target_agent_id=target_agent_id,
         target_client_ip=target_client_ip,
+        source_job_payload=source_job_payload,
     )
 
 
@@ -105,6 +112,7 @@ def write_output_print_queue(
     target_agent_id: str = "",
     target_client_ip: str = "",
     source_job_id: str = "",
+    regular_auto: bool = False,
 ) -> Path:
     print_files: list[dict[str, Any]] = []
     invoice_ids: list[int] = []
@@ -142,6 +150,7 @@ def write_output_print_queue(
         "printer_key": str(printer_key or ""),
         "printer_name": str(printer_name or ""),
         "source_job_id": str(source_job_id or ""),
+        "regular_auto": bool(regular_auto),
         "print_files": print_files,
     }
     path = queue_dir() / f"output_print_{job_id}.json"

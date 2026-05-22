@@ -307,11 +307,23 @@ class JobWorker:
             raise RuntimeError(f"ERP 입력 큐에 등록할 유효한 {label} 건이 없습니다.")
 
         queue_writer = write_regular_erp_queue if is_regular_job else write_purchase_erp_queue
+        source_job_payload = {
+            "one_click": bool(job.payload.get("one_click")),
+            "one_click_mode": str(job.payload.get("one_click_mode") or ("regular" if is_regular_job else "purchase")),
+            "output_action": str(job.payload.get("output_action") or ""),
+            "printer_key": str(job.payload.get("printer_key") or ""),
+            "printer_name": str(job.payload.get("printer_name") or ""),
+            "processor": processor,
+            "target_agent_id": str(job.payload.get("target_agent_id") or ""),
+            "target_client_ip": str(job.payload.get("target_client_ip") or ""),
+            "regular_auto": bool(job.payload.get("regular_auto")),
+        }
         queue_path = queue_writer(
             job.id,
             invoices,
             target_agent_id=str(job.payload.get("target_agent_id") or ""),
             target_client_ip=str(job.payload.get("target_client_ip") or ""),
+            source_job_payload=source_job_payload,
         )
         self.store.add_event(job.id, "erp", 72, f"ERP 큐 파일 생성: {queue_path}")
 
@@ -431,6 +443,7 @@ class JobWorker:
                 target_agent_id=target_agent_id,
                 target_client_ip=target_client_ip,
                 source_job_id=source_job_id,
+                regular_auto=bool(job.payload.get("regular_auto")),
             )
             result["action"] = "print_individual"
             result["queue_path"] = str(queue_path)

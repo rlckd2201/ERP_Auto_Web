@@ -1,6 +1,6 @@
 # Project Status
 
-Updated: 2026-05-18
+Updated: 2026-05-22
 
 ## How To Use This File
 
@@ -602,3 +602,26 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Root cause follow-up: fix146/fix147 prechecked and slowed the special vendor popup path, but when the popup was not already open the fallback opener still used a single click. The K-System relation-item value cell requires a double-click to open the vendor information popup.
 - Fix: the special KT/AutoEver business-number path now keeps the already-open popup guard, but uses `_double_click_form_xy()` for the fallback popup opener.
 - Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix148 ZIP verification passed for version 1.0.136, special vendor double-click popup opener, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.
+## 2026-05-22 fix149 Regular Auto-Agent Processing
+
+- Active WEB/Agent files are now `1.0.137`.
+- Added regular auto-processing settings:
+  - `REGULAR_AUTO_ENABLED=1`
+  - `REGULAR_AUTO_AGENT_IP=172.17.30.243`
+  - `REGULAR_AUTO_PRINTER_KEY=pyeongtaek`
+  - `REGULAR_AUTO_INTERVAL_SECONDS=60`
+  - `REGULAR_AUTO_SCAN_LIMIT=200`
+  - `REGULAR_AUTO_MAX_BATCH=20`
+- Operating server install now defaults the Pyeongtaek printer to `평택 프린터 (172.16.10.172)` when it cannot auto-detect the printer.
+- Server startup now runs a regular auto scheduler. It scans existing `GET /api/invoices?mode=regular` data, validates each candidate with `build_regular_erp_payload()`, and queues only waiting regular invoices.
+- Auto regular ERP queue is always targeted to the latest live Agent profile at `172.17.30.243`; regular auto jobs are not claimable by ordinary user PCs because `target_agent_id` and `target_client_ip` are written into the queue.
+- Auto regular output is fixed to `pyeongtaek` and creates an Agent-side `output_print` queue after ERP voucher upload/output-set readiness.
+- Duplicate prevention records and checks `regular_auto_dedupe_keys`, using invoice id, tax invoice approval/number fields, PDF/XML paths, and XML `IssueID` when an XML file exists. Completed or already-output-ready regular invoices are skipped and marked instead of requeued.
+- ERP/output queue files now carry `source_job_payload` / `regular_auto` metadata so regular output can still be queued or marked if in-memory job state is missing when the Agent reports completion.
+- New status endpoint: `GET /api/regular-auto/status`.
+- Verification passed:
+  - `py_compile` for `web_v1/backend/app.py`, `config.py`, `erp_queue.py`, `worker.py`, and `web_v1/agent/erp_agent.py`.
+  - Runtime import/dedupe helper smoke check returned `id`, `number`, and `path` keys.
+  - `git diff --check` passed for changed source/config/doc files.
+  - `graphify update .` completed: 1412 nodes, 4471 edges, 85 communities.
+- Operational cautions for the robot PC remain important: `172.17.30.243` must stay logged in/unlocked, sleep disabled, Agent autostarting, ERP installed, Pyeongtaek printer mapped, and server communication healthy.

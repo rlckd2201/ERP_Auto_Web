@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import logging
+import re
 import shutil
 import sqlite3
 import threading
@@ -22,11 +23,12 @@ from fastapi.staticfiles import StaticFiles
 from .agent_queue import claim_next_erp_task, update_erp_task
 from .compuzone_quote import auto_attach_compuzone_quote
 from .config import WEB_ROOT, settings
-from .invoice_db import DONE, ERROR, PROCESSING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
+from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
 from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .output_set import build_output_set_status, generate_expense_report_pdf
 from .erp_queue import queue_dir, write_expense_report_queue
+from .erp_runner import build_regular_erp_payload
 from .purchase_analysis import (
     _extract_amounts_from_tax,
     _extract_date,
@@ -50,6 +52,7 @@ from .setup_state import (
     find_installer,
     init_auth_db,
     init_setup_db,
+    latest_agent_profile,
     record_agent_heartbeat,
     request_password_reset_code,
     reset_password_with_code,
@@ -106,6 +109,10 @@ _MAIL_COLLECT_INTERVAL_SECONDS = 60
 _mail_collect_scheduler_started = False
 _mail_collect_scheduler_lock = threading.RLock()
 _mail_collect_last_job_id = ""
+_REGULAR_AUTO_AGENT_MAX_AGE_SECONDS = 120
+_regular_auto_scheduler_started = False
+_regular_auto_scheduler_lock = threading.RLock()
+_regular_auto_last_job_id = ""
 
 
 def _invoice_data(invoice: dict[str, Any] | None) -> dict[str, Any]:
@@ -335,6 +342,338 @@ def _start_mail_collect_scheduler() -> None:
     threading.Thread(target=_loop, name="purchase-mail-collector", daemon=True).start()
 
 
+def _regular_auto_age_seconds(value: Any) -> int | None:
+    try:
+        return int((datetime.now() - datetime.fromisoformat(str(value))).total_seconds())
+    except Exception:
+        return None
+
+
+def _regular_auto_printer_key() -> str:
+    key = str(settings.regular_auto_printer_key or "pyeongtaek").strip().lower()
+    if key != "pyeongtaek":
+        logging.warning("REGULAR_AUTO_PRINTER_KEY=%s ignored; regular auto output is fixed to pyeongtaek", key)
+    return "pyeongtaek"
+
+
+def _regular_auto_target_profile() -> dict[str, Any] | None:
+    target_ip = str(settings.regular_auto_agent_ip or "").strip()
+    if not settings.regular_auto_enabled or not target_ip:
+        return None
+    profile = latest_agent_profile(client_ip=target_ip)
+    if not profile or not str(profile.get("agent_id") or "").strip():
+        return None
+    age = _regular_auto_age_seconds(profile.get("last_seen"))
+    if age is None or age > _REGULAR_AUTO_AGENT_MAX_AGE_SECONDS:
+        return None
+    return profile
+
+
+def _regular_auto_printer_name(profile: dict[str, Any], printer_key: str) -> str:
+    mapping = profile.get("printer_mapping") if isinstance(profile.get("printer_mapping"), dict) else {}
+    printer_name = str(mapping.get(printer_key) or "").strip()
+    if printer_name:
+        return printer_name
+    capabilities = profile.get("capabilities") if isinstance(profile.get("capabilities"), dict) else {}
+    setup = capabilities.get("setup") if isinstance(capabilities.get("setup"), dict) else {}
+    setup_mapping = setup.get("printer_mapping") if isinstance(setup.get("printer_mapping"), dict) else {}
+    printer_name = str(setup_mapping.get(printer_key) or "").strip()
+    if printer_name:
+        return printer_name
+    return str(settings.print_target_pyeongtaek or "평택 프린터 (172.16.10.172)").strip()
+
+
+def _regular_auto_normalize_path(value: Any) -> str:
+    text = str(value or "").strip().strip('"')
+    if not text:
+        return ""
+    return re.sub(r"[\\/]+", r"\\", text).lower()
+
+
+def _regular_auto_clean_number(value: Any) -> str:
+    text = re.sub(r"[^0-9A-Za-z]", "", str(value or "")).upper()
+    return text if len(text) >= 8 else ""
+
+
+def _regular_auto_is_number_key(key: Any) -> bool:
+    raw = str(key or "")
+    compact = re.sub(r"[\s_\-:]+", "", raw).lower()
+    markers = (
+        "approvalno",
+        "approvalnumber",
+        "invoiceno",
+        "invoicenumber",
+        "taxinvoiceno",
+        "taxinvoicenumber",
+        "issueid",
+        "issueno",
+        "serialno",
+        "serialnumber",
+    )
+    return (
+        any(marker in compact for marker in markers)
+        or ("승인" in raw and "번호" in raw)
+        or ("일련" in raw and "번호" in raw)
+    )
+
+
+def _regular_auto_xml_issue_id(path: str) -> str:
+    try:
+        import xml.etree.ElementTree as ET
+
+        xml_path = Path(path)
+        if not xml_path.exists() or not xml_path.is_file():
+            return ""
+        root = ET.parse(str(xml_path)).getroot()
+        for node in root.iter():
+            local_name = str(node.tag).rsplit("}", 1)[-1]
+            if local_name == "IssueID":
+                return _regular_auto_clean_number(node.text)
+    except Exception:
+        return ""
+    return ""
+
+
+def _regular_auto_number_values(value: Any, *, depth: int = 0) -> set[str]:
+    if depth > 6:
+        return set()
+    found: set[str] = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            if _regular_auto_is_number_key(key):
+                number = _regular_auto_clean_number(item)
+                if number:
+                    found.add(number)
+            if isinstance(item, (dict, list)):
+                found.update(_regular_auto_number_values(item, depth=depth + 1))
+    elif isinstance(value, list):
+        for item in value:
+            found.update(_regular_auto_number_values(item, depth=depth + 1))
+    return found
+
+
+def _regular_auto_path_values(value: Any, *, depth: int = 0) -> set[str]:
+    if depth > 6:
+        return set()
+    found: set[str] = set()
+    if isinstance(value, dict):
+        for key, item in value.items():
+            key_text = str(key or "").lower()
+            if isinstance(item, str):
+                text = item.strip()
+                lower = text.lower()
+                if ("path" in key_text or lower.endswith((".pdf", ".xml"))) and lower.endswith((".pdf", ".xml")):
+                    path = _regular_auto_normalize_path(text)
+                    if path:
+                        found.add(path)
+            if isinstance(item, (dict, list)):
+                found.update(_regular_auto_path_values(item, depth=depth + 1))
+    elif isinstance(value, list):
+        for item in value:
+            found.update(_regular_auto_path_values(item, depth=depth + 1))
+    return found
+
+
+def _regular_auto_dedupe_keys(invoice: dict[str, Any]) -> set[str]:
+    data = _invoice_data(invoice)
+    raw = invoice.get("raw") if isinstance(invoice.get("raw"), dict) else {}
+    root = {"invoice": invoice, "raw": raw, "data": data}
+    keys: set[str] = set()
+    invoice_id = int(invoice.get("id") or 0)
+    if invoice_id:
+        keys.add(f"id:{invoice_id}")
+    for number in _regular_auto_number_values(root):
+        keys.add(f"number:{number}")
+    for path in _regular_auto_path_values(root):
+        keys.add(f"path:{path}")
+        if path.endswith(".xml"):
+            number = _regular_auto_xml_issue_id(path)
+            if number:
+                keys.add(f"number:{number}")
+    return keys
+
+
+def _regular_auto_output_ready(invoice: dict[str, Any]) -> bool:
+    try:
+        status = build_output_set_status(invoice, persist=False)
+        return bool(status.get("ready")) and not status.get("blockers")
+    except Exception:
+        return False
+
+
+def _regular_auto_mark_skip(invoice: dict[str, Any], reason: str, detail: str) -> None:
+    invoice_id = int(invoice.get("id") or 0)
+    if not invoice_id:
+        return
+    data = _invoice_data(invoice)
+    signature = f"{reason}:{detail[:240]}"
+    if str(data.get("regular_auto_skip_signature") or "") == signature:
+        return
+    update_invoice_json(
+        invoice_id,
+        {
+            "regular_auto_skip_signature": signature,
+            "regular_auto_skip_reason": reason,
+            "regular_auto_skip_detail": detail,
+            "regular_auto_skip_at": datetime.now().isoformat(timespec="seconds"),
+        },
+        message=f"정기 자동처리 제외: {reason} / {detail}",
+    )
+
+
+def _regular_auto_candidate_invoices() -> list[tuple[dict[str, Any], set[str]]]:
+    limit = max(1, min(int(settings.regular_auto_scan_limit or 200), 200))
+    summaries = list_invoices(mode="regular", limit=limit)
+    invoices = [get_invoice(int(item.get("id") or 0)) for item in summaries]
+    regulars = [invoice for invoice in invoices if invoice and str(invoice.get("invoice_type") or "").strip().lower() == "regular"]
+    blocked_keys: set[str] = set()
+    for invoice in regulars:
+        data = _invoice_data(invoice)
+        status = str(invoice.get("status") or "")
+        already_done = bool(
+            str(invoice.get("processed_at") or "").strip()
+            or str(data.get("regular_auto_completed_at") or "").strip()
+            or str(data.get("regular_auto_output_printed_at") or "").strip()
+            or _regular_auto_output_ready(invoice)
+        )
+        if status != WAITING or already_done:
+            blocked_keys.update(_regular_auto_dedupe_keys(invoice))
+
+    selected: list[tuple[dict[str, Any], set[str]]] = []
+    max_batch = max(1, int(settings.regular_auto_max_batch or 20))
+    for invoice in reversed(regulars):
+        if len(selected) >= max_batch:
+            break
+        invoice_id = int(invoice.get("id") or 0)
+        if not invoice_id or str(invoice.get("status") or "") != WAITING:
+            continue
+        data = _invoice_data(invoice)
+        if str(data.get("regular_auto_completed_at") or data.get("regular_auto_output_printed_at") or "").strip():
+            _regular_auto_mark_skip(invoice, "already_completed", f"invoice #{invoice_id}")
+            blocked_keys.update(_regular_auto_dedupe_keys(invoice))
+            continue
+        if _regular_auto_output_ready(invoice):
+            _regular_auto_mark_skip(invoice, "output_set_ready", f"invoice #{invoice_id}")
+            blocked_keys.update(_regular_auto_dedupe_keys(invoice))
+            continue
+        keys = _regular_auto_dedupe_keys(invoice)
+        duplicate_keys = sorted(key for key in keys if key in blocked_keys and not key.startswith("id:"))
+        if duplicate_keys:
+            _regular_auto_mark_skip(invoice, "duplicate", ", ".join(duplicate_keys[:5]))
+            blocked_keys.update(keys)
+            continue
+        try:
+            build_regular_erp_payload(invoice)
+        except Exception as exc:
+            _regular_auto_mark_skip(invoice, "payload_not_ready", str(exc) or exc.__class__.__name__)
+            continue
+        selected.append((invoice, keys))
+        blocked_keys.update(keys)
+    return selected
+
+
+def _queue_regular_auto_job() -> Any:
+    global _regular_auto_last_job_id
+    if not settings.regular_auto_enabled:
+        return None
+    with _regular_auto_scheduler_lock:
+        current = job_store.get(_regular_auto_last_job_id) if _regular_auto_last_job_id else None
+        if _mail_collect_job_running(current):
+            return current
+        profile = _regular_auto_target_profile()
+        if not profile:
+            return None
+        printer_key = _regular_auto_printer_key()
+        printer_name = _regular_auto_printer_name(profile, printer_key)
+        if not printer_name:
+            return None
+        selected = _regular_auto_candidate_invoices()
+        if not selected:
+            return None
+        invoice_ids = [int(invoice["id"]) for invoice, _keys in selected]
+        job = job_store.create(
+            JobCreateRequest(
+                job_type="regular_one_click",
+                title=f"정기 자동 ERP/평택 출력 {len(invoice_ids)}건",
+                payload={
+                    "invoice_ids": invoice_ids,
+                    "erp_invoice_ids": invoice_ids,
+                    "ready_output_invoice_ids": [],
+                    "processor": "REGULAR_AUTO",
+                    "target_agent_id": str(profile.get("agent_id") or ""),
+                    "target_client_ip": str(settings.regular_auto_agent_ip or "").strip(),
+                    "one_click": True,
+                    "one_click_mode": "regular",
+                    "regular_auto": True,
+                    "output_target": printer_key,
+                    "output_action": "print_individual",
+                    "printer_key": printer_key,
+                    "printer_name": printer_name,
+                },
+            )
+        )
+        _regular_auto_last_job_id = job.id
+        for invoice, keys in selected:
+            update_invoice_json(
+                int(invoice["id"]),
+                {
+                    "regular_auto_queued_at": datetime.now().isoformat(timespec="seconds"),
+                    "regular_auto_job_id": job.id,
+                    "regular_auto_target_client_ip": str(settings.regular_auto_agent_ip or "").strip(),
+                    "regular_auto_printer_key": printer_key,
+                    "regular_auto_dedupe_keys": sorted(keys),
+                    "regular_auto_skip_signature": "",
+                    "regular_auto_skip_reason": "",
+                    "regular_auto_skip_detail": "",
+                },
+                message=f"정기 자동처리 ERP/평택 출력 큐 등록: {job.id}",
+            )
+    worker.submit(job)
+    return job
+
+
+def _regular_auto_status() -> dict[str, Any]:
+    with _regular_auto_scheduler_lock:
+        job_id = _regular_auto_last_job_id
+    job = job_store.get(job_id) if job_id else None
+    profile = latest_agent_profile(client_ip=str(settings.regular_auto_agent_ip or "").strip()) if settings.regular_auto_agent_ip else {}
+    return {
+        "enabled": bool(settings.regular_auto_enabled),
+        "target_client_ip": str(settings.regular_auto_agent_ip or "").strip(),
+        "printer_key": _regular_auto_printer_key(),
+        "printer_name": _regular_auto_printer_name(profile, "pyeongtaek") if profile else str(settings.print_target_pyeongtaek or "평택 프린터 (172.16.10.172)").strip(),
+        "interval_seconds": int(settings.regular_auto_interval_seconds or 60),
+        "running": _mail_collect_job_running(job),
+        "job_id": job_id,
+        "status": getattr(job, "status", "idle") if job else "idle",
+        "agent_id": str((profile or {}).get("agent_id") or ""),
+        "agent_client_ip": str((profile or {}).get("client_ip") or ""),
+        "last_seen": str((profile or {}).get("last_seen") or ""),
+        "last_seen_age_seconds": _regular_auto_age_seconds((profile or {}).get("last_seen")) if profile else None,
+    }
+
+
+def _start_regular_auto_scheduler() -> None:
+    global _regular_auto_scheduler_started
+    if not settings.regular_auto_enabled:
+        return
+    with _regular_auto_scheduler_lock:
+        if _regular_auto_scheduler_started:
+            return
+        _regular_auto_scheduler_started = True
+
+    def _loop() -> None:
+        interval = max(10, int(settings.regular_auto_interval_seconds or 60))
+        while True:
+            try:
+                _queue_regular_auto_job()
+            except Exception:
+                logging.exception("Automatic regular ERP/output queue failed")
+            time.sleep(interval)
+
+    threading.Thread(target=_loop, name="regular-auto-processor", daemon=True).start()
+
+
 def _one_click_output_payload(output_target: str, setup: dict[str, Any]) -> dict[str, str]:
     target = output_target if output_target in {"pdf", "pyeongtaek", "gimje"} else "pdf"
     if target == "pdf":
@@ -386,12 +725,75 @@ def _maybe_queue_one_click_output(source_job_id: str) -> None:
                 "target_agent_id": str(source_job.payload.get("target_agent_id") or ""),
                 "target_client_ip": str(source_job.payload.get("target_client_ip") or ""),
                 "existing_only": True,
+                "regular_auto": bool(source_job.payload.get("regular_auto")),
             },
         )
     )
     source_job.payload["one_click_output_job_id"] = job.id
     job_store.add_event(source_job_id, "printing", 98, f"원클릭 출력 작업 등록: {job.id}")
     worker.submit(job)
+
+
+def _maybe_queue_regular_output_from_context(
+    source_job_id: str,
+    invoice_ids: list[int],
+    context: dict[str, Any],
+) -> bool:
+    if not bool(context.get("one_click")):
+        return False
+    if str(context.get("one_click_mode") or "").strip().lower() != "regular":
+        return False
+    clean_ids = [int(item) for item in invoice_ids if str(item).isdigit()]
+    if not clean_ids:
+        return False
+    duplicate_markers = 0
+    for invoice_id in clean_ids:
+        invoice = get_invoice(invoice_id)
+        data = _invoice_data(invoice)
+        if str(data.get("regular_output_source_job_id") or "") == source_job_id:
+            duplicate_markers += 1
+    if duplicate_markers == len(clean_ids):
+        return False
+    missing = [invoice_id for invoice_id in clean_ids if not _invoice_output_set_ready(get_invoice(invoice_id), "regular")]
+    if missing:
+        return False
+    printer_key = str(context.get("printer_key") or ("pyeongtaek" if context.get("regular_auto") else "pdf")).strip().lower()
+    action = str(context.get("output_action") or ("print_individual" if printer_key != "pdf" else "merged_pdf"))
+    printer_name = str(context.get("printer_name") or "").strip()
+    if action == "print_individual" and not printer_name and printer_key == "pyeongtaek":
+        printer_name = str(settings.print_target_pyeongtaek or "평택 프린터 (172.16.10.172)").strip()
+    if action == "print_individual" and not printer_name:
+        return False
+    job = job_store.create(
+        JobCreateRequest(
+            job_type="output_set",
+            title=f"정기 ERP 완료 후 문서 출력 {len(clean_ids)}건",
+            payload={
+                "invoice_ids": clean_ids,
+                "action": action,
+                "printer_key": printer_key,
+                "printer_name": printer_name,
+                "processor": str(context.get("processor") or "WEB v1.0"),
+                "source_job_id": source_job_id,
+                "target_agent_id": str(context.get("target_agent_id") or ""),
+                "target_client_ip": str(context.get("target_client_ip") or settings.regular_auto_agent_ip or ""),
+                "existing_only": True,
+                "regular_auto": bool(context.get("regular_auto")),
+            },
+        )
+    )
+    for invoice_id in clean_ids:
+        update_invoice_json(
+            invoice_id,
+            {
+                "regular_output_source_job_id": source_job_id,
+                "regular_output_job_id": job.id,
+                "regular_output_queued_at": datetime.now().isoformat(timespec="seconds"),
+            },
+            message=f"정기 ERP 완료 후 문서 출력 큐 등록: {job.id}",
+        )
+    worker.submit(job)
+    return True
 
 
 def _installer_server_url(request: Request) -> str:
@@ -735,6 +1137,7 @@ def on_startup() -> None:
     init_setup_db()
     worker.start()
     _start_mail_collect_scheduler()
+    _start_regular_auto_scheduler()
 
 
 @app.get("/health")
@@ -750,6 +1153,11 @@ def health() -> dict[str, Any]:
 @app.get("/api/mail-collect/status")
 def api_mail_collect_status() -> dict[str, Any]:
     return _mail_collect_status()
+
+
+@app.get("/api/regular-auto/status")
+def api_regular_auto_status() -> dict[str, Any]:
+    return _regular_auto_status()
 
 
 @app.post("/api/agent/heartbeat")
@@ -1133,12 +1541,27 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
         },
     )
     job_type = str(task_payload.get("job_type") or payload.get("job_type") or "")
+    source_context = task_payload.get("source_job_payload") if isinstance(task_payload.get("source_job_payload"), dict) else {}
     if job_type == "output_print":
         output_job = job_store.get(job_id)
         output_payload = output_job.payload if output_job else {}
         source_job_id = str(output_payload.get("source_job_id") or task_payload.get("source_job_id") or "")
+        regular_auto_output = bool(output_payload.get("regular_auto") or task_payload.get("regular_auto"))
+        output_printer_key = str(output_payload.get("printer_key") or task_payload.get("printer_key") or "pyeongtaek")
+        output_printer_name = str(output_payload.get("printer_name") or task_payload.get("printer_name") or "")
         for invoice_id in invoice_ids:
             add_invoice_log(invoice_id, message, level="info" if ok else "error", job_id=job_id)
+            if ok and regular_auto_output:
+                update_invoice_json(
+                    invoice_id,
+                    {
+                        "regular_auto_output_printed_at": datetime.now().isoformat(timespec="seconds"),
+                        "regular_auto_output_print_job_id": job_id,
+                        "regular_auto_printer_key": output_printer_key,
+                        "regular_auto_printer_name": output_printer_name,
+                    },
+                    message=f"정기 자동처리 평택 출력 완료: {output_printer_name}",
+                )
         result_payload = dict(payload)
         result_payload["job_type"] = "output_print"
         if output_job:
@@ -1180,6 +1603,9 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
         if ok and source_job_id:
             _maybe_queue_one_click_output(source_job_id)
         return {"ok": True}
+    source_job = job_store.get(job_id)
+    if source_job:
+        source_context = {**source_context, **source_job.payload}
     for index, invoice_id in enumerate(invoice_ids):
         result = success_by_invoice_id.get(invoice_id)
         if result is None and index < len(successes) and isinstance(successes[index], dict):
@@ -1210,6 +1636,16 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
                 build_output_set_status(refreshed_invoice, persist=True)
         display_processor = normalize_processor(agent_id) or "ERP Agent"
         set_invoice_status(invoice_id, DONE if invoice_ok else ERROR, processor=display_processor, job_id=job_id, processed=invoice_ok, error="" if invoice_ok else message)
+        if invoice_ok and bool(source_context.get("regular_auto")):
+            update_invoice_json(
+                invoice_id,
+                {
+                    "regular_auto_completed_at": datetime.now().isoformat(timespec="seconds"),
+                    "regular_auto_completed_job_id": job_id,
+                    "regular_auto_agent_id": agent_id,
+                },
+                message=f"정기 자동처리 ERP 입력 완료: {agent_id}",
+            )
         add_invoice_log(invoice_id, message, level="info" if invoice_ok else "error", job_id=job_id)
         if invoice_ok:
             _queue_expense_report_after_erp(
@@ -1221,6 +1657,8 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
     source_job = job_store.get(job_id)
     if ok and source_job and bool(source_job.payload.get("one_click")) and str(source_job.payload.get("one_click_mode") or "").lower() == "regular":
         _maybe_queue_one_click_output(job_id)
+    elif ok:
+        _maybe_queue_regular_output_from_context(job_id, invoice_ids, source_context)
     if job_store.get(job_id):
         job_store.set_result(job_id, dict(payload))
         if ok:

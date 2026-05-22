@@ -9,6 +9,8 @@ $DefaultEmailId = "mailsendds@gmail.com"
 $DefaultEmailPw = "ttsjfjkqhfwemcfq"
 $DefaultGeminiApiKey = ""
 $DefaultServerIp = if ($env:WEB_SERVER_IP) { $env:WEB_SERVER_IP } else { "172.17.39.121" }
+$DefaultPyeongtaekPrinter = "평택 프린터 (172.16.10.172)"
+$DefaultRegularAutoAgentIp = if ($env:REGULAR_AUTO_AGENT_IP) { $env:REGULAR_AUTO_AGENT_IP } else { "172.17.30.243" }
 $CertDir = "C:\ERP_DB\certs"
 $SslCertFile = Join-Path $CertDir "web_v1.cert.pem"
 $SslKeyFile = Join-Path $CertDir "web_v1.key.pem"
@@ -81,11 +83,12 @@ try {
 $ptAuto = $printers | Where-Object { $_ -like "*172.16.10.172*" -or $_ -like "*평택*" } | Select-Object -First 1
 $gjAuto = $printers | Where-Object { $_ -like "*172.17.30.162*" -or $_ -like "*김제*" } | Select-Object -First 1
 
-$ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } elseif ($ptAuto) { $ptAuto } else { Read-Host "평택 프린터 이름 입력(Get-Printer 결과와 동일)" }
+$ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } elseif ($ptAuto) { $ptAuto } else { $DefaultPyeongtaekPrinter }
 $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($gjAuto) { $gjAuto } else { Read-Host "김제 프린터 이름 입력(Get-Printer 결과와 동일)" }
+$regularAutoPrinterKey = if ($env:REGULAR_AUTO_PRINTER_KEY) { $env:REGULAR_AUTO_PRINTER_KEY } else { "pyeongtaek" }
 
 @"
-APP_VERSION=1.0.136
+APP_VERSION=1.0.137
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
@@ -119,6 +122,13 @@ ERP_PRINT_TARGET=Microsoft Print to PDF
 ERP_OUTPUT_DIR=C:\ERP_DB\erp_outputs
 ERP_EXECUTE_ENABLED=1
 LEGACY_MANAGER_PATH=$RepoRoot\manager_server\전표 자동화 프로그램(담당자용)_v6.2.py
+
+REGULAR_AUTO_ENABLED=1
+REGULAR_AUTO_AGENT_IP=$DefaultRegularAutoAgentIp
+REGULAR_AUTO_PRINTER_KEY=$regularAutoPrinterKey
+REGULAR_AUTO_INTERVAL_SECONDS=60
+REGULAR_AUTO_SCAN_LIMIT=200
+REGULAR_AUTO_MAX_BATCH=20
 
 WORKER_GUI_CONCURRENCY=1
 "@ | Set-Content -Path $EnvPath -Encoding UTF8
