@@ -2088,11 +2088,15 @@ class ERPLoginBot:
                 _release_modifiers(f"{label} 클릭 후", wait=False)
                 time.sleep(mgmt_focus_wait)
                 try:
-                    pyautogui.press('delete')
+                    pyautogui.hotkey('ctrl', 'a')
+                    _release_modifiers(f"{label} 관계항목 Ctrl+A 후", wait=False)
+                    time.sleep(max(mgmt_key_wait, 0.12))
+                    pyautogui.press('backspace')
                     time.sleep(max(mgmt_key_wait, 0.18))
-                    self.logger.info(f"  [MGMT-XY] {label}: 거래처 관계항목 기존값 삭제 후 사업자번호 팝업 진입")
+                    _paste_text_fast(target_biz_no, f"{label} 거래처 관계항목 사업자번호")
+                    self.logger.info(f"  [MGMT-XY] {label}: 거래처 관계항목에 사업자번호 선입력: {target_biz_no}")
                 except Exception as e:
-                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 관계항목 기존값 삭제 실패, 계속 진행: {e}")
+                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 관계항목 사업자번호 선입력 실패, 팝업 검색으로 계속 진행: {e}")
                 popup = None
                 popup = _find_vendor_popup(timeout=0.70)
                 if popup:
@@ -2117,7 +2121,10 @@ class ERPLoginBot:
                 time.sleep(0.35)
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
-                # 순서: 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.
+                # 순서: 검색칸 전체선택 -> 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.
+                pyautogui.hotkey('ctrl', 'a')
+                _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
+                time.sleep(0.12)
                 _paste_text_fast(target_biz_no, f"{label} 거래처 사업자번호")
                 time.sleep(0.35)
                 self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 붙여넣기: {target_biz_no}")
@@ -2142,7 +2149,7 @@ class ERPLoginBot:
                     return
                 if vendor_target_biz_no:
                     target_biz_no = vendor_target_biz_no
-                    _input_value_xy(x, y, vendor_search_name, label, enter_count=0, clear=True)
+                    _input_value_xy(x, y, target_biz_no, label, enter_count=0, clear=True)
                     pyautogui.press('enter')
                     time.sleep(ERP_FORM_WAIT)
                     picked = False
@@ -2202,7 +2209,7 @@ class ERPLoginBot:
                             time.sleep(ERP_FORM_WAIT)
                             return
                         self.logger.warning(
-                            f"  [MGMT-XY] {label}: 거래처 사업자번호 {target_biz_no} 미검출, 이름 입력 후 Enter fallback"
+                            f"  [MGMT-XY] {label}: 거래처 사업자번호 {target_biz_no} 미검출, 사업자번호 입력 후 Enter fallback"
                         )
                         pyautogui.press('enter')
                     time.sleep(ERP_FORM_WAIT)
@@ -2228,10 +2235,10 @@ class ERPLoginBot:
             if "date" in plan:
                 _input_value_xy(1118, 797, invoice_date, f"{row_no}행 거래일/관리일", enter_count=0, clear=True)
 
-            if "vendor_vat" in plan and vendor_name:
+            if "vendor_vat" in plan and (vendor_name or vendor_target_biz_no):
                 _input_vendor_value_xy(1118, 817, f"{row_no}행 거래처")
 
-            if "vendor" in plan and vendor_name:
+            if "vendor" in plan and (vendor_name or vendor_target_biz_no):
                 _input_vendor_value_xy(1118, 797, f"{row_no}행 거래처")
 
             if "supply" in plan and supply_amount:

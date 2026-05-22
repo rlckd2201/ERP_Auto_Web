@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.139`.
+- Current WEB/Agent version in files: `1.0.140`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -653,3 +653,8 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Parenthesized vendor codes such as `대신아이씨티(DS163)` are ignored during matching.
 - Non-10-digit `vendor_biz_no` values are discarded instead of being pasted into the ERP business-number search box.
 - When a vendor business number is known, the manager ERP automation now uses the existing vendor popup double-click + business-number keyboard confirmation flow for all matched vendors, not only KT/AutoEver.
+
+
+## fix152 / 1.0.140
+- 사업자번호 매핑 대상 거래처는 거래처 관계항목 셀과 팝업 검색칸 모두 사업자번호를 사용한다.
+- 거래처명은 표시/적요용으로만 유지하고 ERP 거래처 검색값으로 쓰지 않는다.

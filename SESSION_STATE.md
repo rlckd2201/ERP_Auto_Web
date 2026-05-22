@@ -15,7 +15,7 @@
   - 이테크시스템/Acronis `211-88-35257`
   - 에티버스 `106-81-43363`
 - Parenthesized vendor codes such as `대신아이씨티(DS163)` are ignored during matching.
-- WEB/Agent version is `1.0.139`.
+- WEB/Agent version is `1.0.140`.
 
 ## Previous Work - 2026-05-22 fix150
 
@@ -87,3 +87,8 @@
   - Agent 자동시작 및 `/api/regular-auto/status`에서 최근 heartbeat 확인.
   - ERP 설치 및 평택 프린터 매핑 확인.
   - 실제 정기 세금계산서 1건으로 ERP 전표 생성 후 평택 출력 E2E 확인.
+
+
+## fix152 / 1.0.140
+- 사업자번호 매핑 대상 거래처는 거래처 관계항목 셀과 팝업 검색칸 모두 사업자번호를 사용한다.
+- 거래처명은 표시/적요용으로만 유지하고 ERP 거래처 검색값으로 쓰지 않는다.
