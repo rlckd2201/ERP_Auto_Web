@@ -1,12 +1,14 @@
 # SESSION STATE
 
-## Current Work - 2026-05-22 fix149
+## Current Work - 2026-05-22 fix150
 
-- Implemented regular auto-processing for dedicated Agent PC `172.17.30.243`.
-- Output is fixed to `pyeongtaek` / `평택 프린터 (172.16.10.172)`.
-- WEB/Agent version is `1.0.137`.
-- Verification passed: py_compile, app import/dedupe smoke check, git diff --check, and graphify update.
-- Next operational E2E: keep the robot PC logged in/unlocked, confirm Agent heartbeat in `/api/regular-auto/status`, then test one real regular invoice through ERP voucher creation and Pyeongtaek printing.
+- Fixed selected invoice/work/recent job log display so long error messages wrap instead of expanding the page horizontally.
+- Selected invoice logs are grouped into 실패 로그 and 성공/일반 로그, each capped to the most recent 10 visible rows.
+- Work/job logs are grouped into 실패 로그 and 성공/진행 로그, each capped to the most recent 10 visible rows.
+- Recent jobs are grouped into 실패 작업 and 성공/진행 작업, each capped to 10 visible jobs. Backend `/api/jobs` default limit is now 10.
+- WEB/Agent version is `1.0.138`.
+- Latest planned deploy ZIP: `C:\Tmp\accounting_web_v1_log_group_limit_fix150_20260522_141739.zip`.
+- Verification so far: JS syntax check, Python py_compile for backend/Agent touched modules, `git diff --check`, and `graphify update .` completed with 1419 nodes / 4491 edges.
 
 ## 현재 작업
 - fix148 KT/AutoEver 거래처 팝업 더블클릭 복구 작업중

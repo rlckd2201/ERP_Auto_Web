@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.124`.
+- Current WEB/Agent version in files: `1.0.138`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -65,6 +65,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 - Latest local deployment ZIP after AutoEver/KT vendor business-number paste fix134: `C:\Tmp\accounting_web_v1_vendor_biz_paste_fix134_20260520_114023.zip`.
 - Latest local deployment ZIP after purchase Gemini attempt logging fix135: `C:\Tmp\accounting_web_v1_purchase_gemini_attempt_fix135_20260520_151927.zip`.
 - Latest local deployment ZIP after Gemini env-key fix136: `C:\Tmp\accounting_web_v1_gemini_env_key_fix136_20260520_154045.zip`.
+- Latest local deployment ZIP after log grouping/limit fix150: `C:\Tmp\accounting_web_v1_log_group_limit_fix150_20260522_141739.zip`.
 - Known hosts: operating server `172.17.39.121`; development PC / temporary ZIP HTTP server `172.17.30.13`.
 - `fix98` still had backend/version mismatch symptoms in the active workspace. Rebuilt `fix101` after restoring the missing backend one-click API, mail status API, scheduler wiring, Agent default printer reporting, and WEB/Agent `1.0.89` version files.
 - `fix102` adds the existing-document output path and bumps WEB/Agent files to `1.0.90`.
@@ -625,3 +626,12 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
   - `git diff --check` passed for changed source/config/doc files.
   - `graphify update .` completed: 1412 nodes, 4471 edges, 85 communities.
 - Operational cautions for the robot PC remain important: `172.17.30.243` must stay logged in/unlocked, sleep disabled, Agent autostarting, ERP installed, Pyeongtaek printer mapped, and server communication healthy.
+
+## 2026-05-22 fix150 Log Grouping and Width Limit
+
+- Active WEB/Agent files are now `1.0.138`.
+- Latest fix150 ZIP: `C:\Tmp\accounting_web_v1_log_group_limit_fix150_20260522_141739.zip`.
+- Selected invoice logs now render as separate 실패 로그 and 성공/일반 로그 groups, with each group capped to the most recent 10 visible rows.
+- The live/work job log panel now renders 실패 로그 and 성공/진행 로그 groups, with each group capped to the most recent 10 visible rows.
+- The recent jobs table now groups 실패 작업 and 성공/진행 작업 separately, and each group is capped to 10 visible jobs. The backend `/api/jobs` default limit is now 10.
+- Long error messages now wrap inside the selected-log, work-log, and recent-jobs message areas instead of expanding the page horizontally.

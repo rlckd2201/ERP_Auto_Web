@@ -1,5 +1,8 @@
 const ONE_CLICK_OUTPUT_STORAGE_KEY = "accountingWebOneClickOutputTarget";
 const ONE_CLICK_OUTPUT_TARGETS = new Set(["pdf", "pyeongtaek", "gimje"]);
+const LOG_GROUP_LIMIT = 10;
+const RECENT_JOB_LIMIT = 10;
+const RECENT_JOB_FETCH_LIMIT = 50;
 
 const state = {
   user: (() => {
@@ -13,6 +16,7 @@ const state = {
   pendingLoginData: null,
   appLoaded: false,
   currentJobId: null,
+  liveJobEvents: [],
   eventSource: null,
   serviceWorkerReady: null,
   selectedInvoiceIds: new Set(),
@@ -939,14 +943,70 @@ function setStage(status) {
   });
 }
 
+function logClass(value) {
+  return String(value || "info").toLowerCase().replace(/[^a-z0-9_-]/g, "") || "info";
+}
+
+function isFailureLog(log) {
+  const status = String(log?.status || log?.level || "").toLowerCase();
+  if (["error", "failed", "fail"].includes(status)) return true;
+  return /실패|오류|에러|error|failed/i.test(String(log?.message || ""));
+}
+
+function splitRecentLogs(logs) {
+  const failures = [];
+  const successes = [];
+  (logs || []).forEach((log) => {
+    const group = isFailureLog(log) ? failures : successes;
+    if (group.length < LOG_GROUP_LIMIT) group.push(log);
+  });
+  return { failures, successes };
+}
+
+function renderLogGroup(title, logs, renderLine, emptyText) {
+  return `
+    <section class="log-group">
+      <div class="log-group-header">
+        <h3>${escapeHtml(title)}</h3>
+        <span>최근 ${LOG_GROUP_LIMIT}개</span>
+      </div>
+      <div class="log-group-items">
+        ${logs.length ? logs.map(renderLine).join("") : `<p class="empty-log">${escapeHtml(emptyText)}</p>`}
+      </div>
+    </section>
+  `;
+}
+
+function renderJobEventLine(event) {
+  const status = event.status || "info";
+  const statusClass = isFailureLog(event) ? "error" : logClass(status);
+  return `
+    <div class="log-line ${statusClass}">
+      <span>${escapeHtml(formatTime(event.created_at))}</span>
+      <strong>${escapeHtml(status)} ${escapeHtml(event.progress ?? 0)}%</strong>
+      <p>${escapeHtml(event.message || "")}</p>
+    </div>
+  `;
+}
+
+function renderJobLogs(events) {
+  const recent = [...(events || [])].reverse();
+  const { failures, successes } = splitRecentLogs(recent);
+  if (!failures.length && !successes.length) {
+    els.logList.innerHTML = '<p class="empty-log">기록된 작업 로그가 없습니다.</p>';
+    return;
+  }
+  els.logList.innerHTML = [
+    renderLogGroup("실패 로그", failures, renderJobEventLine, "실패 로그 없음"),
+    renderLogGroup("성공/진행 로그", successes, renderJobEventLine, "성공/진행 로그 없음"),
+  ].join("");
+}
+
 function addLog(event) {
-  const empty = els.logList.querySelector(".empty-log");
-  if (empty) empty.remove();
-  const line = document.createElement("div");
-  line.className = "log-line";
-  line.textContent = `[${formatTime(event.created_at)}] ${event.status} ${event.progress}% - ${event.message}`;
-  els.logList.appendChild(line);
-  line.scrollIntoView({ block: "nearest" });
+  if (!event) return;
+  state.liveJobEvents.push(event);
+  if (state.liveJobEvents.length > 200) state.liveJobEvents = state.liveJobEvents.slice(-200);
+  renderJobLogs(state.liveJobEvents);
 }
 
 function showNotification(title, body) {
@@ -1050,21 +1110,38 @@ function startMailCollectMonitor() {
   state.mailCollectTimer = setInterval(loadMailCollectStatus, 60000);
 }
 
+function renderJobTableGroup(title, jobs) {
+  const rows = jobs.length
+    ? jobs.map((job) => `
+      <tr>
+        <td class="job-status-cell">${escapeHtml(job.status)}</td>
+        <td class="job-title-cell">${escapeHtml(job.title)}</td>
+        <td class="job-progress-cell">${escapeHtml(job.progress)}%</td>
+        <td class="job-message-cell" title="${escapeHtml(job.message || "")}">${escapeHtml(job.message)}</td>
+        <td><button class="table-button" data-job-log="${escapeHtml(job.id)}" type="button">보기</button></td>
+      </tr>
+    `).join("")
+    : '<tr><td colspan="5" class="empty-cell">해당 작업 없음</td></tr>';
+  return `
+    <tr class="job-group-row">
+      <td colspan="5">${escapeHtml(title)} <span>최근 ${RECENT_JOB_LIMIT}개</span></td>
+    </tr>
+    ${rows}
+  `;
+}
+
 async function refreshJobs() {
-  const jobs = await requestJson("/api/jobs");
+  const jobs = await requestJson(`/api/jobs?limit=${RECENT_JOB_FETCH_LIMIT}`);
   if (!jobs.length) {
     els.jobsTable.innerHTML = '<tr><td colspan="5" class="empty-cell">작업 내역 없음</td></tr>';
     return;
   }
-  els.jobsTable.innerHTML = jobs.map((job) => `
-    <tr>
-      <td>${escapeHtml(job.status)}</td>
-      <td>${escapeHtml(job.title)}</td>
-      <td>${escapeHtml(job.progress)}%</td>
-      <td>${escapeHtml(job.message)}</td>
-      <td><button class="table-button" data-job-log="${escapeHtml(job.id)}" type="button">보기</button></td>
-    </tr>
-  `).join("");
+  const failures = jobs.filter(isFailureLog).slice(0, RECENT_JOB_LIMIT);
+  const successes = jobs.filter((job) => !isFailureLog(job)).slice(0, RECENT_JOB_LIMIT);
+  els.jobsTable.innerHTML = [
+    renderJobTableGroup("실패 작업", failures),
+    renderJobTableGroup("성공/진행 작업", successes),
+  ].join("");
 }
 
 function updateSelectionUi() {
@@ -1653,6 +1730,7 @@ async function startJob(url, body = null) {
   }
   await ensureJobNotificationPermission();
   setBusy(true);
+  state.liveJobEvents = [];
   els.logList.innerHTML = "";
   setBadge("queued");
   setProgress(0);
@@ -1816,19 +1894,24 @@ async function deleteSelectedInvoices() {
 }
 
 async function loadInvoiceLogs(invoiceId) {
-  const logs = await requestJson(`/api/invoices/${invoiceId}/logs`);
+  const logs = await requestJson(`/api/invoices/${invoiceId}/logs?limit=80`);
   els.invoiceLogTitle.textContent = `#${invoiceId}`;
   if (!logs.length) {
     els.invoiceLogList.textContent = "기록된 로그가 없습니다.";
     return;
   }
-  els.invoiceLogList.innerHTML = logs.map((log) => `
-    <div class="detail-line ${escapeHtml(log.level)}">
+  const { failures, successes } = splitRecentLogs(logs);
+  const renderInvoiceLogLine = (log) => `
+    <div class="detail-line ${logClass(log.level)}">
       <span>${escapeHtml(log.created_at || "")}</span>
       <strong>${escapeHtml(log.level || "info")}</strong>
       <p>${escapeHtml(log.message || "")}</p>
     </div>
-  `).join("");
+  `;
+  els.invoiceLogList.innerHTML = [
+    renderLogGroup("실패 로그", failures, renderInvoiceLogLine, "실패 로그 없음"),
+    renderLogGroup("성공/일반 로그", successes, renderInvoiceLogLine, "성공/일반 로그 없음"),
+  ].join("");
 }
 
 async function loadSelectedInvoiceLogs() {
@@ -1841,12 +1924,8 @@ async function loadJobLog(jobId) {
   try {
     const job = await requestJson(`/api/jobs/${jobId}`);
     els.jobTitle.textContent = job.title;
-    els.logList.innerHTML = "";
-    if (!job.events?.length) {
-      els.logList.innerHTML = '<p class="empty-log">기록된 작업 로그가 없습니다.</p>';
-    } else {
-      job.events.forEach(addLog);
-    }
+    state.liveJobEvents = Array.isArray(job.events) ? job.events.slice() : [];
+    renderJobLogs(state.liveJobEvents);
     setBadge(job.status);
     setProgress(job.progress);
     setStage(job.status);

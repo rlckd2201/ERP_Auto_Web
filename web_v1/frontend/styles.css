@@ -593,13 +593,81 @@ body.simple-mode .output-doc-card p {
 .log-list {
   padding: 12px;
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .log-line,
 .empty-log {
   font-family: Consolas, "Cascadia Mono", monospace;
   font-size: 13px;
+}
+
+.log-group {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.log-group-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+
+.log-group-header h3 {
+  margin: 0;
+  color: #b7d9d4;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.log-group-header span {
+  color: #87a3aa;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.log-group-items {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.log-line {
+  display: grid;
+  grid-template-columns: 78px 84px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 7px 9px;
+  border: 1px solid rgba(135, 163, 170, 0.28);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.035);
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.log-line strong {
+  color: #9ee2d8;
+  font-weight: 800;
+}
+
+.log-line.error strong {
+  color: #ffb4b4;
+}
+
+.log-line.done strong {
+  color: #a7f3c2;
+}
+
+.log-line p {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .empty-log {
@@ -622,6 +690,36 @@ td {
   padding: 10px;
   text-align: left;
   white-space: nowrap;
+}
+
+#jobsTable .job-title-cell,
+#jobsTable .job-message-cell {
+  min-width: 0;
+  max-width: 520px;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
+}
+
+#jobsTable .job-status-cell,
+#jobsTable .job-progress-cell {
+  width: 96px;
+}
+
+#jobsTable .job-group-row td {
+  background: var(--surface-soft);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 800;
+  white-space: normal;
+}
+
+#jobsTable .job-group-row span {
+  margin-left: 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
 }
 
 th {
@@ -1056,12 +1154,21 @@ tr[data-invoice-id] {
 
 .detail-log-list {
   min-height: 70px;
-  max-height: 180px;
-  overflow: auto;
+  max-height: 280px;
+  overflow-y: auto;
+  overflow-x: hidden;
   display: grid;
-  gap: 8px;
+  gap: 12px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.detail-log-list .log-group-header h3 {
+  color: var(--text);
+}
+
+.detail-log-list .log-group-header span {
+  color: var(--muted);
 }
 
 .detail-line {
@@ -1074,6 +1181,10 @@ tr[data-invoice-id] {
   border-radius: 8px;
   background: var(--surface-soft);
   color: var(--text);
+  min-width: 0;
+  line-height: 1.45;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .detail-line strong {
@@ -1082,6 +1193,18 @@ tr[data-invoice-id] {
 
 .detail-line.error strong {
   color: var(--danger);
+}
+
+.detail-line span,
+.detail-line strong,
+.detail-line p {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.detail-line p {
+  margin: 0;
 }
 
 @media (max-width: 900px) {
@@ -1143,6 +1266,10 @@ tr[data-invoice-id] {
   }
 
   .detail-line {
+    grid-template-columns: 1fr;
+  }
+
+  .log-line {
     grid-template-columns: 1fr;
   }
 

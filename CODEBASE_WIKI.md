@@ -499,7 +499,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.121
+1.0.138
 ```
 
 ## Safe Change Checklist
@@ -734,3 +734,11 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Duplicate prevention is stored per invoice under `regular_auto_dedupe_keys` and skip metadata. Keys include invoice id, approval/invoice number fields, PDF/XML paths, and XML `IssueID`.
 - ERP queue files now include `source_job_payload`; output print queue files include `regular_auto`. These fields let Agent completion callbacks continue the regular output step and mark Pyeongtaek output completion even when the in-memory source job is unavailable.
 - `GET /api/regular-auto/status` reports enablement, target Agent IP/profile age, printer key/name, and latest scheduler job state.
+
+## 2026-05-22 Log Display Notes
+
+- WEB/Agent version `1.0.138` changes the front-end log display only, plus `/api/jobs` default listing size.
+- `web_v1/frontend/app.js` now splits selected invoice logs and job event logs into failure and success/progress groups. Each group renders at most 10 visible rows.
+- Recent jobs fetch a larger internal sample for grouping, then display at most 10 failed jobs and 10 success/progress jobs.
+- `web_v1/frontend/styles.css` forces long job/error messages to wrap inside log rows and recent-job message cells so a single PDF/print error cannot create horizontal page overflow.
+- `web_v1/backend/app.py` and `web_v1/backend/job_store.py` now default recent job listings to 10 when the client does not pass a limit.

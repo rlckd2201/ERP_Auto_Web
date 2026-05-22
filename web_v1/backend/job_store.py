@@ -88,7 +88,7 @@ class JobStore:
         with self._lock:
             return self._jobs.get(job_id)
 
-    def list_recent(self, limit: int = 50) -> list[JobRecord]:
+    def list_recent(self, limit: int = 10) -> list[JobRecord]:
         with self._lock:
             jobs = sorted(self._jobs.values(), key=lambda item: item.created_at, reverse=True)
             return jobs[:limit]

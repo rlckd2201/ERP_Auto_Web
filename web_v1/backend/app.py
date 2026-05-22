@@ -2553,7 +2553,7 @@ def api_delete_invoice(invoice_id: int) -> dict[str, Any]:
 
 
 @app.get("/api/jobs", response_model=list[JobResponse])
-def list_jobs(limit: int = Query(default=50, ge=1, le=200)) -> list[JobResponse]:
+def list_jobs(limit: int = Query(default=10, ge=1, le=200)) -> list[JobResponse]:
     return [job.to_response() for job in job_store.list_recent(limit=limit)]
 
 
