@@ -88,7 +88,7 @@ $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($g
 $regularAutoPrinterKey = if ($env:REGULAR_AUTO_PRINTER_KEY) { $env:REGULAR_AUTO_PRINTER_KEY } else { "pyeongtaek" }
 
 @"
-APP_VERSION=1.0.140
+APP_VERSION=1.0.141
 APP_ENV=production
 
 WEB_HOST=0.0.0.0

@@ -15,7 +15,7 @@
   - 이테크시스템/Acronis `211-88-35257`
   - 에티버스 `106-81-43363`
 - Parenthesized vendor codes such as `대신아이씨티(DS163)` are ignored during matching.
-- WEB/Agent version is `1.0.140`.
+- WEB/Agent version is `1.0.141`.
 
 ## Previous Work - 2026-05-22 fix150
 
@@ -92,3 +92,10 @@
 ## fix152 / 1.0.140
 - 사업자번호 매핑 대상 거래처는 거래처 관계항목 셀과 팝업 검색칸 모두 사업자번호를 사용한다.
 - 거래처명은 표시/적요용으로만 유지하고 ERP 거래처 검색값으로 쓰지 않는다.
+
+
+## fix153 / 1.0.141
+- ERP GUI 좌표 입력 전 K-System 메인 창을 최대화하고 창 크기를 로그로 검증한다.
+- 좌표 기반 입력은 작은 창에서 금액/거래처/관리항목이 밀릴 수 있으므로 메뉴 진입 전과 폼 입력 직전에 최대화를 반복한다.
+
+- fix153 timing: 정기처리 PC 기본값은 느린 모드이며 ERP_MGMT_SUMMARY_OPEN_WAIT=0.55, ERP_MGMT_AFTER_GRID_PASTE_WAIT=0.70, ERP_VENDOR_POPUP_OPEN_WAIT=0.55 기준으로 관리항목 입력을 기다린다.

@@ -85,10 +85,10 @@ EXPENSE_FORM_SLOTS = [
 ]
 ERP_BOOT_WAIT = 3.0
 ERP_POLL_WAIT = 0.25
-ERP_CLICK_WAIT = 0.05
-ERP_SETTLE_WAIT = 0.10
-ERP_BLOCK_WAIT = 0.20
-ERP_FORM_WAIT = 0.06
+ERP_CLICK_WAIT = 0.08
+ERP_SETTLE_WAIT = 0.18
+ERP_BLOCK_WAIT = 0.30
+ERP_FORM_WAIT = 0.12
 ERP_PRINT_SAVE_WAIT = 3.0
 ERP_PRINT_VIEWER_WAIT = 1.5
 APPROVAL_GW_URL = "https://gw.dae-seung.co.kr"
@@ -394,6 +394,50 @@ class ERPLoginBot:
         self.app = None
         self.login_win = None
         
+    def _force_erp_window_maximized(self, win, label="ERP 메인 창"):
+        if not win:
+            return False
+        try:
+            win.set_focus()
+            time.sleep(0.15)
+        except Exception as e:
+            self.logger.warning(f"[{self.corp_code}] {label} 포커스 실패: {e}")
+        ok = False
+        try:
+            try:
+                if hasattr(win, "is_minimized") and win.is_minimized():
+                    win.restore()
+                    time.sleep(0.15)
+            except Exception:
+                pass
+            win.maximize()
+            time.sleep(max(ERP_BLOCK_WAIT, 0.35))
+            ok = True
+        except Exception as e:
+            self.logger.warning(f"[{self.corp_code}] {label} maximize 실패, Win+Up fallback 사용: {e}")
+            try:
+                pyautogui.hotkey("win", "up")
+                time.sleep(0.18)
+                pyautogui.hotkey("win", "up")
+                time.sleep(max(ERP_BLOCK_WAIT, 0.35))
+                ok = True
+            except Exception as hotkey_exc:
+                self.logger.warning(f"[{self.corp_code}] {label} Win+Up fallback 실패: {hotkey_exc}")
+        try:
+            rect = win.rectangle()
+            screen_w, screen_h = pyautogui.size()
+            width = rect.width()
+            height = rect.height()
+            self.logger.info(
+                f"[{self.corp_code}] {label} 최대화 확인: rect=({rect.left},{rect.top})-({rect.right},{rect.bottom}) "
+                f"size={width}x{height}, screen={screen_w}x{screen_h}"
+            )
+            if width < min(1600, screen_w - 80) or height < min(850, screen_h - 120):
+                self.logger.warning(f"[{self.corp_code}] {label} 창 크기가 좌표 자동입력 기준보다 작습니다. 좌표 오입력 위험이 있습니다.")
+        except Exception as e:
+            self.logger.warning(f"[{self.corp_code}] {label} 크기 확인 실패: {e}")
+        return ok
+
     def run(self):
         try:
             process_exe = self.install_info["process_name"].lower().replace('.exe', '')
@@ -656,9 +700,9 @@ class ERPLoginBot:
 
             if main_win:
                 try:
-                    main_win.set_focus()
+                    self._force_erp_window_maximized(main_win, "메뉴 진입 전 ERP 메인 창")
                     time.sleep(ERP_BLOCK_WAIT)
-                    self.logger.info("메인 창을 활성화했습니다. 내비게이션 시작...")
+                    self.logger.info("메인 창을 최대화/활성화했습니다. 내비게이션 시작...")
                     
                     def _elem_autoid(e):
                         try: return e.element_info.automation_id or ""
@@ -981,23 +1025,26 @@ class ERPLoginBot:
         def _env_flag(name, default="0"):
             return str(os.getenv(name, default)).strip().lower() not in ("0", "false", "no", "off", "")
 
-        fast_input = _env_flag("ERP_FAST_INPUT", "1")
-        fast_field_verify = _env_flag("ERP_FAST_FIELD_VERIFY", "1")
-        fast_management = _env_flag("ERP_FAST_MANAGEMENT", "1")
+        fast_input = _env_flag("ERP_FAST_INPUT", "0")
+        fast_field_verify = _env_flag("ERP_FAST_FIELD_VERIFY", "0")
+        fast_management = _env_flag("ERP_FAST_MANAGEMENT", "0")
         verbose_keysafe = _env_flag("ERP_VERBOSE_KEYSAFE", "0")
         verbose_management_clear = _env_flag("ERP_VERBOSE_MGMT_CLEAR", "0")
-        quick_wait = 0.02 if fast_input else 0.05
-        critical_field_wait = max(0.08, float(os.getenv("ERP_CRITICAL_FIELD_WAIT", "0.10") or "0.10"))
-        mgmt_key_default = "0.025" if fast_management else "0.05"
-        mgmt_commit_default = "0.06" if fast_management else "0.10"
-        mgmt_focus_default = "0.03" if fast_management else "0.05"
-        mgmt_click_default = "0.04" if fast_management else str(ERP_FORM_WAIT)
-        mgmt_clipboard_default = "0.01" if fast_management else "0.03"
+        quick_wait = 0.05 if fast_input else 0.10
+        critical_field_wait = max(0.12, float(os.getenv("ERP_CRITICAL_FIELD_WAIT", "0.18") or "0.18"))
+        mgmt_key_default = "0.08" if fast_management else "0.16"
+        mgmt_commit_default = "0.14" if fast_management else "0.26"
+        mgmt_focus_default = "0.10" if fast_management else "0.20"
+        mgmt_click_default = "0.12" if fast_management else "0.24"
+        mgmt_clipboard_default = "0.04" if fast_management else "0.08"
         mgmt_key_wait = max(quick_wait, float(os.getenv("ERP_MGMT_KEY_WAIT", mgmt_key_default) or mgmt_key_default))
         mgmt_commit_wait = max(mgmt_key_wait, float(os.getenv("ERP_MGMT_COMMIT_WAIT", mgmt_commit_default) or mgmt_commit_default))
         mgmt_focus_wait = max(quick_wait, float(os.getenv("ERP_MGMT_FOCUS_WAIT", mgmt_focus_default) or mgmt_focus_default))
         mgmt_click_wait = max(quick_wait, float(os.getenv("ERP_MGMT_CLICK_WAIT", mgmt_click_default) or mgmt_click_default))
-        mgmt_clipboard_wait = max(0.005, float(os.getenv("ERP_MGMT_CLIPBOARD_WAIT", mgmt_clipboard_default) or mgmt_clipboard_default))
+        mgmt_clipboard_wait = max(0.02, float(os.getenv("ERP_MGMT_CLIPBOARD_WAIT", mgmt_clipboard_default) or mgmt_clipboard_default))
+        mgmt_summary_open_wait = max(mgmt_click_wait, float(os.getenv("ERP_MGMT_SUMMARY_OPEN_WAIT", "0.55") or "0.55"))
+        mgmt_after_grid_paste_wait = max(0.40, float(os.getenv("ERP_MGMT_AFTER_GRID_PASTE_WAIT", "0.70") or "0.70"))
+        vendor_popup_open_wait = max(0.35, float(os.getenv("ERP_VENDOR_POPUP_OPEN_WAIT", "0.55") or "0.55"))
 
         if fast_input:
             try:
@@ -1017,6 +1064,7 @@ class ERPLoginBot:
                 self.logger.warning(f"[FORM-SPEED] pyautogui 속도 설정 실패: {e}")
 
         self.logger.info(f"[폼세팅] site={site_name} / date={invoice_date} / rows={row_count} / clipboard_rows={len(clipboard_rows)}")
+        self._force_erp_window_maximized(main_win, "폼 좌표 입력 전 ERP 메인 창")
 
         # 덤프 진단
         if _env_flag("ERP_FORM_DEBUG_DUMP", "0"):
@@ -2104,8 +2152,8 @@ class ERPLoginBot:
                 for open_try in range(2):
                     if popup:
                         break
-                    _double_click_form_xy(x, y, f"{label} 팝업 열기", wait=0.15)
-                    time.sleep(0.50 if open_try == 0 else ERP_FORM_WAIT + 0.35)
+                    _double_click_form_xy(x, y, f"{label} 팝업 열기", wait=vendor_popup_open_wait)
+                    time.sleep(0.75 if open_try == 0 else ERP_FORM_WAIT + 0.65)
                     popup = _find_vendor_popup(timeout=0.80 if open_try == 0 else 3.5)
                     if popup:
                         self.logger.info(f"  [MGMT-XY] {label}: vendor popup opened after click {open_try + 1}; stopping extra clicks")
@@ -2264,7 +2312,8 @@ class ERPLoginBot:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 스킵: account={account_key}, corp={corp}, 입력 불필요")
                     continue
                 summary_y = 231 + (idx * 20)
-                _double_click_form_xy(970, summary_y, f"{row_no}행 적요", wait=mgmt_click_wait)
+                _double_click_form_xy(970, summary_y, f"{row_no}행 적요", wait=mgmt_summary_open_wait)
+                time.sleep(mgmt_summary_open_wait)
                 _fill_management_for_current_row(row_no, account_name)
                 time.sleep(mgmt_key_wait)
 
@@ -2781,6 +2830,9 @@ class ERPLoginBot:
                 self.logger.warning(f"  [SAVE/PRINT] 자동 저장/출력 흐름 실패: {e}")
 
         def _setup_by_coordinates_only():
+            nonlocal main_rect_cache
+            self._force_erp_window_maximized(main_win, "좌표 전용 폼 세팅 전 ERP 메인 창")
+            main_rect_cache = None
             self.logger.info("  [FORM-XY] 좌표 전용 폼 세팅 시작")
             acc_unit_xy = (493, 124)
             slip_unit_xy = (692, 124)
@@ -2812,7 +2864,7 @@ class ERPLoginBot:
             _click_grid_first_account_cell(first_account_cell_xy)
             pyautogui.hotkey('ctrl', 'v')
             self.logger.info("  [FORM-XY] 그리드 좌표 붙여넣기 완료")
-            time.sleep(0.25)
+            time.sleep(mgmt_after_grid_paste_wait)
 
             # 6. 행별 적요를 더블클릭한 뒤 하단 증빙/관리항목 필수값 입력
             _fill_management_items_by_coord()
