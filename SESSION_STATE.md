@@ -1,6 +1,23 @@
 # SESSION STATE
 
-## Current Work - 2026-05-22 fix150
+## Current Work - 2026-05-22 fix151
+
+- Implemented hardcoded vendor business-number matching for ERP vendor relation-item selection.
+- Added/confirmed vendor business numbers:
+  - 컴퓨존 `106-81-83458`
+  - KT/케이티 `102-81-42945`
+  - 현대오토에버/AutoEver `104-81-53190`
+  - 다우기술/다우오피스 `220-81-02810`
+  - 안랩 `214-81-83536`
+  - 시큐어포인트/Genian/NAC `534-87-01726`
+  - 동양정보통신 `402-81-23213`
+  - 대신아이씨티 `504-86-20609`
+  - 이테크시스템/Acronis `211-88-35257`
+  - 에티버스 `106-81-43363`
+- Parenthesized vendor codes such as `대신아이씨티(DS163)` are ignored during matching.
+- WEB/Agent version is `1.0.139`.
+
+## Previous Work - 2026-05-22 fix150
 
 - Fixed selected invoice/work/recent job log display so long error messages wrap instead of expanding the page horizontally.
 - Selected invoice logs are grouped into 실패 로그 and 성공/일반 로그, each capped to the most recent 10 visible rows.

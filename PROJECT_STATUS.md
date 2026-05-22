@@ -37,7 +37,7 @@ Purchase one-click processing, automatic mail collection, simplified manager UI,
 
 ## Latest Implemented State
 
-- Current WEB/Agent version in files: `1.0.138`.
+- Current WEB/Agent version in files: `1.0.139`.
 - Previous deployable ZIP before current one-click UI cleanup: `C:\Tmp\accounting_web_v1_autorefresh_autoexpense_fix96_20260514_094000.zip`.
 - Previous local deployment ZIP after source restore/rebuild: `C:\Tmp\accounting_web_v1_one_click_full_rebuild_fix101_20260514_121500.zip`.
 - Previous local deployment ZIP after existing-document output update: `C:\Tmp\accounting_web_v1_one_click_existing_output_fix102_20260514_125629.zip`.
@@ -635,3 +635,21 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - The live/work job log panel now renders 실패 로그 and 성공/진행 로그 groups, with each group capped to the most recent 10 visible rows.
 - The recent jobs table now groups 실패 작업 and 성공/진행 작업 separately, and each group is capped to 10 visible jobs. The backend `/api/jobs` default limit is now 10.
 - Long error messages now wrap inside the selected-log, work-log, and recent-jobs message areas instead of expanding the page horizontally.
+
+## 2026-05-22 fix151 Vendor Business Number Master
+
+- Active WEB/Agent files are now `1.0.139`.
+- Added hardcoded vendor business-number matching for ERP relation-item vendor selection:
+  - 컴퓨존: `106-81-83458`
+  - KT/케이티: `102-81-42945`
+  - 현대오토에버/AutoEver: `104-81-53190`
+  - 다우기술/다우오피스: `220-81-02810`
+  - 안랩: `214-81-83536`
+  - 시큐어포인트/Genian/NAC: `534-87-01726`
+  - 동양정보통신: `402-81-23213`
+  - 대신아이씨티: `504-86-20609`
+  - 이테크시스템/Acronis: `211-88-35257`
+  - 에티버스: `106-81-43363`
+- Parenthesized vendor codes such as `대신아이씨티(DS163)` are ignored during matching.
+- Non-10-digit `vendor_biz_no` values are discarded instead of being pasted into the ERP business-number search box.
+- When a vendor business number is known, the manager ERP automation now uses the existing vendor popup double-click + business-number keyboard confirmation flow for all matched vendors, not only KT/AutoEver.

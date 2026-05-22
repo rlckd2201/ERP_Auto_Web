@@ -1882,11 +1882,36 @@ class ERPLoginBot:
                 or form_data.get('supplier_business_number')
                 or ''
             ).strip()
+
+            def _vendor_match_text(*values):
+                text = " ".join(str(value or "") for value in values)
+                text = re.sub(r"\([^)]*\)", "", text)
+                return re.sub(r"\s+", "", text).lower()
+
+            def _vendor_biz_no_override(*values):
+                compact = _vendor_match_text(*values)
+                rules = [
+                    (("컴퓨존",), "컴퓨존", "106-81-83458"),
+                    (("kt", "케이티"), "케이티", "102-81-42945"),
+                    (("오토에버", "현대오토에버", "autoever"), "현대오토에버시스템즈", "104-81-53190"),
+                    (("다우", "다우기술", "다우오피스"), "다우기술", "220-81-02810"),
+                    (("안랩", "ahnlab"), "주식회사 안랩", "214-81-83536"),
+                    (("시큐어포인트", "genian", "nac"), "시큐어포인트", "534-87-01726"),
+                    (("동양정보통신",), "동양정보통신", "402-81-23213"),
+                    (("대신아이씨티",), "대신아이씨티", "504-86-20609"),
+                    (("이테크", "이테크시스템", "acronis"), "이테크시스템", "211-88-35257"),
+                    (("에티버스",), "에티버스", "106-81-43363"),
+                ]
+                for aliases, erp_name, biz_no in rules:
+                    if any(alias.lower() in compact for alias in aliases):
+                        return erp_name, biz_no
+                return "", ""
+
             supply_amount = _value_text(form_data.get('target_supply', 0), comma=False)
             business_query = _business_query_for_management(site_name)
             account_key, corp, plan = _management_plan(account_name)
             vendor_upper = vendor_name.upper()
-            compact_vendor = re.sub(r"\s+", "", vendor_name)
+            compact_vendor = _vendor_match_text(vendor_name)
             is_kt_vendor = bool(vendor_name) and (
                 vendor_upper == "KT"
                 or "케이티" in vendor_name
@@ -1901,6 +1926,22 @@ class ERPLoginBot:
             vendor_search_name = vendor_name
             vendor_target_optional = False
             vendor_biz_digits = re.sub(r"[^0-9]", "", vendor_biz_no or "")
+            raw_vendor_biz_no = vendor_biz_no
+            if vendor_biz_no and len(vendor_biz_digits) != 10:
+                self.logger.warning(
+                    f"  [MGMT-XY] {row_no}행 거래처 사업자번호 값이 10자리 숫자가 아니라 제외: {vendor_biz_no}"
+                )
+                vendor_biz_no = ""
+                vendor_biz_digits = ""
+            override_vendor_name, override_biz_no = _vendor_biz_no_override(
+                vendor_name,
+                raw_vendor_biz_no,
+                vendor_biz_no,
+                form_data.get('supplier_name'),
+                form_data.get('summary'),
+                form_data.get('slip_summary'),
+                form_data.get('item_name'),
+            )
             vendor_probe_digits = re.sub(
                 r"[^0-9]",
                 "",
@@ -1908,6 +1949,7 @@ class ERPLoginBot:
                     str(value or "")
                     for value in (
                         vendor_name,
+                        raw_vendor_biz_no,
                         vendor_biz_no,
                         form_data.get('supplier_name'),
                         form_data.get('summary'),
@@ -1917,7 +1959,10 @@ class ERPLoginBot:
                 ),
             )
             is_autoever_biz_no = vendor_biz_digits == "1048153190" or "1048153190" in vendor_probe_digits
-            if is_kt_vendor:
+            if override_biz_no:
+                vendor_target_biz_no = override_biz_no
+                vendor_search_name = override_vendor_name or vendor_name
+            elif is_kt_vendor:
                 vendor_target_biz_no = "102-81-42945"
                 vendor_search_name = "케이티"
                 vendor_target_optional = True
@@ -1925,13 +1970,13 @@ class ERPLoginBot:
                 vendor_target_biz_no = "104-81-53190"
                 vendor_search_name = "현대오토에버시스템즈"
                 vendor_target_optional = True
-            elif vendor_biz_no:
-                vendor_target_biz_no = f"{vendor_biz_digits[:3]}-{vendor_biz_digits[3:5]}-{vendor_biz_digits[5:]}" if len(vendor_biz_digits) == 10 else vendor_biz_no
+            elif len(vendor_biz_digits) == 10:
+                vendor_target_biz_no = f"{vendor_biz_digits[:3]}-{vendor_biz_digits[3:5]}-{vendor_biz_digits[5:]}"
             elif "동양정보통신" in compact_vendor:
                 vendor_target_biz_no = "402-81-23213"
                 vendor_search_name = "동양정보통신"
             vendor_target_digits = re.sub(r"[^0-9]", "", vendor_target_biz_no or "")
-            is_special_vendor_keyboard = vendor_target_digits in {"1028142945", "1048153190"}
+            is_special_vendor_keyboard = len(vendor_target_digits) == 10
 
             self.logger.info(
                 f"  [MGMT-XY] {row_no}행 관리항목 조건판정: raw_account={account_name}, "
@@ -3971,9 +4016,10 @@ class ERPAutoApp:
 
     def _regular_vendor_display(self, vendor):
         raw = str(vendor or "").strip()
-        compact = re.sub(r"\s+", "", raw.lower())
+        compact = re.sub(r"\s+", "", re.sub(r"\([^)]*\)", "", raw).lower())
         rules = [
             ("다우", "다우기술"),
+            ("대신아이씨티", "대신아이씨티"),
             ("에티버스", "에티버스"),
             ("이테크", "이테크시스템"),
             ("시큐어포인트", "시큐어포인트"),
@@ -3991,7 +4037,7 @@ class ERPAutoApp:
         for key, label in rules:
             if key in compact:
                 return label
-        return re.sub(r"\(주\)|㈜|\(유\)|유한회사|주식회사", "", raw).strip() or "업체명"
+        return re.sub(r"\([^)]*\)|\(주\)|㈜|\(유\)|유한회사|주식회사", "", raw).strip() or "업체명"
 
     def _regular_summary_text(self, item, account, total_supply=0, qty=1):
         name = str(item.get("name") or item.get("raw_desc") or "").strip()

@@ -499,7 +499,7 @@ curl.exe -k https://172.17.39.121:8080/health
 Expected version at the time of this wiki:
 
 ```text
-1.0.138
+1.0.139
 ```
 
 ## Safe Change Checklist
@@ -742,3 +742,11 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - Recent jobs fetch a larger internal sample for grouping, then display at most 10 failed jobs and 10 success/progress jobs.
 - `web_v1/frontend/styles.css` forces long job/error messages to wrap inside log rows and recent-job message cells so a single PDF/print error cannot create horizontal page overflow.
 - `web_v1/backend/app.py` and `web_v1/backend/job_store.py` now default recent job listings to 10 when the client does not pass a limit.
+
+## 2026-05-22 Vendor Business Number Notes
+
+- WEB/Agent version `1.0.139` adds a hardcoded vendor business-number master for ERP vendor relation-item lookup.
+- Known mappings are stored in both `web_v1/backend/erp_runner.py` and the legacy manager automation file because payload generation and GUI input need the same fallback behavior.
+- Parenthesized vendor codes, for example `대신아이씨티(DS163)`, are stripped before matching.
+- Confirmed mappings include 컴퓨존 `106-81-83458`, KT `102-81-42945`, 현대오토에버 `104-81-53190`, 다우기술 `220-81-02810`, 안랩 `214-81-83536`, 시큐어포인트 `534-87-01726`, 동양정보통신 `402-81-23213`, 대신아이씨티 `504-86-20609`, 이테크시스템/Acronis `211-88-35257`, and 에티버스 `106-81-43363`.
+- The ERP GUI path now treats any known 10-digit vendor business number as eligible for the vendor popup double-click + business-number keyboard confirmation path, not only KT/AutoEver.

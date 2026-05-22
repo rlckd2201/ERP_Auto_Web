@@ -41,6 +41,19 @@ CORP_MAP = {
 }
 
 
+VENDOR_BIZ_NO_RULES: tuple[tuple[tuple[str, ...], str, str], ...] = (
+    (("컴퓨존",), "컴퓨존", "106-81-83458"),
+    (("kt", "케이티"), "KT", "102-81-42945"),
+    (("오토에버", "현대오토에버", "autoever"), "현대오토에버시스템즈", "104-81-53190"),
+    (("다우", "다우기술", "다우오피스"), "다우기술", "220-81-02810"),
+    (("안랩", "ahnlab"), "주식회사 안랩", "214-81-83536"),
+    (("시큐어포인트", "genian", "nac"), "시큐어포인트", "534-87-01726"),
+    (("동양정보통신",), "동양정보통신", "402-81-23213"),
+    (("대신아이씨티",), "대신아이씨티", "504-86-20609"),
+    (("이테크", "이테크시스템", "acronis"), "이테크시스템", "211-88-35257"),
+    (("에티버스",), "에티버스", "106-81-43363"),
+)
+
 Progress = Callable[[str], None]
 
 
@@ -56,6 +69,27 @@ def _to_int(value: Any) -> int:
 
 def _clean_text(value: Any, fallback: str = "") -> str:
     return re.sub(r"\s+", " ", str(value or fallback).strip())
+
+
+def _vendor_match_text(*values: Any) -> str:
+    text = " ".join(str(value or "") for value in values)
+    text = re.sub(r"\([^)]*\)", "", text)
+    return re.sub(r"\s+", "", text).lower()
+
+
+def _valid_vendor_biz_no(value: Any) -> str:
+    digits = re.sub(r"[^0-9]", "", str(value or ""))
+    if len(digits) != 10:
+        return ""
+    return f"{digits[:3]}-{digits[3:5]}-{digits[5:]}"
+
+
+def _vendor_biz_no_override(*values: Any) -> str:
+    compact = _vendor_match_text(*values)
+    for aliases, _display, biz_no in VENDOR_BIZ_NO_RULES:
+        if any(alias.lower() in compact for alias in aliases):
+            return biz_no
+    return ""
 
 
 def _site_from_biz_no(value: Any) -> str:
@@ -312,9 +346,10 @@ def _regular_round_text(period_label: str) -> str:
 
 def _regular_vendor_display(vendor: Any) -> str:
     raw = str(vendor or "").strip()
-    compact = re.sub(r"\s+", "", raw.lower())
+    compact = _vendor_match_text(raw)
     rules = [
         ("다우", "다우기술"),
+        ("대신아이씨티", "대신아이씨티"),
         ("에티버스", "에티버스"),
         ("이테크", "이테크시스템"),
         ("시큐어포인트", "시큐어포인트"),
@@ -332,15 +367,11 @@ def _regular_vendor_display(vendor: Any) -> str:
     for key, label in rules:
         if key in compact:
             return label
-    return re.sub(r"\(주\)|㈜|\(유\)|유한회사|주식회사", "", raw).strip() or "업체명"
+    return re.sub(r"\([^)]*\)|\(주\)|㈜|\(유\)|유한회사|주식회사", "", raw).strip() or "업체명"
 
 
 def _regular_vendor_biz_no_override(*values: Any) -> str:
-    text = " ".join(str(value or "") for value in values).lower()
-    compact = re.sub(r"\s+", "", text)
-    if "오토에버" in compact or "autoever" in compact or "현대오토에버" in compact:
-        return "104-81-53190"
-    return ""
+    return _vendor_biz_no_override(*values)
 
 
 def _site_short_name(site: str) -> str:
@@ -494,6 +525,16 @@ def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         or raw.get("supplier_business_number")
         or ""
     )
+    raw_vendor_biz_no = vendor_biz_no
+    vendor_biz_no = _valid_vendor_biz_no(vendor_biz_no) or _vendor_biz_no_override(
+        vendor,
+        raw_vendor_biz_no,
+        data.get("supplier_name"),
+        data.get("subject"),
+        data.get("item_name"),
+        data.get("item"),
+        invoice.get("subject"),
+    )
     site = _resolve_site(data, raw, invoice, pdf_path)
     invoice_date = _extract_invoice_date(data, pdf_path)
     if not invoice_date:
@@ -634,10 +675,14 @@ def build_regular_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         or raw.get("vendor_biz_no")
         or raw.get("supplier_biz_no")
         or raw.get("supplier_business_no")
+        or raw.get("supplier_business_number")
     )
-    vendor_biz_no = vendor_biz_no or _regular_vendor_biz_no_override(
+    raw_vendor_biz_no = vendor_biz_no
+    vendor_biz_no = _valid_vendor_biz_no(vendor_biz_no) or _regular_vendor_biz_no_override(
         raw_vendor,
         vendor,
+        raw_vendor_biz_no,
+        data.get("supplier_name"),
         data.get("subject"),
         data.get("item_name"),
         data.get("item"),
