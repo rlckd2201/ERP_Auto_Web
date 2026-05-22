@@ -2044,20 +2044,20 @@ class ERPLoginBot:
                 time.sleep(mgmt_focus_wait)
                 try:
                     pyautogui.press('delete')
-                    time.sleep(mgmt_key_wait)
+                    time.sleep(max(mgmt_key_wait, 0.18))
                     self.logger.info(f"  [MGMT-XY] {label}: 거래처 관계항목 기존값 삭제 후 사업자번호 팝업 진입")
                 except Exception as e:
                     self.logger.warning(f"  [MGMT-XY] {label}: 거래처 관계항목 기존값 삭제 실패, 계속 진행: {e}")
                 popup = None
-                popup = _find_vendor_popup(timeout=0.25)
+                popup = _find_vendor_popup(timeout=0.70)
                 if popup:
                     self.logger.info(f"  [MGMT-XY] {label}: vendor popup already opened; skip popup-open click")
                 for open_try in range(2):
                     if popup:
                         break
                     _click_form_xy(x, y, f"{label} 팝업 열기", wait=0.0)
-                    time.sleep(0.28 if open_try == 0 else ERP_FORM_WAIT + 0.1)
-                    popup = _find_vendor_popup(timeout=0.35 if open_try == 0 else 3.1)
+                    time.sleep(0.50 if open_try == 0 else ERP_FORM_WAIT + 0.35)
+                    popup = _find_vendor_popup(timeout=0.80 if open_try == 0 else 3.5)
                     if popup:
                         self.logger.info(f"  [MGMT-XY] {label}: vendor popup opened after click {open_try + 1}; stopping extra clicks")
                         break
@@ -2069,22 +2069,22 @@ class ERPLoginBot:
                 # window/grid, so the business-number paste disappears and
                 # navigation confirms a wrong row.
                 self.logger.info(f"  [MGMT-XY] {label}: vendor popup opened; keeping default search-box focus")
-                time.sleep(0.1)
+                time.sleep(0.35)
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
                 # 순서: 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.
                 _paste_text_fast(target_biz_no, f"{label} 거래처 사업자번호")
-                time.sleep(0.1)
+                time.sleep(0.35)
                 self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 붙여넣기: {target_biz_no}")
-                pyautogui.press('tab', presses=4, interval=0.04)
+                pyautogui.press('tab', presses=4, interval=0.08)
                 time.sleep(mgmt_key_wait)
-                pyautogui.press('down', presses=5, interval=0.04)
+                pyautogui.press('down', presses=5, interval=0.08)
                 time.sleep(mgmt_key_wait)
-                pyautogui.press('up', presses=1, interval=0.04)
+                pyautogui.press('up', presses=1, interval=0.08)
                 time.sleep(mgmt_key_wait)
-                pyautogui.press('tab', presses=3, interval=0.04)
+                pyautogui.press('tab', presses=3, interval=0.08)
                 time.sleep(mgmt_key_wait)
-                pyautogui.press('enter', presses=2, interval=0.08)
+                pyautogui.press('enter', presses=2, interval=0.12)
                 time.sleep(ERP_FORM_WAIT)
                 self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 키보드 시퀀스 확정(Enter 2회): {target_biz_no}")
                 return True

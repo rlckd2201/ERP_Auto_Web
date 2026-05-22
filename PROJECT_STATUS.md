@@ -586,3 +586,11 @@ ode --check web_v1/frontend/app.js; Agent py_compile passed with bundled Python 
 - Root cause: in the KT/AutoEver business-number vendor path, the relation-item popup could open immediately after the first field click/delete sequence. The automation then sent another popup-open click, which landed inside the already-open popup grid and stole focus from the search text box. The business number was therefore not pasted, and the Tab/arrow sequence confirmed a wrong vendor row, especially on the VAT vendor row.
 - Fix: after clearing the relation-item value, the automation now checks whether the vendor popup is already open before sending any popup-open click. If it is open, it keeps the default search-box focus and pastes the business number immediately. If it is not open, the fallback click uses K-System window-relative coordinates instead of raw screen coordinates.
 - Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix146 ZIP verification passed for version 1.0.134, popup precheck markers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.
+
+## 2026-05-22 fix147 Vendor Popup Slow Timing
+
+- Active WEB/Agent files are now 1.0.135.
+- Latest fix147 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_slow_timing_fix147_20260522_092748.zip.
+- Root cause follow-up: fix146 prevents the extra grid click, but the ERP vendor popup search box can still become ready slightly later on some runs. When paste/Tab starts too quickly, the business number may not enter the search box consistently.
+- Fix: only the KT/AutoEver special vendor popup path was slowed down. Delete-settle wait, popup precheck, popup-open wait, before/after-paste waits, and Tab/arrow/Enter intervals were increased. Top slip-form fields such as 회계일 and 전표관리단위 were not changed.
+- Verification passed: Python py_compile for the manager ERP automation, Agent, and backend ERP runner; Graphify update completed; fix147 ZIP verification passed for version 1.0.135, slower vendor-popup timing markers, setup EXE/frontend presence, no forbidden entries, and no Gemini key literal.

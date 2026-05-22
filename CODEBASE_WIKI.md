@@ -711,3 +711,10 @@ C:\Tmp\accounting_web_v1_regular_account_rules_fix112_20260515_122034.zip
 - `_input_vendor_by_business_no_keyboard()` now checks `_find_vendor_popup(timeout=0.25)` immediately after clearing the relation-item field. If present, skip popup-open click and paste `102-81-42945` or `104-81-53190` into the existing focused search box.
 - Popup-open fallback clicks use `_click_form_xy()` so relation-item coordinates remain relative to the K-System main window.
 - Latest fix146 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_precheck_fix146_20260522_082859.zip.
+
+## Fix147 Vendor Popup Slow Timing
+
+- KT/AutoEver vendor popup timing is intentionally conservative. The popup may appear before its search Edit is ready, so paste waits and keyboard intervals are longer than the rest of the management grid flow.
+- Current special path timing: delete settle at least 0.18s, precheck timeout 0.70s, first popup-open wait/search 0.50s/0.80s, before paste 0.35s, after paste 0.35s, key interval 0.08s, Enter interval 0.12s.
+- Do not speed this path back up unless real ERP testing proves the business number is always typed into the popup search box.
+- Latest fix147 ZIP: C:\Tmp\accounting_web_v1_vendor_popup_slow_timing_fix147_20260522_092748.zip.
