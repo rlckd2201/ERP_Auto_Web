@@ -2132,19 +2132,6 @@ class ERPLoginBot:
                     return False
 
             def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
-                _click_form_xy(x, y, label, wait=mgmt_click_wait)
-                _release_modifiers(f"{label} 클릭 후", wait=False)
-                time.sleep(mgmt_focus_wait)
-                try:
-                    pyautogui.hotkey('ctrl', 'a')
-                    _release_modifiers(f"{label} 관계항목 Ctrl+A 후", wait=False)
-                    time.sleep(max(mgmt_key_wait, 0.12))
-                    pyautogui.press('backspace')
-                    time.sleep(max(mgmt_key_wait, 0.18))
-                    _paste_text_fast(target_biz_no, f"{label} 거래처 관계항목 사업자번호")
-                    self.logger.info(f"  [MGMT-XY] {label}: 거래처 관계항목에 사업자번호 선입력: {target_biz_no}")
-                except Exception as e:
-                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 관계항목 사업자번호 선입력 실패, 팝업 검색으로 계속 진행: {e}")
                 popup = None
                 popup = _find_vendor_popup(timeout=0.70)
                 if popup:
@@ -2165,16 +2152,18 @@ class ERPLoginBot:
                 # Do not call popup.set_focus(); it can move focus to the
                 # window/grid, so the business-number paste disappears and
                 # navigation confirms a wrong row.
-                self.logger.info(f"  [MGMT-XY] {label}: vendor popup opened; keeping default search-box focus")
-                time.sleep(0.35)
+                self.logger.info(
+                    f"  [MGMT-XY] {label}: vendor popup opened; relation cell untouched, keeping default search-box focus"
+                )
+                time.sleep(max(0.45, mgmt_focus_wait))
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
                 # 순서: 검색칸 전체선택 -> 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.
                 pyautogui.hotkey('ctrl', 'a')
                 _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
-                time.sleep(0.12)
+                time.sleep(max(0.18, mgmt_key_wait))
                 _paste_text_fast(target_biz_no, f"{label} 거래처 사업자번호")
-                time.sleep(0.35)
+                time.sleep(max(0.55, vendor_popup_open_wait))
                 self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 붙여넣기: {target_biz_no}")
                 pyautogui.press('tab', presses=4, interval=0.08)
                 time.sleep(mgmt_key_wait)
@@ -2193,7 +2182,13 @@ class ERPLoginBot:
                 if not vendor_name and not vendor_target_biz_no:
                     return
                 if is_special_vendor_keyboard and vendor_target_biz_no:
-                    _input_vendor_by_business_no_keyboard(x, y, label, vendor_target_biz_no)
+                    if _input_vendor_by_business_no_keyboard(x, y, label, vendor_target_biz_no):
+                        return
+                    if vendor_name:
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: 사업자번호 팝업 진입 실패, 기존 거래처명 입력 fallback: {vendor_name}"
+                        )
+                        _input_value_xy(x, y, vendor_name, label, enter_count=1, clear=True)
                     return
                 if vendor_target_biz_no:
                     target_biz_no = vendor_target_biz_no
