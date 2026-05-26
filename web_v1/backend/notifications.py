@@ -2,7 +2,7 @@ import logging
 import smtplib
 from datetime import datetime
 from email.mime.text import MIMEText
-from email.utils import formatdate, make_msgid
+from email.utils import formataddr, formatdate, make_msgid
 from pathlib import Path
 from typing import Any
 
@@ -42,10 +42,20 @@ def _invoice_summary_line(invoice_id: int) -> str:
     return f"- #{invoice_id} / {vendor} / {site} / {date} / {amount}원 / {pdf_name}"
 
 
+def _regular_auto_sender() -> str:
+    from_addr = settings.regular_auto_result_from or settings.password_reset_from
+    if "<" in from_addr and ">" in from_addr:
+        return from_addr
+    from_name = str(settings.regular_auto_result_from_name or "").strip()
+    if not from_name:
+        return from_addr
+    return formataddr((from_name, from_addr))
+
+
 def _send_mail(to_addr: str, subject: str, body: str) -> None:
     msg = MIMEText(body, _charset="utf-8")
     msg["Subject"] = subject
-    msg["From"] = settings.regular_auto_result_from or settings.password_reset_from
+    msg["From"] = _regular_auto_sender()
     msg["To"] = to_addr
     msg["Date"] = formatdate(localtime=True)
     msg["Message-ID"] = make_msgid()

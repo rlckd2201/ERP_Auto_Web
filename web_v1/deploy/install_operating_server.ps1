@@ -7,6 +7,13 @@ $EnvPath = Join-Path $BackendDir ".env"
 
 $DefaultEmailId = "mailsendds@gmail.com"
 $DefaultEmailPw = "ttsjfjkqhfwemcfq"
+$DefaultPasswordResetDomain = "dae-seung.co.kr"
+$DefaultPasswordResetSmtpServer = "35.216.76.148"
+$DefaultPasswordResetSmtpPort = "25"
+$DefaultPasswordResetUser = "admpdm"
+$DefaultPasswordResetPw = "eotmd12#$"
+$DefaultPasswordResetFrom = "admpdm@dae-seung.co.kr"
+$DefaultRegularAutoResultFromName = "회계처리프로그램"
 $DefaultGeminiApiKey = ""
 $DefaultServerIp = if ($env:WEB_SERVER_IP) { $env:WEB_SERVER_IP } else { "172.17.39.121" }
 $DefaultPyeongtaekPrinter = "평택 프린터 (172.16.10.172)"
@@ -58,20 +65,36 @@ if ($ForceRenewCert -or -not (Test-Path -LiteralPath $SslCertFile) -or -not (Tes
 Import-Certificate -FilePath $SslCertFile -CertStoreLocation Cert:\CurrentUser\Root | Out-Null
 Write-Host "[WEB v1.0] HTTPS certificate trusted for current Windows user"
 
-$emailId = if ($env:EMAIL_ID) { $env:EMAIL_ID } else { $DefaultEmailId }
-$emailPw = if ($env:EMAIL_PW) { $env:EMAIL_PW } else { $DefaultEmailPw }
-$existingGeminiKey = ""
+$existingEnv = @{}
 if (Test-Path -LiteralPath $EnvPath) {
-    $existingGeminiLine = Get-Content -LiteralPath $EnvPath | Where-Object { $_ -match "^GEMINI_API_KEY=" } | Select-Object -First 1
-    if ($existingGeminiLine) {
-        $existingGeminiKey = ($existingGeminiLine -replace "^GEMINI_API_KEY=", "").Trim()
+    Get-Content -LiteralPath $EnvPath | ForEach-Object {
+        if ($_ -match "^\s*([^#=]+)=(.*)$") {
+            $existingEnv[$matches[1].Trim()] = $matches[2].Trim()
+        }
     }
 }
+
+function Resolve-EnvValue([string]$Key, [string]$DefaultValue = "") {
+    $value = [Environment]::GetEnvironmentVariable($Key)
+    if ($null -ne $value -and $value -ne "") {
+        return $value
+    }
+    if ($script:existingEnv.ContainsKey($Key) -and $script:existingEnv[$Key]) {
+        return $script:existingEnv[$Key]
+    }
+    return $DefaultValue
+}
+
+$emailId = Resolve-EnvValue "EMAIL_ID" $DefaultEmailId
+$emailPw = Resolve-EnvValue "EMAIL_PW" $DefaultEmailPw
+$existingGeminiKey = Resolve-EnvValue "GEMINI_API_KEY" ""
 $geminiKey = if ($env:GEMINI_API_KEY) { $env:GEMINI_API_KEY } elseif ($existingGeminiKey) { $existingGeminiKey } else { $DefaultGeminiApiKey }
-$passwordResetDomain = if ($env:PASSWORD_RESET_MAIL_DOMAIN) { $env:PASSWORD_RESET_MAIL_DOMAIN } else { "dae-seung.co.kr" }
-$passwordResetUser = if ($env:PASSWORD_RESET_SMTP_USER) { $env:PASSWORD_RESET_SMTP_USER } elseif ($emailId -like "*@*") { ($emailId -split "@")[0] } else { $emailId }
-$passwordResetPw = if ($env:PASSWORD_RESET_SMTP_PW) { $env:PASSWORD_RESET_SMTP_PW } else { $emailPw }
-$passwordResetFrom = if ($env:PASSWORD_RESET_FROM) { $env:PASSWORD_RESET_FROM } elseif ($passwordResetUser -like "*@*") { $passwordResetUser } else { "$passwordResetUser@$passwordResetDomain" }
+$passwordResetDomain = if ($env:PASSWORD_RESET_MAIL_DOMAIN) { $env:PASSWORD_RESET_MAIL_DOMAIN } else { $DefaultPasswordResetDomain }
+$passwordResetSmtpServer = if ($env:PASSWORD_RESET_SMTP_SERVER) { $env:PASSWORD_RESET_SMTP_SERVER } else { $DefaultPasswordResetSmtpServer }
+$passwordResetSmtpPort = if ($env:PASSWORD_RESET_SMTP_PORT) { $env:PASSWORD_RESET_SMTP_PORT } else { $DefaultPasswordResetSmtpPort }
+$passwordResetUser = if ($env:PASSWORD_RESET_SMTP_USER) { $env:PASSWORD_RESET_SMTP_USER } else { $DefaultPasswordResetUser }
+$passwordResetPw = if ($env:PASSWORD_RESET_SMTP_PW) { $env:PASSWORD_RESET_SMTP_PW } else { $DefaultPasswordResetPw }
+$passwordResetFrom = if ($env:PASSWORD_RESET_FROM) { $env:PASSWORD_RESET_FROM } else { $DefaultPasswordResetFrom }
 
 $printers = @()
 try {
@@ -86,14 +109,15 @@ $gjAuto = $printers | Where-Object { $_ -like "*172.17.30.162*" -or $_ -like "*�
 $ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } elseif ($ptAuto) { $ptAuto } else { $DefaultPyeongtaekPrinter }
 $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($gjAuto) { $gjAuto } else { Read-Host "김제 프린터 이름 입력(Get-Printer 결과와 동일)" }
 $regularAutoPrinterKey = if ($env:REGULAR_AUTO_PRINTER_KEY) { $env:REGULAR_AUTO_PRINTER_KEY } else { "pyeongtaek" }
-$regularAutoResultFrom = if ($env:REGULAR_AUTO_RESULT_FROM) { $env:REGULAR_AUTO_RESULT_FROM } else { $emailId }
-$regularAutoResultSmtpServer = if ($env:REGULAR_AUTO_RESULT_SMTP_SERVER) { $env:REGULAR_AUTO_RESULT_SMTP_SERVER } else { "smtp.gmail.com" }
-$regularAutoResultSmtpPort = if ($env:REGULAR_AUTO_RESULT_SMTP_PORT) { $env:REGULAR_AUTO_RESULT_SMTP_PORT } else { "587" }
-$regularAutoResultSmtpUser = if ($env:REGULAR_AUTO_RESULT_SMTP_USER) { $env:REGULAR_AUTO_RESULT_SMTP_USER } else { $emailId }
-$regularAutoResultSmtpPw = if ($env:REGULAR_AUTO_RESULT_SMTP_PW) { $env:REGULAR_AUTO_RESULT_SMTP_PW } else { $emailPw }
+$regularAutoResultFromName = if ($env:REGULAR_AUTO_RESULT_FROM_NAME) { $env:REGULAR_AUTO_RESULT_FROM_NAME } else { $DefaultRegularAutoResultFromName }
+$regularAutoResultFrom = if ($env:REGULAR_AUTO_RESULT_FROM) { $env:REGULAR_AUTO_RESULT_FROM } else { $passwordResetFrom }
+$regularAutoResultSmtpServer = if ($env:REGULAR_AUTO_RESULT_SMTP_SERVER) { $env:REGULAR_AUTO_RESULT_SMTP_SERVER } else { $passwordResetSmtpServer }
+$regularAutoResultSmtpPort = if ($env:REGULAR_AUTO_RESULT_SMTP_PORT) { $env:REGULAR_AUTO_RESULT_SMTP_PORT } else { $passwordResetSmtpPort }
+$regularAutoResultSmtpUser = if ($env:REGULAR_AUTO_RESULT_SMTP_USER) { $env:REGULAR_AUTO_RESULT_SMTP_USER } else { $passwordResetUser }
+$regularAutoResultSmtpPw = if ($env:REGULAR_AUTO_RESULT_SMTP_PW) { $env:REGULAR_AUTO_RESULT_SMTP_PW } else { $passwordResetPw }
 
 @"
-APP_VERSION=1.0.145
+APP_VERSION=1.0.146
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
@@ -112,8 +136,8 @@ EMAIL_ID=$emailId
 EMAIL_PW=$emailPw
 
 PASSWORD_RESET_MAIL_DOMAIN=$passwordResetDomain
-PASSWORD_RESET_SMTP_SERVER=35.216.76.148
-PASSWORD_RESET_SMTP_PORT=25
+PASSWORD_RESET_SMTP_SERVER=$passwordResetSmtpServer
+PASSWORD_RESET_SMTP_PORT=$passwordResetSmtpPort
 PASSWORD_RESET_SMTP_USER=$passwordResetUser
 PASSWORD_RESET_SMTP_PW=$passwordResetPw
 PASSWORD_RESET_FROM=$passwordResetFrom
@@ -136,6 +160,7 @@ REGULAR_AUTO_SCAN_LIMIT=200
 REGULAR_AUTO_MAX_BATCH=20
 REGULAR_AUTO_RESULT_EMAIL=ds1501@dae-seung.co.kr
 REGULAR_AUTO_RESULT_EMAIL_ENABLED=1
+REGULAR_AUTO_RESULT_FROM_NAME=$regularAutoResultFromName
 REGULAR_AUTO_RESULT_FROM=$regularAutoResultFrom
 REGULAR_AUTO_RESULT_SMTP_SERVER=$regularAutoResultSmtpServer
 REGULAR_AUTO_RESULT_SMTP_PORT=$regularAutoResultSmtpPort
