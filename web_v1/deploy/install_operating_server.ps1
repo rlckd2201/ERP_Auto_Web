@@ -86,9 +86,14 @@ $gjAuto = $printers | Where-Object { $_ -like "*172.17.30.162*" -or $_ -like "*�
 $ptPrinter = if ($env:PRINT_TARGET_PYEONGTAEK) { $env:PRINT_TARGET_PYEONGTAEK } elseif ($ptAuto) { $ptAuto } else { $DefaultPyeongtaekPrinter }
 $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($gjAuto) { $gjAuto } else { Read-Host "김제 프린터 이름 입력(Get-Printer 결과와 동일)" }
 $regularAutoPrinterKey = if ($env:REGULAR_AUTO_PRINTER_KEY) { $env:REGULAR_AUTO_PRINTER_KEY } else { "pyeongtaek" }
+$regularAutoResultFrom = if ($env:REGULAR_AUTO_RESULT_FROM) { $env:REGULAR_AUTO_RESULT_FROM } else { $emailId }
+$regularAutoResultSmtpServer = if ($env:REGULAR_AUTO_RESULT_SMTP_SERVER) { $env:REGULAR_AUTO_RESULT_SMTP_SERVER } else { "smtp.gmail.com" }
+$regularAutoResultSmtpPort = if ($env:REGULAR_AUTO_RESULT_SMTP_PORT) { $env:REGULAR_AUTO_RESULT_SMTP_PORT } else { "587" }
+$regularAutoResultSmtpUser = if ($env:REGULAR_AUTO_RESULT_SMTP_USER) { $env:REGULAR_AUTO_RESULT_SMTP_USER } else { $emailId }
+$regularAutoResultSmtpPw = if ($env:REGULAR_AUTO_RESULT_SMTP_PW) { $env:REGULAR_AUTO_RESULT_SMTP_PW } else { $emailPw }
 
 @"
-APP_VERSION=1.0.144
+APP_VERSION=1.0.145
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
@@ -131,8 +136,11 @@ REGULAR_AUTO_SCAN_LIMIT=200
 REGULAR_AUTO_MAX_BATCH=20
 REGULAR_AUTO_RESULT_EMAIL=ds1501@dae-seung.co.kr
 REGULAR_AUTO_RESULT_EMAIL_ENABLED=1
-REGULAR_AUTO_RESULT_SMTP_SERVER=35.216.76.148
-REGULAR_AUTO_RESULT_SMTP_PORT=25
+REGULAR_AUTO_RESULT_FROM=$regularAutoResultFrom
+REGULAR_AUTO_RESULT_SMTP_SERVER=$regularAutoResultSmtpServer
+REGULAR_AUTO_RESULT_SMTP_PORT=$regularAutoResultSmtpPort
+REGULAR_AUTO_RESULT_SMTP_USER=$regularAutoResultSmtpUser
+REGULAR_AUTO_RESULT_SMTP_PW=$regularAutoResultSmtpPw
 
 WORKER_GUI_CONCURRENCY=1
 "@ | Set-Content -Path $EnvPath -Encoding UTF8
