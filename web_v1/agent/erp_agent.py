@@ -60,7 +60,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.143"
+AGENT_BUNDLE_VERSION = "1.0.144"
 _MUTEX_HANDLE: Any = None
 
 
@@ -1118,6 +1118,56 @@ def run_install_job(server: str, job: dict[str, Any], agent_id: str, verify: boo
         log(f"setup install report failed: {exc}")
 
 
+def _cleanup_erp_processes_after_task(reason: str = "") -> None:
+    if os.name != "nt":
+        return
+    try:
+        import psutil
+    except Exception as exc:
+        log(f"ERP process cleanup skipped: psutil unavailable: {exc}")
+        return
+    current_pid = os.getpid()
+    matches: list[Any] = []
+    for proc in psutil.process_iter(["pid", "name", "exe", "cmdline"]):
+        try:
+            if proc.pid == current_pid:
+                continue
+            name = str(proc.info.get("name") or "").lower()
+            exe = str(proc.info.get("exe") or "").lower()
+            cmdline = " ".join(str(item) for item in (proc.info.get("cmdline") or [])).lower()
+            blob = f"{name} {exe} {cmdline}"
+            if (
+                "younglimwon" in blob
+                or "ksystem ver.5 genuine" in blob
+                or name in {"clientupdater.exe", "rdviewer_u.exe"}
+                or "angkor" in name
+            ):
+                matches.append(proc)
+        except Exception:
+            continue
+    if not matches:
+        log("ERP process cleanup: no ERP processes left")
+        return
+    log(f"ERP process cleanup after task ({reason or 'task'}): {len(matches)} process(es)")
+    survivors: list[Any] = []
+    for proc in matches:
+        try:
+            log(f"terminating ERP process pid={proc.pid} name={proc.name()}")
+            proc.terminate()
+            survivors.append(proc)
+        except Exception as exc:
+            log(f"ERP process terminate failed pid={getattr(proc, 'pid', '?')}: {exc}")
+    try:
+        gone, alive = psutil.wait_procs(survivors, timeout=6)
+    except Exception:
+        alive = survivors
+    for proc in alive:
+        try:
+            log(f"killing ERP process pid={proc.pid} name={proc.name()}")
+            proc.kill()
+        except Exception as exc:
+            log(f"ERP process kill failed pid={getattr(proc, 'pid', '?')}: {exc}")
+
 def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> None:
     os.environ.setdefault("LEGACY_MANAGER_PATH", str(LEGACY_MANAGER))
     os.environ.setdefault("ERP_EXECUTION_MODE", "agent")
@@ -1259,6 +1309,9 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
         except Exception as report_exc:
             log(f"ERP failure report failed: {report_exc}")
     finally:
+        close_after_task = is_regular_auto_task or os.getenv("ERP_AGENT_CLOSE_ERP_AFTER_TASK", "0").strip().lower() in {"1", "true", "yes", "y"}
+        if close_after_task:
+            _cleanup_erp_processes_after_task("regular_auto" if is_regular_auto_task else "env")
         if is_regular_auto_task:
             for key, old_value in previous_speed_env.items():
                 if old_value is None:

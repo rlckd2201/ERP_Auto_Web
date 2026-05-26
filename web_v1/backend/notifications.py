@@ -49,13 +49,13 @@ def _send_mail(to_addr: str, subject: str, body: str) -> None:
     msg["To"] = to_addr
     msg["Date"] = formatdate(localtime=True)
     msg["Message-ID"] = make_msgid()
-    with smtplib.SMTP(settings.password_reset_smtp_server, settings.password_reset_smtp_port, timeout=10) as smtp:
+    with smtplib.SMTP(settings.regular_auto_result_smtp_server, settings.regular_auto_result_smtp_port, timeout=10) as smtp:
         smtp.ehlo()
         if smtp.has_extn("STARTTLS"):
             smtp.starttls()
             smtp.ehlo()
-        if settings.password_reset_smtp_user and settings.password_reset_smtp_pw:
-            smtp.login(settings.password_reset_smtp_user, settings.password_reset_smtp_pw)
+        if settings.regular_auto_result_smtp_user and settings.regular_auto_result_smtp_pw:
+            smtp.login(settings.regular_auto_result_smtp_user, settings.regular_auto_result_smtp_pw)
         smtp.send_message(msg)
 
 
@@ -79,9 +79,11 @@ def notify_regular_auto_result(
     recipient = str(settings.regular_auto_result_email or "").strip()
     if not recipient:
         return {"ok": False, "skipped": True, "reason": "missing_recipient"}
-    if root_payload.get("regular_auto_result_email_sent"):
+    dedupe_phase = "".join(ch if ch.isalnum() else "_" for ch in str(phase or "result")).strip("_") or "result"
+    dedupe_status = "ok" if ok else "error"
+    dedupe_key = f"regular_auto_result_email_sent_{dedupe_phase}_{dedupe_status}"
+    if root_payload.get(dedupe_key):
         return {"ok": True, "skipped": True, "reason": "already_sent"}
-
     clean_invoice_ids = [int(item) for item in invoice_ids if str(item).isdigit()]
     status_label = "성공" if ok else "실패"
     phase_label = phase or "처리"
@@ -109,6 +111,7 @@ def notify_regular_auto_result(
     try:
         _send_mail(recipient, subject, body)
         if isinstance(root_payload, dict):
+            root_payload[dedupe_key] = datetime.now().isoformat(timespec="seconds")
             root_payload["regular_auto_result_email_sent"] = datetime.now().isoformat(timespec="seconds")
             root_payload["regular_auto_result_email_to"] = recipient
             root_payload["regular_auto_result_email_status"] = "sent"

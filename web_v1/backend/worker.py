@@ -59,6 +59,20 @@ class JobWorker:
             finally:
                 self._queue.task_done()
 
+    def _record_regular_auto_mail_result(self, job_id: str, invoice_ids: list[int], result: dict[str, Any], phase: str) -> None:
+        if not job_id or not isinstance(result, dict) or result.get("skipped"):
+            return
+        if result.get("ok"):
+            message = f"regular auto result email sent ({phase}): {result.get('to') or settings.regular_auto_result_email}"
+            level = "info"
+        else:
+            message = f"regular auto result email failed ({phase}): {result.get('error') or result.get('reason') or 'unknown'}"
+            level = "error"
+        job = self.store.get(job_id)
+        if job:
+            self.store.add_event(job_id, job.status, job.progress, message)
+        for invoice_id in invoice_ids:
+            add_invoice_log(invoice_id, message, level=level, job_id=job_id)
     def _run_job(self, job_id: str) -> None:
         job = self.store.get(job_id)
         if not job:
@@ -95,22 +109,26 @@ class JobWorker:
                 self.store.set_error(source_job_id, str(exc))
                 self.store.add_event(source_job_id, "error", 100, f"원클릭 출력 실패: {exc}")
                 if bool(job.payload.get("regular_auto")):
-                    notify_regular_auto_result(
+                    invoice_ids = [int(item) for item in job.payload.get("invoice_ids") or [] if str(item).isdigit()]
+                    mail_result = notify_regular_auto_result(
                         job=job,
                         source_job=self.store.get(source_job_id),
                         ok=False,
-                        message=f"원클릭 출력 실패: {exc}",
-                        invoice_ids=[int(item) for item in job.payload.get("invoice_ids") or [] if str(item).isdigit()],
-                        phase="출력 준비",
+                        message=f"one-click output failed: {exc}",
+                        invoice_ids=invoice_ids,
+                        phase="Output preparation",
                     )
+                    self._record_regular_auto_mail_result(source_job_id or job.id, invoice_ids, mail_result, "Output preparation")
             elif bool(job.payload.get("regular_auto")):
-                notify_regular_auto_result(
+                invoice_ids = [int(item) for item in job.payload.get("invoice_ids") or [] if str(item).isdigit()]
+                mail_result = notify_regular_auto_result(
                     job=job,
                     ok=False,
                     message=str(exc),
-                    invoice_ids=[int(item) for item in job.payload.get("invoice_ids") or [] if str(item).isdigit()],
-                    phase="서버 작업",
+                    invoice_ids=invoice_ids,
+                    phase="Server job",
                 )
+                self._record_regular_auto_mail_result(job.id, invoice_ids, mail_result, "Server job")
 
     def _run_demo(self, job: JobRecord) -> dict[str, Any]:
         steps = [

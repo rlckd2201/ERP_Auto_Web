@@ -151,6 +151,21 @@ def _edit_bool(value: Any) -> bool:
     return bool(value)
 
 
+def _record_regular_auto_mail_result(job_id: str, invoice_ids: list[int], result: dict[str, Any], phase: str) -> None:
+    if not job_id or not isinstance(result, dict) or result.get("skipped"):
+        return
+    if result.get("ok"):
+        message = f"regular auto result email sent ({phase}): {result.get('to') or settings.regular_auto_result_email}"
+        level = "info"
+    else:
+        message = f"regular auto result email failed ({phase}): {result.get('error') or result.get('reason') or 'unknown'}"
+        level = "error"
+    job = job_store.get(job_id)
+    if job:
+        job_store.add_event(job_id, job.status, job.progress, message)
+    for invoice_id in invoice_ids:
+        add_invoice_log(invoice_id, message, level=level, job_id=job_id)
+
 def _purchase_edit_snapshot(data: dict[str, Any]) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
     for source in data.get("items") or []:
@@ -1585,15 +1600,16 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
                 job_store.set_error(source_job_id, message)
                 job_store.add_event(source_job_id, "error", 100, f"원클릭 출력 실패: {message}")
         if regular_auto_output:
-            notify_regular_auto_result(
+            mail_result = notify_regular_auto_result(
                 job=output_job or job_store.get(job_id),
                 source_job=job_store.get(source_job_id) if source_job_id else None,
                 ok=ok,
                 message=message,
                 invoice_ids=invoice_ids,
                 agent_id=agent_id,
-                phase="평택 출력",
+                phase="Pyeongtaek output",
             )
+            _record_regular_auto_mail_result(source_job_id or job_id, invoice_ids, mail_result, "Pyeongtaek output")
         return {"ok": True}
     if job_type == "expense_report":
         expense_job = job_store.get(job_id)
@@ -1678,14 +1694,15 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
             job_store.set_error(job_id, message)
             job_store.add_event(job_id, "error", 100, message)
     if not ok and bool(source_context.get("regular_auto")):
-        notify_regular_auto_result(
+        mail_result = notify_regular_auto_result(
             job=job_store.get(job_id),
             ok=False,
             message=message,
             invoice_ids=invoice_ids,
             agent_id=agent_id,
-            phase="ERP 입력",
+            phase="ERP input",
         )
+        _record_regular_auto_mail_result(job_id, invoice_ids, mail_result, "ERP input")
     return {"ok": True}
 
 
