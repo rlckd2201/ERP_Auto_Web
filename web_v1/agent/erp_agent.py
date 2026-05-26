@@ -60,7 +60,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.142"
+AGENT_BUNDLE_VERSION = "1.0.143"
 _MUTEX_HANDLE: Any = None
 
 
@@ -1122,6 +1122,25 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
     os.environ.setdefault("LEGACY_MANAGER_PATH", str(LEGACY_MANAGER))
     os.environ.setdefault("ERP_EXECUTION_MODE", "agent")
     os.environ.setdefault("ERP_AGENT_FRESH_START", "1")
+    source_context = task.get("source_job_payload") if isinstance(task.get("source_job_payload"), dict) else {}
+    is_regular_auto_task = bool(task.get("regular_auto") or source_context.get("regular_auto"))
+    regular_auto_speed_defaults = {
+        "ERP_FAST_MANAGEMENT": "1",
+        "ERP_MGMT_KEY_WAIT": "0.10",
+        "ERP_MGMT_COMMIT_WAIT": "0.18",
+        "ERP_MGMT_FOCUS_WAIT": "0.12",
+        "ERP_MGMT_CLICK_WAIT": "0.14",
+        "ERP_MGMT_CLIPBOARD_WAIT": "0.04",
+        "ERP_MGMT_SUMMARY_OPEN_WAIT": "0.42",
+        "ERP_MGMT_AFTER_GRID_PASTE_WAIT": "0.50",
+    }
+    previous_speed_env: dict[str, str | None] = {}
+    if is_regular_auto_task:
+        for key, value in regular_auto_speed_defaults.items():
+            previous_speed_env[key] = os.environ.get(key)
+            if key not in os.environ:
+                os.environ[key] = value
+        log("regular auto ERP management timing profile applied")
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -1239,6 +1258,13 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
             )
         except Exception as report_exc:
             log(f"ERP failure report failed: {report_exc}")
+    finally:
+        if is_regular_auto_task:
+            for key, old_value in previous_speed_env.items():
+                if old_value is None:
+                    os.environ.pop(key, None)
+                else:
+                    os.environ[key] = old_value
 
 
 def run_expense_report_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> None:

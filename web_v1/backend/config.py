@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import os
 from dataclasses import dataclass
@@ -115,6 +115,9 @@ class Settings:
     regular_auto_interval_seconds: int = _env_int("REGULAR_AUTO_INTERVAL_SECONDS", 60)
     regular_auto_scan_limit: int = _env_int("REGULAR_AUTO_SCAN_LIMIT", 200)
     regular_auto_max_batch: int = _env_int("REGULAR_AUTO_MAX_BATCH", 20)
+    regular_auto_result_email: str = _env("REGULAR_AUTO_RESULT_EMAIL", "ds1501@dae-seung.co.kr")
+    regular_auto_result_email_enabled: bool = _env_bool("REGULAR_AUTO_RESULT_EMAIL_ENABLED", True)
+    regular_auto_result_from: str = _env("REGULAR_AUTO_RESULT_FROM", _env("PASSWORD_RESET_FROM", _env("EMAIL_ID") or "noreply@dae-seung.co.kr"))
     compuzone_id: str = _env("COMPUZONE_ID")
     compuzone_pw: str = _env("COMPUZONE_PW")
     compuzone_auto_quote_enabled: bool = _env_bool("COMPUZONE_AUTO_QUOTE_ENABLED", True)

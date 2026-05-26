@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 import asyncio
 import base64
@@ -26,6 +26,7 @@ from .config import WEB_ROOT, settings
 from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
 from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
+from .notifications import notify_regular_auto_result
 from .output_set import build_output_set_status, generate_expense_report_pdf
 from .erp_queue import queue_dir, write_expense_report_queue
 from .erp_runner import build_regular_erp_payload
@@ -1583,6 +1584,16 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
             else:
                 job_store.set_error(source_job_id, message)
                 job_store.add_event(source_job_id, "error", 100, f"원클릭 출력 실패: {message}")
+        if regular_auto_output:
+            notify_regular_auto_result(
+                job=output_job or job_store.get(job_id),
+                source_job=job_store.get(source_job_id) if source_job_id else None,
+                ok=ok,
+                message=message,
+                invoice_ids=invoice_ids,
+                agent_id=agent_id,
+                phase="평택 출력",
+            )
         return {"ok": True}
     if job_type == "expense_report":
         expense_job = job_store.get(job_id)
@@ -1666,6 +1677,15 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
         else:
             job_store.set_error(job_id, message)
             job_store.add_event(job_id, "error", 100, message)
+    if not ok and bool(source_context.get("regular_auto")):
+        notify_regular_auto_result(
+            job=job_store.get(job_id),
+            ok=False,
+            message=message,
+            invoice_ids=invoice_ids,
+            agent_id=agent_id,
+            phase="ERP 입력",
+        )
     return {"ok": True}
 
 

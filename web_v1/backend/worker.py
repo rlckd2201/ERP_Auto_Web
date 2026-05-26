@@ -15,6 +15,7 @@ from .config import settings
 from .invoice_db import ERP_QUEUED, ERROR, PROCESSING, DONE, add_invoice_log, get_invoice, set_invoice_status, update_invoice_json
 from .job_store import JobRecord, JobStore
 from .mail_collector import collect_mail_once
+from .notifications import notify_regular_auto_result
 from .output_set import build_output_set_status, run_output_set_job
 from .purchase_analysis import analyze_purchase_documents
 
@@ -93,6 +94,23 @@ class JobWorker:
             if job.job_type == "output_set" and source_job_id and self.store.get(source_job_id):
                 self.store.set_error(source_job_id, str(exc))
                 self.store.add_event(source_job_id, "error", 100, f"원클릭 출력 실패: {exc}")
+                if bool(job.payload.get("regular_auto")):
+                    notify_regular_auto_result(
+                        job=job,
+                        source_job=self.store.get(source_job_id),
+                        ok=False,
+                        message=f"원클릭 출력 실패: {exc}",
+                        invoice_ids=[int(item) for item in job.payload.get("invoice_ids") or [] if str(item).isdigit()],
+                        phase="출력 준비",
+                    )
+            elif bool(job.payload.get("regular_auto")):
+                notify_regular_auto_result(
+                    job=job,
+                    ok=False,
+                    message=str(exc),
+                    invoice_ids=[int(item) for item in job.payload.get("invoice_ids") or [] if str(item).isdigit()],
+                    phase="서버 작업",
+                )
 
     def _run_demo(self, job: JobRecord) -> dict[str, Any]:
         steps = [

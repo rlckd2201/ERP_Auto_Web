@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
@@ -88,7 +88,7 @@ $gjPrinter = if ($env:PRINT_TARGET_GIMJE) { $env:PRINT_TARGET_GIMJE } elseif ($g
 $regularAutoPrinterKey = if ($env:REGULAR_AUTO_PRINTER_KEY) { $env:REGULAR_AUTO_PRINTER_KEY } else { "pyeongtaek" }
 
 @"
-APP_VERSION=1.0.141
+APP_VERSION=1.0.143
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
@@ -129,6 +129,8 @@ REGULAR_AUTO_PRINTER_KEY=$regularAutoPrinterKey
 REGULAR_AUTO_INTERVAL_SECONDS=60
 REGULAR_AUTO_SCAN_LIMIT=200
 REGULAR_AUTO_MAX_BATCH=20
+REGULAR_AUTO_RESULT_EMAIL=ds1501@dae-seung.co.kr
+REGULAR_AUTO_RESULT_EMAIL_ENABLED=1
 
 WORKER_GUI_CONCURRENCY=1
 "@ | Set-Content -Path $EnvPath -Encoding UTF8
