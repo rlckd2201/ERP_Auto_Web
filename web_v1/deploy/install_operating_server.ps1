@@ -117,7 +117,7 @@ $regularAutoResultSmtpUser = if ($env:REGULAR_AUTO_RESULT_SMTP_USER) { $env:REGU
 $regularAutoResultSmtpPw = if ($env:REGULAR_AUTO_RESULT_SMTP_PW) { $env:REGULAR_AUTO_RESULT_SMTP_PW } else { $passwordResetPw }
 
 @"
-APP_VERSION=1.0.147
+APP_VERSION=1.0.148
 APP_ENV=production
 
 WEB_HOST=0.0.0.0

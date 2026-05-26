@@ -853,7 +853,11 @@ class ERPLoginBot:
                                             if _elem_name(el).strip() == "회계관리":
                                                 r = el.rectangle()
                                                 # 왼쪽 트리의 '회계관리 >>'가 아니라 메뉴 타일 영역만 허용합니다.
-                                                if r.left > main_win.rectangle().left + 250:
+                                                rel_left = r.left - main_win.rectangle().left
+                                                rel_top = r.top - main_win.rectangle().top
+                                                is_ds_accounting_tile = self.corp_code == "DS" and rel_left >= 60 and rel_top >= 120
+                                                is_legacy_accounting_tile = rel_left > 250
+                                                if is_ds_accounting_tile or is_legacy_accounting_tile:
                                                     try:
                                                         el.click_input()
                                                     except Exception:
@@ -869,7 +873,11 @@ class ERPLoginBot:
                         if not clicked_tile:
                             self.logger.warning("  [MENU-03] 메뉴 타일 UI 미발견, 좌표 fallback 실행")
                             # 화면 기준: 두 번째 이미지의 회계관리 타일 중앙 부근
-                            _click_rel(390, 115, "메뉴 내부 회계관리 타일")
+                            # DS accounting menu tile moved to first column, second row after operation-management permission was added.
+                            if self.corp_code == "DS":
+                                _click_rel(137, 183, "DS accounting menu tile")
+                            else:
+                                _click_rel(390, 115, "accounting menu tile")
                         time.sleep(ERP_BLOCK_WAIT)
                         self.logger.info("  [MENU-03] 회계관리 타일 클릭 후 짧은 대기 완료")
                         pyautogui.press("escape")
