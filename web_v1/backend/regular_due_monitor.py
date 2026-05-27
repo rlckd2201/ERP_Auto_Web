@@ -712,12 +712,13 @@ def _send_html_mail(to_addr: str, subject: str, plain: str, html_body: str) -> N
 
 def send_regular_due_report(reference_date: str | date | datetime | None = None, *, force: bool = False) -> dict[str, Any]:
     report = build_regular_due_report(reference_date)
+    report_date = _parse_date(report.get("reference_date")) or datetime.now().date()
     if not _enabled():
         return {**report, "sent": False, "skipped": True, "reason": "disabled"}
+    if report_date < _alert_start_date() and not force:
+        return {**report, "sent": False, "skipped": True, "reason": "before_start_date"}
     if not report["items"] and not force:
         return {**report, "sent": False, "skipped": True, "reason": "no_due_items"}
-    if not report.get("trigger_count") and not force:
-        return {**report, "sent": False, "skipped": True, "reason": "no_trigger_items"}
     recipient = _recipient()
     if not recipient:
         return {**report, "sent": False, "skipped": True, "reason": "missing_recipient"}

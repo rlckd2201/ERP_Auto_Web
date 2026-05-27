@@ -1,3 +1,8 @@
+1.0.155
+
+- Changed the regular due alert scheduler to send the status email every day at/after 08:00 from 2026-06-01, instead of only on vendor trigger dates.
+- Added a start-date guard so automatic sends before 2026-06-01 are skipped unless forced manually.
+
 1.0.154
 
 - Added condition filters to the regular tax invoice history page: vendor, issue/receive date ranges, amount range, content, file name, and global search.
