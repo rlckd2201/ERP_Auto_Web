@@ -88,9 +88,16 @@ def _recipient() -> str:
 
 
 def _history_url() -> str:
-    origin = settings.web_public_origin or f"http://{settings.web_host}:{settings.web_port}"
-    return f"{origin.rstrip('/')}/regular-due-history"
+    override = str(os.getenv("REGULAR_DUE_HISTORY_URL") or "").strip()
+    if re.match(r"^https?://[^/]+", override):
+        return override.rstrip("/")
 
+    origin = str(settings.web_public_origin or "").strip().rstrip("/")
+    if re.match(r"^https?://[^/]+", origin):
+        return f"{origin}/regular-due-history"
+
+    host = str(os.getenv("WEB_SERVER_IP") or "172.17.39.121").strip()
+    return f"https://{host}:{settings.web_port}/regular-due-history"
 
 def _alert_hour() -> int:
     return max(0, min(_env_int("REGULAR_DUE_ALERT_HOUR", 8), 23))
