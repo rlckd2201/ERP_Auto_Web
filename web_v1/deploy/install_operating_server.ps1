@@ -85,6 +85,17 @@ function Resolve-EnvValue([string]$Key, [string]$DefaultValue = "") {
     return $DefaultValue
 }
 
+function Resolve-EnvValueAllowBlank([string]$Key, [string]$DefaultValue = "") {
+    $value = [Environment]::GetEnvironmentVariable($Key)
+    if ($null -ne $value) {
+        return $value
+    }
+    if ($script:existingEnv.ContainsKey($Key)) {
+        return $script:existingEnv[$Key]
+    }
+    return $DefaultValue
+}
+
 $emailId = Resolve-EnvValue "EMAIL_ID" $DefaultEmailId
 $emailPw = Resolve-EnvValue "EMAIL_PW" $DefaultEmailPw
 $existingGeminiKey = Resolve-EnvValue "GEMINI_API_KEY" ""
@@ -113,11 +124,11 @@ $regularAutoResultFromName = if ($env:REGULAR_AUTO_RESULT_FROM_NAME) { $env:REGU
 $regularAutoResultFrom = if ($env:REGULAR_AUTO_RESULT_FROM) { $env:REGULAR_AUTO_RESULT_FROM } else { $passwordResetFrom }
 $regularAutoResultSmtpServer = if ($env:REGULAR_AUTO_RESULT_SMTP_SERVER) { $env:REGULAR_AUTO_RESULT_SMTP_SERVER } else { $passwordResetSmtpServer }
 $regularAutoResultSmtpPort = if ($env:REGULAR_AUTO_RESULT_SMTP_PORT) { $env:REGULAR_AUTO_RESULT_SMTP_PORT } else { $passwordResetSmtpPort }
-$regularAutoResultSmtpUser = if ($env:REGULAR_AUTO_RESULT_SMTP_USER) { $env:REGULAR_AUTO_RESULT_SMTP_USER } else { $passwordResetUser }
-$regularAutoResultSmtpPw = if ($env:REGULAR_AUTO_RESULT_SMTP_PW) { $env:REGULAR_AUTO_RESULT_SMTP_PW } else { $passwordResetPw }
+$regularAutoResultSmtpUser = Resolve-EnvValueAllowBlank "REGULAR_AUTO_RESULT_SMTP_USER" ""
+$regularAutoResultSmtpPw = Resolve-EnvValueAllowBlank "REGULAR_AUTO_RESULT_SMTP_PW" ""
 
 @"
-APP_VERSION=1.0.149
+APP_VERSION=1.0.150
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
