@@ -87,8 +87,18 @@ def _recipient() -> str:
     return str(os.getenv("REGULAR_DUE_ALERT_EMAIL") or settings.regular_auto_result_email or "ds1501@dae-seung.co.kr").strip()
 
 
+def _history_url() -> str:
+    origin = settings.web_public_origin or f"http://{settings.web_host}:{settings.web_port}"
+    return f"{origin.rstrip('/')}/regular-due-history"
+
+
 def _alert_hour() -> int:
     return max(0, min(_env_int("REGULAR_DUE_ALERT_HOUR", 8), 23))
+
+
+def _alert_start_date() -> date:
+    parsed = _parse_date(os.getenv("REGULAR_DUE_ALERT_START_DATE") or "2026-06-01")
+    return parsed or date(2026, 6, 1)
 
 
 def _scan_limit() -> int:
@@ -252,14 +262,68 @@ def _trigger_rule_keys(reference_date: date) -> set[tuple[str, str, str]]:
     }
 
 
-def _due_rules_for_report(reference_date: date) -> list[tuple[DueRule, date, date]]:
-    rules: dict[tuple[str, str, str], tuple[DueRule, date, date]] = {}
-    for rule, expected_date, receive_due_date in _due_rules_for_month(reference_date):
-        rules[(rule.key, expected_date.isoformat(), receive_due_date.isoformat())] = (rule, expected_date, receive_due_date)
-    for rule, expected_date, receive_due_date in _due_rules_for_notify_date(reference_date):
-        key = (rule.key, expected_date.isoformat(), receive_due_date.isoformat())
-        rules.setdefault(key, (rule, expected_date, receive_due_date))
-    return sorted(rules.values(), key=lambda item: (item[2], item[0].vendor_name))
+def _add_months(value: date, months: int) -> date:
+    month_index = value.month - 1 + months
+    year = value.year + month_index // 12
+    month = month_index % 12 + 1
+    return date(year, month, 1)
+
+
+def _due_rules_around(reference_date: date, *, past_months: int = 12, future_months: int = 12) -> list[tuple[DueRule, date, date]]:
+    start_month = _add_months(date(reference_date.year, reference_date.month, 1), -past_months)
+    end_month = _add_months(date(reference_date.year, reference_date.month, 1), future_months)
+    result: list[tuple[DueRule, date, date]] = []
+    cursor = start_month
+    while cursor <= end_month:
+        for rule in REGULAR_DUE_RULES:
+            receive_due_date = _rule_receive_due_date(rule, cursor.year, cursor.month)
+            if receive_due_date and receive_due_date + timedelta(days=1) >= _alert_start_date():
+                result.append((rule, _rule_issue_date(rule, receive_due_date), receive_due_date))
+        cursor = _add_months(cursor, 1)
+    return sorted(result, key=lambda item: (item[2], item[0].vendor_name))
+
+
+def _cycle_has_invoice(rule: DueRule, expected_date: date, invoices: list[dict[str, Any]]) -> bool:
+    for invoice in invoices:
+        if not _rule_matches_invoice(rule, invoice):
+            continue
+        issue_date = _invoice_issue_date(invoice)
+        if _issue_date_ok(rule, issue_date, expected_date) or _same_period(issue_date, expected_date):
+            return True
+    return False
+
+
+def _cycle_for_report(rule: DueRule, reference_date: date, invoices: list[dict[str, Any]]) -> tuple[DueRule, date, date] | None:
+    cycles = [item for item in _due_rules_around(reference_date) if item[0].key == rule.key]
+    if not cycles:
+        return None
+
+    alert_day_cycles = [item for item in cycles if item[2] + timedelta(days=1) == reference_date]
+    if alert_day_cycles:
+        return alert_day_cycles[-1]
+
+    unresolved = [
+        item
+        for item in cycles
+        if item[2] < reference_date and not _cycle_has_invoice(item[0], item[1], invoices)
+    ]
+    if unresolved:
+        return unresolved[0]
+
+    future_or_today = [item for item in cycles if item[2] >= reference_date]
+    if future_or_today:
+        return future_or_today[0]
+
+    return cycles[-1]
+
+
+def _due_rules_for_report(reference_date: date, invoices: list[dict[str, Any]]) -> list[tuple[DueRule, date, date]]:
+    result: list[tuple[DueRule, date, date]] = []
+    for rule in REGULAR_DUE_RULES:
+        cycle = _cycle_for_report(rule, reference_date, invoices)
+        if cycle:
+            result.append(cycle)
+    return sorted(result, key=lambda item: (item[2], item[0].vendor_name))
 
 def _expected_label(rule: DueRule, expected_date: date, receive_due_date: date) -> str:
     if rule.issue_kind == "by_day":
@@ -449,7 +513,7 @@ def build_regular_due_report(reference_date: str | date | datetime | None = None
     trigger_keys = _trigger_rule_keys(today)
     items = [
         _evaluate_rule(rule, expected_date, receive_due_date, today, invoices, trigger_keys)
-        for rule, expected_date, receive_due_date in _due_rules_for_report(today)
+        for rule, expected_date, receive_due_date in _due_rules_for_report(today, invoices)
     ]
     missing = sum(1 for item in items if item["severity"] == "missing")
     warning = sum(1 for item in items if item["severity"] == "warning")
@@ -478,6 +542,7 @@ def _plain_text(report: dict[str, Any]) -> str:
             f"누락 {report['missing_count']} / 일자확인 {report['warning_count']} / "
             f"수신대기 {report['pending_count']} / 수신완료 {report['ok_count']}"
         ),
+        f"수신이력: {_history_url()}",
         "",
     ]
     if not report["items"]:
@@ -536,7 +601,10 @@ def _html_report(report: dict[str, Any]) -> str:
   <p style="margin:0 0 8px 0;color:{headline_color};font-weight:700;">
     누락 {report['missing_count']}건 / 일자확인 {report['warning_count']}건 / 수신대기 {report['pending_count']}건 / 수신완료 {report['ok_count']}건
   </p>
-  <p style="margin:0 0 14px 0;color:#4b5563;font-size:12px;">{legend}</p>
+  <p style="margin:0 0 10px 0;color:#4b5563;font-size:12px;">{legend}</p>
+  <p style="margin:0 0 14px 0;">
+    <a href="{html.escape(_history_url(), quote=True)}" style="display:inline-block;background:#0f766e;color:#ffffff;text-decoration:none;padding:8px 12px;border-radius:4px;font-weight:700;font-size:12px;">전체 세금계산서 수신이력 조회</a>
+  </p>
   <table cellspacing="0" cellpadding="0" style="border-collapse:collapse;width:100%;font-size:13px;line-height:1.35;">
     <thead>
       <tr style="background:#f3f4f6;">
@@ -621,6 +689,46 @@ def send_regular_due_report(reference_date: str | date | datetime | None = None,
     state["sent"] = sent
     _save_state(state)
     return {**report, "sent": True, "to": recipient, "state_key": key}
+
+def _history_rule(invoice: dict[str, Any]) -> DueRule | None:
+    for rule in REGULAR_DUE_RULES:
+        if _rule_matches_invoice(rule, invoice):
+            return rule
+    return None
+
+
+def regular_due_history(*, limit: int = 500) -> dict[str, Any]:
+    limit = max(1, min(int(limit or 500), 1000))
+    summaries = list_invoices(mode="regular", limit=limit)
+    items: list[dict[str, Any]] = []
+    for summary in summaries:
+        try:
+            invoice = get_invoice(int(summary.get("id") or 0))
+        except Exception:
+            invoice = None
+        if not invoice or str(invoice.get("invoice_type") or "").lower() != "regular":
+            continue
+        data = _invoice_data(invoice)
+        rule = _history_rule(invoice)
+        issue_date = _invoice_issue_date(invoice)
+        pdf_name = Path(str(invoice.get("pdf_path") or data.get("pdf_path") or "")).name
+        items.append(
+            {
+                "invoice_id": invoice.get("id") or summary.get("id"),
+                "vendor_name": rule.vendor_name if rule else _clean_text(data.get("vendor_name") or data.get("supplier_name") or invoice.get("vendor_name") or "미분류"),
+                "issue_date": issue_date.isoformat() if issue_date else "-",
+                "received_at": _invoice_received_text(invoice),
+                "amount": _amount(invoice),
+                "content": _invoice_item_text(invoice),
+                "file_name": pdf_name or "-",
+            }
+        )
+    return {
+        "item_count": len(items),
+        "items": items,
+        "history_url": _history_url(),
+    }
+
 
 def regular_due_status(reference_date: str | date | datetime | None = None) -> dict[str, Any]:
     report = build_regular_due_report(reference_date)

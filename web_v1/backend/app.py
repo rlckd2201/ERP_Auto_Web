@@ -17,7 +17,7 @@ from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 
 from .agent_queue import claim_next_erp_task, update_erp_task
@@ -28,7 +28,7 @@ from .job_store import job_store
 from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .notifications import notify_regular_auto_result
 from .output_set import build_output_set_status, generate_expense_report_pdf
-from .regular_due_monitor import regular_due_status, send_regular_due_report, start_regular_due_scheduler
+from .regular_due_monitor import regular_due_history, regular_due_status, send_regular_due_report, start_regular_due_scheduler
 from .erp_queue import queue_dir, write_expense_report_queue
 from .erp_runner import build_regular_erp_payload
 from .purchase_analysis import (
@@ -1174,6 +1174,11 @@ def api_regular_due_status(date: str = Query(default="", max_length=20)) -> dict
     return regular_due_status(date or None)
 
 
+@app.get("/api/regular-due/history")
+def api_regular_due_history(limit: int = Query(default=500, ge=1, le=1000)) -> dict[str, Any]:
+    return regular_due_history(limit=limit)
+
+
 @app.post("/api/regular-due/check")
 def api_regular_due_check(
     date: str = Query(default="", max_length=20),
@@ -1732,6 +1737,74 @@ def version() -> dict[str, Any]:
         "agent_bundle_hash": expected_agent_bundle_hash(),
         "agent_update_notes": _agent_update_notes(),
     }
+
+
+@app.get("/regular-due-history", include_in_schema=False)
+def regular_due_history_page() -> HTMLResponse:
+    return HTMLResponse("""<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>정기 세금계산서 수신이력</title>
+  <style>
+    body{margin:0;font-family:Malgun Gothic,Arial,sans-serif;color:#111827;background:#f8fafc;}
+    main{padding:20px;}
+    h1{font-size:20px;margin:0 0 14px 0;}
+    .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;}
+    input{height:34px;border:1px solid #cbd5e1;border-radius:4px;padding:0 10px;min-width:280px;}
+    button{height:34px;border:0;border-radius:4px;background:#0f766e;color:white;padding:0 12px;font-weight:700;cursor:pointer;}
+    .count{color:#475569;font-size:13px;}
+    table{width:100%;border-collapse:collapse;background:white;font-size:13px;}
+    th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;}
+    th{background:#f1f5f9;text-align:center;white-space:nowrap;}
+    td.center{text-align:center;white-space:nowrap;}
+    td.vendor{font-weight:700;white-space:nowrap;}
+    td.content{min-width:240px;}
+  </style>
+</head>
+<body>
+<main>
+  <h1>정기 세금계산서 수신이력</h1>
+  <div class="bar">
+    <input id="q" placeholder="업체명, 내용, 파일명 검색">
+    <button id="reload">새로고침</button>
+    <span class="count" id="count"></span>
+  </div>
+  <table>
+    <thead>
+      <tr>
+        <th>순번</th><th>업체명</th><th>발행일</th><th>수신일</th><th>금액</th><th>내용</th><th>파일명</th>
+      </tr>
+    </thead>
+    <tbody id="rows"><tr><td colspan="7" class="center">불러오는 중</td></tr></tbody>
+  </table>
+</main>
+<script>
+let allRows=[];
+const rowsEl=document.getElementById('rows');
+const qEl=document.getElementById('q');
+const countEl=document.getElementById('count');
+function esc(v){return String(v??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function render(){
+  const q=qEl.value.trim().toLowerCase();
+  const filtered=allRows.filter(r=>!q||[r.vendor_name,r.content,r.file_name,r.issue_date,r.received_at].some(v=>String(v||'').toLowerCase().includes(q)));
+  countEl.textContent=`${filtered.length}건`;
+  rowsEl.innerHTML=filtered.length?filtered.map((r,i)=>`<tr><td class="center">${i+1}</td><td class="vendor">${esc(r.vendor_name)}</td><td class="center">${esc(r.issue_date)}</td><td class="center">${esc(r.received_at)}</td><td class="center">${esc(r.amount)}</td><td class="content">${esc(r.content)}</td><td>${esc(r.file_name)}</td></tr>`).join(''):'<tr><td colspan="7" class="center">조회 결과 없음</td></tr>';
+}
+async function load(){
+  rowsEl.innerHTML='<tr><td colspan="7" class="center">불러오는 중</td></tr>';
+  const res=await fetch('/api/regular-due/history?limit=1000',{cache:'no-store'});
+  const data=await res.json();
+  allRows=data.items||[];
+  render();
+}
+qEl.addEventListener('input',render);
+document.getElementById('reload').addEventListener('click',load);
+load();
+</script>
+</body>
+</html>""")
 
 
 @app.get("/admin-db", include_in_schema=False)
