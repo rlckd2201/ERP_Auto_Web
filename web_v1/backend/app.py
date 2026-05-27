@@ -28,6 +28,7 @@ from .job_store import job_store
 from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .notifications import notify_regular_auto_result
 from .output_set import build_output_set_status, generate_expense_report_pdf
+from .regular_due_monitor import regular_due_status, send_regular_due_report, start_regular_due_scheduler
 from .erp_queue import queue_dir, write_expense_report_queue
 from .erp_runner import build_regular_erp_payload
 from .purchase_analysis import (
@@ -1154,6 +1155,7 @@ def on_startup() -> None:
     worker.start()
     _start_mail_collect_scheduler()
     _start_regular_auto_scheduler()
+    start_regular_due_scheduler()
 
 
 @app.get("/health")
@@ -1165,6 +1167,22 @@ def health() -> dict[str, Any]:
         "erp_execution_mode": settings.erp_execution_mode,
     }
 
+
+
+@app.get("/api/regular-due/status")
+def api_regular_due_status(date: str = Query(default="", max_length=20)) -> dict[str, Any]:
+    return regular_due_status(date or None)
+
+
+@app.post("/api/regular-due/check")
+def api_regular_due_check(
+    date: str = Query(default="", max_length=20),
+    send: bool = Query(default=False),
+    force: bool = Query(default=False),
+) -> dict[str, Any]:
+    if send:
+        return send_regular_due_report(date or None, force=force)
+    return regular_due_status(date or None)
 
 @app.get("/api/mail-collect/status")
 def api_mail_collect_status() -> dict[str, Any]:
