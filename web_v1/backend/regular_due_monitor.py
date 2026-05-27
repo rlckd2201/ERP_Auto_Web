@@ -346,6 +346,55 @@ def _invoice_text(invoice: dict[str, Any]) -> str:
     return "\n".join(_flatten_strings({"invoice": invoice, "data": data, "raw": raw}))
 
 
+def _pdf_supplier_name(invoice: dict[str, Any]) -> str:
+    data = _invoice_data(invoice)
+    pdf_name = Path(str(invoice.get("pdf_path") or data.get("pdf_path") or "")).stem
+    if not pdf_name:
+        return ""
+    text = re.sub(r"^세금계산서\s*-\s*", "", pdf_name).strip()
+    text = re.split(r"[_，,]\s*(?:\(?주\)?|주식회사)?\s*대승", text, maxsplit=1)[0].strip()
+    text = re.sub(r"\((?!주\)|유\))[^)]*\)", "", text).strip()
+    text = re.sub(r"\s+", " ", text)
+    return text.strip(" -_,")
+
+
+def _history_rule(invoice: dict[str, Any]) -> DueRule | None:
+    data = _invoice_data(invoice)
+    candidates = [
+        _pdf_supplier_name(invoice),
+        Path(str(invoice.get("pdf_path") or data.get("pdf_path") or "")).name,
+        data.get("supplier_name"),
+        data.get("vendor_name"),
+        invoice.get("vendor_name"),
+        invoice.get("subject"),
+        _invoice_item_text(invoice),
+    ]
+    compact = _compact("\n".join(_clean_text(candidate) for candidate in candidates if _clean_text(candidate)))
+    if not compact:
+        return None
+    for rule in REGULAR_DUE_RULES:
+        if any(_compact(alias) and _compact(alias) in compact for alias in rule.aliases):
+            return rule
+    return None
+
+
+def _history_vendor_name(invoice: dict[str, Any]) -> str:
+    rule = _history_rule(invoice)
+    if rule:
+        return rule.vendor_name
+    data = _invoice_data(invoice)
+    for candidate in (
+        _pdf_supplier_name(invoice),
+        data.get("supplier_name"),
+        data.get("vendor_name"),
+        invoice.get("vendor_name"),
+    ):
+        text = _clean_text(candidate)
+        if text:
+            return text
+    return "미분류"
+
+
 def _rule_matches_invoice(rule: DueRule, invoice: dict[str, Any]) -> bool:
     text = _invoice_text(invoice)
     compact = _compact(text)
@@ -697,12 +746,6 @@ def send_regular_due_report(reference_date: str | date | datetime | None = None,
     _save_state(state)
     return {**report, "sent": True, "to": recipient, "state_key": key}
 
-def _history_rule(invoice: dict[str, Any]) -> DueRule | None:
-    for rule in REGULAR_DUE_RULES:
-        if _rule_matches_invoice(rule, invoice):
-            return rule
-    return None
-
 
 def regular_due_history(*, limit: int = 500) -> dict[str, Any]:
     limit = max(1, min(int(limit or 500), 1000))
@@ -716,13 +759,12 @@ def regular_due_history(*, limit: int = 500) -> dict[str, Any]:
         if not invoice or str(invoice.get("invoice_type") or "").lower() != "regular":
             continue
         data = _invoice_data(invoice)
-        rule = _history_rule(invoice)
         issue_date = _invoice_issue_date(invoice)
         pdf_name = Path(str(invoice.get("pdf_path") or data.get("pdf_path") or "")).name
         items.append(
             {
                 "invoice_id": invoice.get("id") or summary.get("id"),
-                "vendor_name": rule.vendor_name if rule else _clean_text(data.get("vendor_name") or data.get("supplier_name") or invoice.get("vendor_name") or "미분류"),
+                "vendor_name": _history_vendor_name(invoice),
                 "issue_date": issue_date.isoformat() if issue_date else "-",
                 "received_at": _invoice_received_text(invoice),
                 "amount": _amount(invoice),

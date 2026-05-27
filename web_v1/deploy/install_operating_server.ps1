@@ -128,7 +128,7 @@ $regularAutoResultSmtpUser = Resolve-EnvValueAllowBlank "REGULAR_AUTO_RESULT_SMT
 $regularAutoResultSmtpPw = Resolve-EnvValueAllowBlank "REGULAR_AUTO_RESULT_SMTP_PW" ""
 
 @"
-APP_VERSION=1.0.152
+APP_VERSION=1.0.153
 APP_ENV=production
 
 WEB_HOST=0.0.0.0
