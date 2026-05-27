@@ -1746,61 +1746,206 @@ def regular_due_history_page() -> HTMLResponse:
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>정기 세금계산서 수신이력</title>
+  <title>&#51221;&#44592; &#49464;&#44552;&#44228;&#49328;&#49436; &#49688;&#49888;&#51060;&#47141;</title>
   <style>
+    *{box-sizing:border-box;}
     body{margin:0;font-family:Malgun Gothic,Arial,sans-serif;color:#111827;background:#f8fafc;}
     main{padding:20px;}
     h1{font-size:20px;margin:0 0 14px 0;}
-    .bar{display:flex;gap:8px;align-items:center;margin-bottom:12px;}
-    input{height:34px;border:1px solid #cbd5e1;border-radius:4px;padding:0 10px;min-width:280px;}
+    .panel{border:1px solid #cbd5e1;background:#ffffff;padding:12px;margin-bottom:12px;}
+    .filters{display:grid;grid-template-columns:repeat(6,minmax(140px,1fr));gap:10px;align-items:end;}
+    label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:#475569;font-weight:700;}
+    input,select{height:34px;border:1px solid #cbd5e1;border-radius:4px;padding:0 9px;background:#ffffff;color:#111827;font:inherit;font-size:13px;min-width:0;}
+    input[type=number]{text-align:right;}
+    .wide{grid-column:span 2;}
+    .actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap;}
     button{height:34px;border:0;border-radius:4px;background:#0f766e;color:white;padding:0 12px;font-weight:700;cursor:pointer;}
-    .count{color:#475569;font-size:13px;}
-    table{width:100%;border-collapse:collapse;background:white;font-size:13px;}
+    button.secondary{background:#475569;}
+    button.ghost{background:#e2e8f0;color:#111827;}
+    .count{color:#475569;font-size:13px;font-weight:700;}
+    .table-wrap{overflow:auto;border:1px solid #cbd5e1;background:white;}
+    table{width:100%;border-collapse:collapse;background:white;font-size:13px;min-width:1180px;}
     th,td{border:1px solid #cbd5e1;padding:8px;vertical-align:top;}
-    th{background:#f1f5f9;text-align:center;white-space:nowrap;}
+    th{background:#f1f5f9;text-align:center;white-space:nowrap;position:sticky;top:0;z-index:1;}
+    th.sortable{cursor:pointer;user-select:none;}
+    th.sortable:hover{background:#e2e8f0;}
     td.center{text-align:center;white-space:nowrap;}
+    td.amount{text-align:right;white-space:nowrap;}
     td.vendor{font-weight:700;white-space:nowrap;}
     td.content{min-width:240px;}
+    td.file{min-width:320px;word-break:break-all;}
+    .sortmark{display:inline-block;min-width:18px;color:#0f766e;font-weight:700;}
+    @media (max-width:1200px){.filters{grid-template-columns:repeat(3,minmax(140px,1fr));}.wide{grid-column:span 3;}}
   </style>
 </head>
 <body>
 <main>
-  <h1>정기 세금계산서 수신이력</h1>
-  <div class="bar">
-    <input id="q" placeholder="업체명, 내용, 파일명 검색">
-    <button id="reload">새로고침</button>
-    <span class="count" id="count"></span>
+  <h1>&#51221;&#44592; &#49464;&#44552;&#44228;&#49328;&#49436; &#49688;&#49888;&#51060;&#47141;</h1>
+  <section class="panel">
+    <div class="filters">
+      <label class="wide">&#53685;&#54633;&#44160;&#49353;
+        <input id="q" placeholder="&#50629;&#52404;&#47749;, &#45236;&#50857;, &#54028;&#51068;&#47749;, ID">
+      </label>
+      <label>&#50629;&#52404;&#47749;
+        <select id="vendor"><option value="">&#51204;&#52404;</option></select>
+      </label>
+      <label>&#51221;&#47148;&#44592;&#51456;
+        <select id="sortBy">
+          <option value="received_at">&#49688;&#49888;&#51068;</option>
+          <option value="issue_date">&#48156;&#54665;&#51068;</option>
+          <option value="vendor_name">&#50629;&#52404;&#47749;</option>
+          <option value="amount">&#44552;&#50529;</option>
+          <option value="content">&#45236;&#50857;</option>
+          <option value="file_name">&#54028;&#51068;&#47749;</option>
+          <option value="invoice_id">ID</option>
+        </select>
+      </label>
+      <label>&#51221;&#47148;&#48169;&#54693;
+        <select id="sortDir">
+          <option value="desc">&#45236;&#47548;&#52264;&#49692;</option>
+          <option value="asc">&#50724;&#47492;&#52264;&#49692;</option>
+        </select>
+      </label>
+      <div class="actions">
+        <button id="apply">&#51312;&#54924;</button>
+        <button id="reset" class="ghost">&#52488;&#44592;&#54868;</button>
+        <button id="reload" class="secondary">&#49352;&#47196;&#44256;&#52840;</button>
+      </div>
+      <label>&#48156;&#54665;&#51068; &#49884;&#51089;
+        <input id="issueFrom" type="date">
+      </label>
+      <label>&#48156;&#54665;&#51068; &#51333;&#47308;
+        <input id="issueTo" type="date">
+      </label>
+      <label>&#49688;&#49888;&#51068; &#49884;&#51089;
+        <input id="receivedFrom" type="date">
+      </label>
+      <label>&#49688;&#49888;&#51068; &#51333;&#47308;
+        <input id="receivedTo" type="date">
+      </label>
+      <label>&#44552;&#50529; &#51060;&#49345;
+        <input id="amountMin" type="number" min="0" step="1" placeholder="0">
+      </label>
+      <label>&#44552;&#50529; &#51060;&#54616;
+        <input id="amountMax" type="number" min="0" step="1" placeholder="0">
+      </label>
+      <label class="wide">&#45236;&#50857;
+        <input id="contentQ" placeholder="&#54408;&#47785;/&#49436;&#48708;&#49828;&#47749;">
+      </label>
+      <label class="wide">&#54028;&#51068;&#47749;
+        <input id="fileQ" placeholder="PDF &#54028;&#51068;&#47749;">
+      </label>
+      <div class="actions"><span class="count" id="count"></span></div>
+    </div>
+  </section>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>&#49692;&#48264;</th>
+          <th class="sortable" data-sort="invoice_id">ID <span class="sortmark"></span></th>
+          <th class="sortable" data-sort="vendor_name">&#50629;&#52404;&#47749; <span class="sortmark"></span></th>
+          <th class="sortable" data-sort="issue_date">&#48156;&#54665;&#51068; <span class="sortmark"></span></th>
+          <th class="sortable" data-sort="received_at">&#49688;&#49888;&#51068; <span class="sortmark"></span></th>
+          <th class="sortable" data-sort="amount">&#44552;&#50529; <span class="sortmark"></span></th>
+          <th class="sortable" data-sort="content">&#45236;&#50857; <span class="sortmark"></span></th>
+          <th class="sortable" data-sort="file_name">&#54028;&#51068;&#47749; <span class="sortmark"></span></th>
+        </tr>
+      </thead>
+      <tbody id="rows"><tr><td colspan="8" class="center">&#48520;&#47084;&#50724;&#45716; &#51473;</td></tr></tbody>
+    </table>
   </div>
-  <table>
-    <thead>
-      <tr>
-        <th>순번</th><th>업체명</th><th>발행일</th><th>수신일</th><th>금액</th><th>내용</th><th>파일명</th>
-      </tr>
-    </thead>
-    <tbody id="rows"><tr><td colspan="7" class="center">불러오는 중</td></tr></tbody>
-  </table>
 </main>
 <script>
 let allRows=[];
+let viewRows=[];
 const rowsEl=document.getElementById('rows');
-const qEl=document.getElementById('q');
+const ids=['q','vendor','sortBy','sortDir','issueFrom','issueTo','receivedFrom','receivedTo','amountMin','amountMax','contentQ','fileQ'];
+const el=Object.fromEntries(ids.map(id=>[id,document.getElementById(id)]));
 const countEl=document.getElementById('count');
 function esc(v){return String(v??'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m]));}
+function norm(v){return String(v??'').toLowerCase().trim();}
+function dateKey(v){const s=String(v??'').slice(0,10);return /^\d{4}-\d{2}-\d{2}$/.test(s)?s:'';}
+function num(v){const n=Number(String(v??'').replace(/[^0-9.-]/g,''));return Number.isFinite(n)?n:0;}
+function includes(v,q){return !q||norm(v).includes(q);}
+function inDateRange(value,from,to){const d=dateKey(value); if(!d)return !(from||to); return (!from||d>=from)&&(!to||d<=to);}
+function inAmountRange(value,min,max){const n=num(value); return (!min||n>=Number(min))&&(!max||n<=Number(max));}
+function rowText(r){return [r.invoice_id,r.vendor_name,r.content,r.file_name,r.issue_date,r.received_at,r.amount].join(' ');}
+function compareValue(r,key){
+  if(key==='amount'||key==='invoice_id')return num(r[key]);
+  if(key==='issue_date'||key==='received_at')return dateKey(r[key]);
+  return norm(r[key]);
+}
+function sortRows(rows){
+  const key=el.sortBy.value;
+  const dir=el.sortDir.value==='asc'?1:-1;
+  return [...rows].sort((a,b)=>{
+    const av=compareValue(a,key), bv=compareValue(b,key);
+    const ae=av===''||av===0, be=bv===''||bv===0;
+    if(ae&&be)return 0;
+    if(ae)return 1;
+    if(be)return -1;
+    if(av>bv)return dir;
+    if(av<bv)return -dir;
+    return num(b.invoice_id)-num(a.invoice_id);
+  });
+}
+function fillVendors(){
+  const vendors=[...new Set(allRows.map(r=>String(r.vendor_name||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
+  el.vendor.innerHTML='<option value="">&#51204;&#52404;</option>'+vendors.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+}
+function updateSortMarks(){
+  document.querySelectorAll('th.sortable').forEach(th=>{
+    const mark=th.querySelector('.sortmark');
+    mark.textContent=th.dataset.sort===el.sortBy.value?(el.sortDir.value==='asc'?'\u25B2':'\u25BC'):'';
+  });
+}
+function applyFilters(){
+  const q=norm(el.q.value), contentQ=norm(el.contentQ.value), fileQ=norm(el.fileQ.value), vendor=el.vendor.value;
+  viewRows=allRows.filter(r=>{
+    if(vendor&&String(r.vendor_name||'')!==vendor)return false;
+    if(q&&!norm(rowText(r)).includes(q))return false;
+    if(!includes(r.content,contentQ))return false;
+    if(!includes(r.file_name,fileQ))return false;
+    if(!inDateRange(r.issue_date,el.issueFrom.value,el.issueTo.value))return false;
+    if(!inDateRange(r.received_at,el.receivedFrom.value,el.receivedTo.value))return false;
+    if(!inAmountRange(r.amount,el.amountMin.value,el.amountMax.value))return false;
+    return true;
+  });
+  viewRows=sortRows(viewRows);
+  render();
+}
 function render(){
-  const q=qEl.value.trim().toLowerCase();
-  const filtered=allRows.filter(r=>!q||[r.vendor_name,r.content,r.file_name,r.issue_date,r.received_at].some(v=>String(v||'').toLowerCase().includes(q)));
-  countEl.textContent=`${filtered.length}건`;
-  rowsEl.innerHTML=filtered.length?filtered.map((r,i)=>`<tr><td class="center">${i+1}</td><td class="vendor">${esc(r.vendor_name)}</td><td class="center">${esc(r.issue_date)}</td><td class="center">${esc(r.received_at)}</td><td class="center">${esc(r.amount)}</td><td class="content">${esc(r.content)}</td><td>${esc(r.file_name)}</td></tr>`).join(''):'<tr><td colspan="7" class="center">조회 결과 없음</td></tr>';
+  countEl.textContent='\uC870\uD68C '+viewRows.length+'\uAC74 / \uC804\uCCB4 '+allRows.length+'\uAC74';
+  updateSortMarks();
+  rowsEl.innerHTML=viewRows.length?viewRows.map((r,i)=>`<tr><td class="center">${i+1}</td><td class="center">${esc(r.invoice_id)}</td><td class="vendor">${esc(r.vendor_name)}</td><td class="center">${esc(r.issue_date)}</td><td class="center">${esc(r.received_at)}</td><td class="amount">${esc(r.amount)}</td><td class="content">${esc(r.content)}</td><td class="file">${esc(r.file_name)}</td></tr>`).join(''):'<tr><td colspan="8" class="center">&#51312;&#54924; &#44208;&#44284; &#50630;&#51020;</td></tr>';
+}
+function resetFilters(){
+  ['q','issueFrom','issueTo','receivedFrom','receivedTo','amountMin','amountMax','contentQ','fileQ'].forEach(id=>el[id].value='');
+  el.vendor.value='';
+  el.sortBy.value='received_at';
+  el.sortDir.value='desc';
+  applyFilters();
 }
 async function load(){
-  rowsEl.innerHTML='<tr><td colspan="7" class="center">불러오는 중</td></tr>';
+  rowsEl.innerHTML='<tr><td colspan="8" class="center">&#48520;&#47084;&#50724;&#45716; &#51473;</td></tr>';
   const res=await fetch('/api/regular-due/history?limit=1000',{cache:'no-store'});
   const data=await res.json();
   allRows=data.items||[];
-  render();
+  fillVendors();
+  applyFilters();
 }
-qEl.addEventListener('input',render);
+document.getElementById('apply').addEventListener('click',applyFilters);
+document.getElementById('reset').addEventListener('click',resetFilters);
 document.getElementById('reload').addEventListener('click',load);
+['q','contentQ','fileQ'].forEach(id=>el[id].addEventListener('keydown',e=>{if(e.key==='Enter')applyFilters();}));
+['vendor','sortBy','sortDir','issueFrom','issueTo','receivedFrom','receivedTo','amountMin','amountMax'].forEach(id=>el[id].addEventListener('change',applyFilters));
+document.querySelectorAll('th.sortable').forEach(th=>th.addEventListener('click',()=>{
+  const key=th.dataset.sort;
+  if(el.sortBy.value===key){el.sortDir.value=el.sortDir.value==='asc'?'desc':'asc';}
+  else{el.sortBy.value=key;el.sortDir.value=(key==='vendor_name'||key==='content'||key==='file_name')?'asc':'desc';}
+  applyFilters();
+}));
 load();
 </script>
 </body>
