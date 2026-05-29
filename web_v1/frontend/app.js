@@ -916,7 +916,7 @@ function setBusy(isBusy) {
   const regular = selectedInvoiceType() === "regular" || state.invoiceMode === "regular";
   els.analyzePurchaseButton.disabled = regular || isBusy || !detail.quote_path;
   els.saveAnalysisButton.disabled = isBusy || !(Array.isArray(detail.items) && detail.items.length);
-  els.retryInvoiceButton.disabled = isBusy || state.selectedInvoiceIds.size === 0;
+  els.retryInvoiceButton.disabled = isBusy || !selectedInvoicesCanRetry();
   els.deleteInvoiceButton.disabled = isBusy || state.selectedInvoiceIds.size === 0;
   if (isBusy) els.erpQueueButton.disabled = true;
   else updateSelectionUi();
@@ -1159,7 +1159,9 @@ function updateSelectionUi() {
   els.erpQueueButton.disabled = !erpExecutable;
   els.erpQueueButton.title = erpExecutable ? `선택 건 ${actionName}` : blockedReason;
   syncOneClickOutputTarget();
-  els.retryInvoiceButton.disabled = count === 0;
+  const retryExecutable = selectedInvoicesCanRetry();
+  els.retryInvoiceButton.disabled = !retryExecutable;
+  els.retryInvoiceButton.title = retryExecutable ? '오류 건을 대기중으로 되돌립니다.' : '오류 건만 재시도할 수 있습니다. 처리완료 건은 문서 세트의 기존 문서 출력으로 다시 출력하세요.';
   els.deleteInvoiceButton.disabled = count === 0;
   els.invoiceLogButton.disabled = count !== 1;
   els.invoiceSelectAll.checked =
@@ -1246,6 +1248,15 @@ function canRunErp(invoice) {
 
 function invoiceReadinessText(invoice) {
   return readinessText(detailData(invoice));
+}
+
+function canRetryInvoice(invoice) {
+  return String(invoice?.status || "") === "오류";
+}
+
+function selectedInvoicesCanRetry() {
+  const selected = state.invoices.filter((item) => state.selectedInvoiceIds.has(item.id));
+  return selected.length > 0 && selected.length === state.selectedInvoiceIds.size && selected.every(canRetryInvoice);
 }
 
 function accountOptions(value) {

@@ -1590,6 +1590,21 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
         output_printer_name = str(output_payload.get("printer_name") or task_payload.get("printer_name") or "")
         for invoice_id in invoice_ids:
             add_invoice_log(invoice_id, message, level="info" if ok else "error", job_id=job_id)
+            if ok:
+                refreshed_invoice = get_invoice(invoice_id)
+                if refreshed_invoice and str(refreshed_invoice.get("status") or "") == WAITING:
+                    try:
+                        output_status = build_output_set_status(refreshed_invoice, persist=True)
+                    except Exception:
+                        output_status = {}
+                    if output_status.get("ready"):
+                        set_invoice_status(
+                            invoice_id,
+                            DONE,
+                            processor=normalize_processor(agent_id) or "ERP Agent",
+                            job_id=job_id,
+                            processed=True,
+                        )
             if ok and regular_auto_output:
                 update_invoice_json(
                     invoice_id,
@@ -2813,9 +2828,17 @@ def api_get_invoice_logs(invoice_id: int, limit: int = Query(default=100, ge=1, 
 
 @app.post("/api/invoices/{invoice_id}/retry")
 def api_retry_invoice(invoice_id: int) -> dict[str, Any]:
+    invoice = get_invoice(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    status = str(invoice.get("status") or "")
+    if status == DONE:
+        raise HTTPException(status_code=400, detail='처리완료 건은 재시도 대신 기존 문서 출력으로 다시 출력하세요.')
+    if status != ERROR:
+        return {"ok": True, "invoice_id": invoice_id, "status": status or WAITING, "skipped": True}
     if not reset_invoice(invoice_id):
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return {"ok": True, "invoice_id": invoice_id, "status": "대기중"}
+    return {"ok": True, "invoice_id": invoice_id, "status": WAITING}
 
 
 @app.delete("/api/invoices/{invoice_id}")

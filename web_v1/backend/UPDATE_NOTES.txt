@@ -1,3 +1,8 @@
+1.0.160
+
+- Retry is now limited to error invoices so completed invoices are not accidentally reset to waiting.
+- Successful document-set printing restores a waiting invoice to completed when the saved voucher/tax invoice set is already ready.
+
 1.0.159
 
 - Regular invoice list display now recovers the factory/site name from buyer business number and PDF filename when SmartBill stores only the buyer legal entity name.
