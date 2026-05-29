@@ -127,6 +127,82 @@ def _safe_subject(subject: str) -> str:
     return subject[:120] if subject else "제목 없음"
 
 
+_TRANSIENT_CRAWLER_ERROR_MARKERS = (
+    "no such window",
+    "target window already closed",
+    "web view not found",
+    "chrome not reachable",
+    "disconnected",
+    "invalid session id",
+)
+
+
+def _is_transient_crawler_error(message: str) -> bool:
+    text = str(message or "").lower()
+    return any(marker in text for marker in _TRANSIENT_CRAWLER_ERROR_MARKERS)
+
+
+def _fetch_message_without_seen(mail: imaplib.IMAP4_SSL, mail_id: bytes) -> bytes | None:
+    _, data = mail.fetch(mail_id, "(BODY.PEEK[])")
+    if not data:
+        return None
+    for item in data:
+        if isinstance(item, tuple) and len(item) >= 2:
+            return item[1]
+    return None
+
+
+def _set_mail_seen(mail: imaplib.IMAP4_SSL, mail_id: bytes, seen: bool) -> None:
+    try:
+        op = "+FLAGS" if seen else "-FLAGS"
+        mail.store(mail_id, op, r"(\Seen)")
+    except Exception as exc:
+        log.warning("failed to set mail seen=%s for %r: %s", seen, mail_id, exc)
+
+
+def _crawl_invoice_with_retry(
+    api: dict,
+    target: str,
+    body: str,
+    mail_date: str,
+    subject: str,
+    emit: Callable[[str, int, str], None],
+    progress_value: int,
+) -> dict:
+    attempts = 2
+    last_result: dict = {"ok": False, "error": "crawler failed"}
+    for attempt in range(1, attempts + 1):
+        try:
+            last_result = api["crawl_invoice"](
+                target,
+                mail_text=body,
+                mail_date=mail_date,
+                mail_subject=subject,
+            )
+        except Exception as exc:
+            last_result = {"ok": False, "error": str(exc)}
+
+        if last_result.get("ok"):
+            if attempt > 1:
+                emit("analyzing", min(progress_value + 2, 84), "crawler retry succeeded")
+            return last_result
+
+        error = str(last_result.get("error") or "crawler failed")
+        should_retry = attempt < attempts and _is_transient_crawler_error(error)
+        if not should_retry:
+            return last_result
+
+        short_error = re.sub(r"\s+", " ", error).strip()[:180]
+        emit(
+            "crawling",
+            progress_value,
+            f"Chrome window closed, retry {attempt}/{attempts - 1}: {short_error}",
+        )
+        time.sleep(3)
+
+    return last_result
+
+
 def collect_mail_once(progress: ProgressCallback | None = None) -> dict:
     if not settings.email_id or not settings.email_pw:
         raise RuntimeError("EMAIL_ID/EMAIL_PW가 설정되지 않았습니다.")
@@ -156,10 +232,10 @@ def collect_mail_once(progress: ProgressCallback | None = None) -> dict:
 
         for index, mail_id in enumerate(mail_ids, start=1):
             base_progress = 20 + int((index - 1) / max(len(mail_ids), 1) * 55)
-            _, data = mail.fetch(mail_id, "(RFC822)")
-            if not data or not data[0]:
+            raw_message = _fetch_message_without_seen(mail, mail_id)
+            if not raw_message:
                 continue
-            msg = email.message_from_bytes(data[0][1])
+            msg = email.message_from_bytes(raw_message)
             subject = api["decode_mime_header"](msg.get("Subject", ""))
             body = _extract_mail_body(msg)
             mail_date = api["parse_mail_date"](msg)
@@ -179,16 +255,22 @@ def collect_mail_once(progress: ProgressCallback | None = None) -> dict:
             result.target_count += len(targets)
             if not targets:
                 emit("crawling", min(base_progress + 4, 75), "지원 가능한 세금계산서 링크/첨부 없음")
+                _set_mail_seen(mail, mail_id, True)
                 continue
 
+            mail_failed = False
             for target in targets:
-                emit("crawling", min(base_progress + 8, 78), f"크롤링 시작: {target[:80]}")
+                crawl_progress = min(base_progress + 8, 78)
+                emit("crawling", crawl_progress, f"Crawling start: {target[:80]}")
                 try:
-                    crawled = api["crawl_invoice"](
+                    crawled = _crawl_invoice_with_retry(
+                        api,
                         target,
-                        mail_text=body,
-                        mail_date=mail_date or time.strftime("%y%m%d"),
-                        mail_subject=subject,
+                        body,
+                        mail_date or time.strftime("%y%m%d"),
+                        subject,
+                        emit,
+                        crawl_progress,
                     )
                     if crawled.get("ok"):
                         inserted = insert_crawler_invoice(subject, crawled)
@@ -213,14 +295,22 @@ def collect_mail_once(progress: ProgressCallback | None = None) -> dict:
                             result.duplicate_count += 1
                             emit("analyzing", min(base_progress + 16, 84), f"중복 자료라 DB 저장 생략: {invoice_type}")
                     else:
+                        mail_failed = True
                         result.failed_count += 1
                         error = str(crawled.get("error") or "크롤링 실패")
                         result.errors.append(error)
                         emit("analyzing", min(base_progress + 16, 84), f"크롤링 실패 기록: {error}")
                 except Exception as exc:
+                    mail_failed = True
                     result.failed_count += 1
                     result.errors.append(str(exc))
                     emit("analyzing", min(base_progress + 16, 84), f"대상 처리 실패 기록: {exc}")
+
+            if mail_failed:
+                _set_mail_seen(mail, mail_id, False)
+                emit("analyzing", min(base_progress + 18, 86), "mail kept unread because some targets failed")
+            else:
+                _set_mail_seen(mail, mail_id, True)
 
         return result.to_dict()
     finally:
