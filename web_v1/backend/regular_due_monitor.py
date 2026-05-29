@@ -100,7 +100,7 @@ def _history_url() -> str:
     return f"https://{host}:{settings.web_port}/regular-due-history"
 
 def _alert_hour() -> int:
-    return max(0, min(_env_int("REGULAR_DUE_ALERT_HOUR", 8), 23))
+    return max(0, min(_env_int("REGULAR_DUE_ALERT_HOUR", 12), 23))
 
 
 def _alert_start_date() -> date:
@@ -591,9 +591,10 @@ def build_regular_due_report(reference_date: str | date | datetime | None = None
 
 
 def _plain_text(report: dict[str, Any]) -> str:
+    alert_time = f"{int(report.get('alert_hour') or 0):02d}:00"
     lines = [
         "정기 세금계산서 수신 점검",
-        f"기준일: {report['reference_date']} 08:00",
+        f"기준일: {report['reference_date']} {alert_time}",
         (
             f"누락 {report['missing_count']} / 일자확인 {report['warning_count']} / "
             f"수신대기 {report['pending_count']} / 수신완료 {report['ok_count']}"
@@ -612,6 +613,7 @@ def _plain_text(report: dict[str, Any]) -> str:
 
 
 def _html_report(report: dict[str, Any]) -> str:
+    alert_time = f"{int(report.get('alert_hour') or 0):02d}:00"
     rows = []
     colors = {
         "missing": ("#fff1f2", "#b91c1c"),
@@ -653,7 +655,7 @@ def _html_report(report: dict[str, Any]) -> str:
 <html>
 <body style="font-family:Malgun Gothic,Arial,sans-serif;color:#111827;">
   <h2 style="margin:0 0 12px 0;">정기 세금계산서 수신 점검</h2>
-  <p style="margin:0 0 8px 0;">기준일: <b>{html.escape(report['reference_date'])} 08:00</b></p>
+  <p style="margin:0 0 8px 0;">기준일: <b>{html.escape(report['reference_date'])} {html.escape(alert_time)}</b></p>
   <p style="margin:0 0 8px 0;color:{headline_color};font-weight:700;">
     누락 {report['missing_count']}건 / 일자확인 {report['warning_count']}건 / 수신대기 {report['pending_count']}건 / 수신완료 {report['ok_count']}건
   </p>
