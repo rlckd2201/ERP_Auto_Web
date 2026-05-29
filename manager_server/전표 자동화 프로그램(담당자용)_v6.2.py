@@ -384,6 +384,157 @@ def setup_logger():
             pass
     return logger
 
+
+_ERP_TARGET_MONITOR_CACHE = None
+
+
+def _set_process_dpi_aware_for_erp_windowing():
+    if os.name != "nt":
+        return
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+def _monitor_summary(monitors):
+    if not monitors:
+        return "none"
+    parts = []
+    for item in monitors:
+        parts.append(
+            f"{item.get('device','?')} {item.get('width')}x{item.get('height')} "
+            f"scale={item.get('scale')} rect=({item.get('left')},{item.get('top')})-({item.get('right')},{item.get('bottom')})"
+        )
+    return "; ".join(parts)
+
+
+def _detect_erp_target_monitor(logger=None):
+    global _ERP_TARGET_MONITOR_CACHE
+    if _ERP_TARGET_MONITOR_CACHE:
+        return _ERP_TARGET_MONITOR_CACHE
+    if os.name != "nt":
+        return None
+
+    import ctypes
+    from ctypes import wintypes
+
+    _set_process_dpi_aware_for_erp_windowing()
+    user32 = ctypes.windll.user32
+    shcore = getattr(ctypes.windll, "shcore", None)
+
+    class RECT(ctypes.Structure):
+        _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+    class MONITORINFOEX(ctypes.Structure):
+        _fields_ = [
+            ("cbSize", ctypes.c_ulong),
+            ("rcMonitor", RECT),
+            ("rcWork", RECT),
+            ("dwFlags", ctypes.c_ulong),
+            ("szDevice", ctypes.c_wchar * 32),
+        ]
+
+    monitors = []
+    MONITORENUMPROC = ctypes.WINFUNCTYPE(ctypes.c_int, wintypes.HMONITOR, wintypes.HDC, ctypes.POINTER(RECT), wintypes.LPARAM)
+
+    def callback(hmonitor, hdc, lprc, lparam):
+        info = MONITORINFOEX()
+        info.cbSize = ctypes.sizeof(MONITORINFOEX)
+        if not user32.GetMonitorInfoW(hmonitor, ctypes.byref(info)):
+            return 1
+        width = int(info.rcMonitor.right - info.rcMonitor.left)
+        height = int(info.rcMonitor.bottom - info.rcMonitor.top)
+        dpi_x = dpi_y = 96
+        if shcore:
+            try:
+                x = ctypes.c_uint()
+                y = ctypes.c_uint()
+                if shcore.GetDpiForMonitor(hmonitor, 0, ctypes.byref(x), ctypes.byref(y)) == 0:
+                    dpi_x, dpi_y = int(x.value), int(y.value)
+            except Exception:
+                pass
+        scale = round(dpi_x / 96 * 100)
+        monitors.append({
+            "device": info.szDevice,
+            "left": int(info.rcMonitor.left),
+            "top": int(info.rcMonitor.top),
+            "right": int(info.rcMonitor.right),
+            "bottom": int(info.rcMonitor.bottom),
+            "work_left": int(info.rcWork.left),
+            "work_top": int(info.rcWork.top),
+            "work_right": int(info.rcWork.right),
+            "work_bottom": int(info.rcWork.bottom),
+            "width": width,
+            "height": height,
+            "scale": scale,
+            "primary": bool(info.dwFlags & 1),
+        })
+        return 1
+
+    user32.EnumDisplayMonitors(0, 0, MONITORENUMPROC(callback), 0)
+    recommended = [m for m in monitors if m["width"] >= 1920 and m["height"] >= 1080 and 95 <= m["scale"] <= 105]
+    if not recommended:
+        message = "ERP automation requires a 1920x1080 display at 100% scale. detected=" + _monitor_summary(monitors)
+        if logger:
+            logger.error(message)
+        raise RuntimeError(message)
+    recommended.sort(key=lambda m: (not m["primary"], m["left"], m["top"]))
+    _ERP_TARGET_MONITOR_CACHE = recommended[0]
+    if logger:
+        logger.info("ERP target display selected: " + _monitor_summary([_ERP_TARGET_MONITOR_CACHE]))
+    return _ERP_TARGET_MONITOR_CACHE
+
+
+def _move_window_to_erp_monitor(win, logger=None, label="ERP window"):
+    if not win or os.name != "nt":
+        return None
+    target = _detect_erp_target_monitor(logger)
+    left = int(target.get("work_left", target["left"]))
+    top = int(target.get("work_top", target["top"]))
+    right = int(target.get("work_right", target["right"]))
+    bottom = int(target.get("work_bottom", target["bottom"]))
+    width = max(800, right - left)
+    height = max(600, bottom - top)
+    try:
+        if hasattr(win, "is_minimized") and win.is_minimized():
+            win.restore()
+            time.sleep(0.15)
+    except Exception:
+        pass
+    try:
+        win.move_window(left, top, width, height, True)
+    except Exception:
+        try:
+            import ctypes
+            ctypes.windll.user32.MoveWindow(int(win.handle), left, top, width, height, True)
+        except Exception as exc:
+            if logger:
+                logger.warning(f"{label} move to ERP target display failed: {exc}")
+            raise
+    try:
+        win.set_focus()
+    except Exception:
+        pass
+    time.sleep(0.20)
+    if logger:
+        logger.info(f"{label} moved to ERP target display: {target.get('device')} rect=({left},{top}) size={width}x{height} scale={target.get('scale')}")
+    return target
+
+
+def _window_center_in_monitor(win, monitor):
+    try:
+        rect = win.rectangle()
+        cx = (rect.left + rect.right) // 2
+        cy = (rect.top + rect.bottom) // 2
+        return monitor["left"] <= cx < monitor["right"] and monitor["top"] <= cy < monitor["bottom"]
+    except Exception:
+        return False
+
 class ERPLoginBot:
     def __init__(self, install_info: dict, corp_info: dict, corp_code: str, manager, logger: logging.Logger):
         self.install_info = install_info
@@ -402,6 +553,7 @@ class ERPLoginBot:
             time.sleep(0.15)
         except Exception as e:
             self.logger.warning(f"[{self.corp_code}] {label} 포커스 실패: {e}")
+        target_monitor = _detect_erp_target_monitor(self.logger)
         ok = False
         try:
             try:
@@ -410,11 +562,15 @@ class ERPLoginBot:
                     time.sleep(0.15)
             except Exception:
                 pass
+            _move_window_to_erp_monitor(win, self.logger, f"[{self.corp_code}] {label}")
+        except Exception:
+            raise
+        try:
             win.maximize()
             time.sleep(max(ERP_BLOCK_WAIT, 0.35))
             ok = True
         except Exception as e:
-            self.logger.warning(f"[{self.corp_code}] {label} maximize 실패, Win+Up fallback 사용: {e}")
+            self.logger.warning(f"[{self.corp_code}] {label} maximize ??, Win+Up fallback ??: {e}")
             try:
                 pyautogui.hotkey("win", "up")
                 time.sleep(0.18)
@@ -422,7 +578,7 @@ class ERPLoginBot:
                 time.sleep(max(ERP_BLOCK_WAIT, 0.35))
                 ok = True
             except Exception as hotkey_exc:
-                self.logger.warning(f"[{self.corp_code}] {label} Win+Up fallback 실패: {hotkey_exc}")
+                self.logger.warning(f"[{self.corp_code}] {label} Win+Up fallback ??: {hotkey_exc}")
         try:
             rect = win.rectangle()
             screen_w, screen_h = pyautogui.size()
@@ -432,6 +588,13 @@ class ERPLoginBot:
                 f"[{self.corp_code}] {label} 최대화 확인: rect=({rect.left},{rect.top})-({rect.right},{rect.bottom}) "
                 f"size={width}x{height}, screen={screen_w}x{screen_h}"
             )
+            if target_monitor and not _window_center_in_monitor(win, target_monitor):
+                self.logger.warning(f"[{self.corp_code}] {label} is not on ERP target display after maximize; retry move/maximize")
+                _move_window_to_erp_monitor(win, self.logger, f"[{self.corp_code}] {label} retry")
+                win.maximize()
+                time.sleep(max(ERP_BLOCK_WAIT, 0.35))
+                if not _window_center_in_monitor(win, target_monitor):
+                    raise RuntimeError(f"{label} failed to stay on the 1920x1080 100% ERP display")
             if width < min(1600, screen_w - 80) or height < min(850, screen_h - 120):
                 self.logger.warning(f"[{self.corp_code}] {label} 창 크기가 좌표 자동입력 기준보다 작습니다. 좌표 오입력 위험이 있습니다.")
         except Exception as e:
@@ -581,6 +744,7 @@ class ERPLoginBot:
                     self.app = Application(backend="uia").connect(process=confirmed_pid)
                     self.logger.info(f"[{self.corp_code}] 메인 ERP(PID:{confirmed_pid}) 확정 및 메모리 매핑 완료.")
                     
+                    _move_window_to_erp_monitor(self.login_win, self.logger, f"[{self.corp_code}] login window")
                     self.login_win.set_focus()
                     time.sleep(ERP_BLOCK_WAIT)
 

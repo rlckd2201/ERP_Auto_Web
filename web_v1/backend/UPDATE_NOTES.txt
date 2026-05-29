@@ -1,3 +1,9 @@
+1.0.158
+
+- ERP automation now requires a 1920x1080 display at 100% scale; 125% displays no longer pass the Agent display check.
+- K-System login and main windows are moved to the selected 1920x1080 100% display before maximize and coordinate input.
+- ERP input stops before coordinate automation if no valid 100% display is available.
+
 1.0.157
 
 - Changed the regular due alert send hour from 08:00 to 12:00 KST.

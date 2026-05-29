@@ -986,7 +986,7 @@ def _display_check() -> dict[str, Any]:
         scale = round(dpi_x / 96 * 100)
         scale_100 = 95 <= scale <= 105
         recommended = width >= 1920 and height >= 1080 and scale_100
-        usable = width >= 1920 and height >= 1080 and scale <= 125
+        usable = recommended
         monitors.append(
             {
                 "device": info.szDevice,
@@ -1007,13 +1007,13 @@ def _display_check() -> dict[str, Any]:
     user32.EnumDisplayMonitors(0, 0, MONITORENUMPROC(callback), 0)
     recommended = [item for item in monitors if item["recommended"]]
     usable = [item for item in monitors if item["usable"]]
-    selected = recommended[0] if recommended else (usable[0] if usable else None)
+    selected = recommended[0] if recommended else None
     return {
         "ok": bool(selected),
         "recommended": bool(recommended),
         "selected": selected,
         "monitors": monitors,
-        "message": "1920x1080 100% display found" if recommended else ("usable display found" if selected else "no usable ERP display"),
+        "message": "1920x1080 100% display found" if recommended else "no 1920x1080 100% ERP display",
     }
 
 
@@ -1203,6 +1203,16 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
     _post(server, f"/api/agent/jobs/{job_id}/event", {"agent_id": agent_id, "status": "erp", "progress": 82, "message": "담당자 PC Agent ERP 입력 시작", "invoice_ids": invoice_ids}, verify=verify)
     successes = []
     try:
+        display = _display_check()
+        if not display.get("ok"):
+            monitors = display.get("monitors") or []
+            summary = "; ".join(
+                f"{m.get('device','?')} {m.get('width')}x{m.get('height')} scale={m.get('scale')}"
+                for m in monitors
+            ) or "none"
+            raise RuntimeError("ERP automation requires a 1920x1080 display at 100% scale. detected=" + summary)
+        log(f"ERP display target verified: {display.get('selected')}")
+
         for index, invoice in enumerate(invoices, start=1):
             invoice_id = int(invoice.get("id") or 0)
             base_progress = 82 + int(index / max(len(invoices), 1) * 12)
