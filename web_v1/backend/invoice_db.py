@@ -219,6 +219,28 @@ def _readiness(data: dict[str, Any], raw: dict[str, Any], *, invoice_type: str, 
     return True, "ERP 입력 가능"
 
 
+def _regular_site_name(raw: dict[str, Any], data: dict[str, Any], *, subject: str = "", pdf_path: str = "") -> str:
+    fallback = str(data.get("site_name") or data.get("buyer_name") or "").strip()
+    try:
+        from .erp_runner import _resolve_site
+
+        resolved = _resolve_site(
+            data,
+            raw,
+            {
+                "subject": subject,
+                "pdf_path": pdf_path,
+                "site_name": fallback,
+                "data": data,
+                "raw": raw,
+            },
+            pdf_path,
+        )
+    except Exception:
+        resolved = ""
+    return resolved or fallback
+
+
 def _row_to_invoice(row: sqlite3.Row) -> dict[str, Any]:
     try:
         raw = json.loads(row["json_data"] or "{}")
@@ -230,6 +252,15 @@ def _row_to_invoice(row: sqlite3.Row) -> dict[str, Any]:
     data = _invoice_data(raw)
     invoice_type = invoice_type or "regular"
     erp_ready, readiness_reason = _readiness(data, raw, invoice_type=invoice_type, pdf_path=str(row["pdf_path"] or ""))
+    site_name = _regular_site_name(
+        raw,
+        data,
+        subject=str(row["subject"] or ""),
+        pdf_path=str(row["pdf_path"] or ""),
+    ) if invoice_type == "regular" else str(data.get("site_name") or data.get("buyer_name") or "").strip()
+    if site_name:
+        data = dict(data)
+        data["site_name"] = site_name
     total = (
         _clean_int(data.get("total_sum"))
         or _clean_int(data.get("total_amount"))
@@ -246,7 +277,7 @@ def _row_to_invoice(row: sqlite3.Row) -> dict[str, Any]:
         "last_error": row["last_error"] if "last_error" in row.keys() else "",
         "erp_job_id": row["erp_job_id"] if "erp_job_id" in row.keys() else "",
         "invoice_type": invoice_type,
-        "site_name": data.get("site_name") or data.get("buyer_name") or "",
+        "site_name": site_name,
         "vendor_name": data.get("vendor_name") or data.get("supplier_name") or "",
         "total_sum": total,
         "purchase_analysis_ready": bool(data.get("purchase_analysis_ready") or raw.get("purchase_analysis_ready") or data.get("items")),
@@ -381,6 +412,11 @@ def _repair_regular_fields(result: dict[str, Any], pdf_path: str) -> dict[str, A
         if invoice_date:
             fixed["invoice_date"] = invoice_date
             nested["invoice_date"] = invoice_date
+    site_name = _regular_site_name(fixed, nested, subject=str(fixed.get("subject") or ""), pdf_path=pdf_path)
+    if site_name:
+        fixed["site_name"] = site_name
+        nested["site_name"] = site_name
+        nested.setdefault("buyer_site", site_name)
     fixed["data"] = nested
     return fixed
 

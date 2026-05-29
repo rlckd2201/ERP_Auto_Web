@@ -128,7 +128,7 @@ class SmartBillHandler(BaseTaxInvoiceHandler):
             "subject": f"[{buyer_name}] {supplier_name} 세금계산서 ({total_amount:,}원)",
             "data": {
                 "vendor_name": supplier_name,
-                "site_name": buyer_site or buyer_name,
+                "site_name": buyer_site or self._site_name_from_biz_no(buyer_biz_no) or buyer_name,
                 "business_no": buyer_biz_no,
                 "matched_biz_no": buyer_biz_no,
                 "target_supply": supply_amount,

@@ -1,3 +1,8 @@
+1.0.159
+
+- Regular invoice list display now recovers the factory/site name from buyer business number and PDF filename when SmartBill stores only the buyer legal entity name.
+- SmartBill crawler output now falls back from buyer business number to factory/site name before storing regular invoice data.
+
 1.0.158
 
 - ERP automation now requires a 1920x1080 display at 100% scale; 125% displays no longer pass the Agent display check.
