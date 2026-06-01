@@ -24,6 +24,20 @@ from urllib.parse import quote
 
 import requests
 
+
+def _set_process_dpi_awareness_early() -> None:
+    if os.name != "nt":
+        return
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+_set_process_dpi_awareness_early()
 try:
     import urllib3
 
@@ -60,7 +74,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.145"
+AGENT_BUNDLE_VERSION = "1.0.161"
 _MUTEX_HANDLE: Any = None
 
 
@@ -927,15 +941,7 @@ def _install_https_certificate(server_url: str) -> dict[str, Any]:
 
 
 def _set_dpi_awareness() -> None:
-    if platform.system().lower() != "windows":
-        return
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except Exception:
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass
+    _set_process_dpi_awareness_early()
 
 
 def _display_check() -> dict[str, Any]:

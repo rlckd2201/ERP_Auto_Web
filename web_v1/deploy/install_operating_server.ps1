@@ -1,4 +1,4 @@
-﻿$ErrorActionPreference = "Stop"
+$ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptDir "..\..")
@@ -128,7 +128,7 @@ $regularAutoResultSmtpUser = Resolve-EnvValueAllowBlank "REGULAR_AUTO_RESULT_SMT
 $regularAutoResultSmtpPw = Resolve-EnvValueAllowBlank "REGULAR_AUTO_RESULT_SMTP_PW" ""
 
 @"
-APP_VERSION=1.0.160
+APP_VERSION=1.0.161
 APP_ENV=production
 
 WEB_HOST=0.0.0.0

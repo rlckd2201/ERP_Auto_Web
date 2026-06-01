@@ -1,3 +1,7 @@
+1.0.161
+
+- Set Windows DPI awareness at Agent startup before GUI libraries load, so 1920x1080 100% monitors are not misreported as 2400x1350 125%.
+- Fixed ERP window MoveWindow fallback to pass HWND with the correct ctypes signature, preventing `OverflowError: int too long to convert`.
 1.0.160
 
 - Retry is now limited to error invoices so completed invoices are not accidentally reset to waiting.

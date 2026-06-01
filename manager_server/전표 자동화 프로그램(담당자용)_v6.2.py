@@ -1,4 +1,20 @@
 import os
+import ctypes
+
+
+def _set_process_dpi_awareness_early():
+    if os.name != "nt":
+        return
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
+
+_set_process_dpi_awareness_early()
 import time
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, simpledialog
@@ -389,16 +405,7 @@ _ERP_TARGET_MONITOR_CACHE = None
 
 
 def _set_process_dpi_aware_for_erp_windowing():
-    if os.name != "nt":
-        return
-    import ctypes
-    try:
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except Exception:
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass
+    _set_process_dpi_awareness_early()
 
 
 def _monitor_summary(monitors):
@@ -511,7 +518,17 @@ def _move_window_to_erp_monitor(win, logger=None, label="ERP window"):
     except Exception:
         try:
             import ctypes
-            ctypes.windll.user32.MoveWindow(int(win.handle), left, top, width, height, True)
+            user32 = ctypes.windll.user32
+            user32.MoveWindow.argtypes = [
+                ctypes.wintypes.HWND,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.c_int,
+                ctypes.wintypes.BOOL,
+            ]
+            user32.MoveWindow.restype = ctypes.wintypes.BOOL
+            user32.MoveWindow(ctypes.wintypes.HWND(int(win.handle)), left, top, width, height, True)
         except Exception as exc:
             if logger:
                 logger.warning(f"{label} move to ERP target display failed: {exc}")
