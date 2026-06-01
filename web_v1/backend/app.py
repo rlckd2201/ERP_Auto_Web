@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from .agent_queue import claim_next_erp_task, update_erp_task
+from .approval_fetcher import fetch_approval_documents
 from .compuzone_quote import auto_attach_compuzone_quote
 from .config import WEB_ROOT, settings
 from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
@@ -166,6 +167,60 @@ def _record_regular_auto_mail_result(job_id: str, invoice_ids: list[int], result
         job_store.add_event(job_id, job.status, job.progress, message)
     for invoice_id in invoice_ids:
         add_invoice_log(invoice_id, message, level=level, job_id=job_id)
+
+def _start_purchase_approval_fetch_background(invoice_id: int, quote_path: str) -> bool:
+    quote_path = str(quote_path or "").strip()
+    if not quote_path:
+        return False
+    invoice = get_invoice(invoice_id)
+    data = _invoice_data(invoice)
+    existing_paths = [str(path) for path in data.get("approval_pdf_paths") or [] if str(path or "").strip()]
+    if any(Path(path).exists() for path in existing_paths):
+        return False
+    if str(data.get("approval_fetch_status") or "").strip().lower() == "running":
+        return False
+
+    def _worker() -> None:
+        update_invoice_json(
+            invoice_id,
+            {
+                "approval_fetch_status": "running",
+                "approval_fetch_error": "",
+                "approval_fetch_started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+            },
+            message="전자결재 품의 자동 확보 시작",
+        )
+        try:
+            payload = fetch_approval_documents(
+                invoice_id,
+                quote_path,
+                progress=lambda message: add_invoice_log(invoice_id, f"[품의] {message}"),
+            )
+            update_invoice_json(
+                invoice_id,
+                {
+                    **payload,
+                    "approval_fetch_status": "done",
+                    "approval_fetch_error": "",
+                    "approval_fetch_finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "erp_ready": True,
+                },
+                message=f"전자결재 품의 자동 확보 완료: {len(payload.get('approval_pdf_paths') or [])}건",
+            )
+        except Exception as exc:
+            update_invoice_json(
+                invoice_id,
+                {
+                    "approval_fetch_status": "error",
+                    "approval_fetch_error": str(exc),
+                    "approval_fetch_finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "erp_ready": True,
+                },
+                message=f"전자결재 품의 자동 확보 실패: {exc}",
+            )
+
+    threading.Thread(target=_worker, name=f"approval-fetch-{invoice_id}", daemon=True).start()
+    return True
 
 def _purchase_edit_snapshot(data: dict[str, Any]) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
@@ -2557,6 +2612,7 @@ def api_analyze_purchase(invoice_id: int) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     ai_note = "AI 분석 사용" if analysis.get("analysis_ai_used") else ("AI 분석 시도 후 빠른 파싱 사용" if analysis.get("analysis_ai_attempted") else "학습 DB/빠른 파싱 사용")
     updated = update_invoice_json(invoice_id, analysis, message=f"구매 세금계산서/견적서 분석 결과가 저장되었습니다. ({ai_note})")
+    _start_purchase_approval_fetch_background(invoice_id, str(analysis.get("quote_path") or analysis.get("quote_pdf_path") or ""))
     reset_invoice(invoice_id)
     return get_invoice(invoice_id) or updated or {"ok": True, "invoice_id": invoice_id, "analysis": analysis}
 
@@ -2772,6 +2828,7 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
         from .invoice_db import add_invoice_log
 
         add_invoice_log(invoice_id, f"구매 품목 학습 DB 반영: {learned_count}건")
+    _start_purchase_approval_fetch_background(invoice_id, str(quote_path or ""))
     reset_invoice(invoice_id)
     return get_invoice(invoice_id) or updated or {"ok": True, "invoice_id": invoice_id}
 

@@ -226,9 +226,22 @@ def _is_cad_pc_text(value: Any) -> bool:
     return "CADPC" in compact
 
 
+def _is_graphics_card_text(value: Any) -> bool:
+    text = str(value or "")
+    upper = text.upper()
+    compact = re.sub(r"[^A-Z0-9가-힣]+", "", upper)
+    if any(token in compact for token in ("그래픽카드", "지포스", "GEFORCE", "RADEON")):
+        return True
+    if any(token in compact for token in ("RTX", "GTX")):
+        return True
+    return bool(re.search(r"\b(?:VGA|RX)\s*[-]?\s*\d{3,5}\b", upper))
+
+
 def _guess_account(name: str) -> str:
     text = name.lower()
     if _is_cad_pc_text(name):
+        return "집기비품"
+    if _is_graphics_card_text(name):
         return "집기비품"
     if any(token in text for token in ("office", "adobe", "cad", "라이선스", "소프트웨어", "백신", "프로그램")):
         return "컴퓨터소프트웨어"
@@ -254,6 +267,8 @@ def _simplify_purchase_item_name(value: Any) -> str:
     compact = re.sub(r"\s+", "", stripped)
     upper = stripped.upper()
 
+    if _is_graphics_card_text(text):
+        return "그래픽카드"
     if "멀티탭" in compact and "USB" in upper:
         outlet = re.search(r"(\d+)\s*구", stripped)
         return f"USB {outlet.group(1)}구 멀티탭" if outlet else "USB 멀티탭"
@@ -358,8 +373,11 @@ def _process_items_with_db(items: list[dict[str, Any]], db_rows: list[tuple[str,
 
         business_text = f"{name} {item.get('raw_desc', '')} {item.get('quote_category', '')}".upper()
         cad_pc_item = _is_cad_pc_text(name)
+        graphics_card_item = _is_graphics_card_text(business_text)
         is_monitor_accessory = _is_monitor_accessory(business_text)
         force_asset = any(token in business_text for token in ("PC", "NOTEBOOK", "LAPTOP", "노트북", "랩탑", "복합기", "빔프로젝터"))
+        if graphics_card_item:
+            force_asset = True
         if "모니터" in business_text and not is_monitor_accessory:
             force_asset = True
         display_like = (
@@ -440,6 +458,12 @@ def _normalize_items_for_display(items: list[dict[str, Any]]) -> list[dict[str, 
         if _is_cad_pc_text(repaired.get("name")):
             repaired["account"] = "집기비품"
             repaired["is_a"] = True
+        elif _is_graphics_card_text(item_text):
+            repaired["account"] = "집기비품"
+            repaired["is_a"] = True
+            current_name = str(repaired.get("name") or "").strip()
+            if not current_name or len(current_name) > 30 or _is_graphics_card_text(current_name):
+                repaired["name"] = "그래픽카드"
         elif _is_monitor_accessory(item_text):
             repaired["account"] = "소모품비"
             repaired["is_a"] = False
