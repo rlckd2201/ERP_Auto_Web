@@ -2138,6 +2138,7 @@ class ERPLoginBot:
                     (("대신아이씨티",), "대신아이씨티", "504-86-20609"),
                     (("이테크", "이테크시스템", "acronis"), "이테크시스템", "211-88-35257"),
                     (("에티버스",), "에티버스", "106-81-43363"),
+                    (("피플러스", "pplus", "peoplus", "gradius"), "피플러스", "129-86-49875"),
                 ]
                 for aliases, erp_name, biz_no in rules:
                     if any(alias.lower() in compact for alias in aliases):

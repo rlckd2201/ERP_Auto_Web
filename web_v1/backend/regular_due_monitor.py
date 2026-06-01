@@ -55,8 +55,8 @@ REGULAR_DUE_RULES: tuple[DueRule, ...] = (
     DueRule(
         "pplus_dlp",
         "피플러스",
-        ("피플러스",),
-        "",
+        ("피플러스", "pplus", "peoplus", "gradius"),
+        "129-86-49875",
         "3개월(3월부터)",
         "last_day",
         quarterly_months=(3, 6, 9, 12),

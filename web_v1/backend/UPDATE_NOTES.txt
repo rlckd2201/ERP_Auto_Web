@@ -1,3 +1,8 @@
+1.0.162
+
+- Added Peoplus/PPlus/GRADIUS vendor business-number mapping (`129-86-49875`) so ERP vendor management items search by business number instead of vendor name.
+- Regular due monitoring now stores the Peoplus business number for DLP checks.
+
 1.0.161
 
 - Set Windows DPI awareness at Agent startup before GUI libraries load, so 1920x1080 100% monitors are not misreported as 2400x1350 125%.
