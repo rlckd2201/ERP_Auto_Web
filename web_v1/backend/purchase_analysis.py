@@ -242,7 +242,7 @@ def _guess_account(name: str) -> str:
     if _is_cad_pc_text(name):
         return "집기비품"
     if _is_graphics_card_text(name):
-        return "집기비품"
+        return "소모품비"
     if any(token in text for token in ("office", "adobe", "cad", "라이선스", "소프트웨어", "백신", "프로그램")):
         return "컴퓨터소프트웨어"
     if any(token in text for token in ("모니터", "pc", "컴퓨터", "노트북", "프린터", "스캐너", "장비", "키보드")):
@@ -377,7 +377,13 @@ def _process_items_with_db(items: list[dict[str, Any]], db_rows: list[tuple[str,
         is_monitor_accessory = _is_monitor_accessory(business_text)
         force_asset = any(token in business_text for token in ("PC", "NOTEBOOK", "LAPTOP", "노트북", "랩탑", "복합기", "빔프로젝터"))
         if graphics_card_item:
-            force_asset = True
+            item["name"] = "그래픽카드"
+            item["account"] = "소모품비"
+            item["is_a"] = False
+            item["dept"] = "소모품"
+            item["system_adjustment"] = True
+            processed.append(item)
+            continue
         if "모니터" in business_text and not is_monitor_accessory:
             force_asset = True
         display_like = (
@@ -459,8 +465,10 @@ def _normalize_items_for_display(items: list[dict[str, Any]]) -> list[dict[str, 
             repaired["account"] = "집기비품"
             repaired["is_a"] = True
         elif _is_graphics_card_text(item_text):
-            repaired["account"] = "집기비품"
-            repaired["is_a"] = True
+            repaired["account"] = "소모품비"
+            repaired["is_a"] = False
+            repaired["dept"] = "소모품"
+            repaired["system_adjustment"] = True
             current_name = str(repaired.get("name") or "").strip()
             if not current_name or len(current_name) > 30 or _is_graphics_card_text(current_name):
                 repaired["name"] = "그래픽카드"
