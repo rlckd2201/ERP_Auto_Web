@@ -1,0 +1,1 @@
+"""Excel voucher web application."""
