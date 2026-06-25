@@ -55,6 +55,29 @@ class Settings:
     data_server_endpoint: str = _env("EXCEL_VOUCHER_DATA_SERVER_ENDPOINT", "/api/excel-voucher/jobs")
     data_server_timeout_seconds: int = _env_int("EXCEL_VOUCHER_DATA_SERVER_TIMEOUT_SECONDS", 10)
     forward_to_data_server: bool = _env_bool("EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER", False)
+    auth_required: bool = _env_bool("EXCEL_VOUCHER_AUTH_REQUIRED", False)
+    initial_password: str = _env("EXCEL_VOUCHER_INITIAL_PASSWORD", "wowjd12!@")
+    session_cookie_name: str = _env("EXCEL_VOUCHER_SESSION_COOKIE", "excel_voucher_session")
+
+    groupware_db_host: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_HOST", "172.16.19.33")
+    groupware_db_port: int = _env_int("EXCEL_VOUCHER_GROUPWARE_DB_PORT", 3306)
+    groupware_db_name: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_NAME", "ksystem_yundong")
+    groupware_db_user: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_USER", "")
+    groupware_db_password: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_PASSWORD", "")
+    groupware_sync_on_start: bool = _env_bool("EXCEL_VOUCHER_GROUPWARE_SYNC_ON_START", False)
+    groupware_finance_dept_codes: str = _env(
+        "EXCEL_VOUCHER_FINANCE_DEPT_CODES",
+        "HQ22111000,HQ22112000,HQ22113000,HQ22114000",
+    )
+    groupware_mail_domain: str = _env("EXCEL_VOUCHER_GROUPWARE_MAIL_DOMAIN", "")
+
+    smtp_host: str = _env("EXCEL_VOUCHER_SMTP_HOST", "")
+    smtp_port: int = _env_int("EXCEL_VOUCHER_SMTP_PORT", 587)
+    smtp_user: str = _env("EXCEL_VOUCHER_SMTP_USER", "")
+    smtp_password: str = _env("EXCEL_VOUCHER_SMTP_PASSWORD", "")
+    smtp_from: str = _env("EXCEL_VOUCHER_SMTP_FROM", "")
+    smtp_starttls: bool = _env_bool("EXCEL_VOUCHER_SMTP_STARTTLS", True)
+    mail_outbox_dir: Path = Path(_env("EXCEL_VOUCHER_MAIL_OUTBOX_DIR", str(data_dir / "mail_outbox")))
 
     @property
     def db_path(self) -> Path:
@@ -90,6 +113,13 @@ def manager_profiles() -> dict[str, ManagerProfile]:
             key="ilgwang",
             label="일강 담당자",
             company_name="일강",
+            agent_id=agent_id,
+            agent_ip=agent_ip,
+        ),
+        "jm": ManagerProfile(
+            key="jm",
+            label="제이엠 담당자",
+            company_name="제이엠",
             agent_id=agent_id,
             agent_ip=agent_ip,
         ),

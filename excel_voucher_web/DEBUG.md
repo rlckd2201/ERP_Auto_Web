@@ -52,3 +52,16 @@
 - 테스트용으로 `agent_worker.py --insecure-skip-tls-verify`와 `run_agent.ps1 -InsecureSkipTlsVerify` 옵션을 추가했다.
 - 운영 안정화 시 담당자 PC에 `C:\ERP_DB\certs\web_v1.cert.pem` 신뢰 등록 후 TLS 검증을 켜고 실행하는 쪽이 더 좋다.
 - 수정 후 `py_compile` 통과, `pytest tests -q` 결과: 2 passed, `run_agent.ps1` parse 검증 통과, `graphify update .` 완료.
+
+## 2026-06-26 출력/메일/계정 확장
+- 172.17.30.243 프린터 연결 완료 전제로 Agent 출력 제출 단계를 추가했다.
+- 현재 출력물은 ERP 자동입력 전 dry-run 전표 HTML 산출물이다. 실제 ERP 화면 입력/ERP 자체 출력은 후속 연결 필요.
+- `run_agent.ps1` 기본값은 `-PrintMode default-printer`이며 테스트 시 `-PrintMode off`로 출력 없이 검증 가능하다.
+- 웹 업로드 UI는 파일 선택과 드래그 앤 드롭을 모두 지원한다.
+- 로그인/세션/비밀번호 해시는 로컬 SQLite에 저장한다.
+- 그룹웨어 MariaDB는 `gw_emp`, `ds_t_emp`를 `SHOW COLUMNS`와 `SELECT`로만 읽는다.
+- 외부 DB에는 쓰기 SQL을 넣지 않았다. 운영 시 반드시 읽기 전용 DB 계정을 사용한다.
+- 신규 동기화 계정 초기 비밀번호는 `wowjd12!@`, 최초 로그인 및 비밀번호 찾기 후 변경 강제.
+- 완료 메일은 Agent 결과에 `print_submitted=true`가 있을 때 발송한다.
+- SMTP 미설정 시 메일은 `data/mail_outbox` JSON으로 보관된다.
+- 검증: `py_compile` 통과, PowerShell scriptblock parse 통과, `pytest tests -q` 결과 5 passed, `node --check app/static/app.js` 통과, `/api/settings` TestClient smoke 200.

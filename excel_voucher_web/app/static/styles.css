@@ -17,6 +17,10 @@
   box-sizing: border-box;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-width: 320px;
@@ -32,6 +36,20 @@ body {
   padding: 18px 24px;
   background: #ffffff;
   border-bottom: 1px solid var(--line);
+}
+
+.topActions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.userBar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--subtle);
+  font-size: 13px;
 }
 
 h1,
@@ -67,11 +85,25 @@ h2 {
   margin: 16px auto 32px;
 }
 
+.authShell {
+  width: min(420px, calc(100% - 32px));
+  margin: 48px auto;
+}
+
 .panel {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 16px;
+}
+
+.authPanel {
+  padding: 20px;
+}
+
+.authForm {
+  display: grid;
+  gap: 12px;
 }
 
 .uploadPanel {
@@ -163,6 +195,37 @@ select {
   grid-column: 1 / -1;
 }
 
+.dropZone {
+  width: 100%;
+  min-height: 72px;
+  display: grid;
+  place-items: center;
+  gap: 3px;
+  border: 1px dashed #9fb2ba;
+  border-radius: 8px;
+  color: var(--text);
+  background: #fbfdfe;
+  cursor: pointer;
+}
+
+.dropZone strong,
+.dropZone span {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dropZone span {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.dropZone.dragOver {
+  border-color: var(--accent);
+  background: #ecfdf5;
+}
+
 .primaryButton {
   grid-column: 1 / -1;
   border: 0;
@@ -170,6 +233,20 @@ select {
   background: var(--accent);
   font-weight: 750;
   cursor: pointer;
+}
+
+.textButton,
+.linkButton {
+  min-height: 32px;
+  border: 1px solid var(--line);
+  color: var(--text);
+  background: #ffffff;
+  cursor: pointer;
+}
+
+.linkButton {
+  border: 0;
+  color: var(--accent-strong);
 }
 
 .primaryButton:hover {

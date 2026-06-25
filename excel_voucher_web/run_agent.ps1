@@ -2,6 +2,9 @@ param(
   [string]$Server = "https://172.17.39.121:8081",
   [string]$AgentId = "finance-agent-172-17-30-243",
   [string]$ClientIp = "",
+  [ValidateSet("default-printer", "off")]
+  [string]$PrintMode = "default-printer",
+  [double]$PrintWaitSeconds = 3,
   [switch]$Once,
   [switch]$InsecureSkipTlsVerify
 )
@@ -28,7 +31,13 @@ if ($Candidates.Count -gt 0) {
   }
 }
 
-$ArgsList = @(".\agent\agent_worker.py", "--server", $Server, "--agent-id", $AgentId)
+$ArgsList = @(
+  ".\agent\agent_worker.py",
+  "--server", $Server,
+  "--agent-id", $AgentId,
+  "--print-mode", $PrintMode,
+  "--print-wait-seconds", [string]$PrintWaitSeconds
+)
 if ($ClientIp) {
   $ArgsList += @("--client-ip", $ClientIp)
 }

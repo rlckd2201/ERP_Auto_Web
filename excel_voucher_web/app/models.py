@@ -42,6 +42,8 @@ class VoucherPayload(BaseModel):
     company_key: str
     company_name: str
     requester: str
+    requester_id: str = ""
+    requester_email: str = ""
     source_filename: str
     source_format: str = "generic_excel"
     source_row_count: int = 0
@@ -109,3 +111,17 @@ class AgentCompleteRequest(BaseModel):
     message: str = Field(default="", max_length=500)
     result: dict[str, Any] = Field(default_factory=dict)
     error: str = Field(default="", max_length=2000)
+
+
+class LoginRequest(BaseModel):
+    user_id: str = Field(default="", max_length=160)
+    password: str = Field(default="", max_length=200)
+
+
+class ChangePasswordRequest(BaseModel):
+    old_password: str = Field(default="", max_length=200)
+    new_password: str = Field(default="", min_length=8, max_length=200)
+
+
+class ForgotPasswordRequest(BaseModel):
+    user_id: str = Field(default="", max_length=160)
