@@ -1,3 +1,14 @@
+param(
+  [string]$HostName = "0.0.0.0",
+  [int]$Port = 8081,
+  [string]$PublicOrigin = "https://172.17.39.121:8081",
+  [string]$DataServerUrl = "http://127.0.0.1:18080",
+  [string]$DataServerEndpoint = "/api/excel-voucher/jobs",
+  [switch]$ForwardToDataServer,
+  [string]$SslCertFile = "",
+  [string]$SslKeyFile = ""
+)
+
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
@@ -20,5 +31,18 @@ if ($Candidates.Count -gt 0) {
   }
 }
 
+$env:EXCEL_VOUCHER_WEB_HOST = $HostName
+$env:EXCEL_VOUCHER_WEB_PORT = [string]$Port
+$env:EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN = $PublicOrigin
+$env:EXCEL_VOUCHER_DATA_SERVER_URL = $DataServerUrl
+$env:EXCEL_VOUCHER_DATA_SERVER_ENDPOINT = $DataServerEndpoint
+$env:EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER = if ($ForwardToDataServer) { "1" } else { "0" }
+
 & $Python -m pip install -r requirements.txt
-& $Python -m uvicorn app.main:app --host 127.0.0.1 --port 18100 --reload
+
+$UvicornArgs = @("-m", "uvicorn", "app.main:app", "--host", $HostName, "--port", [string]$Port)
+if ($SslCertFile -and $SslKeyFile) {
+  $UvicornArgs += @("--ssl-certfile", $SslCertFile, "--ssl-keyfile", $SslKeyFile)
+}
+
+& $Python @UvicornArgs

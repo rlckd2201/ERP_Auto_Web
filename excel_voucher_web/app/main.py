@@ -9,6 +9,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from .data_server import data_server_target_url, forward_job_to_data_server
 from .models import AgentCompleteRequest, AgentEventRequest, AgentHeartbeat
 from .settings import BASE_DIR, default_accounting_date, manager_profile, manager_profiles, settings
 from .storage import JobStore
@@ -59,6 +60,11 @@ def api_settings() -> dict[str, Any]:
         "managers": [profile.__dict__ for profile in profiles.values()],
         "target_agent_id": settings.target_agent_id,
         "target_agent_ip": settings.target_agent_ip,
+        "web_public_origin": settings.web_public_origin,
+        "data_server_url": settings.data_server_url,
+        "data_server_endpoint": settings.data_server_endpoint,
+        "data_server_target_url": data_server_target_url(),
+        "forward_to_data_server": settings.forward_to_data_server,
     }
 
 
@@ -91,6 +97,15 @@ def api_upload_voucher(
             job_path = settings.upload_dir / f"{payload.company_key}_{payload.accounting_date}_{uuid.uuid4().hex[:8]}_{filename}"
         temp_path.replace(job_path)
         job = store.create_job(payload=payload, source_path=job_path, manager=manager)
+        if settings.forward_to_data_server:
+            forward_result = forward_job_to_data_server(job)
+            message = "데이터 서버 전달 완료" if forward_result.get("ok") else "데이터 서버 전달 실패, 서버 큐에는 보관됨"
+            job = store.update_job(
+                job.id,
+                progress=10 if forward_result.get("ok") else 7,
+                message=message,
+                result={**job.result, "data_server_forward": forward_result},
+            )
     except HTTPException:
         raise
     except Exception as exc:
@@ -130,6 +145,23 @@ def api_job_source(job_id: str) -> FileResponse:
     if not path.exists():
         raise HTTPException(status_code=404, detail="원본 파일이 없습니다.")
     return FileResponse(path, filename=path.name)
+
+
+@app.post("/api/jobs/{job_id}/forward")
+def api_forward_job(job_id: str) -> dict[str, Any]:
+    try:
+        job = store.get_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
+    forward_result = forward_job_to_data_server(job)
+    message = "데이터 서버 전달 완료" if forward_result.get("ok") else "데이터 서버 전달 실패"
+    updated = store.update_job(
+        job_id,
+        progress=12 if forward_result.get("ok") else job.progress,
+        message=message,
+        result={**job.result, "data_server_forward": forward_result},
+    )
+    return {"ok": bool(forward_result.get("ok")), "forward": forward_result, "job": updated.model_dump(mode="json")}
 
 
 @app.post("/api/agent/heartbeat")

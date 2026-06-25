@@ -15,9 +15,14 @@ def run_erp_voucher_task(task: dict[str, Any], *, output_dir: Path) -> dict[str,
         json.dumps(payload, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
+    clipboard_rows = [str(row) for row in payload.get("erp_clipboard_rows") or []]
+    clipboard_path = output_dir / f"{job_id}_erp_clipboard_rows.txt"
+    clipboard_path.write_text("\r\n".join(clipboard_rows), encoding="utf-8")
     return {
         "dry_run": True,
         "preview_path": str(preview_path),
+        "clipboard_rows_path": str(clipboard_path),
+        "erp_clipboard_row_count": len(clipboard_rows),
         "line_count": int(payload.get("line_count") or 0),
         "debit_total": int(payload.get("debit_total") or 0),
         "message": "ERP 자동입력 연결 전 dry-run payload 생성 완료",

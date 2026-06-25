@@ -112,14 +112,21 @@ async function selectJob(jobId, keepSelection = true) {
   setDetailStatus(job.status);
   const payload = job.payload || {};
   const events = job.events || [];
+  const warnings = payload.warnings || [];
+  const forward = (job.result || {}).data_server_forward;
   document.querySelector("#jobDetail").className = "";
   document.querySelector("#jobDetail").innerHTML = `
     <div class="detailGrid">
       <div class="metric"><strong>${money(payload.debit_total)}</strong><span>차변 합계</span></div>
       <div class="metric"><strong>${money(payload.credit_total)}</strong><span>대변 합계</span></div>
       <div class="metric"><strong>${Number(payload.line_count || 0)}</strong><span>전표 행</span></div>
+      <div class="metric"><strong>${Number(payload.source_row_count || 0)}</strong><span>원본 행</span></div>
+      <div class="metric"><strong>${escapeHtml(payload.source_format || "-")}</strong><span>원본 형식</span></div>
       <div class="metric"><strong>${escapeHtml(job.target_client_ip)}</strong><span>Agent PC</span></div>
+      <div class="metric"><strong>${forward ? escapeHtml(forward.ok ? "OK" : "FAIL") : "-"}</strong><span>데이터 서버</span></div>
+      <div class="metric"><strong>${Number((payload.bank_transfers || []).length)}</strong><span>이체 행</span></div>
     </div>
+    ${warnings.length ? `<ul class="warningList">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
     <ul class="eventList">
       ${events.map((event) => `<li><span>${escapeHtml(event.message)}</span><time>${escapeHtml(event.created_at.replace("T", " "))}</time></li>`).join("")}
     </ul>

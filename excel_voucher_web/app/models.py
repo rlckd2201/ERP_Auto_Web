@@ -17,21 +17,43 @@ class VoucherLine(BaseModel):
     summary: str
     vendor_name: str = ""
     vendor_code: str = ""
+    department: str = ""
+    original_summary: str = ""
+    payment_date: str = ""
+    source_sheet: str = ""
+    source_row: int | None = None
+
+
+class BankTransfer(BaseModel):
+    seq: int
+    bank_code: str = ""
+    account_no: str = ""
+    depositor: str = ""
+    amount: int
+    company_name: str = ""
+    source_sheet: str = "인터넷뱅킹"
     source_row: int | None = None
 
 
 class VoucherPayload(BaseModel):
     job_type: Literal["excel_voucher"] = "excel_voucher"
     accounting_date: str
+    voucher_month_label: str
     company_key: str
     company_name: str
     requester: str
     source_filename: str
+    source_format: str = "generic_excel"
+    source_row_count: int = 0
+    header_total: int = 0
     debit_total: int
     credit_total: int
     line_count: int
     lines: list[VoucherLine]
+    bank_transfers: list[BankTransfer] = Field(default_factory=list)
+    erp_clipboard_rows: list[str] = Field(default_factory=list)
     source_columns: dict[str, str] = Field(default_factory=dict)
+    warnings: list[str] = Field(default_factory=list)
 
 
 class JobRecord(BaseModel):

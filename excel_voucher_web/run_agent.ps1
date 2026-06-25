@@ -1,5 +1,5 @@
 param(
-  [string]$Server = "http://127.0.0.1:18100",
+  [string]$Server = "https://172.17.39.121:8081",
   [string]$AgentId = "finance-agent-172-17-30-243",
   [string]$ClientIp = "",
   [switch]$Once
