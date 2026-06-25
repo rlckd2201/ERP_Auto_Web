@@ -24,6 +24,10 @@ def _post(session: requests.Session, server: str, path: str, payload: dict[str, 
     return data if isinstance(data, dict) else {}
 
 
+def _connection_error_message(server: str, exc: Exception) -> str:
+    return f"server unreachable: {server} ({exc.__class__.__name__}: {exc})"
+
+
 def _heartbeat(agent_id: str, client_ip: str = "") -> dict[str, Any]:
     return {
         "agent_id": agent_id,
@@ -39,8 +43,15 @@ def run_loop(server: str, agent_id: str, client_ip: str, interval: int, once: bo
     output_dir = ROOT / "data" / "agent_results"
     while True:
         heartbeat = _heartbeat(agent_id, client_ip)
-        _post(session, server, "/api/agent/heartbeat", heartbeat)
-        next_payload = _post(session, server, "/api/agent/voucher/next", heartbeat)
+        try:
+            _post(session, server, "/api/agent/heartbeat", heartbeat)
+            next_payload = _post(session, server, "/api/agent/voucher/next", heartbeat)
+        except requests.RequestException as exc:
+            print(_connection_error_message(server, exc), file=sys.stderr)
+            if once:
+                return
+            time.sleep(interval)
+            continue
         task = next_payload.get("task")
         if not task:
             if once:
@@ -76,17 +87,20 @@ def run_loop(server: str, agent_id: str, client_ip: str, interval: int, once: bo
             )
             print(f"completed {job_id}")
         except Exception as exc:
-            _post(
-                session,
-                server,
-                f"/api/agent/jobs/{job_id}/complete",
-                {
-                    "agent_id": agent_id,
-                    "ok": False,
-                    "message": "Agent 처리 실패",
-                    "error": str(exc),
-                },
-            )
+            try:
+                _post(
+                    session,
+                    server,
+                    f"/api/agent/jobs/{job_id}/complete",
+                    {
+                        "agent_id": agent_id,
+                        "ok": False,
+                        "message": "Agent 처리 실패",
+                        "error": str(exc),
+                    },
+                )
+            except requests.RequestException as report_exc:
+                print(_connection_error_message(server, report_exc), file=sys.stderr)
             print(f"failed {job_id}: {exc}", file=sys.stderr)
         if once:
             return

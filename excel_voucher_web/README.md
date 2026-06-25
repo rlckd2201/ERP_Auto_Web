@@ -26,6 +26,18 @@ cd excel_voucher_web
 
 운영에서는 `EXCEL_VOUCHER_TARGET_AGENT_IP=172.17.30.243`를 기본으로 사용한다.
 
+## 접속 확인
+서버 PC에서:
+```powershell
+Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue
+New-NetFirewallRule -DisplayName "Excel Voucher Web 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow
+```
+
+담당자 PC에서:
+```powershell
+Test-NetConnection 172.17.39.121 -Port 8081
+```
+
 ## 데이터 서버 전달
 - 기본 URL: `http://127.0.0.1:18080`
 - 기본 endpoint: `/api/excel-voucher/jobs`

@@ -34,3 +34,9 @@
 - 샘플 마지막 대변 row: `보통예금		0	1019546751	5월 수시결제 - 신한은행`.
 - 수정 후 `py_compile` 통과, `pytest tests -q` 결과: 2 passed.
 - `graphify update .` 재실행 완료. 1932 files AST extraction, 4645 nodes, 36768 edges.
+
+## 2026-06-25 Agent 접속 타임아웃
+- 담당자 PC에서 `run_agent.ps1 -Server https://172.17.39.121:8081` 실행 시 `/api/agent/heartbeat` 연결 타임아웃 발생.
+- 원인 범위: 서버 8081 미기동, 서버 방화벽 8081 미허용, 서버 바인딩/네트워크 경로 문제.
+- Agent는 서버 접속 실패 시 Traceback 종료 대신 stderr에 짧게 출력하고 재시도하도록 수정했다.
+- 수정 후 `py_compile` 통과, `pytest tests -q` 결과: 2 passed, `graphify update .` 완료.
