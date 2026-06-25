@@ -2,7 +2,8 @@ param(
   [string]$Server = "https://172.17.39.121:8081",
   [string]$AgentId = "finance-agent-172-17-30-243",
   [string]$ClientIp = "",
-  [switch]$Once
+  [switch]$Once,
+  [switch]$InsecureSkipTlsVerify
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +34,9 @@ if ($ClientIp) {
 }
 if ($Once) {
   $ArgsList += "--once"
+}
+if ($InsecureSkipTlsVerify) {
+  $ArgsList += "--insecure-skip-tls-verify"
 }
 
 & $Python @ArgsList

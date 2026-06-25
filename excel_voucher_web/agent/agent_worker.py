@@ -5,6 +5,7 @@ import getpass
 import socket
 import sys
 import time
+import urllib3
 from pathlib import Path
 from typing import Any
 
@@ -17,8 +18,8 @@ if str(ROOT) not in sys.path:
 from app.agent_adapter import run_erp_voucher_task
 
 
-def _post(session: requests.Session, server: str, path: str, payload: dict[str, Any]) -> dict[str, Any]:
-    response = session.post(f"{server.rstrip('/')}{path}", json=payload, timeout=30)
+def _post(session: requests.Session, server: str, path: str, payload: dict[str, Any], *, verify_tls: bool) -> dict[str, Any]:
+    response = session.post(f"{server.rstrip('/')}{path}", json=payload, timeout=30, verify=verify_tls)
     response.raise_for_status()
     data = response.json()
     return data if isinstance(data, dict) else {}
@@ -38,14 +39,16 @@ def _heartbeat(agent_id: str, client_ip: str = "") -> dict[str, Any]:
     }
 
 
-def run_loop(server: str, agent_id: str, client_ip: str, interval: int, once: bool) -> None:
+def run_loop(server: str, agent_id: str, client_ip: str, interval: int, once: bool, verify_tls: bool) -> None:
+    if not verify_tls:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     session = requests.Session()
     output_dir = ROOT / "data" / "agent_results"
     while True:
         heartbeat = _heartbeat(agent_id, client_ip)
         try:
-            _post(session, server, "/api/agent/heartbeat", heartbeat)
-            next_payload = _post(session, server, "/api/agent/voucher/next", heartbeat)
+            _post(session, server, "/api/agent/heartbeat", heartbeat, verify_tls=verify_tls)
+            next_payload = _post(session, server, "/api/agent/voucher/next", heartbeat, verify_tls=verify_tls)
         except requests.RequestException as exc:
             print(_connection_error_message(server, exc), file=sys.stderr)
             if once:
@@ -72,6 +75,7 @@ def run_loop(server: str, agent_id: str, client_ip: str, interval: int, once: bo
                     "progress": 35,
                     "message": "Agent ERP 전표 payload 처리 시작",
                 },
+                verify_tls=verify_tls,
             )
             result = run_erp_voucher_task(task, output_dir=output_dir)
             _post(
@@ -84,6 +88,7 @@ def run_loop(server: str, agent_id: str, client_ip: str, interval: int, once: bo
                     "message": result.get("message") or "Agent 처리 완료",
                     "result": result,
                 },
+                verify_tls=verify_tls,
             )
             print(f"completed {job_id}")
         except Exception as exc:
@@ -98,6 +103,7 @@ def run_loop(server: str, agent_id: str, client_ip: str, interval: int, once: bo
                         "message": "Agent 처리 실패",
                         "error": str(exc),
                     },
+                    verify_tls=verify_tls,
                 )
             except requests.RequestException as report_exc:
                 print(_connection_error_message(server, report_exc), file=sys.stderr)
@@ -114,8 +120,16 @@ def main() -> None:
     parser.add_argument("--client-ip", default="")
     parser.add_argument("--interval", type=int, default=5)
     parser.add_argument("--once", action="store_true")
+    parser.add_argument("--insecure-skip-tls-verify", action="store_true")
     args = parser.parse_args()
-    run_loop(args.server, args.agent_id, args.client_ip, max(1, args.interval), args.once)
+    run_loop(
+        args.server,
+        args.agent_id,
+        args.client_ip,
+        max(1, args.interval),
+        args.once,
+        not args.insecure_skip_tls_verify,
+    )
 
 
 if __name__ == "__main__":

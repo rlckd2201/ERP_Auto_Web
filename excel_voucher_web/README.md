@@ -26,6 +26,11 @@ cd excel_voucher_web
 
 운영에서는 `EXCEL_VOUCHER_TARGET_AGENT_IP=172.17.30.243`를 기본으로 사용한다.
 
+self-signed 인증서를 아직 담당자 PC에 신뢰 등록하지 않은 테스트 환경에서는:
+```powershell
+.\run_agent.ps1 -Server https://172.17.39.121:8081 -ClientIp 172.17.30.243 -InsecureSkipTlsVerify
+```
+
 ## 접속 확인
 서버 PC에서:
 ```powershell

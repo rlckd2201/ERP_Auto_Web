@@ -46,3 +46,9 @@
 - `run_server.ps1`, `run_agent.ps1`의 throw 메시지를 ASCII 영어로 변경했다.
 - `[scriptblock]::Create((Get-Content .\run_server.ps1 -Raw))` 및 `run_agent.ps1` parse 검증 통과.
 - `pytest tests -q` 결과: 2 passed.
+
+## 2026-06-25 Agent self-signed SSL 오류
+- 담당자 PC Agent가 `SSLCertVerificationError: self-signed certificate`로 서버 heartbeat 실패.
+- 테스트용으로 `agent_worker.py --insecure-skip-tls-verify`와 `run_agent.ps1 -InsecureSkipTlsVerify` 옵션을 추가했다.
+- 운영 안정화 시 담당자 PC에 `C:\ERP_DB\certs\web_v1.cert.pem` 신뢰 등록 후 TLS 검증을 켜고 실행하는 쪽이 더 좋다.
+- 수정 후 `py_compile` 통과, `pytest tests -q` 결과: 2 passed, `run_agent.ps1` parse 검증 통과, `graphify update .` 완료.
