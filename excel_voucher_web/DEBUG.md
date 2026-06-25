@@ -40,3 +40,9 @@
 - 원인 범위: 서버 8081 미기동, 서버 방화벽 8081 미허용, 서버 바인딩/네트워크 경로 문제.
 - Agent는 서버 접속 실패 시 Traceback 종료 대신 stderr에 짧게 출력하고 재시도하도록 수정했다.
 - 수정 후 `py_compile` 통과, `pytest tests -q` 결과: 2 passed, `graphify update .` 완료.
+
+## 2026-06-25 PowerShell 5.1 스크립트 인코딩
+- 서버에서 `run_server.ps1`의 한글 `throw` 메시지가 Windows PowerShell 5.1 기본 인코딩으로 깨져 parser error 발생.
+- `run_server.ps1`, `run_agent.ps1`의 throw 메시지를 ASCII 영어로 변경했다.
+- `[scriptblock]::Create((Get-Content .\run_server.ps1 -Raw))` 및 `run_agent.ps1` parse 검증 통과.
+- `pytest tests -q` 결과: 2 passed.

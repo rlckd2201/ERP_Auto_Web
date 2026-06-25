@@ -23,7 +23,7 @@ if ($Candidates.Count -gt 0) {
   if ($LASTEXITCODE -eq 0 -and $PyLine -match "([A-Za-z]:\\.*python\.exe)") {
     $Python = $Matches[1]
   } else {
-    throw "Python 3.11+ 설치가 필요합니다."
+    throw "Python 3.11+ is required."
   }
 }
 
