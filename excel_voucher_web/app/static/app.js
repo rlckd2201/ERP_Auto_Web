@@ -19,8 +19,8 @@ const statusText = {
 };
 
 const statusMessage = {
-  queued: "파일 접수가 끝났습니다. 자동처리 PC에서 이어서 처리합니다.",
-  claimed: "자동처리 PC에서 처리 준비 중입니다.",
+  queued: "파일 접수가 끝났습니다. 자동 전표처리 PC에서 이어서 처리합니다.",
+  claimed: "자동 전표처리 PC에서 처리 준비 중입니다.",
   running: "전표 자료를 만들고 출력 요청을 준비하고 있습니다.",
   done: "출력 요청까지 완료되었습니다.",
   error: "처리 중 확인이 필요한 내용이 있습니다.",
@@ -141,9 +141,9 @@ function renderAdminDiagnostics(job) {
       <div class="adminGrid">
         <div><span>현재 위치</span><strong>${escapeHtml(diagnostics.current_location || "-")}</strong></div>
         <div><span>확인할 일</span><strong>${escapeHtml(diagnostics.recommended_action || "-")}</strong></div>
-        <div><span>자동처리 PC</span><strong>${escapeHtml(diagnostics.target_client_ip || profile.client_ip || "-")}</strong></div>
+        <div><span>자동 전표처리 PC</span><strong>${escapeHtml(diagnostics.target_client_ip || profile.client_ip || "-")}</strong></div>
         <div><span>Agent ID</span><strong>${escapeHtml(diagnostics.target_agent_id || profile.agent_id || "-")}</strong></div>
-        <div><span>Agent 접속</span><strong>${diagnostics.agent_online ? "정상" : "미확인"} / ${formatAge(diagnostics.agent_last_seen_age_seconds)}</strong></div>
+        <div><span>Agent 프로그램 접속</span><strong>${diagnostics.agent_online ? "정상" : "미확인"} / ${formatAge(diagnostics.agent_last_seen_age_seconds)}</strong></div>
         <div><span>18080 전달</span><strong>${escapeHtml(forwardText)}</strong></div>
       </div>
       ${

@@ -36,7 +36,7 @@
 - `graphify update .` 재실행 완료. 1932 files AST extraction, 4645 nodes, 36768 edges.
 
 ## 2026-06-25 Agent 접속 타임아웃
-- 담당자 PC에서 `run_agent.ps1 -Server https://172.17.39.121:8081` 실행 시 `/api/agent/heartbeat` 연결 타임아웃 발생.
+- 자동 전표처리 PC에서 `run_agent.ps1 -Server https://172.17.39.121:8081` 실행 시 `/api/agent/heartbeat` 연결 타임아웃 발생.
 - 원인 범위: 서버 8081 미기동, 서버 방화벽 8081 미허용, 서버 바인딩/네트워크 경로 문제.
 - Agent는 서버 접속 실패 시 Traceback 종료 대신 stderr에 짧게 출력하고 재시도하도록 수정했다.
 - 수정 후 `py_compile` 통과, `pytest tests -q` 결과: 2 passed, `graphify update .` 완료.
@@ -48,9 +48,9 @@
 - `pytest tests -q` 결과: 2 passed.
 
 ## 2026-06-25 Agent self-signed SSL 오류
-- 담당자 PC Agent가 `SSLCertVerificationError: self-signed certificate`로 서버 heartbeat 실패.
+- 자동 전표처리 PC Agent가 `SSLCertVerificationError: self-signed certificate`로 서버 heartbeat 실패.
 - 테스트용으로 `agent_worker.py --insecure-skip-tls-verify`와 `run_agent.ps1 -InsecureSkipTlsVerify` 옵션을 추가했다.
-- 운영 안정화 시 담당자 PC에 `C:\ERP_DB\certs\web_v1.cert.pem` 신뢰 등록 후 TLS 검증을 켜고 실행하는 쪽이 더 좋다.
+- 운영 안정화 시 자동 전표처리 PC에 `C:\ERP_DB\certs\web_v1.cert.pem` 신뢰 등록 후 TLS 검증을 켜고 실행하는 쪽이 더 좋다.
 - 수정 후 `py_compile` 통과, `pytest tests -q` 결과: 2 passed, `run_agent.ps1` parse 검증 통과, `graphify update .` 완료.
 
 ## 2026-06-26 출력/메일/계정 확장
@@ -93,10 +93,10 @@
 - 운영 데이터 기본 폴더는 `C:\ERP_DB\excel_voucher_web_data`.
 - 이전 PowerShell 세션에 placeholder 환경변수가 남아 있어도 `run_server.ps1` 기본 인자로 덮어쓴다.
 
-## 2026-06-26 Agent 대기 상태 진단
-- 담당자 PC에서 사람이 별도 수락하는 단계는 없다.
+## 2026-06-26 자동 전표처리 PC 대기 상태 진단
+- 자동 전표처리 PC에서 사람이 별도 수락하는 단계는 없다.
 - Agent는 5초마다 서버 `/api/agent/voucher/next`를 호출해 작업을 자동으로 가져간다.
-- 운영에서는 172.17.30.243 로그인 세션에서 `install_agent_task.ps1`로 Agent 자동 실행 작업을 등록한다.
-- 작업이 `queued`/7%에 머무르면 ERP 입력 단계가 아니라 Agent가 아직 작업을 가져가기 전 상태다.
+- 운영에서는 172.17.30.243 자동 전표처리 PC 로그인 세션에서 `install_agent_task.ps1`로 Agent 자동 실행 작업을 등록한다.
+- 작업이 `queued`/7%에 머무르면 ERP 입력 단계가 아니라 자동 전표처리 PC Agent가 아직 작업을 가져가기 전 상태다.
 - 전산 관리자에게만 현재 위치, 확인할 일, 대상 PC, Agent 마지막 접속, 18080 전달 여부, 이벤트 로그를 표시한다.
-- 내부 이벤트 문구 `Agent 작업 수락`은 오해를 줄이기 위해 `자동처리 PC 작업 시작`으로 변경했다.
+- 이전 내부 이벤트 문구는 오해를 줄이기 위해 `자동 전표처리 PC 작업 시작`으로 변경했다.

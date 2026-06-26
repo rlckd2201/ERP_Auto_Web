@@ -122,7 +122,7 @@ class JobStore:
                     payload.accounting_date,
                     payload.source_filename,
                     str(source_path),
-                    "엑셀 업로드 완료, Agent 대기 중",
+                    "엑셀 업로드 완료, 자동 전표처리 PC 대기 중",
                     manager.agent_id,
                     manager.agent_ip,
                     _json_dumps(payload.model_dump(mode="json")),
@@ -332,7 +332,7 @@ class JobStore:
                 SET status = 'claimed', progress = 15, message = ?, updated_at = ?, claimed_at = ?
                 WHERE id = ? AND status = 'queued'
                 """,
-                (f"자동처리 PC 작업 시작: {agent_id}", claimed, claimed, row["id"]),
+                (f"자동 전표처리 PC 작업 시작: {agent_id}", claimed, claimed, row["id"]),
             )
-            self._add_event_conn(conn, row["id"], "claimed", 15, f"자동처리 PC 작업 시작: {agent_id}")
+            self._add_event_conn(conn, row["id"], "claimed", 15, f"자동 전표처리 PC 작업 시작: {agent_id}")
         return self.get_job(row["id"])

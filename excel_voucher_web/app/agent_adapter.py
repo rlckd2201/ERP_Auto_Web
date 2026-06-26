@@ -76,7 +76,7 @@ def run_erp_voucher_task(
     print_mode: str = "default-printer",
     print_wait_seconds: float = 3.0,
 ) -> dict[str, Any]:
-    """Placeholder for the real ERP UI automation run on the 담당자 PC Agent."""
+    """Placeholder for the real ERP UI automation run on the automatic voucher PC Agent."""
     output_dir.mkdir(parents=True, exist_ok=True)
     job_id = str(task.get("id") or task.get("job_id") or "unknown")
     payload = task.get("payload") or {}

@@ -115,19 +115,19 @@ def _job_diagnostics(job: Any) -> dict[str, Any]:
 
     if job.status == "queued":
         if not profile:
-            current_location = "자동처리 PC가 아직 서버에 접속한 기록이 없습니다."
-            recommended_action = "172.17.30.243에서 Agent 실행 여부와 서버 주소를 확인하세요."
+            current_location = "자동 전표처리 PC가 아직 서버에 접속한 기록이 없습니다."
+            recommended_action = "172.17.30.243에서 Agent 프로그램 실행 여부와 서버 주소를 확인하세요."
         elif not agent_online:
-            current_location = "자동처리 PC 연결이 끊겼거나 Agent가 멈춘 상태입니다."
+            current_location = "자동 전표처리 PC 연결이 끊겼거나 Agent 프로그램이 멈춘 상태입니다."
             recommended_action = "172.17.30.243 PowerShell Agent 창을 확인하고 필요하면 다시 실행하세요."
         else:
-            current_location = "자동처리 PC가 연결되어 있고 작업 가져가기를 기다리는 중입니다."
+            current_location = "자동 전표처리 PC가 연결되어 있고 작업 가져가기를 기다리는 중입니다."
             recommended_action = "몇 초 후에도 진행되지 않으면 Agent 창의 오류 메시지를 확인하세요."
     elif job.status == "claimed":
-        current_location = "자동처리 PC가 작업을 가져갔고 전표 처리 준비 중입니다."
-        recommended_action = "진행률이 그대로면 172.17.30.243 Agent 창을 확인하세요."
+        current_location = "자동 전표처리 PC가 작업을 가져갔고 전표 처리 준비 중입니다."
+        recommended_action = "진행률이 그대로면 172.17.30.243 자동 전표처리 PC의 Agent 창을 확인하세요."
     elif job.status == "running":
-        current_location = "자동처리 PC에서 전표 자료 생성 또는 출력 처리가 진행 중입니다."
+        current_location = "자동 전표처리 PC에서 전표 자료 생성 또는 출력 처리가 진행 중입니다."
         recommended_action = "진행률이 멈추면 Agent 창과 ERP 화면 상태를 확인하세요."
     elif job.status == "done":
         current_location = "출력 요청까지 완료되었습니다."
@@ -415,7 +415,7 @@ def api_agent_job_event(job_id: str, event: AgentEventRequest) -> dict[str, Any]
             job_id,
             status=event.status,
             progress=event.progress,
-            message=event.message or "Agent 진행 중",
+            message=event.message or "자동 전표처리 PC 진행 중",
             result=event.result or None,
             error=event.error or None,
         )

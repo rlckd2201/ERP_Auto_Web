@@ -82,7 +82,7 @@ def run_loop(
                     "agent_id": agent_id,
                     "status": "running",
                     "progress": 35,
-                    "message": "자동처리 PC 전표 자료 처리 시작",
+                    "message": "자동 전표처리 PC 자료 처리 시작",
                 },
                 verify_tls=verify_tls,
             )
@@ -99,7 +99,7 @@ def run_loop(
                 {
                     "agent_id": agent_id,
                     "ok": True,
-                    "message": result.get("message") or "자동처리 PC 처리 완료",
+                    "message": result.get("message") or "자동 전표처리 PC 처리 완료",
                     "result": result,
                 },
                 verify_tls=verify_tls,
@@ -114,7 +114,7 @@ def run_loop(
                     {
                         "agent_id": agent_id,
                         "ok": False,
-                        "message": "자동처리 PC 처리 실패",
+                        "message": "자동 전표처리 PC 처리 실패",
                         "error": str(exc),
                     },
                     verify_tls=verify_tls,
