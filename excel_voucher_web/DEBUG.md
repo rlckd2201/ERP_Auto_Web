@@ -73,3 +73,10 @@
 - 실제 DB 컬럼 확인: `gw_emp.EmpID`, `gw_emp.GwID`, `gw_emp.Use_yn`, `ds_t_emp.EmpID`, `ds_t_emp.kor_name`, `ds_t_emp.bu_code`, `ds_t_emp.DeptName`, `ds_t_emp.use_yn`.
 - 재정 하위 부서 활성 계정 조회 결과 17건 확인.
 - `gw_emp`에 직접 메일 주소 컬럼은 없어서 `GwID@dae-seung.co.kr` 형식으로 수신 메일을 만든다.
+
+## 2026-06-26 전산 관리자 계정 동기화
+- 기존 회계업무 WEB 기본 전산 계정은 `rlckd9646 / 김기창`.
+- 새 시스템 시작 시와 전산 계정 로그인 직전에 `C:\ERP_DB\learned_data.db`의 `users` 테이블에서 `rlckd9646` 계정을 다시 읽어 동기화한다.
+- 기존 DB에서 읽은 전산 계정은 비밀번호 변경 상태까지 새 시스템 로컬 해시에 반영한다.
+- 기존 DB를 읽을 수 없을 때는 새 시스템 로컬 DB에 있는 계정 비밀번호를 유지한다.
+- 기존 DB에도 계정이 없을 때만 fallback으로 `eotmd12!@`를 사용한다.

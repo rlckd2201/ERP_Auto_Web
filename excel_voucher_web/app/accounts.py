@@ -58,6 +58,7 @@ class AccountUser:
     company_key: str
     active: bool
     must_change_password: bool
+    is_admin: bool
 
     def public_dict(self) -> dict[str, Any]:
         return {
@@ -70,6 +71,7 @@ class AccountUser:
             "company_key": self.company_key,
             "active": self.active,
             "must_change_password": self.must_change_password,
+            "is_admin": self.is_admin,
         }
 
 
@@ -99,12 +101,14 @@ class AccountStore:
                     active INTEGER NOT NULL DEFAULT 1,
                     password_hash TEXT NOT NULL DEFAULT '',
                     must_change_password INTEGER NOT NULL DEFAULT 1,
+                    is_admin INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL,
                     updated_at TEXT NOT NULL,
                     last_login_at TEXT
                 )
                 """
             )
+            self._ensure_column(conn, "app_users", "is_admin", "is_admin INTEGER NOT NULL DEFAULT 0")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS user_sessions (
@@ -128,7 +132,14 @@ class AccountStore:
             company_key=row["company_key"] or "daeseung",
             active=bool(row["active"]),
             must_change_password=bool(row["must_change_password"]),
+            is_admin=bool(row["is_admin"]),
         )
+
+    def _ensure_column(self, conn: sqlite3.Connection, table_name: str, column_name: str, ddl: str) -> None:
+        rows = conn.execute(f"PRAGMA table_info({table_name})").fetchall()
+        columns = {str(row["name"]) for row in rows}
+        if column_name not in columns:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {ddl}")
 
     def get_user(self, user_id: str) -> AccountUser | None:
         with self.connect() as conn:
@@ -141,15 +152,16 @@ class AccountStore:
             return
         timestamp = now_text()
         with self.connect() as conn:
-            existing = conn.execute("SELECT password_hash FROM app_users WHERE user_id = ?", (user_id,)).fetchone()
+            existing = conn.execute("SELECT password_hash, is_admin FROM app_users WHERE user_id = ?", (user_id,)).fetchone()
             password_hash = existing["password_hash"] if existing else hash_password(self.initial_password)
             must_change = 1 if not existing else None
+            is_admin = 1 if user.get("is_admin", False) else (int(existing["is_admin"]) if existing else 0)
             if existing:
                 conn.execute(
                     """
                     UPDATE app_users
                     SET emp_no = ?, name = ?, dept_code = ?, dept_name = ?, email = ?,
-                        company_key = ?, active = ?, updated_at = ?
+                        company_key = ?, active = ?, is_admin = ?, updated_at = ?
                     WHERE user_id = ?
                     """,
                     (
@@ -160,6 +172,7 @@ class AccountStore:
                         str(user.get("email") or ""),
                         str(user.get("company_key") or "daeseung"),
                         1 if user.get("active", True) else 0,
+                        is_admin,
                         timestamp,
                         user_id,
                     ),
@@ -169,9 +182,9 @@ class AccountStore:
                     """
                     INSERT INTO app_users (
                         user_id, emp_no, name, dept_code, dept_name, email, company_key,
-                        active, password_hash, must_change_password, created_at, updated_at
+                        active, password_hash, must_change_password, is_admin, created_at, updated_at
                     )
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         user_id,
@@ -184,6 +197,57 @@ class AccountStore:
                         1 if user.get("active", True) else 0,
                         password_hash,
                         must_change,
+                        is_admin,
+                        timestamp,
+                        timestamp,
+                    ),
+                )
+
+    def upsert_admin_user(
+        self,
+        *,
+        user_id: str,
+        name: str,
+        password: str,
+        email: str = "",
+        must_change_password: bool = True,
+        overwrite_password: bool = False,
+    ) -> None:
+        user_id = str(user_id or "").strip()
+        if not user_id:
+            return
+        timestamp = now_text()
+        with self.connect() as conn:
+            existing = conn.execute("SELECT user_id FROM app_users WHERE user_id = ?", (user_id,)).fetchone()
+            if existing:
+                password_sql = ", password_hash = ?, must_change_password = ?" if overwrite_password else ""
+                password_values = (
+                    (hash_password(password), 1 if must_change_password else 0) if overwrite_password else ()
+                )
+                conn.execute(
+                    f"""
+                    UPDATE app_users
+                    SET name = ?, dept_code = 'IT', dept_name = '전산', email = ?,
+                        company_key = 'daeseung', active = 1, is_admin = 1{password_sql}, updated_at = ?
+                    WHERE user_id = ?
+                    """,
+                    (name or user_id, email, *password_values, timestamp, user_id),
+                )
+            else:
+                conn.execute(
+                    """
+                    INSERT INTO app_users (
+                        user_id, emp_no, name, dept_code, dept_name, email, company_key,
+                        active, password_hash, must_change_password, is_admin, created_at, updated_at
+                    )
+                    VALUES (?, '', ?, 'IT', '전산', ?, 'daeseung', 1, ?, ?, 1, ?, ?)
+                    """,
+                    (
+                        user_id,
+                        name or user_id,
+                        email,
+                        hash_password(password),
+                        1 if must_change_password else 0,
                         timestamp,
                         timestamp,
                     ),

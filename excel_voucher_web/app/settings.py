@@ -58,6 +58,11 @@ class Settings:
     auth_required: bool = _env_bool("EXCEL_VOUCHER_AUTH_REQUIRED", False)
     initial_password: str = _env("EXCEL_VOUCHER_INITIAL_PASSWORD", "wowjd12!@")
     session_cookie_name: str = _env("EXCEL_VOUCHER_SESSION_COOKIE", "excel_voucher_session")
+    admin_user_id: str = _env("EXCEL_VOUCHER_ADMIN_USER_ID", "rlckd9646")
+    admin_name: str = _env("EXCEL_VOUCHER_ADMIN_NAME", "김기창")
+    admin_password: str = _env("EXCEL_VOUCHER_ADMIN_PASSWORD", "eotmd12!@")
+    admin_email: str = _env("EXCEL_VOUCHER_ADMIN_EMAIL", "rlckd9646@dae-seung.co.kr")
+    legacy_auth_db_path: Path = Path(_env("EXCEL_VOUCHER_LEGACY_AUTH_DB_PATH", r"C:\ERP_DB\learned_data.db"))
 
     groupware_db_host: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_HOST", "172.16.19.33")
     groupware_db_port: int = _env_int("EXCEL_VOUCHER_GROUPWARE_DB_PORT", 3306)

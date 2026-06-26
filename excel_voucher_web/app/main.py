@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import shutil
+import sqlite3
 import uuid
 from pathlib import Path
 from typing import Any
@@ -34,8 +35,44 @@ STATIC_DIR = BASE_DIR / "app" / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+def _legacy_admin_user() -> dict[str, Any] | None:
+    path = settings.legacy_auth_db_path
+    if not path.exists():
+        return None
+    try:
+        with sqlite3.connect(str(path)) as conn:
+            conn.row_factory = sqlite3.Row
+            row = conn.execute(
+                "SELECT id, name, pw, is_initial FROM users WHERE id = ?",
+                (settings.admin_user_id,),
+            ).fetchone()
+    except sqlite3.Error:
+        return None
+    if not row or not row["pw"]:
+        return None
+    return {
+        "user_id": str(row["id"]),
+        "name": str(row["name"] or row["id"]),
+        "password": str(row["pw"]),
+        "must_change_password": bool(row["is_initial"]),
+    }
+
+
+def _sync_admin_user_from_legacy() -> None:
+    legacy_admin = _legacy_admin_user()
+    account_store.upsert_admin_user(
+        user_id=(legacy_admin or {}).get("user_id") or settings.admin_user_id,
+        name=(legacy_admin or {}).get("name") or settings.admin_name,
+        password=(legacy_admin or {}).get("password") or settings.admin_password,
+        email=settings.admin_email,
+        must_change_password=bool((legacy_admin or {}).get("must_change_password", True)),
+        overwrite_password=bool(legacy_admin),
+    )
+
+
 @app.on_event("startup")
 def startup_sync_groupware_users() -> None:
+    _sync_admin_user_from_legacy()
     if not settings.groupware_sync_on_start:
         return
     if not groupware_enabled():
@@ -120,6 +157,8 @@ def api_auth_status(request: Request) -> dict[str, Any]:
 
 @app.post("/api/auth/login")
 def api_auth_login(payload: LoginRequest, request: Request, response: Response) -> dict[str, Any]:
+    if payload.user_id.strip() == settings.admin_user_id:
+        _sync_admin_user_from_legacy()
     user = account_store.authenticate(payload.user_id, payload.password)
     if not user and groupware_enabled():
         for groupware_user in fetch_finance_users():
@@ -183,8 +222,10 @@ def api_upload_voucher(
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     if settings.auth_required and user and user.must_change_password:
         raise HTTPException(status_code=403, detail="비밀번호 변경 후 업로드할 수 있습니다.")
-    if user:
+    if user and not user.is_admin:
         company_key = user.company_key or company_key
+        requester = user.name or user.user_id
+    elif user:
         requester = user.name or user.user_id
     manager = manager_profile(company_key)
     filename = _safe_filename(file.filename or "upload.xlsx")

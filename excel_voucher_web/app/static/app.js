@@ -85,9 +85,11 @@ function applyAuthUi() {
     userName.textContent = `${user.name || user.user_id}`;
     requester.value = user.name || user.user_id;
     requester.readOnly = true;
-    if (companyKey.querySelector(`option[value="${user.company_key}"]`)) {
+    if (!user.is_admin && companyKey.querySelector(`option[value="${user.company_key}"]`)) {
       companyKey.value = user.company_key;
       companyKey.disabled = true;
+    } else {
+      companyKey.disabled = false;
     }
   } else {
     userName.textContent = "";
