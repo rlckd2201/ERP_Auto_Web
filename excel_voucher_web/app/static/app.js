@@ -60,12 +60,18 @@ function resultNotice(job) {
   if (job.status === "error") {
     return job.error || "처리 중 오류가 발생했습니다. 전산팀에 확인을 요청해 주세요.";
   }
+  if ((job.result || {}).dry_run) {
+    return "ERP 자동입력 전 테스트 출력입니다. 실제 전표 저장은 아직 수행되지 않았습니다.";
+  }
   const notification = (job.result || {}).notification || {};
   if (job.status === "done" && notification.sent) {
     return "출력 요청과 완료 메일 발송이 끝났습니다.";
   }
   if (job.status === "done" && notification.queued) {
     return "출력 요청은 끝났고, 메일은 서버 보관함에 임시 저장되었습니다.";
+  }
+  if (job.status === "done" && (job.result || {}).erp_saved && !(job.result || {}).voucher_no) {
+    return "ERP 저장과 출력은 끝났고, 전표번호 확인 전이라 완료 메일은 보내지 않았습니다.";
   }
   return statusMessage[job.status] || "처리 상태를 확인하고 있습니다.";
 }

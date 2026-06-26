@@ -39,8 +39,12 @@ class ManagerProfile:
     company_name: str
     agent_id: str
     agent_ip: str
+    erp_site_name: str = ""
     bank_account_name: str = "보통예금"
     bank_summary_name: str = "신한은행"
+    bank_account_no: str = ""
+    bank_branch_name: str = ""
+    bank_vendor: str = ""
 
 
 @dataclass(frozen=True)
@@ -106,6 +110,9 @@ def manager_profiles() -> dict[str, ManagerProfile]:
             company_name="대승",
             agent_id=agent_id,
             agent_ip=agent_ip,
+            erp_site_name="D1공장",
+            bank_account_no="140-000-948562",
+            bank_branch_name="신한 수원금융센터",
         ),
         "daeseung_precision": ManagerProfile(
             key="daeseung_precision",

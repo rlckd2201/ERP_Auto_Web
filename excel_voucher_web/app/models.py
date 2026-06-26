@@ -15,6 +15,7 @@ class VoucherLine(BaseModel):
     account_name: str
     amount: int
     summary: str
+    management_items: dict[str, str] = Field(default_factory=dict)
     vendor_name: str = ""
     vendor_code: str = ""
     department: str = ""
@@ -41,6 +42,7 @@ class VoucherPayload(BaseModel):
     voucher_month_label: str
     company_key: str
     company_name: str
+    erp_site_name: str = ""
     requester: str
     requester_id: str = ""
     requester_email: str = ""
@@ -52,6 +54,8 @@ class VoucherPayload(BaseModel):
     credit_total: int
     line_count: int
     lines: list[VoucherLine]
+    cash_processing_enabled: bool = False
+    erp_line_management_items: list[dict[str, str]] = Field(default_factory=list)
     bank_transfers: list[BankTransfer] = Field(default_factory=list)
     erp_clipboard_rows: list[str] = Field(default_factory=list)
     source_columns: dict[str, str] = Field(default_factory=dict)

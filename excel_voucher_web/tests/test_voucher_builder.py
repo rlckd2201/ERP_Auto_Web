@@ -4,6 +4,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
+from app.agent_adapter import _legacy_form_data
 from app.settings import manager_profile
 from app.voucher_builder import build_voucher_payload
 
@@ -46,12 +47,33 @@ def test_build_voucher_payload_adds_bank_credit_line(tmp_path: Path) -> None:
     assert payload.debit_total == 15000
     assert payload.credit_total == 15000
     assert payload.line_count == 3
+    assert payload.erp_site_name == "D1공장"
     assert payload.lines[0].side == "debit"
     assert payload.lines[0].account_name == "미지급금(원화)"
     assert payload.lines[0].summary == "5월 수시결제 - 가나다상사(A001)"
+    assert payload.lines[0].management_items == {"거래처": "A001"}
     assert payload.lines[-1].side == "credit"
     assert payload.lines[-1].account_name == "보통예금"
     assert payload.lines[-1].summary == "5월 수시결제 - 신한은행"
+    assert payload.lines[-1].management_items == {
+        "계좌번호": "140-000-948562",
+        "금융기관지점": "신한 수원금융센터",
+        "거래처": "",
+    }
+    assert payload.erp_line_management_items[0] == {"거래처": "A001"}
+    assert payload.erp_line_management_items[-1] == {
+        "계좌번호": "140-000-948562",
+        "금융기관지점": "신한 수원금융센터",
+        "거래처": "",
+    }
+    assert payload.cash_processing_enabled is False
+
+    legacy = _legacy_form_data(payload.model_dump(mode="json"))
+    assert legacy["site_name"] == "D1공장"
+    assert legacy["invoice_date"] == "2026-06-20"
+    assert legacy["erp_row_count"] == payload.line_count
+    assert legacy["cash_processing_enabled"] is False
+    assert legacy["erp_line_management_items"][-1]["계좌번호"] == "140-000-948562"
 
 
 def test_build_voucher_payload_uses_cash_sheet_rows_only(tmp_path: Path) -> None:
@@ -72,4 +94,5 @@ def test_build_voucher_payload_uses_cash_sheet_rows_only(tmp_path: Path) -> None
     assert payload.line_count == 3
     assert payload.lines[0].source_sheet == "수시결제현금"
     assert payload.lines[0].amount == 12000
+    assert payload.lines[0].management_items == {"거래처": "A001"}
     assert payload.source_columns["amount"] == "수시결제현금!H"

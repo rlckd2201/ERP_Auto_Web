@@ -109,6 +109,22 @@ def _erp_clipboard_rows(lines: list[VoucherLine]) -> list[str]:
     return rows
 
 
+def _erp_line_management_items(lines: list[VoucherLine]) -> list[dict[str, str]]:
+    return [dict(line.management_items) for line in lines]
+
+
+def _payable_management_items(vendor_code: str, vendor_name: str) -> dict[str, str]:
+    return {"거래처": vendor_code.strip() or vendor_name.strip()}
+
+
+def _bank_management_items(manager: ManagerProfile) -> dict[str, str]:
+    return {
+        "계좌번호": manager.bank_account_no,
+        "금융기관지점": manager.bank_branch_name,
+        "거래처": manager.bank_vendor,
+    }
+
+
 def _parse_header_total(value: Any) -> tuple[int, int]:
     text = str(value or "")
     numbers = [int(part.replace(",", "")) for part in re.findall(r"\d[\d,]*", text)]
@@ -245,6 +261,7 @@ def _build_daeseung_cash_payload(
                 account_name="미지급금(원화)",
                 amount=amount,
                 summary=_vendor_summary(month_label, cash_row["vendor_name"], cash_row["vendor_code"]),
+                management_items=_payable_management_items(cash_row["vendor_code"], cash_row["vendor_name"]),
                 vendor_name=cash_row["vendor_name"],
                 vendor_code=cash_row["vendor_code"],
                 department=cash_row["department"],
@@ -271,6 +288,7 @@ def _build_daeseung_cash_payload(
             account_name=manager.bank_account_name,
             amount=debit_total,
             summary=f"{month_label} 수시결제 - {manager.bank_summary_name}",
+            management_items=_bank_management_items(manager),
             source_sheet="generated",
         )
     )
@@ -280,6 +298,7 @@ def _build_daeseung_cash_payload(
         voucher_month_label=month_label,
         company_key=manager.key,
         company_name=manager.company_name,
+        erp_site_name=manager.erp_site_name,
         requester=requester,
         source_filename=source_filename,
         source_format="daeseung_cash_sheet_v1",
@@ -289,6 +308,8 @@ def _build_daeseung_cash_payload(
         credit_total=debit_total,
         line_count=len(lines),
         lines=lines,
+        cash_processing_enabled=False,
+        erp_line_management_items=_erp_line_management_items(lines),
         bank_transfers=bank_transfers if amount_source == "bank_fallback" else [],
         erp_clipboard_rows=_erp_clipboard_rows(lines),
         source_columns={
@@ -335,6 +356,7 @@ def _build_generic_payload(
                 account_name="미지급금(원화)",
                 amount=amount,
                 summary=_vendor_summary(month_label, vendor_name, vendor_code),
+                management_items=_payable_management_items(vendor_code, vendor_name),
                 vendor_name=vendor_name,
                 vendor_code=vendor_code,
                 source_sheet=sheet.title,
@@ -353,6 +375,7 @@ def _build_generic_payload(
             account_name=manager.bank_account_name,
             amount=debit_total,
             summary=f"{month_label} 수시결제 - {manager.bank_summary_name}",
+            management_items=_bank_management_items(manager),
             source_sheet="generated",
         )
     )
@@ -362,6 +385,7 @@ def _build_generic_payload(
         voucher_month_label=month_label,
         company_key=manager.key,
         company_name=manager.company_name,
+        erp_site_name=manager.erp_site_name,
         requester=requester,
         source_filename=source_filename,
         source_row_count=len(lines) - 1,
@@ -369,6 +393,8 @@ def _build_generic_payload(
         credit_total=debit_total,
         line_count=len(lines),
         lines=lines,
+        cash_processing_enabled=False,
+        erp_line_management_items=_erp_line_management_items(lines),
         erp_clipboard_rows=_erp_clipboard_rows(lines),
         source_columns=columns.labels,
     )

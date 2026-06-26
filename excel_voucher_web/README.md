@@ -27,6 +27,7 @@ cd excel_voucher_web
 ```
 
 운영에서는 `EXCEL_VOUCHER_TARGET_AGENT_IP=172.17.30.243`를 기본으로 사용한다.
+Agent 기본값은 `dry-run`이라 ERP 저장 없이 테스트 출력만 수행한다. 실제 ERP 입력/저장/출력 테스트는 `-ErpMode real`을 명시해야 한다.
 Agent는 전표 PDF를 먼저 보관하고, `-PrinterName`이 있으면 Windows 기본 프린터를 변경하지 않고 지정 프린터로 출력한다.
 테스트 완료 전 설치 명령에서는 `김제 프린터 (172.17.30.162)`를 지정한다.
 
@@ -36,6 +37,7 @@ Agent는 전표 PDF를 먼저 보관하고, `-PrinterName`이 있으면 Windows 
   -Server https://172.17.39.121:8081 `
   -ClientIp 172.17.30.243 `
   -PrinterName "김제 프린터 (172.17.30.162)" `
+  -ErpMode real `
   -InsecureSkipTlsVerify
 ```
 
@@ -45,6 +47,7 @@ Agent는 전표 PDF를 먼저 보관하고, `-PrinterName`이 있으면 Windows 
   -Server https://172.17.39.121:8081 `
   -ClientIp 172.17.30.243 `
   -PrinterName "재정 프린터 (172.16.10.173)" `
+  -ErpMode real `
   -InsecureSkipTlsVerify
 ```
 

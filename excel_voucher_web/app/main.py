@@ -438,7 +438,12 @@ def api_agent_job_complete(job_id: str, complete: AgentCompleteRequest) -> dict[
             error="" if complete.ok else complete.error,
             finished=True,
         )
-        if complete.ok and complete.result.get("print_submitted"):
+        if (
+            complete.ok
+            and complete.result.get("erp_saved")
+            and complete.result.get("voucher_no")
+            and complete.result.get("print_submitted")
+        ):
             try:
                 notification = notify_job_completed(job)
             except Exception as exc:

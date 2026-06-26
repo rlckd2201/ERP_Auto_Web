@@ -6,6 +6,8 @@ param(
   [string]$PrintMode = "default-printer",
   [string]$PrinterName = "",
   [double]$PrintWaitSeconds = 3,
+  [ValidateSet("dry-run", "real")]
+  [string]$ErpMode = "dry-run",
   [string]$TaskName = "Excel Voucher Agent",
   [switch]$InsecureSkipTlsVerify,
   [switch]$RunNow
@@ -28,7 +30,8 @@ $ActionArgs = @(
   "-ClientIp", "`"$ClientIp`"",
   "-PrintMode", $PrintMode,
   "-PrinterName", "`"$PrinterName`"",
-  "-PrintWaitSeconds", [string]$PrintWaitSeconds
+  "-PrintWaitSeconds", [string]$PrintWaitSeconds,
+  "-ErpMode", $ErpMode
 )
 if ($InsecureSkipTlsVerify) {
   $ActionArgs += "-InsecureSkipTlsVerify"
@@ -57,3 +60,4 @@ Write-Host "User: $UserId"
 Write-Host "Server: $Server"
 Write-Host "ClientIp: $ClientIp"
 Write-Host "PrinterName: $PrinterName"
+Write-Host "ErpMode: $ErpMode"

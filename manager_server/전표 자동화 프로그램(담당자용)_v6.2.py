@@ -2148,6 +2148,18 @@ class ERPLoginBot:
             supply_amount = _value_text(form_data.get('target_supply', 0), comma=False)
             business_query = _business_query_for_management(site_name)
             account_key, corp, plan = _management_plan(account_name)
+            line_management_items = form_data.get('erp_line_management_items') or form_data.get('line_management_items') or []
+            explicit_management = {}
+            if isinstance(line_management_items, list) and row_no - 1 < len(line_management_items):
+                candidate = line_management_items[row_no - 1]
+                if isinstance(candidate, dict):
+                    explicit_management = {
+                        str(key): str(value or "")
+                        for key, value in candidate.items()
+                        if str(key or "").strip()
+                    }
+            if explicit_management:
+                plan = ["explicit"]
             vendor_upper = vendor_name.upper()
             compact_vendor = _vendor_match_text(vendor_name)
             is_kt_vendor = bool(vendor_name) and (
@@ -2449,6 +2461,24 @@ class ERPLoginBot:
                     return
                 _input_value_xy(x, y, vendor_name, label, enter_count=1, clear=True)
 
+            def _fill_explicit_management_items():
+                if str(form_data.get('cash_processing_enabled', '')).strip().lower() not in ("1", "true", "yes", "on"):
+                    _uncheck_cash_processing(row_no)
+                y = 797
+                for item_name, item_value in explicit_management.items():
+                    text = str(item_value or "").strip()
+                    if not text:
+                        self.logger.info(f"  [MGMT-XY] {row_no}행 {item_name} 값 없음: 스킵")
+                        y += 20
+                        continue
+                    _input_value_xy(1118, y, text, f"{row_no}행 {item_name}", enter_count=1, clear=True)
+                    y += 20
+                self.logger.info(f"  [MGMT-XY] {row_no}행 명시 관리항목 입력 완료: {list(explicit_management.keys())}")
+
+            if "explicit" in plan:
+                _fill_explicit_management_items()
+                return
+
             if account_key == "부가세대급금" and corp == "일강":
                 if "vendor_vat" in plan:
                     _input_vendor_value_xy(1118, 797, f"{row_no}행 거래처")
@@ -2484,6 +2514,7 @@ class ERPLoginBot:
 
         def _fill_management_items_by_coord():
             erp_rows = form_data.get('erp_clipboard_rows') or []
+            line_management_items = form_data.get('erp_line_management_items') or form_data.get('line_management_items') or []
             rows_to_fill = max(0, int(form_data.get('erp_row_count') or len(erp_rows) or row_count))
             self.logger.info(f"  [MGMT-XY] 행별 적요/관리항목 좌표 입력 시작: rows={rows_to_fill}")
 
@@ -2493,7 +2524,13 @@ class ERPLoginBot:
                     account_name = str(erp_rows[idx]).split('\t')[0].strip()
                 row_no = idx + 1
                 account_key, corp, plan = _management_plan(account_name)
-                if not plan:
+                has_explicit_management = (
+                    isinstance(line_management_items, list)
+                    and idx < len(line_management_items)
+                    and isinstance(line_management_items[idx], dict)
+                    and bool(line_management_items[idx])
+                )
+                if not plan and not has_explicit_management:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 스킵: account={account_key}, corp={corp}, 입력 불필요")
                     continue
                 summary_y = 231 + (idx * 20)

@@ -6,6 +6,8 @@ param(
   [string]$PrintMode = "default-printer",
   [string]$PrinterName = "",
   [double]$PrintWaitSeconds = 3,
+  [ValidateSet("dry-run", "real")]
+  [string]$ErpMode = "dry-run",
   [switch]$Once,
   [switch]$InsecureSkipTlsVerify
 )
@@ -32,12 +34,15 @@ if ($Candidates.Count -gt 0) {
   }
 }
 
+& $Python -m pip install -r requirements.txt
+
 $ArgsList = @(
   ".\agent\agent_worker.py",
   "--server", $Server,
   "--agent-id", $AgentId,
   "--print-mode", $PrintMode,
-  "--print-wait-seconds", [string]$PrintWaitSeconds
+  "--print-wait-seconds", [string]$PrintWaitSeconds,
+  "--erp-mode", $ErpMode
 )
 if ($ClientIp) {
   $ArgsList += @("--client-ip", $ClientIp)
