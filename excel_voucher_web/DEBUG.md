@@ -114,3 +114,8 @@
 - `run_agent.ps1`, `install_agent_task.ps1`, `agent_worker.py`에 `PrinterName` 옵션을 추가했다.
 - `PrinterName`이 있으면 `notepad.exe /pt <file> <printer>`로 지정 프린터 출력한다.
 - HTML 전표 파일에서 PDF 보관 파일을 먼저 생성한다. Edge/Chrome headless가 없으면 PDF 보관 실패만 결과에 남기고 출력은 계속 시도한다.
+
+## 2026-06-26 작업 내역 초기화
+- 기존 실패 작업은 서버 SQLite `jobs`, `job_events`에 남아 웹에 계속 표시된다.
+- DB 파일 전체 삭제는 로그인 계정/비밀번호까지 지우므로 금지한다.
+- `reset_jobs.ps1 -ClearUploads -Force`는 계정 테이블을 보존하고 작업 큐/이벤트/업로드 파일만 정리한다.

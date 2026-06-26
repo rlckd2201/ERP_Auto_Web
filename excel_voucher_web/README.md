@@ -107,3 +107,15 @@ Test-NetConnection 172.17.39.121 -Port 8081
 - 기본 endpoint: `/api/excel-voucher/jobs`
 - 자동 전달은 `run_server.ps1`의 `-ForwardToDataServer`로 켠다.
 - 수동 재전달 API: `POST /api/jobs/{job_id}/forward`
+
+## 작업 내역 초기화
+계정/비밀번호는 유지하고 처리 내역과 업로드 파일만 지울 때 서버에서 실행한다.
+
+```powershell
+cd "C:\ERP_Auto_Web\excel_voucher_web"
+
+powershell.exe -ExecutionPolicy Bypass -File .\reset_jobs.ps1 `
+  -DataDir "C:\ERP_DB\excel_voucher_web_data" `
+  -ClearUploads `
+  -Force
+```
