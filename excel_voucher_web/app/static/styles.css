@@ -76,12 +76,13 @@ h2 {
 
 .shell {
   display: grid;
-  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  grid-template-columns: 1fr;
   grid-template-areas:
-    "upload queue"
-    "detail detail";
+    "upload"
+    "detail"
+    "history";
   gap: 16px;
-  width: min(1180px, calc(100% - 32px));
+  width: min(1120px, calc(100% - 32px));
   margin: 16px auto 32px;
 }
 
@@ -108,14 +109,15 @@ h2 {
 
 .uploadPanel {
   grid-area: upload;
-}
-
-.queuePanel {
-  grid-area: queue;
+  padding: 22px;
 }
 
 .detailPanel {
   grid-area: detail;
+}
+
+.historyPanel {
+  grid-area: history;
 }
 
 .panelTitle {
@@ -162,8 +164,8 @@ h2 {
 
 .formGrid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
 }
 
 label {
@@ -197,11 +199,11 @@ select {
 
 .dropZone {
   width: 100%;
-  min-height: 72px;
+  min-height: 156px;
   display: grid;
   place-items: center;
-  gap: 3px;
-  border: 1px dashed #9fb2ba;
+  gap: 8px;
+  border: 2px dashed #9fb2ba;
   border-radius: 8px;
   color: var(--text);
   background: #fbfdfe;
@@ -216,9 +218,13 @@ select {
   white-space: nowrap;
 }
 
+.dropZone strong {
+  font-size: 19px;
+}
+
 .dropZone span {
   color: var(--subtle);
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .dropZone.dragOver {
@@ -228,6 +234,7 @@ select {
 
 .primaryButton {
   grid-column: 1 / -1;
+  min-height: 48px;
   border: 0;
   color: #ffffff;
   background: var(--accent);
@@ -348,11 +355,98 @@ tr.jobRow:hover {
   border-radius: 8px;
 }
 
-.detailGrid {
+.currentJob {
+  display: grid;
+  gap: 16px;
+}
+
+.currentHeader {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.currentHeader strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 20px;
+}
+
+.currentHeader span,
+.plainMessage {
+  color: var(--subtle);
+  font-size: 14px;
+}
+
+.currentHeader b {
+  color: var(--accent-strong);
+  font-size: 22px;
+}
+
+.largeProgressTrack {
+  width: 100%;
+  height: 14px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e8eef0;
+}
+
+.largeProgressBar {
+  height: 100%;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.stepList {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.stepItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--subtle);
+  background: #ffffff;
+  font-size: 13px;
+}
+
+.stepItem span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #cbd5db;
+}
+
+.stepItem.done {
+  color: var(--done);
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.stepItem.done span {
+  background: var(--done);
+}
+
+.stepItem.active {
+  color: var(--accent-strong);
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.detailGrid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
-  margin-bottom: 14px;
 }
 
 .metric {
@@ -403,16 +497,16 @@ tr.jobRow:hover {
   font-size: 13px;
 }
 
-@media (max-width: 860px) {
-  .shell {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "upload"
-      "queue"
-      "detail";
-  }
+.tableEmpty {
+  padding: 18px 8px;
+  color: var(--subtle);
+  text-align: center;
+}
 
-  .detailGrid {
+@media (max-width: 860px) {
+  .formGrid,
+  .detailGrid,
+  .stepList {
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -428,8 +522,13 @@ tr.jobRow:hover {
   }
 
   .formGrid,
-  .detailGrid {
+  .detailGrid,
+  .stepList {
     grid-template-columns: 1fr;
+  }
+
+  .currentHeader {
+    display: grid;
   }
 
   th,

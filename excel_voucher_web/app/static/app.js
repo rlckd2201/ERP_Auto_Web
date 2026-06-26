@@ -1,6 +1,7 @@
 const state = {
   selectedJobId: "",
   jobs: [],
+  uploading: false,
   auth: {
     auth_required: false,
     authenticated: false,
@@ -9,12 +10,21 @@ const state = {
 };
 
 const statusText = {
-  queued: "대기",
-  claimed: "수락",
-  running: "진행",
-  done: "완료",
-  error: "오류",
+  queued: "접수 완료",
+  claimed: "처리 준비",
+  running: "처리 중",
+  done: "출력 완료",
+  error: "확인 필요",
   cancelled: "취소",
+};
+
+const statusMessage = {
+  queued: "파일 접수가 끝났습니다. 창을 닫아도 처리는 계속 진행됩니다.",
+  claimed: "담당 PC가 작업을 가져갔습니다.",
+  running: "전표 자료를 만들고 출력 요청을 준비하고 있습니다.",
+  done: "출력 요청까지 완료되었습니다.",
+  error: "처리 중 확인이 필요한 내용이 있습니다.",
+  cancelled: "작업이 취소되었습니다.",
 };
 
 function money(value) {
@@ -38,7 +48,65 @@ function badge(status) {
 function setDetailStatus(status) {
   const detailStatus = document.querySelector("#detailStatus");
   detailStatus.className = `badge ${status}`;
-  detailStatus.textContent = statusText[status] || status || "-";
+  detailStatus.textContent = statusText[status] || status || "대기";
+}
+
+function jobTitle(job) {
+  const payload = job.payload || {};
+  return `${payload.company_name || "수시결제"} ${job.accounting_date || ""}`.trim();
+}
+
+function resultNotice(job) {
+  if (job.status === "error") {
+    return job.error || "처리 중 오류가 발생했습니다. 전산팀에 확인을 요청해 주세요.";
+  }
+  const notification = (job.result || {}).notification || {};
+  if (job.status === "done" && notification.sent) {
+    return "출력 요청과 완료 메일 발송이 끝났습니다.";
+  }
+  if (job.status === "done" && notification.queued) {
+    return "출력 요청은 끝났고, 메일은 서버 보관함에 임시 저장되었습니다.";
+  }
+  return statusMessage[job.status] || "처리 상태를 확인하고 있습니다.";
+}
+
+function renderStep(label, done, active) {
+  const className = `stepItem ${done ? "done" : ""} ${active ? "active" : ""}`.trim();
+  return `<li class="${className}"><span></span>${escapeHtml(label)}</li>`;
+}
+
+function renderSteps(job) {
+  const progress = Number(job.progress || 0);
+  const status = job.status;
+  const done = status === "done";
+  const error = status === "error";
+  return `
+    <ol class="stepList">
+      ${renderStep("접수", progress >= 5, status === "queued")}
+      ${renderStep("자료 확인", progress >= 15, status === "claimed")}
+      ${renderStep("전표 처리", progress >= 35, status === "running")}
+      ${renderStep("출력", done, done)}
+      ${error ? renderStep("확인 필요", true, true) : ""}
+    </ol>
+  `;
+}
+
+function renderTransientProgress(message, progress) {
+  setDetailStatus("running");
+  document.querySelector("#jobDetail").className = "currentJob";
+  document.querySelector("#jobDetail").innerHTML = `
+    <div class="currentHeader">
+      <div>
+        <strong>파일 업로드 중</strong>
+        <span>${escapeHtml(message)}</span>
+      </div>
+      <b>${Math.max(0, Math.min(progress, 100))}%</b>
+    </div>
+    <div class="largeProgressTrack">
+      <div class="largeProgressBar" style="width:${Math.max(0, Math.min(progress, 100))}%"></div>
+    </div>
+    <p class="plainMessage">업로드가 끝나면 서버에 작업이 접수됩니다.</p>
+  `;
 }
 
 async function fetchJson(url, options) {
@@ -102,7 +170,6 @@ async function loadSettings() {
   const settings = await fetchJson("/api/settings");
   state.auth = settings.auth || state.auth;
   document.querySelector("#accountingDate").value = settings.default_accounting_date;
-  document.querySelector("#agentTarget").textContent = `Agent ${settings.target_agent_ip} / ${settings.target_agent_id}`;
   const select = document.querySelector("#companyKey");
   select.innerHTML = "";
   settings.managers.forEach((manager) => {
@@ -120,14 +187,14 @@ function renderJobs(jobs) {
   const rows = document.querySelector("#jobRows");
   rows.innerHTML = "";
   if (!jobs.length) {
-    rows.innerHTML = `<tr><td colspan="4" class="emptyState">대기 중인 작업이 없습니다.</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="4" class="tableEmpty">최근 처리 내역이 없습니다.</td></tr>`;
     return;
   }
   jobs.forEach((job) => {
     const row = document.createElement("tr");
     row.className = "jobRow";
     row.dataset.jobId = job.id;
-    const title = escapeHtml(job.title);
+    const title = escapeHtml(jobTitle(job));
     row.innerHTML = `
       <td>${badge(job.status)}</td>
       <td class="titleCell" title="${title}">${title}</td>
@@ -148,6 +215,12 @@ async function refreshJobs() {
   renderJobs(jobs);
   if (state.selectedJobId) {
     await selectJob(state.selectedJobId, false);
+  } else if (!state.uploading && jobs.length) {
+    await selectJob(jobs[0].id);
+  } else if (!state.uploading) {
+    setDetailStatus("");
+    document.querySelector("#jobDetail").className = "currentJob emptyState";
+    document.querySelector("#jobDetail").textContent = "엑셀 파일을 업로드하면 처리 현황이 표시됩니다.";
   }
 }
 
@@ -166,25 +239,31 @@ async function selectJob(jobId, keepSelection = true) {
   }
   setDetailStatus(job.status);
   const payload = job.payload || {};
-  const events = job.events || [];
   const warnings = payload.warnings || [];
-  const forward = (job.result || {}).data_server_forward;
-  document.querySelector("#jobDetail").className = "";
+  const progress = Math.max(0, Math.min(Number(job.progress || 0), 100));
+  const notification = (job.result || {}).notification || {};
+  document.querySelector("#jobDetail").className = "currentJob";
   document.querySelector("#jobDetail").innerHTML = `
+    <div class="currentHeader">
+      <div>
+        <strong>${escapeHtml(jobTitle(job))}</strong>
+        <span>${escapeHtml(resultNotice(job))}</span>
+      </div>
+      <b>${progress}%</b>
+    </div>
+    <div class="largeProgressTrack" title="${progress}%">
+      <div class="largeProgressBar" style="width:${progress}%"></div>
+    </div>
+    ${renderSteps(job)}
     <div class="detailGrid">
-      <div class="metric"><strong>${money(payload.debit_total)}</strong><span>차변 합계</span></div>
-      <div class="metric"><strong>${money(payload.credit_total)}</strong><span>대변 합계</span></div>
-      <div class="metric"><strong>${Number(payload.line_count || 0)}</strong><span>전표 행</span></div>
-      <div class="metric"><strong>${Number(payload.source_row_count || 0)}</strong><span>원본 행</span></div>
-      <div class="metric"><strong>${escapeHtml(payload.source_format || "-")}</strong><span>원본 형식</span></div>
-      <div class="metric"><strong>${escapeHtml(job.target_client_ip)}</strong><span>Agent PC</span></div>
-      <div class="metric"><strong>${forward ? escapeHtml(forward.ok ? "OK" : "FAIL") : "-"}</strong><span>데이터 서버</span></div>
-      <div class="metric"><strong>${Number((payload.bank_transfers || []).length)}</strong><span>이체 행</span></div>
+      <div class="metric"><strong>${money(payload.debit_total)}</strong><span>처리 금액</span></div>
+      <div class="metric"><strong>${Number(payload.source_row_count || 0)}</strong><span>엑셀 행</span></div>
+      <div class="metric"><strong>${Number(payload.line_count || 0)}</strong><span>전표 줄</span></div>
+      <div class="metric"><strong>${escapeHtml(job.accounting_date || "-")}</strong><span>회계일</span></div>
+      <div class="metric"><strong>${notification.sent ? "발송 완료" : notification.queued ? "보관됨" : "-"}</strong><span>완료 메일</span></div>
+      <div class="metric"><strong>${job.finished_at ? escapeHtml(job.finished_at.replace("T", " ")) : "-"}</strong><span>완료 시간</span></div>
     </div>
     ${warnings.length ? `<ul class="warningList">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
-    <ul class="eventList">
-      ${events.map((event) => `<li><span>${escapeHtml(event.message)}</span><time>${escapeHtml(event.created_at.replace("T", " "))}</time></li>`).join("")}
-    </ul>
   `;
 }
 
@@ -196,6 +275,8 @@ async function uploadVoucher(event) {
   notice.className = "notice";
   notice.textContent = "";
   button.disabled = true;
+  state.uploading = true;
+  renderTransientProgress("파일을 서버로 보내고 있습니다.", 8);
   try {
     const data = new FormData(form);
     const job = await fetchJson("/api/uploads/voucher", {
@@ -203,7 +284,7 @@ async function uploadVoucher(event) {
       body: data,
     });
     state.selectedJobId = job.id;
-    notice.textContent = "업로드 완료";
+    notice.textContent = "업로드가 완료되었습니다. 창을 닫아도 처리는 계속 진행됩니다.";
     form.querySelector("#fileInput").value = "";
     updateFileName();
     await refreshJobs();
@@ -212,6 +293,7 @@ async function uploadVoucher(event) {
     notice.className = "notice error";
     notice.textContent = error.message;
   } finally {
+    state.uploading = false;
     button.disabled = false;
   }
 }
