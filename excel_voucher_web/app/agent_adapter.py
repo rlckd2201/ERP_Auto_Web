@@ -291,6 +291,56 @@ def _legacy_site_name(payload: dict[str, Any]) -> str:
     return ""
 
 
+def _is_payable_account(account_name: Any) -> bool:
+    return "미지급금" in str(account_name or "").replace(" ", "")
+
+
+def _is_bank_account(account_name: Any) -> bool:
+    return "보통예금" in str(account_name or "").replace(" ", "")
+
+
+def _fallback_bank_management_items(payload: dict[str, Any]) -> dict[str, str]:
+    company_key = str(payload.get("company_key") or "").strip().lower()
+    company_name = str(payload.get("company_name") or "").strip()
+    if company_key == "daeseung" or company_name == "대승":
+        return {
+            "계좌번호": "140-000-948562",
+            "금융기관지점": "신한 수원금융센터",
+            "거래처": "",
+        }
+    return {}
+
+
+def _fallback_line_management_items(payload: dict[str, Any]) -> list[dict[str, str]]:
+    existing = payload.get("erp_line_management_items") or payload.get("line_management_items")
+    if isinstance(existing, list) and any(isinstance(item, dict) and item for item in existing):
+        return [dict(item) if isinstance(item, dict) else {} for item in existing]
+
+    lines = payload.get("lines") or []
+    if not isinstance(lines, list):
+        return []
+
+    fallback: list[dict[str, str]] = []
+    for line in lines:
+        if not isinstance(line, dict):
+            fallback.append({})
+            continue
+        explicit = line.get("management_items")
+        if isinstance(explicit, dict) and explicit:
+            fallback.append(dict(explicit))
+            continue
+        account_name = line.get("account_name") or ""
+        if _is_payable_account(account_name):
+            vendor_value = str(line.get("vendor_code") or line.get("vendor_name") or "").strip()
+            fallback.append({"거래처": vendor_value} if vendor_value else {})
+            continue
+        if _is_bank_account(account_name):
+            fallback.append(_fallback_bank_management_items(payload))
+            continue
+        fallback.append({})
+    return fallback
+
+
 def _legacy_form_data(payload: dict[str, Any]) -> dict[str, Any]:
     rows = [str(row) for row in payload.get("erp_clipboard_rows") or []]
     if not rows:
@@ -298,6 +348,7 @@ def _legacy_form_data(payload: dict[str, Any]) -> dict[str, Any]:
     site_name = _legacy_site_name(payload)
     if not site_name:
         raise RuntimeError("ERP 회계단위가 설정되지 않았습니다. 담당자별 erp_site_name을 먼저 확정해야 합니다.")
+    line_management_items = _fallback_line_management_items(payload)
     data = dict(payload)
     data.update(
         {
@@ -313,7 +364,7 @@ def _legacy_form_data(payload: dict[str, Any]) -> dict[str, Any]:
             "total_sum": int(payload.get("credit_total") or payload.get("debit_total") or 0),
             "erp_row_count": int(payload.get("line_count") or len(rows)),
             "erp_clipboard_rows": rows,
-            "erp_line_management_items": list(payload.get("erp_line_management_items") or []),
+            "erp_line_management_items": line_management_items,
             "cash_processing_enabled": bool(payload.get("cash_processing_enabled")),
         }
     )

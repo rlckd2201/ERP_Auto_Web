@@ -75,6 +75,14 @@ def test_build_voucher_payload_adds_bank_credit_line(tmp_path: Path) -> None:
     assert legacy["cash_processing_enabled"] is False
     assert legacy["erp_line_management_items"][-1]["계좌번호"] == "140-000-948562"
 
+    legacy_payload = payload.model_dump(mode="json")
+    legacy_payload.pop("erp_line_management_items")
+    for line in legacy_payload["lines"]:
+        line.pop("management_items", None)
+    legacy_from_lines = _legacy_form_data(legacy_payload)
+    assert legacy_from_lines["erp_line_management_items"][0] == {"거래처": "A001"}
+    assert legacy_from_lines["erp_line_management_items"][-1]["계좌번호"] == "140-000-948562"
+
 
 def test_build_voucher_payload_uses_cash_sheet_rows_only(tmp_path: Path) -> None:
     source = tmp_path / "cash.xlsx"

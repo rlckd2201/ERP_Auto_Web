@@ -131,3 +131,5 @@
 - `real` 모드는 ERP 전표를 Microsoft Print to PDF로 먼저 보관한 뒤 지정 프린터로 PDF를 출력 제출한다.
 - 현재 전표번호 자동 회수는 아직 없으므로 `voucher_no`가 비어 있고, 완료 메일은 의도적으로 발송되지 않는다.
 - 대승 담당자 ERP 회계단위는 `D1공장`으로 1차 설정했다.
+- 2026-06-26 재발 방지: 서버가 구형 payload를 보내 `erp_line_management_items`가 없어도 Agent가 `lines[].vendor_code`와 보통예금 기본값으로 관리항목을 복구한다.
+- ERP 로그에 `plan=['vendor']`가 보이면 잘못된 구방식 입력이므로 즉시 중지한다. 정상은 `plan=['explicit']` 또는 `명시 관리항목 입력 완료`이다.
