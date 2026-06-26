@@ -3,6 +3,7 @@ from __future__ import annotations
 import html
 import json
 import os
+import subprocess
 import time
 from pathlib import Path
 from typing import Any
@@ -58,15 +59,57 @@ def _render_print_html(payload: dict[str, Any], output_path: Path) -> None:
     )
 
 
-def _submit_print(path: Path, *, print_mode: str, wait_seconds: float) -> dict[str, Any]:
+def _render_print_text(payload: dict[str, Any], output_path: Path) -> None:
+    lines = payload.get("lines") or []
+    rows = [
+        f"{payload.get('company_name') or ''} 수시결제 전표",
+        f"회계일: {payload.get('accounting_date') or ''}",
+        f"작성자: {payload.get('requester') or ''}",
+        f"합계: {int(payload.get('debit_total') or 0):,}원",
+        "",
+        "No\t계정과목\t차변\t대변\t적요",
+    ]
+    for line in lines:
+        debit = int(line.get("amount") or 0) if line.get("side") == "debit" else 0
+        credit = int(line.get("amount") or 0) if line.get("side") == "credit" else 0
+        rows.append(
+            "\t".join(
+                [
+                    str(line.get("seq") or ""),
+                    str(line.get("account_name") or ""),
+                    f"{debit:,}",
+                    f"{credit:,}",
+                    str(line.get("summary") or ""),
+                ]
+            )
+        )
+    output_path.write_text("\r\n".join(rows), encoding="utf-8")
+
+
+def _submit_print(path: Path, fallback_text_path: Path, *, print_mode: str, wait_seconds: float) -> dict[str, Any]:
     if print_mode == "off":
         return {"print_submitted": False, "print_mode": print_mode, "print_file": str(path)}
     if os.name != "nt":
         raise RuntimeError("default-printer print mode is only supported on Windows.")
-    os.startfile(str(path), "print")  # type: ignore[attr-defined]
+    primary_error = ""
+    try:
+        os.startfile(str(path), "print")  # type: ignore[attr-defined]
+        print_file = path
+        effective_mode = print_mode
+    except OSError as exc:
+        primary_error = str(exc)
+        try:
+            subprocess.Popen(["notepad.exe", "/p", str(fallback_text_path)])
+        except OSError as fallback_exc:
+            raise RuntimeError(f"HTML print failed: {primary_error}; text print failed: {fallback_exc}") from fallback_exc
+        print_file = fallback_text_path
+        effective_mode = "notepad-text-fallback"
     if wait_seconds > 0:
         time.sleep(wait_seconds)
-    return {"print_submitted": True, "print_mode": print_mode, "print_file": str(path)}
+    result = {"print_submitted": True, "print_mode": effective_mode, "print_file": str(print_file)}
+    if primary_error:
+        result["primary_print_error"] = primary_error
+    return result
 
 
 def run_erp_voucher_task(
@@ -90,7 +133,14 @@ def run_erp_voucher_task(
     clipboard_path.write_text("\r\n".join(clipboard_rows), encoding="utf-8")
     print_path = output_dir / f"{job_id}_voucher_print.html"
     _render_print_html(payload, print_path)
-    print_result = _submit_print(print_path, print_mode=print_mode, wait_seconds=print_wait_seconds)
+    print_text_path = output_dir / f"{job_id}_voucher_print.txt"
+    _render_print_text(payload, print_text_path)
+    print_result = _submit_print(
+        print_path,
+        print_text_path,
+        print_mode=print_mode,
+        wait_seconds=print_wait_seconds,
+    )
     return {
         "dry_run": True,
         "preview_path": str(preview_path),
