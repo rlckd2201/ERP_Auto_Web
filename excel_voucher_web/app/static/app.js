@@ -19,8 +19,8 @@ const statusText = {
 };
 
 const statusMessage = {
-  queued: "파일 접수가 끝났습니다. 창을 닫아도 처리는 계속 진행됩니다.",
-  claimed: "담당 PC가 작업을 가져갔습니다.",
+  queued: "파일 접수가 끝났습니다. 자동처리 PC에서 이어서 처리합니다.",
+  claimed: "자동처리 PC에서 처리 준비 중입니다.",
   running: "전표 자료를 만들고 출력 요청을 준비하고 있습니다.",
   done: "출력 요청까지 완료되었습니다.",
   error: "처리 중 확인이 필요한 내용이 있습니다.",
@@ -106,6 +106,57 @@ function renderTransientProgress(message, progress) {
       <div class="largeProgressBar" style="width:${Math.max(0, Math.min(progress, 100))}%"></div>
     </div>
     <p class="plainMessage">업로드가 끝나면 서버에 작업이 접수됩니다.</p>
+  `;
+}
+
+function formatAge(seconds) {
+  if (seconds === null || seconds === undefined) {
+    return "-";
+  }
+  const safeSeconds = Math.max(0, Number(seconds || 0));
+  if (safeSeconds < 60) {
+    return `${safeSeconds}초 전`;
+  }
+  const minutes = Math.floor(safeSeconds / 60);
+  if (minutes < 60) {
+    return `${minutes}분 전`;
+  }
+  return `${Math.floor(minutes / 60)}시간 전`;
+}
+
+function renderAdminDiagnostics(job) {
+  const user = state.auth.user || {};
+  const diagnostics = job.diagnostics || null;
+  if (!user.is_admin || !diagnostics) {
+    return "";
+  }
+  const profile = diagnostics.agent_profile || {};
+  const forward = diagnostics.data_server_forward || {};
+  const hasForward = Object.keys(forward).length > 0;
+  const forwardText = hasForward ? (forward.ok ? "성공" : "실패") : "-";
+  const events = job.events || [];
+  return `
+    <details class="adminDiagnostics" open>
+      <summary>전산 상세</summary>
+      <div class="adminGrid">
+        <div><span>현재 위치</span><strong>${escapeHtml(diagnostics.current_location || "-")}</strong></div>
+        <div><span>확인할 일</span><strong>${escapeHtml(diagnostics.recommended_action || "-")}</strong></div>
+        <div><span>자동처리 PC</span><strong>${escapeHtml(diagnostics.target_client_ip || profile.client_ip || "-")}</strong></div>
+        <div><span>Agent ID</span><strong>${escapeHtml(diagnostics.target_agent_id || profile.agent_id || "-")}</strong></div>
+        <div><span>Agent 접속</span><strong>${diagnostics.agent_online ? "정상" : "미확인"} / ${formatAge(diagnostics.agent_last_seen_age_seconds)}</strong></div>
+        <div><span>18080 전달</span><strong>${escapeHtml(forwardText)}</strong></div>
+      </div>
+      ${
+        events.length
+          ? `<ul class="eventList">${events
+              .map(
+                (event) =>
+                  `<li><span>${escapeHtml(event.message)}</span><time>${escapeHtml(String(event.created_at || "").replace("T", " "))}</time></li>`,
+              )
+              .join("")}</ul>`
+          : ""
+      }
+    </details>
   `;
 }
 
@@ -264,6 +315,7 @@ async function selectJob(jobId, keepSelection = true) {
       <div class="metric"><strong>${job.finished_at ? escapeHtml(job.finished_at.replace("T", " ")) : "-"}</strong><span>완료 시간</span></div>
     </div>
     ${warnings.length ? `<ul class="warningList">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
+    ${renderAdminDiagnostics(job)}
   `;
 }
 

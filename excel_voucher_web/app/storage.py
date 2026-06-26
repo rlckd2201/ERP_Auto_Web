@@ -195,6 +195,23 @@ class JobStore:
             for row in rows
         ]
 
+    def get_agent_profile(self, agent_id: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                "SELECT * FROM agent_profiles WHERE agent_id = ?",
+                (agent_id,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "agent_id": row["agent_id"],
+            "client_ip": row["client_ip"] or "",
+            "agent_host": row["agent_host"] or "",
+            "agent_user": row["agent_user"] or "",
+            "capabilities": _json_loads(row["capabilities_json"]),
+            "last_seen": row["last_seen"] or "",
+        }
+
     def _add_event_conn(
         self,
         conn: sqlite3.Connection,
@@ -315,7 +332,7 @@ class JobStore:
                 SET status = 'claimed', progress = 15, message = ?, updated_at = ?, claimed_at = ?
                 WHERE id = ? AND status = 'queued'
                 """,
-                (f"Agent 작업 수락: {agent_id}", claimed, claimed, row["id"]),
+                (f"자동처리 PC 작업 시작: {agent_id}", claimed, claimed, row["id"]),
             )
-            self._add_event_conn(conn, row["id"], "claimed", 15, f"Agent 작업 수락: {agent_id}")
+            self._add_event_conn(conn, row["id"], "claimed", 15, f"자동처리 PC 작업 시작: {agent_id}")
         return self.get_job(row["id"])

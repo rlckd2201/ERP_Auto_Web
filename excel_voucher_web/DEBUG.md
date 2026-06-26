@@ -92,3 +92,11 @@
 - `run_server.ps1` 기본값에 그룹웨어 DB 계정, 메일 SMTP, 운영 데이터 폴더를 반영했다.
 - 운영 데이터 기본 폴더는 `C:\ERP_DB\excel_voucher_web_data`.
 - 이전 PowerShell 세션에 placeholder 환경변수가 남아 있어도 `run_server.ps1` 기본 인자로 덮어쓴다.
+
+## 2026-06-26 Agent 대기 상태 진단
+- 담당자 PC에서 사람이 별도 수락하는 단계는 없다.
+- Agent는 5초마다 서버 `/api/agent/voucher/next`를 호출해 작업을 자동으로 가져간다.
+- 운영에서는 172.17.30.243 로그인 세션에서 `install_agent_task.ps1`로 Agent 자동 실행 작업을 등록한다.
+- 작업이 `queued`/7%에 머무르면 ERP 입력 단계가 아니라 Agent가 아직 작업을 가져가기 전 상태다.
+- 전산 관리자에게만 현재 위치, 확인할 일, 대상 PC, Agent 마지막 접속, 18080 전달 여부, 이벤트 로그를 표시한다.
+- 내부 이벤트 문구 `Agent 작업 수락`은 오해를 줄이기 위해 `자동처리 PC 작업 시작`으로 변경했다.

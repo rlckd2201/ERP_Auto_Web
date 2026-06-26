@@ -3,6 +3,7 @@ from __future__ import annotations
 import shutil
 import sqlite3
 import uuid
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -97,12 +98,71 @@ def _safe_filename(filename: str, fallback: str = "upload.xlsx") -> str:
     return clean
 
 
-def _job_response(job_id: str) -> dict[str, Any]:
-    job = store.get_job(job_id)
+def _seconds_since_iso(value: str | None) -> int | None:
+    if not value:
+        return None
+    try:
+        return max(0, int((datetime.now() - datetime.fromisoformat(str(value))).total_seconds()))
+    except ValueError:
+        return None
+
+
+def _job_diagnostics(job: Any) -> dict[str, Any]:
+    profile = store.get_agent_profile(job.target_agent_id) if job.target_agent_id else None
+    last_seen_age = _seconds_since_iso(profile.get("last_seen") if profile else None)
+    agent_online = last_seen_age is not None and last_seen_age <= 20
+    forward_result = (job.result or {}).get("data_server_forward") or {}
+
+    if job.status == "queued":
+        if not profile:
+            current_location = "자동처리 PC가 아직 서버에 접속한 기록이 없습니다."
+            recommended_action = "172.17.30.243에서 Agent 실행 여부와 서버 주소를 확인하세요."
+        elif not agent_online:
+            current_location = "자동처리 PC 연결이 끊겼거나 Agent가 멈춘 상태입니다."
+            recommended_action = "172.17.30.243 PowerShell Agent 창을 확인하고 필요하면 다시 실행하세요."
+        else:
+            current_location = "자동처리 PC가 연결되어 있고 작업 가져가기를 기다리는 중입니다."
+            recommended_action = "몇 초 후에도 진행되지 않으면 Agent 창의 오류 메시지를 확인하세요."
+    elif job.status == "claimed":
+        current_location = "자동처리 PC가 작업을 가져갔고 전표 처리 준비 중입니다."
+        recommended_action = "진행률이 그대로면 172.17.30.243 Agent 창을 확인하세요."
+    elif job.status == "running":
+        current_location = "자동처리 PC에서 전표 자료 생성 또는 출력 처리가 진행 중입니다."
+        recommended_action = "진행률이 멈추면 Agent 창과 ERP 화면 상태를 확인하세요."
+    elif job.status == "done":
+        current_location = "출력 요청까지 완료되었습니다."
+        recommended_action = "출력물과 완료 메일 수신 여부만 확인하면 됩니다."
+    elif job.status == "error":
+        current_location = "처리 중 오류가 발생했습니다."
+        recommended_action = job.error or "작업 상세 로그와 Agent 창 오류를 확인하세요."
+    else:
+        current_location = "작업 상태 확인이 필요합니다."
+        recommended_action = "작업 로그를 확인하세요."
+
+    if forward_result and not forward_result.get("ok"):
+        recommended_action += " 18080 데이터 서버 전달은 실패했지만 서버 큐에는 보관되어 있습니다."
+
     return {
+        "current_location": current_location,
+        "recommended_action": recommended_action,
+        "target_agent_id": job.target_agent_id,
+        "target_client_ip": job.target_client_ip,
+        "agent_profile": profile,
+        "agent_online": agent_online,
+        "agent_last_seen_age_seconds": last_seen_age,
+        "data_server_forward": forward_result,
+    }
+
+
+def _job_response(job_id: str, *, include_diagnostics: bool = False) -> dict[str, Any]:
+    job = store.get_job(job_id)
+    response = {
         **job.model_dump(mode="json"),
         "events": [event.model_dump(mode="json") for event in store.list_events(job_id)],
     }
+    if include_diagnostics:
+        response["diagnostics"] = _job_diagnostics(job)
+    return response
 
 
 def _current_user(request: Request) -> AccountUser | None:
@@ -272,7 +332,7 @@ def api_upload_voucher(
         if temp_path.exists():
             temp_path.unlink()
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    return _job_response(job.id)
+    return _job_response(job.id, include_diagnostics=bool(user and user.is_admin))
 
 
 @app.get("/api/jobs")
@@ -281,9 +341,10 @@ def api_jobs(limit: int = 100) -> list[dict[str, Any]]:
 
 
 @app.get("/api/jobs/{job_id}")
-def api_job(job_id: str) -> dict[str, Any]:
+def api_job(job_id: str, request: Request) -> dict[str, Any]:
     try:
-        return _job_response(job_id)
+        user = _current_user(request)
+        return _job_response(job_id, include_diagnostics=bool(user and user.is_admin))
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
 

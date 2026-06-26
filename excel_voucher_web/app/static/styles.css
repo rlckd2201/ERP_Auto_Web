@@ -484,6 +484,44 @@ tr.jobRow:hover {
   font-size: 13px;
 }
 
+.adminDiagnostics {
+  padding: 12px;
+  border: 1px solid #c7d2fe;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.adminDiagnostics summary {
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.adminGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.adminGrid div {
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.adminGrid span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.adminGrid strong {
+  font-size: 13px;
+  line-height: 1.4;
+}
+
 .warningList {
   display: grid;
   gap: 6px;
@@ -506,6 +544,7 @@ tr.jobRow:hover {
 @media (max-width: 860px) {
   .formGrid,
   .detailGrid,
+  .adminGrid,
   .stepList {
     grid-template-columns: 1fr 1fr;
   }
@@ -523,6 +562,7 @@ tr.jobRow:hover {
 
   .formGrid,
   .detailGrid,
+  .adminGrid,
   .stepList {
     grid-template-columns: 1fr;
   }
