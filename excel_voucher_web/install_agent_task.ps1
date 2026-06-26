@@ -4,6 +4,7 @@ param(
   [string]$ClientIp = "172.17.30.243",
   [ValidateSet("default-printer", "off")]
   [string]$PrintMode = "default-printer",
+  [string]$PrinterName = "",
   [double]$PrintWaitSeconds = 3,
   [string]$TaskName = "Excel Voucher Agent",
   [switch]$InsecureSkipTlsVerify,
@@ -26,6 +27,7 @@ $ActionArgs = @(
   "-AgentId", "`"$AgentId`"",
   "-ClientIp", "`"$ClientIp`"",
   "-PrintMode", $PrintMode,
+  "-PrinterName", "`"$PrinterName`"",
   "-PrintWaitSeconds", [string]$PrintWaitSeconds
 )
 if ($InsecureSkipTlsVerify) {
@@ -54,3 +56,4 @@ Write-Host "Installed scheduled task: $TaskName"
 Write-Host "User: $UserId"
 Write-Host "Server: $Server"
 Write-Host "ClientIp: $ClientIp"
+Write-Host "PrinterName: $PrinterName"

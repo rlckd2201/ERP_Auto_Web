@@ -29,13 +29,13 @@ def _connection_error_message(server: str, exc: Exception) -> str:
     return f"server unreachable: {server} ({exc.__class__.__name__}: {exc})"
 
 
-def _heartbeat(agent_id: str, client_ip: str = "", print_mode: str = "default-printer") -> dict[str, Any]:
+def _heartbeat(agent_id: str, client_ip: str = "", print_mode: str = "default-printer", printer_name: str = "") -> dict[str, Any]:
     return {
         "agent_id": agent_id,
         "agent_host": socket.gethostname(),
         "agent_user": getpass.getuser(),
         "client_ip": client_ip,
-        "capabilities": {"excel_voucher": True, "voucher_print": print_mode != "off"},
+        "capabilities": {"excel_voucher": True, "voucher_print": print_mode != "off", "printer_name": printer_name},
     }
 
 
@@ -47,6 +47,7 @@ def run_loop(
     once: bool,
     verify_tls: bool,
     print_mode: str,
+    printer_name: str,
     print_wait_seconds: float,
 ) -> None:
     if not verify_tls:
@@ -54,7 +55,7 @@ def run_loop(
     session = requests.Session()
     output_dir = ROOT / "data" / "agent_results"
     while True:
-        heartbeat = _heartbeat(agent_id, client_ip, print_mode)
+        heartbeat = _heartbeat(agent_id, client_ip, print_mode, printer_name)
         try:
             _post(session, server, "/api/agent/heartbeat", heartbeat, verify_tls=verify_tls)
             next_payload = _post(session, server, "/api/agent/voucher/next", heartbeat, verify_tls=verify_tls)
@@ -90,6 +91,7 @@ def run_loop(
                 task,
                 output_dir=output_dir,
                 print_mode=print_mode,
+                printer_name=printer_name,
                 print_wait_seconds=print_wait_seconds,
             )
             _post(
@@ -136,6 +138,7 @@ def main() -> None:
     parser.add_argument("--once", action="store_true")
     parser.add_argument("--insecure-skip-tls-verify", action="store_true")
     parser.add_argument("--print-mode", choices=["default-printer", "off"], default="default-printer")
+    parser.add_argument("--printer-name", default="")
     parser.add_argument("--print-wait-seconds", type=float, default=3.0)
     args = parser.parse_args()
     run_loop(
@@ -146,6 +149,7 @@ def main() -> None:
         args.once,
         not args.insecure_skip_tls_verify,
         args.print_mode,
+        args.printer_name,
         max(0.0, args.print_wait_seconds),
     )
 

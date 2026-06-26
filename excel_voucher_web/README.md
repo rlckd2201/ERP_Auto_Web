@@ -27,7 +27,26 @@ cd excel_voucher_web
 ```
 
 운영에서는 `EXCEL_VOUCHER_TARGET_AGENT_IP=172.17.30.243`를 기본으로 사용한다.
-Agent는 기본값으로 생성된 전표 출력 HTML을 Windows 기본 프린터에 제출한다.
+Agent는 전표 PDF를 먼저 보관하고, `-PrinterName`이 있으면 Windows 기본 프린터를 변경하지 않고 지정 프린터로 출력한다.
+테스트 완료 전 설치 명령에서는 `김제 프린터 (172.17.30.162)`를 지정한다.
+
+지정 프린터 출력 예시:
+```powershell
+.\run_agent.ps1 `
+  -Server https://172.17.39.121:8081 `
+  -ClientIp 172.17.30.243 `
+  -PrinterName "김제 프린터 (172.17.30.162)" `
+  -InsecureSkipTlsVerify
+```
+
+운영 전환 시 지정 프린터:
+```powershell
+.\run_agent.ps1 `
+  -Server https://172.17.39.121:8081 `
+  -ClientIp 172.17.30.243 `
+  -PrinterName "재정 프린터 (172.16.10.173)" `
+  -InsecureSkipTlsVerify
+```
 
 출력 없이 큐/전표 데이터만 테스트할 때:
 ```powershell

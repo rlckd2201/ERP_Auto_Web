@@ -4,6 +4,7 @@ param(
   [string]$ClientIp = "",
   [ValidateSet("default-printer", "off")]
   [string]$PrintMode = "default-printer",
+  [string]$PrinterName = "",
   [double]$PrintWaitSeconds = 3,
   [switch]$Once,
   [switch]$InsecureSkipTlsVerify
@@ -40,6 +41,9 @@ $ArgsList = @(
 )
 if ($ClientIp) {
   $ArgsList += @("--client-ip", $ClientIp)
+}
+if ($PrinterName) {
+  $ArgsList += @("--printer-name", $PrinterName)
 }
 if ($Once) {
   $ArgsList += "--once"

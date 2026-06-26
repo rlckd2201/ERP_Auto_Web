@@ -106,3 +106,11 @@
 - Agent는 HTML 출력 파일과 별도로 텍스트 전표 파일을 생성한다.
 - HTML `print` verb가 실패하면 `notepad.exe /p`로 텍스트 전표를 기본 프린터에 제출한다.
 - 이 fallback은 dry-run 출력용이며 실제 ERP 자체 출력은 후속 ERP 자동입력 연결 뒤 별도로 구현한다.
+
+## 2026-06-26 지정 프린터 출력
+- 172.17.30.243 프린터 목록에서 운영 출력 대상은 `재정 프린터 (172.16.10.173)`.
+- 완전 테스트 전까지 실제 출력은 `김제 프린터 (172.17.30.162)`로 보낸다.
+- Windows 기본 프린터는 변경하지 않는다.
+- `run_agent.ps1`, `install_agent_task.ps1`, `agent_worker.py`에 `PrinterName` 옵션을 추가했다.
+- `PrinterName`이 있으면 `notepad.exe /pt <file> <printer>`로 지정 프린터 출력한다.
+- HTML 전표 파일에서 PDF 보관 파일을 먼저 생성한다. Edge/Chrome headless가 없으면 PDF 보관 실패만 결과에 남기고 출력은 계속 시도한다.
