@@ -4,17 +4,18 @@ param(
   [string]$PublicOrigin = "https://172.17.39.121:8081",
   [string]$DataServerUrl = "http://127.0.0.1:18080",
   [string]$DataServerEndpoint = "/api/excel-voucher/jobs",
+  [string]$DataDir = "C:\ERP_DB\excel_voucher_web_data",
   [switch]$ForwardToDataServer,
   [switch]$RequireLogin,
   [switch]$GroupwareSyncOnStart,
-  [string]$GroupwareDbUser = "",
-  [string]$GroupwareDbPassword = "",
-  [string]$GroupwareMailDomain = "",
-  [string]$SmtpHost = "",
-  [int]$SmtpPort = 587,
+  [string]$GroupwareDbUser = "dlpadmin2",
+  [string]$GroupwareDbPassword = "rlarlckd12!@",
+  [string]$GroupwareMailDomain = "dae-seung.co.kr",
+  [string]$SmtpHost = "35.216.76.148",
+  [int]$SmtpPort = 25,
   [string]$SmtpUser = "",
   [string]$SmtpPassword = "",
-  [string]$SmtpFrom = "",
+  [string]$SmtpFrom = "admpdm@dae-seung.co.kr",
   [string]$SslCertFile = "",
   [string]$SslKeyFile = ""
 )
@@ -44,19 +45,20 @@ if ($Candidates.Count -gt 0) {
 $env:EXCEL_VOUCHER_WEB_HOST = $HostName
 $env:EXCEL_VOUCHER_WEB_PORT = [string]$Port
 $env:EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN = $PublicOrigin
+$env:EXCEL_VOUCHER_DATA_DIR = $DataDir
 $env:EXCEL_VOUCHER_DATA_SERVER_URL = $DataServerUrl
 $env:EXCEL_VOUCHER_DATA_SERVER_ENDPOINT = $DataServerEndpoint
 $env:EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER = if ($ForwardToDataServer) { "1" } else { "0" }
 $env:EXCEL_VOUCHER_AUTH_REQUIRED = if ($RequireLogin) { "1" } else { "0" }
 $env:EXCEL_VOUCHER_GROUPWARE_SYNC_ON_START = if ($GroupwareSyncOnStart) { "1" } else { "0" }
-if ($GroupwareDbUser) { $env:EXCEL_VOUCHER_GROUPWARE_DB_USER = $GroupwareDbUser }
-if ($GroupwareDbPassword) { $env:EXCEL_VOUCHER_GROUPWARE_DB_PASSWORD = $GroupwareDbPassword }
-if ($GroupwareMailDomain) { $env:EXCEL_VOUCHER_GROUPWARE_MAIL_DOMAIN = $GroupwareMailDomain }
-if ($SmtpHost) { $env:EXCEL_VOUCHER_SMTP_HOST = $SmtpHost }
+$env:EXCEL_VOUCHER_GROUPWARE_DB_USER = $GroupwareDbUser
+$env:EXCEL_VOUCHER_GROUPWARE_DB_PASSWORD = $GroupwareDbPassword
+$env:EXCEL_VOUCHER_GROUPWARE_MAIL_DOMAIN = $GroupwareMailDomain
+$env:EXCEL_VOUCHER_SMTP_HOST = $SmtpHost
 $env:EXCEL_VOUCHER_SMTP_PORT = [string]$SmtpPort
 if ($SmtpUser) { $env:EXCEL_VOUCHER_SMTP_USER = $SmtpUser }
 if ($SmtpPassword) { $env:EXCEL_VOUCHER_SMTP_PASSWORD = $SmtpPassword }
-if ($SmtpFrom) { $env:EXCEL_VOUCHER_SMTP_FROM = $SmtpFrom }
+$env:EXCEL_VOUCHER_SMTP_FROM = $SmtpFrom
 
 & $Python -m pip install -r requirements.txt
 

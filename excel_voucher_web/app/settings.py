@@ -45,7 +45,7 @@ class ManagerProfile:
 
 @dataclass(frozen=True)
 class Settings:
-    data_dir: Path = Path(_env("EXCEL_VOUCHER_DATA_DIR", str(BASE_DIR / "data")))
+    data_dir: Path = Path(_env("EXCEL_VOUCHER_DATA_DIR", r"C:\ERP_DB\excel_voucher_web_data"))
     target_agent_id: str = _env("EXCEL_VOUCHER_TARGET_AGENT_ID", "finance-agent-172-17-30-243")
     target_agent_ip: str = _env("EXCEL_VOUCHER_TARGET_AGENT_IP", "172.17.30.243")
     web_host: str = _env("EXCEL_VOUCHER_WEB_HOST", "0.0.0.0")

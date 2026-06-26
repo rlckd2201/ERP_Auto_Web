@@ -87,3 +87,8 @@
 - 업로드 시작 즉시 처리 현황 카드에 진행률을 표시한다.
 - 작업 큐/데이터 서버/Agent 같은 내부 용어는 화면에서 빼고 접수, 자료 확인, 전표 처리, 출력 단계로 표시한다.
 - 검증: `node --check app/static/app.js` 통과, `pytest tests -q` 결과 7 passed.
+
+## 2026-06-26 운영 기본값 스크립트 반영
+- `run_server.ps1` 기본값에 그룹웨어 DB 계정, 메일 SMTP, 운영 데이터 폴더를 반영했다.
+- 운영 데이터 기본 폴더는 `C:\ERP_DB\excel_voucher_web_data`.
+- 이전 PowerShell 세션에 placeholder 환경변수가 남아 있어도 `run_server.ps1` 기본 인자로 덮어쓴다.
