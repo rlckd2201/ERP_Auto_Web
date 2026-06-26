@@ -6,14 +6,14 @@ from typing import Any
 from .settings import settings
 
 
-EMP_NO_COLUMNS = ("emp_no", "EMP_NO", "sabun", "SABUN", "emp_cd", "EMP_CD", "employee_no")
-GROUPWARE_ID_COLUMNS = ("gw_id", "GW_ID", "login_id", "LOGIN_ID", "user_id", "USER_ID", "id", "ID")
-ACTIVE_COLUMNS = ("use_yn", "USE_YN", "active_yn", "ACTIVE_YN", "enabled", "ENABLED", "del_yn", "DEL_YN")
+EMP_NO_COLUMNS = ("EmpID", "emp_no", "EMP_NO", "sabun", "SABUN", "emp_cd", "EMP_CD", "employee_no")
+GROUPWARE_ID_COLUMNS = ("GwID", "gw_id", "GW_ID", "login_id", "LOGIN_ID", "user_id", "USER_ID", "id", "ID")
+ACTIVE_COLUMNS = ("Use_yn", "use_yn", "USE_YN", "active_yn", "ACTIVE_YN", "enabled", "ENABLED", "del_yn", "DEL_YN")
 EMAIL_COLUMNS = ("email", "EMAIL", "mail", "MAIL", "email_addr", "EMAIL_ADDR")
-NAME_COLUMNS = ("emp_nm", "EMP_NM", "name", "NAME", "kor_nm", "KOR_NM", "user_nm", "USER_NM")
-DEPT_CODE_COLUMNS = ("dept_cd", "DEPT_CD", "dept_code", "DEPT_CODE", "org_cd", "ORG_CD")
-DEPT_NAME_COLUMNS = ("dept_nm", "DEPT_NM", "dept_name", "DEPT_NAME", "org_nm", "ORG_NM")
-EMPLOYMENT_COLUMNS = ("retire_yn", "RETIRE_YN", "work_yn", "WORK_YN", "status", "STATUS", "use_yn", "USE_YN")
+NAME_COLUMNS = ("kor_name", "EmpName", "emp_nm", "EMP_NM", "name", "NAME", "kor_nm", "KOR_NM", "user_nm", "USER_NM")
+DEPT_CODE_COLUMNS = ("bu_code", "DeptCode", "dept_cd", "DEPT_CD", "dept_code", "DEPT_CODE", "org_cd", "ORG_CD")
+DEPT_NAME_COLUMNS = ("DeptName", "dept_nm", "DEPT_NM", "dept_name", "DEPT_NAME", "org_nm", "ORG_NM")
+EMPLOYMENT_COLUMNS = ("use_yn", "Use_yn", "RetireDate", "retire_yn", "RETIRE_YN", "work_yn", "WORK_YN", "status", "STATUS", "USE_YN")
 
 DEPT_COMPANY = {
     "HQ22111000": "daeseung",

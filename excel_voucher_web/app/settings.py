@@ -62,20 +62,20 @@ class Settings:
     groupware_db_host: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_HOST", "172.16.19.33")
     groupware_db_port: int = _env_int("EXCEL_VOUCHER_GROUPWARE_DB_PORT", 3306)
     groupware_db_name: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_NAME", "ksystem_yundong")
-    groupware_db_user: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_USER", "")
-    groupware_db_password: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_PASSWORD", "")
+    groupware_db_user: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_USER", "dlpadmin2")
+    groupware_db_password: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_PASSWORD", "rlarlckd12!@")
     groupware_sync_on_start: bool = _env_bool("EXCEL_VOUCHER_GROUPWARE_SYNC_ON_START", False)
     groupware_finance_dept_codes: str = _env(
         "EXCEL_VOUCHER_FINANCE_DEPT_CODES",
         "HQ22111000,HQ22112000,HQ22113000,HQ22114000",
     )
-    groupware_mail_domain: str = _env("EXCEL_VOUCHER_GROUPWARE_MAIL_DOMAIN", "")
+    groupware_mail_domain: str = _env("EXCEL_VOUCHER_GROUPWARE_MAIL_DOMAIN", "dae-seung.co.kr")
 
-    smtp_host: str = _env("EXCEL_VOUCHER_SMTP_HOST", "")
-    smtp_port: int = _env_int("EXCEL_VOUCHER_SMTP_PORT", 587)
+    smtp_host: str = _env("EXCEL_VOUCHER_SMTP_HOST", "35.216.76.148")
+    smtp_port: int = _env_int("EXCEL_VOUCHER_SMTP_PORT", 25)
     smtp_user: str = _env("EXCEL_VOUCHER_SMTP_USER", "")
     smtp_password: str = _env("EXCEL_VOUCHER_SMTP_PASSWORD", "")
-    smtp_from: str = _env("EXCEL_VOUCHER_SMTP_FROM", "")
+    smtp_from: str = _env("EXCEL_VOUCHER_SMTP_FROM", "admpdm@dae-seung.co.kr")
     smtp_starttls: bool = _env_bool("EXCEL_VOUCHER_SMTP_STARTTLS", True)
     mail_outbox_dir: Path = Path(_env("EXCEL_VOUCHER_MAIL_OUTBOX_DIR", str(data_dir / "mail_outbox")))
 

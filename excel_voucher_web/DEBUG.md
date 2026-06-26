@@ -65,3 +65,11 @@
 - 완료 메일은 Agent 결과에 `print_submitted=true`가 있을 때 발송한다.
 - SMTP 미설정 시 메일은 `data/mail_outbox` JSON으로 보관된다.
 - 검증: `py_compile` 통과, PowerShell scriptblock parse 통과, `pytest tests -q` 결과 5 passed, `node --check app/static/app.js` 통과, `/api/settings` TestClient smoke 200.
+
+## 2026-06-26 기존 메일/DB 기본값 반영
+- 그룹웨어 DB 기본 계정은 `dlpadmin2`를 사용하도록 반영했다.
+- 기존 회계업무 WEB의 메일 기본값을 참고해 SMTP 기본값을 `35.216.76.148:25`, 발신자 `admpdm@dae-seung.co.kr`로 맞췄다.
+- 기존 전산 코드처럼 SMTP 서버가 STARTTLS를 지원할 때만 TLS를 시작하도록 수정했다.
+- 실제 DB 컬럼 확인: `gw_emp.EmpID`, `gw_emp.GwID`, `gw_emp.Use_yn`, `ds_t_emp.EmpID`, `ds_t_emp.kor_name`, `ds_t_emp.bu_code`, `ds_t_emp.DeptName`, `ds_t_emp.use_yn`.
+- 재정 하위 부서 활성 계정 조회 결과 17건 확인.
+- `gw_emp`에 직접 메일 주소 컬럼은 없어서 `GwID@dae-seung.co.kr` 형식으로 수신 메일을 만든다.

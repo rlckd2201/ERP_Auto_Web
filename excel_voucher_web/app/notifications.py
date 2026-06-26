@@ -46,8 +46,10 @@ def send_mail(to_addr: str, subject: str, body: str) -> dict[str, Any]:
     if not settings.smtp_host or not from_addr:
         return _write_outbox(message, reason="SMTP is not configured")
     with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
-        if settings.smtp_starttls:
+        smtp.ehlo()
+        if settings.smtp_starttls and smtp.has_extn("STARTTLS"):
             smtp.starttls()
+            smtp.ehlo()
         if settings.smtp_user:
             smtp.login(settings.smtp_user, settings.smtp_password)
         smtp.send_message(message)
