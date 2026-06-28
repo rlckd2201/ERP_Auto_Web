@@ -83,6 +83,14 @@ def test_build_voucher_payload_adds_bank_credit_line(tmp_path: Path) -> None:
     assert legacy_from_lines["erp_line_management_items"][0] == {"거래처": "A001"}
     assert legacy_from_lines["erp_line_management_items"][-1]["계좌번호"] == "140-000-948562"
 
+    clipboard_only_payload = payload.model_dump(mode="json")
+    clipboard_only_payload.pop("erp_line_management_items")
+    clipboard_only_payload.pop("lines")
+    legacy_from_clipboard = _legacy_form_data(clipboard_only_payload)
+    assert legacy_from_clipboard["erp_line_management_items"][0] == {"거래처": "A001"}
+    assert legacy_from_clipboard["erp_line_management_items"][1] == {"거래처": "B002"}
+    assert legacy_from_clipboard["erp_line_management_items"][-1]["계좌번호"] == "140-000-948562"
+
 
 def test_build_voucher_payload_uses_cash_sheet_rows_only(tmp_path: Path) -> None:
     source = tmp_path / "cash.xlsx"

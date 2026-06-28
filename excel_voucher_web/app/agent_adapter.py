@@ -4,6 +4,7 @@ import html
 import json
 import logging
 import os
+import re
 import subprocess
 import sys
 import time
@@ -311,27 +312,62 @@ def _fallback_bank_management_items(payload: dict[str, Any]) -> dict[str, str]:
     return {}
 
 
+def _clean_management_items(value: Any) -> dict[str, str]:
+    if not isinstance(value, dict):
+        return {}
+    return {
+        str(key).strip(): str(item_value or "").strip()
+        for key, item_value in value.items()
+        if str(key or "").strip()
+    }
+
+
+def _has_management_value(value: dict[str, str]) -> bool:
+    return any(str(item_value or "").strip() for item_value in value.values())
+
+
+def _clipboard_account_name(row: Any) -> str:
+    return str(row or "").split("\t", 1)[0].strip()
+
+
+def _clipboard_vendor_value(row: Any) -> str:
+    text = str(row or "").strip()
+    if not text:
+        return ""
+    summary = text.split("\t")[-1].strip()
+    matches = re.findall(r"\(([^()\t\r\n]+)\)", summary or text)
+    if not matches:
+        return ""
+    return matches[-1].strip()
+
+
 def _fallback_line_management_items(payload: dict[str, Any]) -> list[dict[str, str]]:
     existing = payload.get("erp_line_management_items") or payload.get("line_management_items")
-    if isinstance(existing, list) and any(isinstance(item, dict) and item for item in existing):
-        return [dict(item) if isinstance(item, dict) else {} for item in existing]
-
-    lines = payload.get("lines") or []
-    if not isinstance(lines, list):
-        return []
+    existing_items = existing if isinstance(existing, list) else []
+    lines_raw = payload.get("lines") or []
+    lines = lines_raw if isinstance(lines_raw, list) else []
+    rows = [str(row) for row in payload.get("erp_clipboard_rows") or []]
+    row_count = max(len(existing_items), len(lines), len(rows))
 
     fallback: list[dict[str, str]] = []
-    for line in lines:
-        if not isinstance(line, dict):
-            fallback.append({})
+    for idx in range(row_count):
+        existing_item = _clean_management_items(existing_items[idx]) if idx < len(existing_items) else {}
+        if _has_management_value(existing_item):
+            fallback.append(existing_item)
             continue
-        explicit = line.get("management_items")
-        if isinstance(explicit, dict) and explicit:
-            fallback.append(dict(explicit))
+
+        line = lines[idx] if idx < len(lines) and isinstance(lines[idx], dict) else {}
+        row = rows[idx] if idx < len(rows) else ""
+        explicit = _clean_management_items(line.get("management_items")) if isinstance(line, dict) else {}
+        if _has_management_value(explicit):
+            fallback.append(explicit)
             continue
-        account_name = line.get("account_name") or ""
+
+        account_name = line.get("account_name") or _clipboard_account_name(row)
         if _is_payable_account(account_name):
             vendor_value = str(line.get("vendor_code") or line.get("vendor_name") or "").strip()
+            if not vendor_value:
+                vendor_value = _clipboard_vendor_value(row)
             fallback.append({"거래처": vendor_value} if vendor_value else {})
             continue
         if _is_bank_account(account_name):
