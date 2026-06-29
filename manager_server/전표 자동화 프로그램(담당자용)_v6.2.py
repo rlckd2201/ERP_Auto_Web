@@ -2863,7 +2863,7 @@ class ERPLoginBot:
                 except Exception:
                     return False
 
-            def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
+            def _input_vendor_by_popup_keyboard(x, y, label, search_text, search_label, up_presses):
                 popup = None
                 popup = _find_vendor_popup(timeout=0.70)
                 if popup:
@@ -2889,26 +2889,35 @@ class ERPLoginBot:
                 )
                 time.sleep(max(0.45, mgmt_focus_wait))
 
-                # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
-                # 순서: 검색칸 전체선택 -> 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.
+                # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 키보드 흐름을 사용합니다.
+                # 재정 엑셀 전표는 거래처코드 검색이어야 하므로 보정 Up 횟수를 별도로 받습니다.
                 pyautogui.hotkey('ctrl', 'a')
                 _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
                 time.sleep(max(0.18, mgmt_key_wait))
-                _paste_text_fast(target_biz_no, f"{label} 거래처 사업자번호")
+                _paste_text_fast(search_text, f"{label} 거래처 {search_label}")
                 time.sleep(max(0.55, vendor_popup_open_wait))
-                self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 붙여넣기: {target_biz_no}")
+                self.logger.info(f"  [MGMT-XY] {label}: 거래처 {search_label} 붙여넣기: {search_text}")
                 pyautogui.press('tab', presses=4, interval=0.08)
                 time.sleep(mgmt_key_wait)
                 pyautogui.press('down', presses=5, interval=0.08)
                 time.sleep(mgmt_key_wait)
-                pyautogui.press('up', presses=1, interval=0.08)
+                pyautogui.press('up', presses=max(1, int(up_presses)), interval=0.08)
                 time.sleep(mgmt_key_wait)
                 pyautogui.press('tab', presses=3, interval=0.08)
                 time.sleep(mgmt_key_wait)
                 pyautogui.press('enter', presses=2, interval=0.12)
                 time.sleep(ERP_FORM_WAIT)
-                self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 키보드 시퀀스 확정(Enter 2회): {target_biz_no}")
+                self.logger.info(
+                    f"  [MGMT-XY] {label}: 거래처 {search_label} 키보드 시퀀스 확정"
+                    f"(Up {max(1, int(up_presses))}, Enter 2회): {search_text}"
+                )
                 return True
+
+            def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
+                return _input_vendor_by_popup_keyboard(x, y, label, target_biz_no, "사업자번호", 1)
+
+            def _input_vendor_by_code_keyboard(x, y, label, vendor_code):
+                return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처코드", 2)
 
             def _input_vendor_value_xy(x, y, label):
                 if not vendor_name and not vendor_target_biz_no:
@@ -3002,6 +3011,14 @@ class ERPLoginBot:
                         y += 20
                         continue
                     value_x, value_y = _management_value_xy(item_name, y)
+                    item_key = re.sub(r"\s+", "", str(item_name or "")).lower()
+                    if item_key in ("거래처", "거래처코드", "업체코드", "vendor", "vendor_code"):
+                        if _input_vendor_by_code_keyboard(value_x, value_y, f"{row_no}행 {item_name}", text):
+                            y += 20
+                            continue
+                        self.logger.warning(
+                            f"  [MGMT-XY] {row_no}행 {item_name}: 거래처코드 팝업 입력 실패, 직접 입력 fallback: {text}"
+                        )
                     _input_value_xy(value_x, value_y, text, f"{row_no}행 {item_name}", enter_count=1, clear=True)
                     y += 20
                 self.logger.info(f"  [MGMT-XY] {row_no}행 명시 관리항목 입력 완료: {list(explicit_management.keys())}")
