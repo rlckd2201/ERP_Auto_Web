@@ -389,6 +389,20 @@ async function runAdminAgentCommand(command) {
   }
 }
 
+async function updateServerFromAdmin() {
+  const notice = document.querySelector("#adminToolNotice");
+  notice.className = "notice";
+  notice.textContent = "서버 최신 적용 중...";
+  try {
+    const data = await postJson("/api/admin/server-update");
+    const result = data.result || {};
+    notice.textContent = result.message || "서버 최신 적용 완료. 서버 재시작 후 반영됩니다.";
+  } catch (error) {
+    notice.className = "notice error";
+    notice.textContent = error.message;
+  }
+}
+
 async function resetJobsFromAdmin() {
   const notice = document.querySelector("#adminToolNotice");
   notice.className = "notice";
@@ -689,6 +703,7 @@ document.querySelector("#refreshButton").addEventListener("click", () => {
 });
 document.querySelector("#adminResetJobsButton").addEventListener("click", resetJobsFromAdmin);
 document.querySelector("#adminTailLogButton").addEventListener("click", () => runAdminAgentCommand("tail-log"));
+document.querySelector("#adminUpdateServerButton").addEventListener("click", updateServerFromAdmin);
 document.querySelector("#adminUpdateAgentButton").addEventListener("click", () => runAdminAgentCommand("update-agent"));
 document.querySelector("#adminRestartAgentButton").addEventListener("click", () => runAdminAgentCommand("restart-agent"));
 document.querySelector("#loginForm").addEventListener("submit", login);

@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import shutil
 import sqlite3
+import tempfile
 import uuid
+import zipfile
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import requests
 from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -36,6 +39,7 @@ app = FastAPI(title="Excel Voucher Web")
 store = JobStore(settings.db_path)
 account_store = AccountStore(settings.db_path, initial_password=settings.initial_password)
 STATIC_DIR = BASE_DIR / "app" / "static"
+DEFAULT_REPO_ZIP_URL = "https://github.com/rlckd2201/ERP_Auto_Web/archive/refs/heads/main.zip"
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -73,6 +77,30 @@ def _sync_admin_user_from_legacy() -> None:
         must_change_password=bool((legacy_admin or {}).get("must_change_password", True)),
         overwrite_password=bool(legacy_admin),
     )
+
+
+def _update_server_files(zip_url: str = DEFAULT_REPO_ZIP_URL) -> dict[str, Any]:
+    repo_root = BASE_DIR.parent
+    with tempfile.TemporaryDirectory(prefix="excel_voucher_server_update_") as temp_name:
+        temp = Path(temp_name)
+        zip_path = temp / "ERP_Auto_Web.zip"
+        response = requests.get(zip_url, timeout=300)
+        response.raise_for_status()
+        zip_path.write_bytes(response.content)
+        with zipfile.ZipFile(zip_path) as archive:
+            archive.extractall(temp)
+        extracted = temp / "ERP_Auto_Web-main"
+        if not extracted.exists():
+            raise RuntimeError("GitHub ZIP 압축 해제 결과에서 ERP_Auto_Web-main 폴더를 찾지 못했습니다.")
+        shutil.copytree(extracted / "excel_voucher_web", BASE_DIR, dirs_exist_ok=True)
+        manager_source = extracted / "manager_server"
+        if manager_source.exists():
+            shutil.copytree(manager_source, repo_root / "manager_server", dirs_exist_ok=True)
+    return {
+        "message": "서버 파일 최신 적용 완료. 실행 중인 서버 프로세스는 재시작 후 새 코드가 반영됩니다.",
+        "updated_root": str(repo_root),
+        "zip_url": zip_url,
+    }
 
 
 @app.on_event("startup")
@@ -532,6 +560,16 @@ def api_admin_reset_jobs(payload: AdminResetJobsRequest, request: Request) -> di
                 item.unlink(missing_ok=True)
             upload_count += 1
     return {"ok": True, "cleared": {**cleared, "uploads": upload_count}}
+
+
+@app.post("/api/admin/server-update")
+def api_admin_server_update(request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    try:
+        result = _update_server_files()
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"서버 최신 적용 실패: {exc}") from exc
+    return {"ok": True, "result": result}
 
 
 @app.post("/api/admin/agent-commands")
