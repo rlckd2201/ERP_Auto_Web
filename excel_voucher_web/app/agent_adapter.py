@@ -473,6 +473,7 @@ def _run_real_erp_voucher_task(
     os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print to PDF")
     os.environ["ERP_GRID_COORD_FIRST"] = "0"
     os.environ["ERP_ADD_ROW_COORD_FIRST"] = "0"
+    os.environ["ERP_FORM_COORD_FIRST"] = "0"
     os.environ["ERP_VERIFY_GRID_PASTE"] = "1"
     os.environ["ERP_NEW_CLICK_COUNT"] = "2"
 

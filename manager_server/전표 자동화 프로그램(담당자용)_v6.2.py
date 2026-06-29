@@ -1372,6 +1372,11 @@ class ERPLoginBot:
         """
         original_clipboard = pyperclip.paste()
         form_data = getattr(self.manager.main_app, 'data', {})
+        form_clipboard_rows = form_data.get('erp_clipboard_rows') or []
+        if isinstance(form_clipboard_rows, list) and form_clipboard_rows:
+            original_clipboard = "\r\n".join(str(row) for row in form_clipboard_rows)
+            pyperclip.copy(original_clipboard)
+            self.logger.info(f"[폼세팅] form_data ERP clipboard rows restored: {len(form_clipboard_rows)}")
         site_name    = form_data.get('site_name', '')
         invoice_date = form_data.get('invoice_date', '')
         if not invoice_date:
@@ -1466,7 +1471,10 @@ class ERPLoginBot:
                 try:
                     aid = b.element_info.automation_id or ''
                     nm  = b.window_text() or ''
-                    if aid == 'New' or '신규' in nm:
+                    nm_norm = _norm_text(nm)
+                    if "복사" in nm_norm or "저장" in nm_norm:
+                        continue
+                    if aid == 'New' or nm_norm == _norm_text('신규'):
                         btn_new = b; break
                 except: pass
             if btn_new and btn_new.is_visible():
@@ -1718,7 +1726,7 @@ class ERPLoginBot:
             combo = _find_acc_unit_combo()
             if combo:
                 checks.append(_control_text(combo))
-            near = _find_near_control(493, 124, ("ComboBox", "Edit", "Text"))
+            near = _find_near_control(237, 124, ("ComboBox", "Edit", "Text"))
             if near:
                 checks.append(_control_text(near))
             for actual in checks:
@@ -2139,16 +2147,16 @@ class ERPLoginBot:
                         if combo:
                             combo.click_input()
                         else:
-                            _click_form_xy(493, 124, "회계단위 드롭다운")
+                            _click_form_xy(237, 124, "회계단위 드롭다운")
                         pyautogui.hotkey("alt", "down")
                     elif method == "f4":
                         if combo:
                             combo.click_input()
                         else:
-                            _click_form_xy(493, 124, "회계단위 드롭다운")
+                            _click_form_xy(237, 124, "회계단위 드롭다운")
                         pyautogui.press("f4")
                     elif method == "xy-arrow":
-                        _click_form_xy(493, 124, "회계단위 드롭다운")
+                        _click_form_xy(237, 124, "회계단위 드롭다운")
                     time.sleep(ERP_SETTLE_WAIT)
                     items = _visible_acc_unit_items()
                     if items:
@@ -3381,10 +3389,10 @@ class ERPLoginBot:
             self._force_erp_window_maximized(main_win, "좌표 전용 폼 세팅 전 ERP 메인 창")
             main_rect_cache = None
             self.logger.info("  [FORM-XY] 좌표 전용 폼 세팅 시작")
-            acc_unit_xy = (493, 124)
-            slip_unit_xy = (692, 124)
-            invoice_date_xy = (375, 149)
-            first_account_cell_xy = (398, 231)
+            acc_unit_xy = (237, 124)
+            slip_unit_xy = (512, 124)
+            invoice_date_xy = (237, 149)
+            first_account_cell_xy = (229, 239)
 
             # 1. 신규 버튼은 폼 진입 직후 상단 공통 초기화 단계에서 처리합니다.
             # 2. 전표관리단위: 사업장 코드를 먼저 입력해서 열린 메뉴/포커스를 정리합니다.
@@ -3498,7 +3506,7 @@ class ERPLoginBot:
             # 화면 좌표 fallback: 이미지 기준 회계단위 콤보박스 위치
             try:
                 self.logger.info(f"  [FORM-XY] 회계단위 좌표 fallback 시작: {site_name}")
-                _click_form_xy(493, 124, "회계단위 드롭다운 화살표")
+                _click_form_xy(237, 124, "회계단위 드롭다운 화살표")
                 time.sleep(0.4)
                 picked = False
                 for w in Desktop(backend="uia").windows():
@@ -3514,7 +3522,7 @@ class ERPLoginBot:
                     if picked: break
                 if not picked:
                     self.logger.warning(f"  [FORM-XY] 회계단위 목록에서 '{site_name}' 미발견. 입력 fallback 실행")
-                    _paste_form_xy(417, 124, site_name, "회계단위", clear=True, enter=True)
+                    _paste_form_xy(237, 124, site_name, "회계단위", clear=True, enter=True)
             except Exception as e:
                 self.logger.warning(f"  [FORM-XY] 회계단위 fallback 실패: {e}")
 
@@ -3552,7 +3560,7 @@ class ERPLoginBot:
 
             # 화면 좌표 fallback: 이미지 기준 전표관리단위 입력칸
             try:
-                _paste_form_xy(850, 154, site_name, "전표관리단위", clear=True, tab=True)
+                _paste_form_xy(512, 124, site_name, "전표관리단위", clear=True, tab=True)
             except Exception as e:
                 self.logger.warning(f"  [FORM-XY] 전표관리단위 fallback 실패: {e}")
 
