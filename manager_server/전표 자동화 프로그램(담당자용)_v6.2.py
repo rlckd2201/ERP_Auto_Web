@@ -1407,10 +1407,12 @@ class ERPLoginBot:
         fast_input = _env_flag("ERP_FAST_INPUT", "0")
         fast_field_verify = _env_flag("ERP_FAST_FIELD_VERIFY", "0")
         fast_management = _env_flag("ERP_FAST_MANAGEMENT", "0")
+        strict_form_steps = _env_flag("ERP_STRICT_FORM_STEPS", "0")
         verbose_keysafe = _env_flag("ERP_VERBOSE_KEYSAFE", "0")
         verbose_management_clear = _env_flag("ERP_VERBOSE_MGMT_CLEAR", "0")
         quick_wait = 0.05 if fast_input else 0.10
         critical_field_wait = max(0.12, float(os.getenv("ERP_CRITICAL_FIELD_WAIT", "0.18") or "0.18"))
+        form_step_wait = max(0.0, float(os.getenv("ERP_FORM_STEP_WAIT", "0.0") or "0.0"))
         mgmt_key_default = "0.08" if fast_management else "0.16"
         mgmt_commit_default = "0.14" if fast_management else "0.26"
         mgmt_focus_default = "0.10" if fast_management else "0.20"
@@ -1840,6 +1842,32 @@ class ERPLoginBot:
                 return True
             _fail_form(f"{label} 검증 실패: expected={expected}, actual={actual}")
 
+        def _verify_anchor_field_retry(label, expected, fallback_xy, date_mode=False, attempts=1):
+            last_error = None
+            for attempt in range(max(1, attempts)):
+                try:
+                    return _verify_anchor_field(label, expected, fallback_xy, date_mode=date_mode)
+                except Exception as e:
+                    last_error = e
+                    if attempt >= attempts - 1:
+                        break
+                    self.logger.warning(f"  [FORM-VERIFY] {label} 검증 재시도 대기 ({attempt + 1}/{attempts}): {e}")
+                    time.sleep(critical_field_wait)
+            raise last_error
+
+        def _verify_field_xy_retry(x, y, expected, label, date_mode=False, attempts=1):
+            last_error = None
+            for attempt in range(max(1, attempts)):
+                try:
+                    return _verify_field_xy(x, y, expected, label, date_mode=date_mode)
+                except Exception as e:
+                    last_error = e
+                    if attempt >= attempts - 1:
+                        break
+                    self.logger.warning(f"  [FORM-VERIFY] {label} 좌표 검증 재시도 대기 ({attempt + 1}/{attempts}): {e}")
+                    time.sleep(critical_field_wait)
+            raise last_error
+
         def _type_anchor_field(label, text, fallback_xy, clear=True, enter=False, tab=False, date_mode=False):
             is_critical = label in ("전표관리단위", "회계일")
             if is_critical:
@@ -1871,18 +1899,32 @@ class ERPLoginBot:
                 pyautogui.press('tab')
                 if is_critical:
                     time.sleep(critical_field_wait)
+            if is_critical and form_step_wait:
+                time.sleep(form_step_wait)
             if used_anchor:
                 self.logger.info(f"  [FORM-ANCHOR] {label} input complete: {text}")
                 if is_critical and fast_field_verify:
                     self.logger.info(f"  [FORM-VERIFY] {label} fast verify skipped after stable wait: {text}")
                 else:
-                    _verify_anchor_field(label, text, fallback_xy, date_mode=date_mode)
+                    _verify_anchor_field_retry(
+                        label,
+                        text,
+                        fallback_xy,
+                        date_mode=date_mode,
+                        attempts=3 if (strict_form_steps and is_critical) else 1,
+                    )
             else:
                 self.logger.info(f"  [FORM-FAST] {label} input complete: {text}")
                 if fast_field_verify:
                     self.logger.info(f"  [FORM-VERIFY] {label} fast verify skipped: {text}")
                 else:
-                    _verify_field_xy(*fallback_xy, text, label, date_mode=date_mode)
+                    _verify_field_xy_retry(
+                        *fallback_xy,
+                        text,
+                        label,
+                        date_mode=date_mode,
+                        attempts=3 if (strict_form_steps and is_critical) else 1,
+                    )
             if is_critical:
                 self.logger.info(f"  [FORM-STEP] {label} 입력 완료: {text}")
 
@@ -3398,7 +3440,7 @@ class ERPLoginBot:
             # 2. 전표관리단위: 사업장 코드를 먼저 입력해서 열린 메뉴/포커스를 정리합니다.
             if site_name:
                 slip_unit = _site_code(site_name)
-                _type_anchor_field("전표관리단위", slip_unit, slip_unit_xy, clear=True, enter=True, tab=True)
+                _type_anchor_field("전표관리단위", slip_unit, slip_unit_xy, clear=True, enter=True, tab=False)
 
             # 3. 회계단위: 전표관리단위 입력 후 드롭박스를 열어 사업장을 선택합니다.
             if site_name:

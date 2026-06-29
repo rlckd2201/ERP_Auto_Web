@@ -476,6 +476,11 @@ def _run_real_erp_voucher_task(
     os.environ["ERP_FORM_COORD_FIRST"] = "0"
     os.environ["ERP_VERIFY_GRID_PASTE"] = "1"
     os.environ["ERP_NEW_CLICK_COUNT"] = "2"
+    os.environ["ERP_FAST_INPUT"] = "0"
+    os.environ["ERP_FAST_FIELD_VERIFY"] = "0"
+    os.environ["ERP_STRICT_FORM_STEPS"] = "1"
+    os.environ["ERP_CRITICAL_FIELD_WAIT"] = "0.8"
+    os.environ["ERP_FORM_STEP_WAIT"] = "0.8"
 
     erp_runner = _load_web_erp_runner()
     import pyperclip
