@@ -2266,6 +2266,127 @@ class ERPLoginBot:
             grid_paste_state["verified"] = True
             self.logger.info(f"  [FORM-VERIFY] 그리드 붙여넣기 검증 완료: {expected}")
 
+        def _management_grid_snapshot():
+            main_rect = _main_rect()
+            header_label = None
+            header_value = None
+            item_rows = []
+            item_needles = {
+                _norm_text("계좌번호"),
+                _norm_text("금융기관지점"),
+                _norm_text("거래처"),
+                _norm_text("증빙"),
+                _norm_text("공급가액"),
+                _norm_text("거래일"),
+                _norm_text("사업자번호"),
+                _norm_text("프로젝트코드"),
+            }
+            for ctrl in _iter_visible():
+                try:
+                    text = (_control_text(ctrl) or ctrl.window_text() or "").strip()
+                    norm = _norm_text(text)
+                    if not norm:
+                        continue
+                    rect = ctrl.rectangle()
+                    center_x = (rect.left + rect.right) // 2
+                    center_y = (rect.top + rect.bottom) // 2
+                    rel_x = center_x - main_rect.left
+                    rel_y = center_y - main_rect.top
+                    if rel_x < 580 or rel_y < 300:
+                        continue
+                    row = {
+                        "text": text,
+                        "norm": norm,
+                        "rect": rect,
+                        "rel_x": rel_x,
+                        "rel_y": rel_y,
+                    }
+                    if norm == _norm_text("관리항목"):
+                        header_label = row
+                    elif norm == _norm_text("관리항목값"):
+                        header_value = row
+                    elif norm in item_needles:
+                        item_rows.append(row)
+                except:
+                    pass
+            item_rows.sort(key=lambda row: (row["rel_y"], row["rel_x"]))
+            return {
+                "header_label": header_label,
+                "header_value": header_value,
+                "items": item_rows,
+                "labels": [row["text"] for row in item_rows],
+                "label_norms": {row["norm"] for row in item_rows},
+            }
+
+        def _wait_for_management_grid_ready(context="Excel paste"):
+            ready_needles = {
+                _norm_text("계좌번호"),
+                _norm_text("금융기관지점"),
+                _norm_text("거래처"),
+            }
+            min_wait = max(8.0, min(35.0, row_count * 0.10))
+            timeout = max(min_wait + 30.0, min(240.0, row_count * 0.75))
+            end_at = time.time() + timeout
+            started = time.time()
+            next_log = 0.0
+            last_snapshot = None
+            while time.time() < end_at:
+                elapsed = time.time() - started
+                snapshot = _management_grid_snapshot()
+                last_snapshot = snapshot
+                labels = snapshot.get("label_norms") or set()
+                has_ready_label = bool(labels & ready_needles)
+                has_value_header = bool(snapshot.get("header_value"))
+                if elapsed >= min_wait and has_ready_label:
+                    self.logger.info(
+                        "  [FORM-VERIFY] 하단 관리항목 표시 감지: "
+                        f"context={context}, rows={row_count}, elapsed={elapsed:.1f}s, "
+                        f"value_header={has_value_header}, labels={snapshot.get('labels')}"
+                    )
+                    return snapshot
+                if elapsed >= next_log:
+                    self.logger.info(
+                        "  [FORM-VERIFY] 하단 관리항목 표시 대기 중: "
+                        f"context={context}, elapsed={elapsed:.1f}s/{timeout:.1f}s, "
+                        f"labels={snapshot.get('labels')}"
+                    )
+                    next_log = elapsed + 10.0
+                time.sleep(1.0)
+            _fail_form(
+                "하단 관리항목 표시 대기 실패: "
+                f"context={context}, timeout={timeout:.1f}s, "
+                f"last_labels={(last_snapshot or {}).get('labels')}"
+            )
+
+        def _management_value_xy(item_name, fallback_y):
+            target = _norm_text(item_name)
+            snapshot = None
+            main_rect = _main_rect()
+            for attempt in range(8):
+                snapshot = _management_grid_snapshot()
+                value_header = snapshot.get("header_value")
+                for row in snapshot.get("items") or []:
+                    row_norm = row.get("norm") or ""
+                    if not target or (target != row_norm and target not in row_norm and row_norm not in target):
+                        continue
+                    if value_header:
+                        value_x = value_header["rel_x"]
+                    else:
+                        rect = row["rect"]
+                        value_x = min(1450, max(820, (rect.right - main_rect.left) + 260))
+                    value_y = row["rel_y"]
+                    self.logger.info(
+                        f"  [MGMT-ANCHOR] {item_name} 현재 위치 기준 입력 좌표: "
+                        f"rel=({value_x},{value_y}), labels={snapshot.get('labels')}"
+                    )
+                    return int(value_x), int(value_y)
+                time.sleep(0.25)
+            self.logger.warning(
+                f"  [MGMT-ANCHOR] {item_name} 위치 미검출, fallback 사용: rel=(1118,{fallback_y}), "
+                f"labels={(snapshot or {}).get('labels')}"
+            )
+            return 1118, fallback_y
+
         def _select_acc_unit_by_coord(target_site):
             order = ["P1공장", "P2공장", "P3공장", "P4공장", "D1공장", "D2공장", "D3공장", "일강 1공장", "일강 2공장", "제이엠", "더원"]
             key = _acc_unit_display(target_site)
@@ -2847,7 +2968,8 @@ class ERPLoginBot:
                         self.logger.info(f"  [MGMT-XY] {row_no}행 {item_name} 값 없음: 스킵")
                         y += 20
                         continue
-                    _input_value_xy(1118, y, text, f"{row_no}행 {item_name}", enter_count=1, clear=True)
+                    value_x, value_y = _management_value_xy(item_name, y)
+                    _input_value_xy(value_x, value_y, text, f"{row_no}행 {item_name}", enter_count=1, clear=True)
                     y += 20
                 self.logger.info(f"  [MGMT-XY] {row_no}행 명시 관리항목 입력 완료: {list(explicit_management.keys())}")
 
@@ -3566,22 +3688,10 @@ class ERPLoginBot:
             pyautogui.hotkey('ctrl', 'v')
             self.logger.info("  [FORM-XY] 그리드 좌표 붙여넣기 완료")
             try:
-                paste_wait = mgmt_after_grid_paste_wait
                 if excel_copy_used:
-                    dynamic_wait = max(20.0, min(90.0, row_count * 0.18))
-                    configured_wait = float(os.getenv("ERP_EXCEL_GRID_PASTE_WAIT", "0") or "0")
-                    paste_wait = max(
-                        paste_wait,
-                        dynamic_wait,
-                        configured_wait,
-                    )
-                time.sleep(paste_wait)
-                if excel_copy_used:
-                    self.logger.info(
-                        f"  [FORM-VERIFY] Excel 범위 붙여넣기 경로는 클립보드 재검증을 생략합니다. "
-                        f"rows={row_count}, wait={paste_wait:.1f}s"
-                    )
+                    _wait_for_management_grid_ready("Excel range paste")
                 else:
+                    time.sleep(mgmt_after_grid_paste_wait)
                     _verify_grid_paste_or_fail(first_account_cell_xy)
             finally:
                 if excel_copy_used:
