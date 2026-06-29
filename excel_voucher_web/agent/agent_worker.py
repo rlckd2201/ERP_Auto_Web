@@ -266,6 +266,7 @@ def _tail_log_admin_loop(
     verify_tls: bool,
     print_mode: str,
     printer_name: str,
+    print_wait_seconds: float,
     erp_mode: str,
     output_dir: Path,
     interval: int,
@@ -273,27 +274,51 @@ def _tail_log_admin_loop(
     session = requests.Session()
     while True:
         heartbeat = _heartbeat(agent_id, client_ip, print_mode, printer_name, erp_mode)
-        heartbeat["capabilities"]["admin_commands"] = ["tail-log"]
-        heartbeat["capabilities"]["admin_worker"] = "tail-log"
+        heartbeat["capabilities"]["admin_commands"] = ["tail-log", "update-agent", "restart-agent"]
+        heartbeat["capabilities"]["admin_worker"] = "background"
         try:
             _post(session, server, "/api/agent/heartbeat", heartbeat, verify_tls=verify_tls)
             admin_payload = _post(session, server, "/api/agent/admin/next", heartbeat, verify_tls=verify_tls)
             admin_command = admin_payload.get("command")
             if admin_command:
                 command_id = str(admin_command.get("id") or "")
-                result = _latest_agent_log(output_dir)
-                _post(
-                    session,
-                    server,
-                    f"/api/agent/admin/{command_id}/complete",
-                    {"agent_id": agent_id, "ok": True, "result": result},
-                    verify_tls=verify_tls,
-                )
-                print(f"admin tail-log completed {command_id}")
+                try:
+                    result = _execute_admin_command(
+                        admin_command,
+                        server=server,
+                        agent_id=agent_id,
+                        client_ip=client_ip,
+                        verify_tls=verify_tls,
+                        print_mode=print_mode,
+                        printer_name=printer_name,
+                        print_wait_seconds=print_wait_seconds,
+                        erp_mode=erp_mode,
+                        output_dir=output_dir,
+                    )
+                    _post(
+                        session,
+                        server,
+                        f"/api/agent/admin/{command_id}/complete",
+                        {"agent_id": agent_id, "ok": True, "result": result},
+                        verify_tls=verify_tls,
+                    )
+                    print(f"admin background command completed {command_id}: {admin_command.get('command')}")
+                except Exception as exc:
+                    try:
+                        _post(
+                            session,
+                            server,
+                            f"/api/agent/admin/{command_id}/complete",
+                            {"agent_id": agent_id, "ok": False, "error": str(exc)},
+                            verify_tls=verify_tls,
+                        )
+                    except requests.RequestException as report_exc:
+                        print(_connection_error_message(server, report_exc), file=sys.stderr)
+                    print(f"admin background command failed {command_id}: {exc}", file=sys.stderr)
         except requests.RequestException as exc:
             print(_connection_error_message(server, exc), file=sys.stderr)
         except Exception as exc:
-            print(f"admin tail-log worker failed: {exc}", file=sys.stderr)
+            print(f"admin background worker failed: {exc}", file=sys.stderr)
         time.sleep(max(2, interval))
 
 
@@ -323,6 +348,7 @@ def run_loop(
                 "verify_tls": verify_tls,
                 "print_mode": print_mode,
                 "printer_name": printer_name,
+                "print_wait_seconds": print_wait_seconds,
                 "erp_mode": erp_mode,
                 "output_dir": output_dir,
                 "interval": interval,
