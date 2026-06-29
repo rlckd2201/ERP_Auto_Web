@@ -39,6 +39,8 @@ class ManagerProfile:
     company_name: str
     agent_id: str
     agent_ip: str
+    enabled: bool = True
+    disabled_reason: str = ""
     erp_site_name: str = ""
     bank_account_name: str = "보통예금"
     bank_summary_name: str = "신한은행"
@@ -120,6 +122,8 @@ def manager_profiles() -> dict[str, ManagerProfile]:
             company_name="대승정밀",
             agent_id=agent_id,
             agent_ip=agent_ip,
+            enabled=False,
+            disabled_reason="ERP 계정과 보통예금 설정 확인 후 사용할 수 있습니다.",
         ),
         "ilgwang": ManagerProfile(
             key="ilgwang",
@@ -127,6 +131,8 @@ def manager_profiles() -> dict[str, ManagerProfile]:
             company_name="일강",
             agent_id=agent_id,
             agent_ip=agent_ip,
+            enabled=False,
+            disabled_reason="ERP 계정과 보통예금 설정 확인 후 사용할 수 있습니다.",
         ),
         "jm": ManagerProfile(
             key="jm",
@@ -134,6 +140,8 @@ def manager_profiles() -> dict[str, ManagerProfile]:
             company_name="제이엠",
             agent_id=agent_id,
             agent_ip=agent_ip,
+            enabled=False,
+            disabled_reason="ERP 계정과 보통예금 설정 확인 후 사용할 수 있습니다.",
         ),
     }
 

@@ -407,6 +407,37 @@ def _legacy_form_data(payload: dict[str, Any]) -> dict[str, Any]:
     return data
 
 
+def _apply_company_erp_credentials(payload: dict[str, Any], corp_info: dict[str, Any]) -> dict[str, Any]:
+    company_key = str(payload.get("company_key") or "").strip().lower()
+    if company_key != "daeseung":
+        return corp_info
+
+    user_id = os.getenv("EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID", "12240413").strip()
+    password = os.getenv("EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD", "").strip()
+    updated = dict(corp_info)
+    if user_id:
+        updated["user_id"] = user_id
+    if password:
+        updated["password"] = password
+    return updated
+
+
+def _validate_erp_runtime_info(install_info: dict[str, Any], corp_info: dict[str, Any], *, config_path: Path, install_key: str, corp_code: str) -> None:
+    exe_path = str(install_info.get("exe_path") or "").strip()
+    if not exe_path:
+        raise RuntimeError(
+            f"K-System 실행파일 경로가 비어 있습니다. config={config_path} section=INSTALL_{install_key} key=exe_path"
+        )
+    if not Path(exe_path).exists():
+        raise RuntimeError(
+            f"K-System 실행파일을 찾지 못했습니다. config={config_path} section=INSTALL_{install_key} exe_path={exe_path}"
+        )
+    if not str(corp_info.get("user_id") or "").strip():
+        raise RuntimeError(f"K-System 로그인 ID가 비어 있습니다. config={config_path} section=CORP_{corp_code}")
+    if not str(corp_info.get("password") or "").strip():
+        raise RuntimeError("대승 ERP 로그인 비밀번호가 설정되지 않았습니다. 243 Agent의 ERP 계정 설정을 확인하세요.")
+
+
 def _run_real_erp_voucher_task(
     task: dict[str, Any],
     *,
@@ -463,7 +494,16 @@ def _run_real_erp_voucher_task(
         main_app = erp_runner._MainAppShim(data, print_choice)
         manager = erp_runner._ManagerShim(legacy, main_app, logger)
         install_key, corp_code = erp_runner._corp_codes(str(data.get("site_name") or ""))
-        install_info, corp_info = erp_runner._validate_install_info(manager, install_key, corp_code)
+        install_info = manager.config_mgr.get_install_info(install_key)
+        corp_info = manager.config_mgr.get_corp_info(corp_code)
+        corp_info = _apply_company_erp_credentials(payload, corp_info)
+        _validate_erp_runtime_info(
+            install_info,
+            corp_info,
+            config_path=manager.config_path,
+            install_key=install_key,
+            corp_code=corp_code,
+        )
         erp_runner._configure_pyautogui_for_server(legacy)
         main_app.erp_job_id = job_id
         bot = legacy.ERPLoginBot(install_info, corp_info, corp_code, manager, logger)

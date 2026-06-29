@@ -8,6 +8,8 @@ param(
   [double]$PrintWaitSeconds = 3,
   [ValidateSet("dry-run", "real")]
   [string]$ErpMode = "dry-run",
+  [string]$DaeseungErpUserId = "",
+  [string]$DaeseungErpPassword = "",
   [switch]$Once,
   [switch]$InsecureSkipTlsVerify
 )
@@ -15,6 +17,13 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
+
+if ($DaeseungErpUserId) {
+  $env:EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID = $DaeseungErpUserId
+}
+if ($DaeseungErpPassword) {
+  $env:EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD = $DaeseungErpPassword
+}
 
 $Candidates = @(@(
   "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",

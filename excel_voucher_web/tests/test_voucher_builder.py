@@ -4,8 +4,8 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
-from app.agent_adapter import _legacy_form_data
-from app.settings import manager_profile
+from app.agent_adapter import _apply_company_erp_credentials, _legacy_form_data
+from app.settings import manager_profile, manager_profiles
 from app.voucher_builder import build_voucher_payload
 
 
@@ -112,3 +112,24 @@ def test_build_voucher_payload_uses_cash_sheet_rows_only(tmp_path: Path) -> None
     assert payload.lines[0].amount == 12000
     assert payload.lines[0].management_items == {"거래처": "A001"}
     assert payload.source_columns["amount"] == "수시결제현금!H"
+
+
+def test_only_daeseung_manager_is_enabled_for_upload() -> None:
+    profiles = manager_profiles()
+    assert profiles["daeseung"].enabled is True
+    assert profiles["daeseung_precision"].enabled is False
+    assert profiles["ilgwang"].enabled is False
+    assert profiles["jm"].enabled is False
+
+
+def test_daeseung_erp_credentials_can_be_overridden(monkeypatch) -> None:
+    monkeypatch.setenv("EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID", "test-user")
+    monkeypatch.setenv("EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD", "test-password")
+
+    corp_info = _apply_company_erp_credentials(
+        {"company_key": "daeseung"},
+        {"user_id": "old-user", "password": "old-password"},
+    )
+
+    assert corp_info["user_id"] == "test-user"
+    assert corp_info["password"] == "test-password"

@@ -288,6 +288,11 @@ def api_upload_voucher(
     elif user:
         requester = user.name or user.user_id
     manager = manager_profile(company_key)
+    if not manager.enabled:
+        raise HTTPException(
+            status_code=400,
+            detail=f"{manager.company_name} 전표 처리는 개발 예정입니다. {manager.disabled_reason}".strip(),
+        )
     filename = _safe_filename(file.filename or "upload.xlsx")
     accounting_date = (accounting_date or default_accounting_date()).strip()
     requester = (requester or "담당자").strip()

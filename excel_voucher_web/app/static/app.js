@@ -190,6 +190,19 @@ function canUseApp() {
   return Boolean(state.auth.user && !state.auth.user.must_change_password);
 }
 
+function updateUploadAvailability() {
+  const companyKey = document.querySelector("#companyKey");
+  const uploadButton = document.querySelector("#uploadButton");
+  const uploadNotice = document.querySelector("#uploadNotice");
+  const selected = companyKey.selectedOptions[0];
+  const disabled = Boolean(selected && selected.disabled);
+  uploadButton.disabled = disabled || state.uploading;
+  if (disabled && uploadNotice && !uploadNotice.textContent) {
+    uploadNotice.className = "notice error";
+    uploadNotice.textContent = selected.title || "선택한 담당자 기능은 개발 예정입니다.";
+  }
+}
+
 function applyAuthUi() {
   const authShell = document.querySelector("#authShell");
   const appShell = document.querySelector("#appShell");
@@ -221,6 +234,7 @@ function applyAuthUi() {
     requester.readOnly = false;
     companyKey.disabled = false;
   }
+  updateUploadAvailability();
 }
 
 async function loadSettings() {
@@ -232,7 +246,11 @@ async function loadSettings() {
   settings.managers.forEach((manager) => {
     const option = document.createElement("option");
     option.value = manager.key;
-    option.textContent = manager.label;
+    option.textContent = manager.enabled ? manager.label : `${manager.label} - 개발 예정`;
+    option.disabled = !manager.enabled;
+    if (manager.disabled_reason) {
+      option.title = manager.disabled_reason;
+    }
     select.appendChild(option);
   });
   applyAuthUi();
@@ -332,6 +350,12 @@ async function uploadVoucher(event) {
   const notice = document.querySelector("#uploadNotice");
   notice.className = "notice";
   notice.textContent = "";
+  const selected = document.querySelector("#companyKey").selectedOptions[0];
+  if (selected && selected.disabled) {
+    notice.className = "notice error";
+    notice.textContent = selected.title || "선택한 담당자 기능은 개발 예정입니다.";
+    return;
+  }
   button.disabled = true;
   state.uploading = true;
   renderTransientProgress("파일을 서버로 보내고 있습니다.", 8);
@@ -456,6 +480,12 @@ function initDropZone() {
 }
 
 document.querySelector("#uploadForm").addEventListener("submit", uploadVoucher);
+document.querySelector("#companyKey").addEventListener("change", () => {
+  const notice = document.querySelector("#uploadNotice");
+  notice.className = "notice";
+  notice.textContent = "";
+  updateUploadAvailability();
+});
 document.querySelector("#refreshButton").addEventListener("click", refreshJobs);
 document.querySelector("#loginForm").addEventListener("submit", login);
 document.querySelector("#changePasswordForm").addEventListener("submit", changePassword);

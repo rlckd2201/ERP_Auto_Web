@@ -829,6 +829,35 @@ class ERPLoginBot:
 
             # ── [중요] 기존 v6.0에서는 여기서 return True를 해서 내비게이션을 안했음 ──
             # 로그인 창이 닫히고 메인 화면이 뜰 때까지 대기 및 강력한 팝업 블라인드 킬러
+            def _window_text_blob(win):
+                parts = []
+                try:
+                    parts.append(win.window_text() or "")
+                except:
+                    pass
+                try:
+                    for ctrl in win.descendants():
+                        try:
+                            text = ctrl.window_text() or ""
+                            if text:
+                                parts.append(text)
+                        except:
+                            pass
+                except:
+                    pass
+                return " ".join(parts)
+
+            def _is_password_change_blocker(win):
+                blob = _window_text_blob(win)
+                compact = re.sub(r"\s+", "", blob).lower()
+                if not compact:
+                    return False
+                password_words = ("비밀번호", "암호", "password", "패스워드")
+                change_words = ("변경", "만료", "기간", "90", "초기화", "재설정", "change", "expired", "expire")
+                return any(word.lower() in compact for word in password_words) and any(
+                    word.lower() in compact for word in change_words
+                )
+
             main_win = None
             try:
                 for _ in range(12):  # 최대 12초 대기
@@ -838,6 +867,14 @@ class ERPLoginBot:
                         top_text = top.window_text() or ""
                         top_auto = top.element_info.automation_id or ""
                         main_keywords = [self.corp_info.get("name", ""), "K-System", "대승", "일강", "제이엠", "더원"]
+
+                        if top.is_visible() and _is_password_change_blocker(top):
+                            msg = (
+                                "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
+                                "대승 ERP 계정 비밀번호를 변경한 뒤 243 Agent의 ERP 비밀번호 설정을 갱신하세요."
+                            )
+                            self.logger.error(msg)
+                            return msg
 
                         if top.is_visible() and (top_auto == "mainwindow" or any(k and k in top_text for k in main_keywords)):
                             # 메인 화면이 확실하게 로드된 경우
@@ -851,6 +888,13 @@ class ERPLoginBot:
                                 top.set_focus()
                                 time.sleep(0.1)
                                 # 메인창에 N/ESC를 난사하지 않도록 팝업성 제목일 때만 fallback 키를 보냅니다.
+                                if _is_password_change_blocker(top):
+                                    msg = (
+                                        "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
+                                        "대승 ERP 계정 비밀번호를 변경한 뒤 243 Agent의 ERP 비밀번호 설정을 갱신하세요."
+                                    )
+                                    self.logger.error(msg)
+                                    return msg
                                 if any(k in top_text for k in ("비밀번호", "변경", "알림", "Message", "확인")):
                                     pyautogui.press("n")       # '아니오' 단축키
                                     pyautogui.press("escape")  # 취소 단축키
@@ -880,6 +924,13 @@ class ERPLoginBot:
                 except: pass
 
             if main_win:
+                if _is_password_change_blocker(main_win):
+                    msg = (
+                        "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
+                        "대승 ERP 계정 비밀번호를 변경한 뒤 243 Agent의 ERP 비밀번호 설정을 갱신하세요."
+                    )
+                    self.logger.error(msg)
+                    return msg
                 try:
                     self._force_erp_window_maximized(main_win, "메뉴 진입 전 ERP 메인 창")
                     time.sleep(ERP_BLOCK_WAIT)
