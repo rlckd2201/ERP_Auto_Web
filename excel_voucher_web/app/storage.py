@@ -91,8 +91,29 @@ class JobStore:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS agent_admin_commands (
+                    id TEXT PRIMARY KEY,
+                    command TEXT NOT NULL,
+                    target_agent_id TEXT NOT NULL DEFAULT '',
+                    status TEXT NOT NULL DEFAULT 'queued',
+                    payload_json TEXT NOT NULL DEFAULT '{}',
+                    result_json TEXT NOT NULL DEFAULT '{}',
+                    error TEXT NOT NULL DEFAULT '',
+                    created_by TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    claimed_at TEXT,
+                    finished_at TEXT
+                )
+                """
+            )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status, created_at)")
             conn.execute("CREATE INDEX IF NOT EXISTS idx_job_events_job_id ON job_events(job_id, id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_agent_admin_commands_status ON agent_admin_commands(status, created_at)"
+            )
 
     def create_job(
         self,
@@ -176,6 +197,14 @@ class JobStore:
                 (max(1, min(limit, 500)),),
             ).fetchall()
         return [self._row_to_job(row) for row in rows]
+
+    def clear_jobs(self) -> dict[str, int]:
+        with self.connect() as conn:
+            job_count = int(conn.execute("SELECT COUNT(*) FROM jobs").fetchone()[0] or 0)
+            event_count = int(conn.execute("SELECT COUNT(*) FROM job_events").fetchone()[0] or 0)
+            conn.execute("DELETE FROM job_events")
+            conn.execute("DELETE FROM jobs")
+        return {"jobs": job_count, "events": event_count}
 
     def list_events(self, job_id: str) -> list[JobEvent]:
         with self.connect() as conn:
@@ -336,3 +365,121 @@ class JobStore:
             )
             self._add_event_conn(conn, row["id"], "claimed", 15, f"자동 전표처리 PC 작업 시작: {agent_id}")
         return self.get_job(row["id"])
+
+    def create_agent_command(
+        self,
+        *,
+        command: str,
+        target_agent_id: str,
+        payload: dict[str, Any] | None,
+        created_by: str,
+    ) -> dict[str, Any]:
+        command_id = uuid.uuid4().hex[:12]
+        created = now_text()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO agent_admin_commands (
+                    id, command, target_agent_id, status, payload_json, created_by, created_at, updated_at
+                )
+                VALUES (?, ?, ?, 'queued', ?, ?, ?, ?)
+                """,
+                (
+                    command_id,
+                    str(command or ""),
+                    str(target_agent_id or ""),
+                    _json_dumps(payload or {}),
+                    str(created_by or ""),
+                    created,
+                    created,
+                ),
+            )
+        return self.get_agent_command(command_id)
+
+    def _row_to_agent_command(self, row: sqlite3.Row) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "command": row["command"] or "",
+            "target_agent_id": row["target_agent_id"] or "",
+            "status": row["status"] or "",
+            "payload": _json_loads(row["payload_json"]),
+            "result": _json_loads(row["result_json"]),
+            "error": row["error"] or "",
+            "created_by": row["created_by"] or "",
+            "created_at": row["created_at"] or "",
+            "updated_at": row["updated_at"] or "",
+            "claimed_at": row["claimed_at"] or "",
+            "finished_at": row["finished_at"] or "",
+        }
+
+    def get_agent_command(self, command_id: str) -> dict[str, Any]:
+        with self.connect() as conn:
+            row = conn.execute("SELECT * FROM agent_admin_commands WHERE id = ?", (command_id,)).fetchone()
+        if not row:
+            raise KeyError(command_id)
+        return self._row_to_agent_command(row)
+
+    def list_agent_commands(self, limit: int = 20) -> list[dict[str, Any]]:
+        with self.connect() as conn:
+            rows = conn.execute(
+                "SELECT * FROM agent_admin_commands ORDER BY datetime(created_at) DESC LIMIT ?",
+                (max(1, min(limit, 100)),),
+            ).fetchall()
+        return [self._row_to_agent_command(row) for row in rows]
+
+    def claim_next_agent_command(self, heartbeat: AgentHeartbeat, client_ip: str) -> dict[str, Any] | None:
+        agent_id = (heartbeat.agent_id or "").strip() or "unknown-agent"
+        effective_ip = (heartbeat.client_ip or client_ip or "").strip()
+        claimed = now_text()
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT * FROM agent_admin_commands
+                WHERE status = 'queued'
+                  AND (target_agent_id = '' OR target_agent_id = ?)
+                ORDER BY datetime(created_at) ASC
+                LIMIT 1
+                """,
+                (agent_id,),
+            ).fetchone()
+            if not row:
+                return None
+            conn.execute(
+                """
+                UPDATE agent_admin_commands
+                SET status = 'running', updated_at = ?, claimed_at = ?
+                WHERE id = ? AND status = 'queued'
+                """,
+                (claimed, claimed, row["id"]),
+            )
+        return self.get_agent_command(row["id"])
+
+    def complete_agent_command(
+        self,
+        command_id: str,
+        *,
+        ok: bool,
+        result: dict[str, Any] | None = None,
+        error: str = "",
+    ) -> dict[str, Any]:
+        finished = now_text()
+        with self.connect() as conn:
+            row = conn.execute("SELECT id FROM agent_admin_commands WHERE id = ?", (command_id,)).fetchone()
+            if not row:
+                raise KeyError(command_id)
+            conn.execute(
+                """
+                UPDATE agent_admin_commands
+                SET status = ?, result_json = ?, error = ?, updated_at = ?, finished_at = ?
+                WHERE id = ?
+                """,
+                (
+                    "done" if ok else "error",
+                    _json_dumps(result or {}),
+                    "" if ok else str(error or ""),
+                    finished,
+                    finished,
+                    command_id,
+                ),
+            )
+        return self.get_agent_command(command_id)

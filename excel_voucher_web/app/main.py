@@ -16,8 +16,11 @@ from .data_server import data_server_target_url, forward_job_to_data_server
 from .groupware_directory import fetch_finance_users, groupware_enabled
 from .models import (
     AgentCompleteRequest,
+    AgentAdminCommandCompleteRequest,
     AgentEventRequest,
     AgentHeartbeat,
+    AdminAgentCommandRequest,
+    AdminResetJobsRequest,
     ChangePasswordRequest,
     ErpCredentialRequest,
     ForgotPasswordRequest,
@@ -251,6 +254,13 @@ def _require_user(request: Request) -> AccountUser:
         raise HTTPException(status_code=401, detail="로그인이 필요합니다.")
     if not user.active:
         raise HTTPException(status_code=403, detail="비활성 계정입니다.")
+    return user
+
+
+def _require_admin(request: Request) -> AccountUser:
+    user = _require_user(request)
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="전산 관리자만 사용할 수 있습니다.")
     return user
 
 
@@ -503,6 +513,40 @@ def api_forward_job(job_id: str) -> dict[str, Any]:
     return {"ok": bool(forward_result.get("ok")), "forward": forward_result, "job": _public_job_dump(updated)}
 
 
+@app.get("/api/admin/agent-commands")
+def api_admin_agent_commands(request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    return {"ok": True, "commands": store.list_agent_commands(30)}
+
+
+@app.post("/api/admin/jobs/reset")
+def api_admin_reset_jobs(payload: AdminResetJobsRequest, request: Request) -> dict[str, Any]:
+    _require_admin(request)
+    cleared = store.clear_jobs()
+    upload_count = 0
+    if payload.clear_uploads and settings.upload_dir.exists():
+        for item in settings.upload_dir.iterdir():
+            if item.is_dir():
+                shutil.rmtree(item, ignore_errors=True)
+            else:
+                item.unlink(missing_ok=True)
+            upload_count += 1
+    return {"ok": True, "cleared": {**cleared, "uploads": upload_count}}
+
+
+@app.post("/api/admin/agent-commands")
+def api_admin_create_agent_command(payload: AdminAgentCommandRequest, request: Request) -> dict[str, Any]:
+    user = _require_admin(request)
+    target_agent_id = payload.target_agent_id.strip() or settings.target_agent_id
+    command = store.create_agent_command(
+        command=payload.command,
+        target_agent_id=target_agent_id,
+        payload=payload.payload,
+        created_by=user.user_id,
+    )
+    return {"ok": True, "command": command}
+
+
 @app.post("/api/agent/heartbeat")
 def api_agent_heartbeat(heartbeat: AgentHeartbeat, request: Request) -> dict[str, Any]:
     profile = store.record_heartbeat(heartbeat, _client_ip(request))
@@ -525,6 +569,27 @@ def api_agent_next(heartbeat: AgentHeartbeat, request: Request) -> dict[str, Any
             "voucher_url": f"/api/jobs/{job.id}/voucher",
         },
     }
+
+
+@app.post("/api/agent/admin/next")
+def api_agent_admin_next(heartbeat: AgentHeartbeat, request: Request) -> dict[str, Any]:
+    store.record_heartbeat(heartbeat, _client_ip(request))
+    command = store.claim_next_agent_command(heartbeat, _client_ip(request))
+    return {"ok": True, "command": command}
+
+
+@app.post("/api/agent/admin/{command_id}/complete")
+def api_agent_admin_complete(command_id: str, complete: AgentAdminCommandCompleteRequest) -> dict[str, Any]:
+    try:
+        command = store.complete_agent_command(
+            command_id,
+            ok=complete.ok,
+            result=complete.result,
+            error=complete.error,
+        )
+        return {"ok": True, "command": command}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Agent 명령을 찾을 수 없습니다.") from exc
 
 
 @app.post("/api/agent/jobs/{job_id}/event")

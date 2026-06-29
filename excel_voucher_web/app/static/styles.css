@@ -80,6 +80,7 @@ h2 {
   grid-template-areas:
     "upload"
     "detail"
+    "admin"
     "history";
   gap: 16px;
   width: min(1120px, calc(100% - 32px));
@@ -162,6 +163,10 @@ h2 {
 
 .historyPanel {
   grid-area: history;
+}
+
+.adminToolsPanel {
+  grid-area: admin;
 }
 
 .panelTitle {
@@ -287,7 +292,9 @@ select {
 }
 
 .textButton,
-.linkButton {
+.linkButton,
+.toolButton,
+.dangerButton {
   min-height: 32px;
   border: 1px solid var(--line);
   color: var(--text);
@@ -298,6 +305,23 @@ select {
 .linkButton {
   border: 0;
   color: var(--accent-strong);
+}
+
+.toolButton,
+.dangerButton {
+  min-height: 42px;
+  padding: 0 12px;
+  font-weight: 750;
+}
+
+.toolButton:hover {
+  border-color: var(--accent);
+}
+
+.dangerButton {
+  color: #ffffff;
+  border-color: var(--danger);
+  background: var(--danger);
 }
 
 .primaryButton:hover {
@@ -328,6 +352,68 @@ select {
 
 .notice.error {
   color: var(--danger);
+}
+
+.adminActionGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.adminCommandRows {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.adminCommandEmpty {
+  padding: 12px;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.adminCommandItem {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #fbfdfe;
+}
+
+.adminCommandItem summary {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) auto auto;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.adminCommandItem p {
+  margin-top: 8px;
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.adminCommandItem time {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.adminLogTail {
+  max-height: 280px;
+  margin: 10px 0 0;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+  background: #0f172a;
+  color: #e5edf0;
+  font-size: 12px;
+  line-height: 1.5;
 }
 
 .tableWrap {
@@ -588,6 +674,7 @@ tr.jobRow:hover {
 @media (max-width: 860px) {
   .formGrid,
   .detailGrid,
+  .adminActionGrid,
   .adminGrid,
   .stepList {
     grid-template-columns: 1fr 1fr;
@@ -606,8 +693,13 @@ tr.jobRow:hover {
 
   .formGrid,
   .detailGrid,
+  .adminActionGrid,
   .adminGrid,
   .stepList {
+    grid-template-columns: 1fr;
+  }
+
+  .adminCommandItem summary {
     grid-template-columns: 1fr;
   }
 

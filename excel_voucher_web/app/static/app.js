@@ -1,6 +1,7 @@
 const state = {
   selectedJobId: "",
   jobs: [],
+  adminCommands: [],
   uploading: false,
   auth: {
     auth_required: false,
@@ -183,6 +184,10 @@ async function postJson(url, payload = {}) {
   });
 }
 
+function isAdmin() {
+  return Boolean((state.auth.user || {}).is_admin);
+}
+
 async function erpCredentialStatus(companyKey) {
   return fetchJson(`/api/erp-credentials/${encodeURIComponent(companyKey)}`);
 }
@@ -216,10 +221,12 @@ function applyAuthUi() {
   const userName = document.querySelector("#userName");
   const requester = document.querySelector("#requester");
   const companyKey = document.querySelector("#companyKey");
+  const adminPanel = document.querySelector("#adminToolsPanel");
   const user = state.auth.user;
 
   appShell.hidden = !canUseApp();
   authShell.hidden = canUseApp();
+  adminPanel.hidden = !isAdmin();
   loginPanel.hidden = Boolean(user && user.must_change_password);
   changePasswordPanel.hidden = !(user && user.must_change_password);
   userBar.hidden = !user;
@@ -290,6 +297,96 @@ function askErpCredentials(status) {
       });
     };
   });
+}
+
+function commandTitle(command) {
+  const labels = {
+    "tail-log": "Agent 로그 가져오기",
+    "update-agent": "243 최신 적용",
+    "restart-agent": "Agent 재시작",
+  };
+  return labels[command] || command || "-";
+}
+
+function commandStatus(command) {
+  const labels = {
+    queued: "대기",
+    running: "실행 중",
+    done: "완료",
+    error: "실패",
+  };
+  return labels[command.status] || command.status || "-";
+}
+
+function renderAdminCommands(commands) {
+  state.adminCommands = commands || [];
+  const count = document.querySelector("#adminCommandCount");
+  const rows = document.querySelector("#adminCommandRows");
+  count.textContent = `${state.adminCommands.length}건`;
+  if (!state.adminCommands.length) {
+    rows.innerHTML = `<div class="adminCommandEmpty">실행 내역이 없습니다.</div>`;
+    return;
+  }
+  rows.innerHTML = state.adminCommands
+    .map((command) => {
+      const result = command.result || {};
+      const tail = result.tail ? `<pre class="adminLogTail">${escapeHtml(result.tail)}</pre>` : "";
+      const detail = command.error || result.message || result.path || "";
+      const statusClass = command.status === "error" ? "error" : command.status === "done" ? "done" : "running";
+      return `
+        <details class="adminCommandItem" ${command.status === "error" || result.tail ? "open" : ""}>
+          <summary>
+            <strong>${escapeHtml(commandTitle(command.command))}</strong>
+            <span class="badge ${statusClass}">${escapeHtml(commandStatus(command))}</span>
+            <time>${escapeHtml(String(command.created_at || "").replace("T", " "))}</time>
+          </summary>
+          ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
+          ${tail}
+        </details>
+      `;
+    })
+    .join("");
+}
+
+async function refreshAdminCommands() {
+  if (!isAdmin() || !canUseApp()) {
+    return;
+  }
+  const data = await fetchJson("/api/admin/agent-commands");
+  renderAdminCommands(data.commands || []);
+}
+
+async function runAdminAgentCommand(command) {
+  const notice = document.querySelector("#adminToolNotice");
+  notice.className = "notice";
+  notice.textContent = "";
+  try {
+    await postJson("/api/admin/agent-commands", { command });
+    notice.textContent = `${commandTitle(command)} 요청 완료`;
+    await refreshAdminCommands();
+  } catch (error) {
+    notice.className = "notice error";
+    notice.textContent = error.message;
+  }
+}
+
+async function resetJobsFromAdmin() {
+  const notice = document.querySelector("#adminToolNotice");
+  notice.className = "notice";
+  notice.textContent = "";
+  if (!window.confirm("작업 큐와 업로드 파일을 비울까요? 계정 정보는 유지됩니다.")) {
+    return;
+  }
+  try {
+    const result = await postJson("/api/admin/jobs/reset", { clear_uploads: true });
+    const cleared = result.cleared || {};
+    notice.textContent = `작업 ${cleared.jobs || 0}건, 업로드 ${cleared.uploads || 0}건 정리 완료`;
+    state.selectedJobId = "";
+    await refreshJobs();
+  } catch (error) {
+    notice.className = "notice error";
+    notice.textContent = error.message;
+  }
 }
 
 async function appendErpCredentials(formData) {
@@ -473,6 +570,7 @@ async function login(event) {
     await loadSettings();
     if (canUseApp()) {
       await refreshJobs();
+      await refreshAdminCommands();
     }
   } catch (error) {
     notice.className = "notice error";
@@ -494,6 +592,7 @@ async function changePassword(event) {
     notice.textContent = "변경 완료";
     await loadSettings();
     await refreshJobs();
+    await refreshAdminCommands();
   } catch (error) {
     notice.className = "notice error";
     notice.textContent = error.message;
@@ -523,6 +622,7 @@ async function logout() {
   await postJson("/api/auth/logout");
   state.auth.authenticated = false;
   state.auth.user = null;
+  state.adminCommands = [];
   await loadSettings();
 }
 
@@ -564,7 +664,14 @@ document.querySelector("#companyKey").addEventListener("change", () => {
   notice.textContent = "";
   updateUploadAvailability();
 });
-document.querySelector("#refreshButton").addEventListener("click", refreshJobs);
+document.querySelector("#refreshButton").addEventListener("click", () => {
+  refreshJobs();
+  refreshAdminCommands();
+});
+document.querySelector("#adminResetJobsButton").addEventListener("click", resetJobsFromAdmin);
+document.querySelector("#adminTailLogButton").addEventListener("click", () => runAdminAgentCommand("tail-log"));
+document.querySelector("#adminUpdateAgentButton").addEventListener("click", () => runAdminAgentCommand("update-agent"));
+document.querySelector("#adminRestartAgentButton").addEventListener("click", () => runAdminAgentCommand("restart-agent"));
 document.querySelector("#loginForm").addEventListener("submit", login);
 document.querySelector("#changePasswordForm").addEventListener("submit", changePassword);
 document.querySelector("#forgotPasswordButton").addEventListener("click", forgotPassword);
@@ -574,7 +681,7 @@ initDropZone();
 loadSettings()
   .then(() => {
     if (canUseApp()) {
-      return refreshJobs();
+      return Promise.all([refreshJobs(), refreshAdminCommands()]);
     }
     return null;
   })
@@ -586,5 +693,6 @@ loadSettings()
 setInterval(() => {
   if (canUseApp()) {
     refreshJobs();
+    refreshAdminCommands();
   }
 }, 5000);

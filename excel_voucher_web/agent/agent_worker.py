@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import shutil
 import socket
+import subprocess
 import sys
 import time
+import tempfile
 import urllib3
+import zipfile
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +20,9 @@ if str(ROOT) not in sys.path:
     sys.path.insert(0, str(ROOT))
 
 from app.agent_adapter import run_erp_voucher_task
+
+
+DEFAULT_REPO_ZIP_URL = "https://github.com/rlckd2201/ERP_Auto_Web/archive/refs/heads/main.zip"
 
 
 def _post(session: requests.Session, server: str, path: str, payload: dict[str, Any], *, verify_tls: bool) -> dict[str, Any]:
@@ -44,6 +51,168 @@ def _heartbeat(agent_id: str, client_ip: str = "", print_mode: str = "default-pr
     }
 
 
+def _tail_text(path: Path, max_lines: int = 160) -> str:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    except FileNotFoundError:
+        return ""
+    return "\n".join(lines[-max(1, max_lines):])
+
+
+def _latest_agent_log(output_dir: Path) -> dict[str, Any]:
+    candidates = sorted(output_dir.glob("*_erp_input.log"), key=lambda p: p.stat().st_mtime, reverse=True)
+    if not candidates:
+        return {"message": "Agent ERP 입력 로그가 아직 없습니다.", "path": "", "tail": ""}
+    latest = candidates[0]
+    return {
+        "message": "최신 Agent 로그를 가져왔습니다.",
+        "path": str(latest),
+        "modified_at": time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(latest.stat().st_mtime)),
+        "tail": _tail_text(latest),
+    }
+
+
+def _popen_hidden(args: list[str]) -> subprocess.Popen:
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.Popen(args, creationflags=creationflags)
+
+
+def _schedule_agent_restart(output_dir: Path, delay_seconds: int = 3) -> Path:
+    output_dir.mkdir(parents=True, exist_ok=True)
+    script = output_dir / f"restart_agent_{int(time.time())}.ps1"
+    script.write_text(
+        "\n".join(
+            [
+                '$TaskName = "Excel Voucher Agent"',
+                f"Start-Sleep -Seconds {max(1, int(delay_seconds))}",
+                'Stop-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue',
+                "Get-CimInstance Win32_Process |",
+                '  Where-Object { $_.CommandLine -match "excel_voucher_web\\\\run_agent.ps1|agent_worker.py" } |',
+                "  ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }",
+                "Start-Sleep -Seconds 1",
+                'Start-ScheduledTask -TaskName $TaskName',
+            ]
+        ),
+        encoding="utf-8",
+    )
+    _popen_hidden(
+        [
+            "powershell.exe",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-File",
+            str(script),
+        ]
+    )
+    return script
+
+
+def _install_agent_task(
+    *,
+    server: str,
+    agent_id: str,
+    client_ip: str,
+    verify_tls: bool,
+    print_mode: str,
+    printer_name: str,
+    print_wait_seconds: float,
+    erp_mode: str,
+) -> dict[str, Any]:
+    script = ROOT / "install_agent_task.ps1"
+    if not script.exists():
+        raise RuntimeError(f"install_agent_task.ps1 not found: {script}")
+    args = [
+        "powershell.exe",
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        str(script),
+        "-Server",
+        server,
+        "-AgentId",
+        agent_id,
+        "-ClientIp",
+        client_ip,
+        "-PrintMode",
+        print_mode,
+        "-PrinterName",
+        printer_name,
+        "-PrintWaitSeconds",
+        str(print_wait_seconds),
+        "-ErpMode",
+        erp_mode,
+    ]
+    if not verify_tls:
+        args.append("-InsecureSkipTlsVerify")
+    completed = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+    if completed.returncode != 0:
+        raise RuntimeError((completed.stderr or completed.stdout or "install_agent_task.ps1 failed").strip())
+    return {"stdout": completed.stdout[-2000:], "stderr": completed.stderr[-2000:]}
+
+
+def _update_agent_files(zip_url: str) -> dict[str, Any]:
+    repo_root = ROOT.parent
+    with tempfile.TemporaryDirectory(prefix="excel_voucher_update_") as temp_name:
+        temp = Path(temp_name)
+        zip_path = temp / "ERP_Auto_Web.zip"
+        response = requests.get(zip_url, timeout=180)
+        response.raise_for_status()
+        zip_path.write_bytes(response.content)
+        with zipfile.ZipFile(zip_path) as archive:
+            archive.extractall(temp)
+        extracted = temp / "ERP_Auto_Web-main"
+        if not extracted.exists():
+            raise RuntimeError("GitHub ZIP 압축 해제 결과에서 ERP_Auto_Web-main 폴더를 찾지 못했습니다.")
+        shutil.copytree(extracted / "excel_voucher_web", ROOT, dirs_exist_ok=True)
+        shutil.copytree(extracted / "manager_server", repo_root / "manager_server", dirs_exist_ok=True)
+    return {"updated_root": str(repo_root), "zip_url": zip_url}
+
+
+def _execute_admin_command(
+    command: dict[str, Any],
+    *,
+    server: str,
+    agent_id: str,
+    client_ip: str,
+    verify_tls: bool,
+    print_mode: str,
+    printer_name: str,
+    print_wait_seconds: float,
+    erp_mode: str,
+    output_dir: Path,
+) -> dict[str, Any]:
+    command_type = str(command.get("command") or "")
+    payload = command.get("payload") if isinstance(command.get("payload"), dict) else {}
+    if command_type == "tail-log":
+        return _latest_agent_log(output_dir)
+    if command_type == "restart-agent":
+        script = _schedule_agent_restart(output_dir)
+        return {"message": "Agent 재시작을 예약했습니다.", "restart_script": str(script)}
+    if command_type == "update-agent":
+        zip_url = str(payload.get("zip_url") or DEFAULT_REPO_ZIP_URL)
+        update_result = _update_agent_files(zip_url)
+        install_result = _install_agent_task(
+            server=server,
+            agent_id=agent_id,
+            client_ip=client_ip,
+            verify_tls=verify_tls,
+            print_mode=print_mode,
+            printer_name=printer_name,
+            print_wait_seconds=print_wait_seconds,
+            erp_mode=erp_mode,
+        )
+        script = _schedule_agent_restart(output_dir)
+        return {
+            "message": "Agent 최신 적용 후 재시작을 예약했습니다.",
+            **update_result,
+            "install": install_result,
+            "restart_script": str(script),
+        }
+    raise RuntimeError(f"지원하지 않는 Agent 명령입니다: {command_type}")
+
+
 def run_loop(
     server: str,
     agent_id: str,
@@ -64,6 +233,47 @@ def run_loop(
         heartbeat = _heartbeat(agent_id, client_ip, print_mode, printer_name, erp_mode)
         try:
             _post(session, server, "/api/agent/heartbeat", heartbeat, verify_tls=verify_tls)
+            admin_payload = _post(session, server, "/api/agent/admin/next", heartbeat, verify_tls=verify_tls)
+            admin_command = admin_payload.get("command")
+            if admin_command:
+                command_id = str(admin_command.get("id") or "")
+                try:
+                    result = _execute_admin_command(
+                        admin_command,
+                        server=server,
+                        agent_id=agent_id,
+                        client_ip=client_ip,
+                        verify_tls=verify_tls,
+                        print_mode=print_mode,
+                        printer_name=printer_name,
+                        print_wait_seconds=print_wait_seconds,
+                        erp_mode=erp_mode,
+                        output_dir=output_dir,
+                    )
+                    _post(
+                        session,
+                        server,
+                        f"/api/agent/admin/{command_id}/complete",
+                        {"agent_id": agent_id, "ok": True, "result": result},
+                        verify_tls=verify_tls,
+                    )
+                    print(f"admin command completed {command_id}: {admin_command.get('command')}")
+                except Exception as exc:
+                    try:
+                        _post(
+                            session,
+                            server,
+                            f"/api/agent/admin/{command_id}/complete",
+                            {"agent_id": agent_id, "ok": False, "error": str(exc)},
+                            verify_tls=verify_tls,
+                        )
+                    except requests.RequestException as report_exc:
+                        print(_connection_error_message(server, report_exc), file=sys.stderr)
+                    print(f"admin command failed {command_id}: {exc}", file=sys.stderr)
+                if once:
+                    return
+                time.sleep(interval)
+                continue
             next_payload = _post(session, server, "/api/agent/voucher/next", heartbeat, verify_tls=verify_tls)
         except requests.RequestException as exc:
             print(_connection_error_message(server, exc), file=sys.stderr)

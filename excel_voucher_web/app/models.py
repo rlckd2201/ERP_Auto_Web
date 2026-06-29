@@ -118,6 +118,23 @@ class AgentCompleteRequest(BaseModel):
     error: str = Field(default="", max_length=2000)
 
 
+class AdminResetJobsRequest(BaseModel):
+    clear_uploads: bool = True
+
+
+class AdminAgentCommandRequest(BaseModel):
+    command: Literal["tail-log", "update-agent", "restart-agent"]
+    target_agent_id: str = Field(default="", max_length=160)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class AgentAdminCommandCompleteRequest(BaseModel):
+    agent_id: str = Field(default="", max_length=160)
+    ok: bool = True
+    result: dict[str, Any] = Field(default_factory=dict)
+    error: str = Field(default="", max_length=4000)
+
+
 class LoginRequest(BaseModel):
     user_id: str = Field(default="", max_length=160)
     password: str = Field(default="", max_length=200)

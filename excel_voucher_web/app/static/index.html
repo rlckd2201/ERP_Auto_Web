@@ -99,6 +99,21 @@
         <div id="jobDetail" class="currentJob emptyState">엑셀 파일을 업로드하면 처리 현황이 표시됩니다.</div>
       </section>
 
+      <section class="panel adminToolsPanel" id="adminToolsPanel" hidden>
+        <div class="panelTitle">
+          <h2>전산 운영</h2>
+          <span id="adminCommandCount" class="badge muted">0건</span>
+        </div>
+        <div class="adminActionGrid">
+          <button class="dangerButton" id="adminResetJobsButton" type="button">작업 큐 비우기</button>
+          <button class="toolButton" id="adminTailLogButton" type="button">Agent 로그 가져오기</button>
+          <button class="toolButton" id="adminUpdateAgentButton" type="button">243 최신 적용</button>
+          <button class="toolButton" id="adminRestartAgentButton" type="button">Agent 재시작</button>
+        </div>
+        <div class="notice" id="adminToolNotice"></div>
+        <div id="adminCommandRows" class="adminCommandRows"></div>
+      </section>
+
       <section class="panel historyPanel">
         <div class="panelTitle">
           <h2>최근 처리 내역</h2>
