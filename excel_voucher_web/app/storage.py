@@ -430,17 +430,28 @@ class JobStore:
     def claim_next_agent_command(self, heartbeat: AgentHeartbeat, client_ip: str) -> dict[str, Any] | None:
         agent_id = (heartbeat.agent_id or "").strip() or "unknown-agent"
         effective_ip = (heartbeat.client_ip or client_ip or "").strip()
+        allowed_commands = heartbeat.capabilities.get("admin_commands")
+        if isinstance(allowed_commands, list):
+            allowed_commands = [str(command).strip() for command in allowed_commands if str(command).strip()]
+        else:
+            allowed_commands = []
         claimed = now_text()
         with self.connect() as conn:
+            command_filter = ""
+            params: list[Any] = [agent_id]
+            if allowed_commands:
+                command_filter = f" AND command IN ({','.join('?' for _ in allowed_commands)})"
+                params.extend(allowed_commands)
             row = conn.execute(
-                """
+                f"""
                 SELECT * FROM agent_admin_commands
                 WHERE status = 'queued'
                   AND (target_agent_id = '' OR target_agent_id = ?)
+                  {command_filter}
                 ORDER BY datetime(created_at) ASC
                 LIMIT 1
                 """,
-                (agent_id,),
+                tuple(params),
             ).fetchone()
             if not row:
                 return None

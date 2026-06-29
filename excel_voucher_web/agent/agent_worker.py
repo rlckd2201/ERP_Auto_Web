@@ -8,6 +8,7 @@ import subprocess
 import sys
 import time
 import tempfile
+import threading
 import urllib3
 import zipfile
 from pathlib import Path
@@ -256,6 +257,45 @@ def _execute_admin_command(
     raise RuntimeError(f"지원하지 않는 Agent 명령입니다: {command_type}")
 
 
+def _tail_log_admin_loop(
+    *,
+    server: str,
+    agent_id: str,
+    client_ip: str,
+    verify_tls: bool,
+    print_mode: str,
+    printer_name: str,
+    erp_mode: str,
+    output_dir: Path,
+    interval: int,
+) -> None:
+    session = requests.Session()
+    while True:
+        heartbeat = _heartbeat(agent_id, client_ip, print_mode, printer_name, erp_mode)
+        heartbeat["capabilities"]["admin_commands"] = ["tail-log"]
+        heartbeat["capabilities"]["admin_worker"] = "tail-log"
+        try:
+            _post(session, server, "/api/agent/heartbeat", heartbeat, verify_tls=verify_tls)
+            admin_payload = _post(session, server, "/api/agent/admin/next", heartbeat, verify_tls=verify_tls)
+            admin_command = admin_payload.get("command")
+            if admin_command:
+                command_id = str(admin_command.get("id") or "")
+                result = _latest_agent_log(output_dir)
+                _post(
+                    session,
+                    server,
+                    f"/api/agent/admin/{command_id}/complete",
+                    {"agent_id": agent_id, "ok": True, "result": result},
+                    verify_tls=verify_tls,
+                )
+                print(f"admin tail-log completed {command_id}")
+        except requests.RequestException as exc:
+            print(_connection_error_message(server, exc), file=sys.stderr)
+        except Exception as exc:
+            print(f"admin tail-log worker failed: {exc}", file=sys.stderr)
+        time.sleep(max(2, interval))
+
+
 def run_loop(
     server: str,
     agent_id: str,
@@ -272,6 +312,22 @@ def run_loop(
         urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     session = requests.Session()
     output_dir = ROOT / "data" / "agent_results"
+    if not once:
+        threading.Thread(
+            target=_tail_log_admin_loop,
+            kwargs={
+                "server": server,
+                "agent_id": agent_id,
+                "client_ip": client_ip,
+                "verify_tls": verify_tls,
+                "print_mode": print_mode,
+                "printer_name": printer_name,
+                "erp_mode": erp_mode,
+                "output_dir": output_dir,
+                "interval": interval,
+            },
+            daemon=True,
+        ).start()
     while True:
         heartbeat = _heartbeat(agent_id, client_ip, print_mode, printer_name, erp_mode)
         try:
