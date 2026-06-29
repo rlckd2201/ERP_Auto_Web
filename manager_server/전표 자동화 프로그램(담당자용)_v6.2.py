@@ -2336,9 +2336,21 @@ class ERPLoginBot:
             end_at = time.time() + timeout
             started = time.time()
             last_snapshot = None
+            responsive_empty_count = 0
+            fallback_min_elapsed = max(
+                40.0,
+                min(180.0, row_count * 0.50),
+            )
+            responsive_snapshot_seconds = max(
+                1.0,
+                float(os.getenv("ERP_GRID_PASTE_RESPONSIVE_SNAPSHOT_SECONDS", "6") or "6"),
+            )
             while True:
                 elapsed = time.time() - started
+                snapshot_started = time.time()
                 snapshot = _management_grid_snapshot()
+                snapshot_seconds = time.time() - snapshot_started
+                elapsed_after_snapshot = time.time() - started
                 last_snapshot = snapshot
                 labels = snapshot.get("label_norms") or set()
                 has_ready_label = bool(labels & ready_needles)
@@ -2350,10 +2362,25 @@ class ERPLoginBot:
                         f"value_header={has_value_header}, labels={snapshot.get('labels')}"
                     )
                     return snapshot
+                if labels:
+                    responsive_empty_count = 0
+                elif snapshot_seconds <= responsive_snapshot_seconds:
+                    responsive_empty_count += 1
+                else:
+                    responsive_empty_count = 0
+                if elapsed_after_snapshot >= fallback_min_elapsed and responsive_empty_count >= 2:
+                    self.logger.warning(
+                        "  [FORM-VERIFY] 하단 관리항목 텍스트는 UIA로 잡히지 않지만 "
+                        "ERP 화면 응답이 안정되어 다음 단계로 진행합니다: "
+                        f"context={context}, rows={row_count}, elapsed={elapsed_after_snapshot:.1f}s, "
+                        f"snapshot={snapshot_seconds:.1f}s, labels={snapshot.get('labels')}"
+                    )
+                    return snapshot
                 self.logger.info(
                     "  [FORM-VERIFY] 하단 관리항목 표시 대기 중: "
                     f"context={context}, elapsed={elapsed:.1f}s/{timeout:.1f}s, "
-                    f"next_check={poll_seconds:.1f}s, labels={snapshot.get('labels')}"
+                    f"next_check={poll_seconds:.1f}s, snapshot={snapshot_seconds:.1f}s, "
+                    f"responsive_empty={responsive_empty_count}, labels={snapshot.get('labels')}"
                 )
                 if time.time() >= end_at:
                     break
