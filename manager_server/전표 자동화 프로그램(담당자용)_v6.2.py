@@ -2082,6 +2082,8 @@ class ERPLoginBot:
                     return cols[0].strip()
             return ""
 
+        grid_paste_state = {"verified": False}
+
         def _verify_grid_paste_or_fail(first_account_cell_xy):
             if not _env_flag("ERP_VERIFY_GRID_PASTE", "0"):
                 self.logger.info("  [FORM-VERIFY] 그리드 붙여넣기 검증 스킵")
@@ -2110,6 +2112,7 @@ class ERPLoginBot:
                     "그리드 붙여넣기 검증 실패: "
                     f"expected_account={expected}, copied={copied[:120]}"
                 )
+            grid_paste_state["verified"] = True
             self.logger.info(f"  [FORM-VERIFY] 그리드 붙여넣기 검증 완료: {expected}")
 
         def _select_acc_unit_by_coord(target_site):
@@ -3333,6 +3336,8 @@ class ERPLoginBot:
             return True
 
         def _save_and_open_print_dialog():
+            if _env_flag("ERP_VERIFY_GRID_PASTE", "0") and not grid_paste_state.get("verified"):
+                _fail_form("그리드 붙여넣기 검증이 완료되지 않아 저장을 중단합니다.")
             try:
                 self.logger.info("  [SAVE] Ctrl+S 저장 시작")
                 pyautogui.hotkey('ctrl', 's')
