@@ -2324,8 +2324,16 @@ class ERPLoginBot:
                 _norm_text("금융기관지점"),
                 _norm_text("거래처"),
             }
-            min_wait = max(8.0, min(35.0, row_count * 0.10))
-            timeout = max(min_wait + 30.0, min(240.0, row_count * 0.75))
+            min_wait_default = max(8.0, min(60.0, row_count * 0.15))
+            timeout_default = max(min_wait_default + 60.0, min(900.0, row_count * 2.75))
+            min_wait = max(
+                0.0,
+                float(os.getenv("ERP_GRID_PASTE_READY_MIN_WAIT", str(min_wait_default)) or str(min_wait_default)),
+            )
+            timeout = max(
+                min_wait + 10.0,
+                float(os.getenv("ERP_GRID_PASTE_READY_TIMEOUT", str(timeout_default)) or str(timeout_default)),
+            )
             end_at = time.time() + timeout
             started = time.time()
             next_log = 0.0

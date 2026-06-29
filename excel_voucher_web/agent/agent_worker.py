@@ -180,7 +180,15 @@ def _install_agent_task(
     ]
     if not verify_tls:
         args.append("-InsecureSkipTlsVerify")
-    completed = subprocess.run(args, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
+    install_timeout = max(120, int(os.getenv("EXCEL_VOUCHER_AGENT_INSTALL_TIMEOUT_SECONDS", "300") or "300"))
+    completed = subprocess.run(
+        args,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=install_timeout,
+    )
     if completed.returncode != 0:
         raise RuntimeError((completed.stderr or completed.stdout or "install_agent_task.ps1 failed").strip())
     return {"stdout": completed.stdout[-2000:], "stderr": completed.stderr[-2000:]}
@@ -191,7 +199,8 @@ def _update_agent_files(zip_url: str) -> dict[str, Any]:
     with tempfile.TemporaryDirectory(prefix="excel_voucher_update_") as temp_name:
         temp = Path(temp_name)
         zip_path = temp / "ERP_Auto_Web.zip"
-        response = requests.get(zip_url, timeout=180)
+        download_timeout = max(180, int(os.getenv("EXCEL_VOUCHER_AGENT_UPDATE_DOWNLOAD_TIMEOUT_SECONDS", "300") or "300"))
+        response = requests.get(zip_url, timeout=download_timeout)
         response.raise_for_status()
         zip_path.write_bytes(response.content)
         with zipfile.ZipFile(zip_path) as archive:
