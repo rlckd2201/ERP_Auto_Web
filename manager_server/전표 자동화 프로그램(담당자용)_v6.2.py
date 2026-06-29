@@ -3568,14 +3568,18 @@ class ERPLoginBot:
             try:
                 paste_wait = mgmt_after_grid_paste_wait
                 if excel_copy_used:
+                    dynamic_wait = max(20.0, min(90.0, row_count * 0.18))
+                    configured_wait = float(os.getenv("ERP_EXCEL_GRID_PASTE_WAIT", "0") or "0")
                     paste_wait = max(
                         paste_wait,
-                        float(os.getenv("ERP_EXCEL_GRID_PASTE_WAIT", "8.0") or "8.0"),
+                        dynamic_wait,
+                        configured_wait,
                     )
                 time.sleep(paste_wait)
                 if excel_copy_used:
                     self.logger.info(
-                        f"  [FORM-VERIFY] Excel 범위 붙여넣기 경로는 클립보드 재검증을 생략합니다. wait={paste_wait:.1f}s"
+                        f"  [FORM-VERIFY] Excel 범위 붙여넣기 경로는 클립보드 재검증을 생략합니다. "
+                        f"rows={row_count}, wait={paste_wait:.1f}s"
                     )
                 else:
                     _verify_grid_paste_or_fail(first_account_cell_xy)
