@@ -1470,9 +1470,15 @@ class ERPLoginBot:
                         btn_new = b; break
                 except: pass
             if btn_new and btn_new.is_visible():
-                btn_new.click_input()
-                self.logger.info("  ✅ [신규] 클릭")
-                time.sleep(max(0.03, float(os.getenv("ERP_NEW_FORM_WAIT", "0.12") or "0.12")))
+                try:
+                    new_click_count = int(str(os.getenv("ERP_NEW_CLICK_COUNT", "1") or "1").strip())
+                except:
+                    new_click_count = 1
+                new_click_count = max(1, min(2, new_click_count))
+                for idx in range(new_click_count):
+                    btn_new.click_input()
+                    self.logger.info(f"  ✅ [신규] 클릭 ({idx + 1}/{new_click_count})")
+                    time.sleep(max(0.03, float(os.getenv("ERP_NEW_FORM_WAIT", "0.12") or "0.12")))
         except Exception as e:
             self.logger.warning(f"  [신규] 클릭 실패: {e}")
 
@@ -3380,26 +3386,27 @@ class ERPLoginBot:
             invoice_date_xy = (375, 149)
             first_account_cell_xy = (398, 231)
 
-            # 1. 회계단위: 세금계산서 사업자번호로 매핑된 site_name(P2공장/P3공장 등)을 선택
-            if site_name:
-                _select_acc_unit_by_coord(site_name)
-
-            # 2. 전표관리단위: 붙여넣기 금지. P2/P3 같은 코드만 타이핑 후 확정
+            # 1. 신규 버튼은 폼 진입 직후 상단 공통 초기화 단계에서 처리합니다.
+            # 2. 전표관리단위: 사업장 코드를 먼저 입력해서 열린 메뉴/포커스를 정리합니다.
             if site_name:
                 slip_unit = _site_code(site_name)
                 _type_anchor_field("전표관리단위", slip_unit, slip_unit_xy, clear=True, enter=True, tab=True)
 
-            # 3. 회계일: 세금계산서 작성일자 그대로 yyyy-mm-dd 타이핑
+            # 3. 회계단위: 전표관리단위 입력 후 드롭박스를 열어 사업장을 선택합니다.
+            if site_name:
+                _select_acc_unit_by_coord(site_name)
+
+            # 4. 회계일: 세금계산서 작성일자 그대로 yyyy-mm-dd 타이핑
             _type_anchor_field("회계일", invoice_date, invoice_date_xy, clear=True, enter=True, date_mode=True)
 
-            # 4. 그리드용 클립보드 복구 후 행추가
+            # 5. 그리드용 클립보드 복구 후 행추가
             pyperclip.copy(original_clipboard)
             time.sleep(ERP_FORM_WAIT)
             add_clicks = max(0, row_count - 1)
             self.logger.info(f"  [FORM-XY] 행추가 시작: {add_clicks}회")
             _click_add_row(add_clicks, (1856, 386))
 
-            # 5. 그리드 첫 계정과목 셀에 붙여넣기
+            # 6. 그리드 첫 계정과목 셀에 계정과목/금액/적요 행 전체를 입력합니다.
             pyperclip.copy(original_clipboard)
             time.sleep(ERP_FORM_WAIT)
             _click_grid_first_account_cell(first_account_cell_xy)
@@ -3408,10 +3415,10 @@ class ERPLoginBot:
             time.sleep(mgmt_after_grid_paste_wait)
             _verify_grid_paste_or_fail(first_account_cell_xy)
 
-            # 6. 행별 적요를 더블클릭한 뒤 하단 증빙/관리항목 필수값 입력
+            # 7. 계정과목별 관리항목값을 입력합니다.
             _fill_management_items_by_coord()
 
-            # 7. 자동입력이 끝나면 저장 후 전표 출력 인쇄창까지 호출
+            # 8. 자동입력이 끝나면 저장 후 전표 출력 인쇄창까지 호출
             _save_and_open_print_dialog()
 
             self.logger.info("🏁 좌표 전용 폼 자동 세팅 완료")

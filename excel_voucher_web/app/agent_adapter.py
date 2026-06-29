@@ -474,6 +474,7 @@ def _run_real_erp_voucher_task(
     os.environ["ERP_GRID_COORD_FIRST"] = "0"
     os.environ["ERP_ADD_ROW_COORD_FIRST"] = "0"
     os.environ["ERP_VERIFY_GRID_PASTE"] = "1"
+    os.environ["ERP_NEW_CLICK_COUNT"] = "2"
 
     erp_runner = _load_web_erp_runner()
     import pyperclip
