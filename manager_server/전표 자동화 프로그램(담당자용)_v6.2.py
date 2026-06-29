@@ -2517,7 +2517,95 @@ class ERPLoginBot:
             line_management_items = form_data.get('erp_line_management_items') or form_data.get('line_management_items') or []
             rows_to_fill = max(0, int(form_data.get('erp_row_count') or len(erp_rows) or row_count))
             self.logger.info(f"  [MGMT-XY] 행별 적요/관리항목 좌표 입력 시작: rows={rows_to_fill}")
+            summary_x = int(os.getenv("ERP_MGMT_SUMMARY_X", "970") or "970")
+            first_row_y = int(os.getenv("ERP_MGMT_FIRST_ROW_Y", "231") or "231")
+            row_height = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
+            sequential_nav = _env_flag("ERP_MGMT_SEQUENTIAL_NAV", "1")
 
+            def _grid_visible_rows():
+                explicit = str(os.getenv("ERP_MGMT_VISIBLE_ROWS", "") or "").strip()
+                if explicit:
+                    try:
+                        return max(1, int(explicit))
+                    except:
+                        pass
+                try:
+                    main_rect = _main_rect()
+                    best = None
+                    for ctrl in _iter_visible("Custom"):
+                        try:
+                            if (ctrl.element_info.automation_id or "") != "SS_Row":
+                                continue
+                            rect = ctrl.rectangle()
+                            rel_left = rect.left - main_rect.left
+                            rel_top = rect.top - main_rect.top
+                            rel_bottom = rect.bottom - main_rect.top
+                            width = rect.right - rect.left
+                            height = rect.bottom - rect.top
+                            if rel_left > 160 or width < 700 or height < 120:
+                                continue
+                            if rel_top - 20 <= first_row_y <= rel_bottom:
+                                best = rel_bottom
+                                break
+                        except:
+                            pass
+                    if best:
+                        bottom_margin = max(10, int(os.getenv("ERP_MGMT_GRID_BOTTOM_MARGIN", "24") or "24"))
+                        last_y = best - bottom_margin
+                        return max(1, min(80, ((last_y - first_row_y) // row_height) + 1))
+                except Exception as e:
+                    self.logger.warning(f"  [MGMT-XY] 그리드 표시 행 수 계산 실패: {e}")
+                return max(1, int(os.getenv("ERP_MGMT_VISIBLE_ROWS_DEFAULT", "27") or "27"))
+
+            visible_rows = _grid_visible_rows()
+            max_row_y = first_row_y + ((visible_rows - 1) * row_height)
+            self.logger.info(
+                f"  [MGMT-XY] 행 이동 방식: sequential={sequential_nav}, "
+                f"first_y={first_row_y}, row_h={row_height}, visible_rows={visible_rows}, max_y={max_row_y}"
+            )
+
+            def _visible_row_y(row_no, expected_y):
+                target = f"{row_no:03d}"
+                main_rect = _main_rect()
+                candidates = []
+                for ctrl_type in ("Text", "Custom"):
+                    for ctrl in _iter_visible(ctrl_type):
+                        try:
+                            text = _norm_text(_control_text(ctrl) or ctrl.window_text())
+                            if text != target:
+                                continue
+                            rect = ctrl.rectangle()
+                            rel_x = ((rect.left + rect.right) // 2) - main_rect.left
+                            rel_y = ((rect.top + rect.bottom) // 2) - main_rect.top
+                            if rel_x > 520:
+                                continue
+                            if first_row_y - row_height <= rel_y <= max_row_y + row_height:
+                                candidates.append((abs(rel_y - expected_y), rel_y))
+                        except:
+                            pass
+                if not candidates:
+                    return None
+                return sorted(candidates, key=lambda item: item[0])[0][1]
+
+            def _focus_grid_row(row_no, expected_y):
+                resolved_y = _visible_row_y(row_no, expected_y) if sequential_nav else None
+                target_y = int(resolved_y if resolved_y is not None else expected_y)
+                _double_click_form_xy(summary_x, target_y, f"{row_no}행 적요", wait=mgmt_summary_open_wait)
+                return target_y
+
+            def _advance_grid_row(current_y, next_row_no):
+                if not sequential_nav:
+                    return current_y
+                _click_form_xy(summary_x, int(current_y), f"{next_row_no - 1}행 선택 복귀", wait=mgmt_key_wait)
+                pyautogui.press('down')
+                time.sleep(mgmt_commit_wait)
+                expected_y = current_y + row_height if current_y + row_height <= max_row_y else max_row_y
+                resolved_y = _visible_row_y(next_row_no, expected_y)
+                if resolved_y is not None:
+                    return resolved_y
+                return expected_y
+
+            current_y = first_row_y
             for idx in range(rows_to_fill):
                 account_name = ""
                 if idx < len(erp_rows):
@@ -2532,12 +2620,16 @@ class ERPLoginBot:
                 )
                 if not plan and not has_explicit_management:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 스킵: account={account_key}, corp={corp}, 입력 불필요")
+                    if idx < rows_to_fill - 1:
+                        current_y = _advance_grid_row(current_y, row_no + 1)
                     continue
-                summary_y = 231 + (idx * 20)
-                _double_click_form_xy(970, summary_y, f"{row_no}행 적요", wait=mgmt_summary_open_wait)
+                summary_y = current_y if sequential_nav else first_row_y + (idx * row_height)
+                current_y = _focus_grid_row(row_no, summary_y)
                 time.sleep(mgmt_summary_open_wait)
                 _fill_management_for_current_row(row_no, account_name)
                 time.sleep(mgmt_key_wait)
+                if idx < rows_to_fill - 1:
+                    current_y = _advance_grid_row(current_y, row_no + 1)
 
             self.logger.info("  [MGMT-XY] 행별 적요/관리항목 좌표 입력 완료")
 
