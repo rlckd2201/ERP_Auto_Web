@@ -2324,42 +2324,40 @@ class ERPLoginBot:
                 _norm_text("금융기관지점"),
                 _norm_text("거래처"),
             }
-            min_wait_default = max(8.0, min(60.0, row_count * 0.15))
-            timeout_default = max(min_wait_default + 60.0, min(900.0, row_count * 2.75))
-            min_wait = max(
-                0.0,
-                float(os.getenv("ERP_GRID_PASTE_READY_MIN_WAIT", str(min_wait_default)) or str(min_wait_default)),
-            )
+            timeout_default = max(20.0, row_count * 10.0)
             timeout = max(
-                min_wait + 10.0,
+                20.0,
                 float(os.getenv("ERP_GRID_PASTE_READY_TIMEOUT", str(timeout_default)) or str(timeout_default)),
+            )
+            poll_seconds = max(
+                1.0,
+                float(os.getenv("ERP_GRID_PASTE_READY_POLL_SECONDS", "20") or "20"),
             )
             end_at = time.time() + timeout
             started = time.time()
-            next_log = 0.0
             last_snapshot = None
-            while time.time() < end_at:
+            while True:
                 elapsed = time.time() - started
                 snapshot = _management_grid_snapshot()
                 last_snapshot = snapshot
                 labels = snapshot.get("label_norms") or set()
                 has_ready_label = bool(labels & ready_needles)
                 has_value_header = bool(snapshot.get("header_value"))
-                if elapsed >= min_wait and has_ready_label:
+                if has_ready_label:
                     self.logger.info(
                         "  [FORM-VERIFY] 하단 관리항목 표시 감지: "
                         f"context={context}, rows={row_count}, elapsed={elapsed:.1f}s, "
                         f"value_header={has_value_header}, labels={snapshot.get('labels')}"
                     )
                     return snapshot
-                if elapsed >= next_log:
-                    self.logger.info(
-                        "  [FORM-VERIFY] 하단 관리항목 표시 대기 중: "
-                        f"context={context}, elapsed={elapsed:.1f}s/{timeout:.1f}s, "
-                        f"labels={snapshot.get('labels')}"
-                    )
-                    next_log = elapsed + 10.0
-                time.sleep(1.0)
+                self.logger.info(
+                    "  [FORM-VERIFY] 하단 관리항목 표시 대기 중: "
+                    f"context={context}, elapsed={elapsed:.1f}s/{timeout:.1f}s, "
+                    f"next_check={poll_seconds:.1f}s, labels={snapshot.get('labels')}"
+                )
+                if time.time() >= end_at:
+                    break
+                time.sleep(min(poll_seconds, max(0.5, end_at - time.time())))
             _fail_form(
                 "하단 관리항목 표시 대기 실패: "
                 f"context={context}, timeout={timeout:.1f}s, "
