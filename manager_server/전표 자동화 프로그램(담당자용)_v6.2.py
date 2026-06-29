@@ -1274,6 +1274,24 @@ class ERPLoginBot:
                             time.sleep(0.05)
                         return _slip_form_ready()
 
+                    def _close_left_menu_before_form_input():
+                        """분개전표입력 선택 후 남는 좌측 메뉴 패널을 닫아 첫 입력 클릭이 먹히지 않게 합니다."""
+                        try:
+                            pyautogui.press("escape")
+                            time.sleep(ERP_CLICK_WAIT)
+                        except Exception as e:
+                            self.logger.warning(f"  [MENU-CLOSE] ESC 메뉴 닫기 실패: {e}")
+                        try:
+                            r = main_win.rectangle()
+                            x = int(os.getenv("ERP_MENU_CLOSE_CLICK_X", "620") or "620")
+                            y = int(os.getenv("ERP_MENU_CLOSE_CLICK_Y", "124") or "124")
+                            pyautogui.click(r.left + x, r.top + y)
+                            self.logger.info(f"  [MENU-CLOSE] 폼 영역 클릭으로 좌측 메뉴 닫기 시도: rel=({x}, {y})")
+                            time.sleep(ERP_SETTLE_WAIT)
+                        except Exception as e:
+                            self.logger.warning(f"  [MENU-CLOSE] 폼 영역 클릭 실패: {e}")
+                        return _wait_slip_form_ready(0.35)
+
                     # Step 1~3: 실제 사용자 동선 그대로 메뉴 -> 왼쪽 회계관리>> -> 메뉴 내부 회계관리 타일 선택
                     if not _tree_has("전표"):
                         self.logger.info("  [MENU] 메뉴 버튼 -> 왼쪽 회계관리>> -> 메뉴 내부 회계관리 타일 선택 시작")
@@ -1327,6 +1345,10 @@ class ERPLoginBot:
                             opened_slip_form = _wait_slip_form_ready(0.35)
                     if opened_slip_form:
                         self.logger.info("  [TREE-VERIFY] 분개전표입력 화면 진입 확인")
+                        if _close_left_menu_before_form_input():
+                            self.logger.info("  [MENU-CLOSE] 좌측 메뉴 정리 후 폼 입력 준비 완료")
+                        else:
+                            self.logger.warning("  [MENU-CLOSE] 좌측 메뉴 정리 후 폼 검증 실패. 기존 흐름으로 계속 진행합니다.")
                             
                     # ── 최종 단계: 폼 데이터 입력 (클립보드 방식 개선된 v6.1 _setup_slip_form 호출) ──
                     if opened_slip_form:
