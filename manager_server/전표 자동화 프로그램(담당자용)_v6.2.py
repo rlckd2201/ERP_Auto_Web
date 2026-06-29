@@ -1105,6 +1105,57 @@ class ERPLoginBot:
                         pyautogui.click(r.left + x, r.top + y)
                         self.logger.info(f"  [DEBUG] {label} 좌표 클릭 완료: rel=({x}, {y}), abs=({r.left + x}, {r.top + y})")
 
+                    def _click_tree_item_by_text(text, *, expand=False, label=None):
+                        tree = _get_tree()
+                        if not tree:
+                            return False
+                        item = _find_item(tree, text)
+                        if not item:
+                            return False
+                        label = label or text
+                        if expand:
+                            if _expand(tree, item, label):
+                                self.logger.info(f"  [TREE-UIA] '{label}' 트리 확장 성공")
+                                return True
+                        try:
+                            item.click_input()
+                        except Exception:
+                            rect = item.rectangle()
+                            pyautogui.click((rect.left + rect.right) // 2, (rect.top + rect.bottom) // 2)
+                        self.logger.info(f"  [TREE-UIA] '{label}' 트리 항목 클릭 성공")
+                        return True
+
+                    def _open_slip_menu_by_uia_path():
+                        if _tree_has("분개전표입력"):
+                            return _click_slip_menu_by_uia()
+                        if not _click_tree_item_by_text("전표", expand=True):
+                            return False
+                        time.sleep(ERP_CLICK_WAIT)
+                        if _tree_has("분개전표입력"):
+                            return _click_slip_menu_by_uia()
+                        if not _click_tree_item_by_text("전표처리", expand=True):
+                            return False
+                        time.sleep(ERP_CLICK_WAIT)
+                        return _click_slip_menu_by_uia()
+
+                    def _slip_menu_fallback_points():
+                        if self.corp_code == "DS":
+                            base_y = int(os.getenv("ERP_DS_SLIP_ROOT_Y", "137") or "137")
+                            row_h = int(os.getenv("ERP_DS_SLIP_ROW_H", "29") or "29")
+                            self.logger.info(
+                                f"  [TREE-XY] DS 메뉴 fallback 사용: 전표 y={base_y}, row_h={row_h}"
+                            )
+                            return {
+                                "slip": (105, base_y),
+                                "process": (126, base_y + row_h),
+                                "entry": (155, base_y + row_h * 2),
+                            }
+                        return {
+                            "slip": (105, 107),
+                            "process": (126, 137),
+                            "entry": (155, 166),
+                        }
+
                     def _open_accounting_menu():
                         self.logger.info("  [MENU-START] 메뉴 진입 시작")
 
@@ -1232,30 +1283,37 @@ class ERPLoginBot:
                             self.logger.warning("  [MENU] 회계관리 전환 확인 실패")
 
                     # Step 3~5: 트리 탐색 및 분개전표입력 클릭
-                    # UIA가 왼쪽 트리를 못 읽는 현장이 반복되어, 여기서는 좌표 fallback을 기본 경로로 사용합니다.
+                    # 계정별 메뉴 구성이 달라질 수 있으므로 UIA 텍스트 경로를 먼저 사용하고,
+                    # 실패할 때만 회사별 보정 좌표 fallback을 사용합니다.
                     opened_slip_form = False
-                    self.logger.info("  [TREE-XY] 전표 -> 전표처리 -> 분개전표입력 좌표 클릭 시작")
-                    slip_menu_visible = _tree_has("분개전표입력")
-                    slip_process_visible = _tree_has("전표처리")
+                    self.logger.info("  [TREE] 전표 -> 전표처리 -> 분개전표입력 진입 시작")
 
-                    if slip_menu_visible:
-                        self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표/전표처리 확장 클릭 스킵")
+                    if _open_slip_menu_by_uia_path():
+                        self.logger.info("  [TREE-UIA] 분개전표입력 텍스트 경로 클릭 완료")
                     else:
-                        if slip_process_visible:
-                            self.logger.info("  [TREE-XY] '전표처리'가 이미 보임. 전표 클릭 스킵")
-                        else:
-                            _click_rel(105, 107, "전표")
-                            time.sleep(ERP_CLICK_WAIT)
+                        points = _slip_menu_fallback_points()
+                        self.logger.warning("  [TREE-XY] UIA 텍스트 경로 실패, 좌표 fallback으로 전표 메뉴를 엽니다.")
+                        slip_menu_visible = _tree_has("분개전표입력")
+                        slip_process_visible = _tree_has("전표처리")
 
-                        if _tree_has("분개전표입력"):
-                            self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표처리 클릭 스킵")
+                        if slip_menu_visible:
+                            self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표/전표처리 확장 클릭 스킵")
                         else:
-                            _click_rel(126, 137, "전표처리")
-                            time.sleep(ERP_CLICK_WAIT)
+                            if slip_process_visible:
+                                self.logger.info("  [TREE-XY] '전표처리'가 이미 보임. 전표 클릭 스킵")
+                            else:
+                                _click_rel(*points["slip"], "전표")
+                                time.sleep(ERP_CLICK_WAIT)
 
-                    if not _click_slip_menu_by_uia():
-                        _click_rel(155, 166, "분개전표입력")
-                        self.logger.info("  [TREE-XY] 분개전표입력 좌표 클릭 전송")
+                            if _tree_has("분개전표입력"):
+                                self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표처리 클릭 스킵")
+                            else:
+                                _click_rel(*points["process"], "전표처리")
+                                time.sleep(ERP_CLICK_WAIT)
+
+                        if not _click_slip_menu_by_uia():
+                            _click_rel(*points["entry"], "분개전표입력")
+                            self.logger.info("  [TREE-XY] 분개전표입력 좌표 클릭 전송")
 
                     opened_slip_form = _wait_slip_form_ready(
                         float(os.getenv("ERP_SLIP_OPEN_WAIT", "0.45") or "0.45")
