@@ -1912,7 +1912,7 @@ class ERPLoginBot:
             # WEB Fix24: click the intersection of the real account header and the
             # first data row. The previous loose fallback could drift into the
             # right-side "부가세행추가" button area.
-            grid_coord_first = str(os.getenv("ERP_GRID_COORD_FIRST", "0")).strip().lower() not in ("0", "false", "no", "off")
+            grid_coord_first = str(os.getenv("ERP_GRID_COORD_FIRST", "1")).strip().lower() not in ("0", "false", "no", "off")
             if grid_coord_first:
                 self.logger.info(f"  [FORM-GRID] account cell coordinate-first: {fallback_xy}")
                 _click_form_xy(*fallback_xy, "grid first account cell")
@@ -2018,7 +2018,7 @@ class ERPLoginBot:
         def _click_add_row(add_clicks, fallback_xy):
             if add_clicks <= 0:
                 return
-            if _env_flag("ERP_ADD_ROW_COORD_FIRST", "0"):
+            if _env_flag("ERP_ADD_ROW_COORD_FIRST", "1"):
                 r = main_win.rectangle()
                 ax, ay = r.left + fallback_xy[0], r.top + fallback_xy[1]
                 for _ in range(add_clicks):
@@ -2083,7 +2083,7 @@ class ERPLoginBot:
             return ""
 
         def _verify_grid_paste_or_fail(first_account_cell_xy):
-            if not _env_flag("ERP_VERIFY_GRID_PASTE", "1"):
+            if not _env_flag("ERP_VERIFY_GRID_PASTE", "0"):
                 self.logger.info("  [FORM-VERIFY] 그리드 붙여넣기 검증 스킵")
                 return
             expected = _expected_first_grid_account()

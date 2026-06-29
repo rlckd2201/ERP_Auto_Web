@@ -471,6 +471,9 @@ def _run_real_erp_voucher_task(
 
     os.environ.setdefault("ERP_OUTPUT_DIR", str(output_dir / "erp_outputs"))
     os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print to PDF")
+    os.environ.setdefault("ERP_GRID_COORD_FIRST", "1")
+    os.environ.setdefault("ERP_ADD_ROW_COORD_FIRST", "1")
+    os.environ.setdefault("ERP_VERIFY_GRID_PASTE", "1")
 
     erp_runner = _load_web_erp_runner()
     import pyperclip
