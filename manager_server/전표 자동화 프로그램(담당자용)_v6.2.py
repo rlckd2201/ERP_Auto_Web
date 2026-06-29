@@ -3459,6 +3459,12 @@ class ERPLoginBot:
             # 6. 그리드 첫 계정과목 셀에 계정과목/금액/적요 행 전체를 입력합니다.
             pyperclip.copy(original_clipboard)
             time.sleep(ERP_FORM_WAIT)
+            first_clipboard_row = next((line for line in str(original_clipboard or "").splitlines() if line.strip()), "")
+            first_clipboard_cols = first_clipboard_row.split("\t") if first_clipboard_row else []
+            self.logger.info(
+                "  [FORM-GRID] clipboard first row cols="
+                f"{len(first_clipboard_cols)} preview={first_clipboard_cols[:5]}"
+            )
             _click_grid_first_account_cell(first_account_cell_xy)
             pyautogui.hotkey('ctrl', 'v')
             self.logger.info("  [FORM-XY] 그리드 좌표 붙여넣기 완료")

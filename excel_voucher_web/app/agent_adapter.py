@@ -341,6 +341,14 @@ def _clipboard_vendor_value(row: Any) -> str:
     return matches[-1].strip()
 
 
+def _normalize_erp_clipboard_row(row: Any) -> str:
+    text = str(row or "")
+    cols = text.split("\t")
+    if len(cols) >= 5 and not cols[1].strip():
+        return "\t".join([cols[0], cols[2], cols[3], "\t".join(cols[4:])])
+    return text
+
+
 def _fallback_line_management_items(payload: dict[str, Any]) -> list[dict[str, str]]:
     existing = payload.get("erp_line_management_items") or payload.get("line_management_items")
     existing_items = existing if isinstance(existing, list) else []
@@ -378,7 +386,7 @@ def _fallback_line_management_items(payload: dict[str, Any]) -> list[dict[str, s
 
 
 def _legacy_form_data(payload: dict[str, Any]) -> dict[str, Any]:
-    rows = [str(row) for row in payload.get("erp_clipboard_rows") or []]
+    rows = [_normalize_erp_clipboard_row(row) for row in payload.get("erp_clipboard_rows") or []]
     if not rows:
         raise RuntimeError("ERP input rows are empty.")
     site_name = _legacy_site_name(payload)
@@ -471,7 +479,7 @@ def _run_real_erp_voucher_task(
 
     os.environ.setdefault("ERP_OUTPUT_DIR", str(output_dir / "erp_outputs"))
     os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print to PDF")
-    os.environ["ERP_GRID_COORD_FIRST"] = "0"
+    os.environ["ERP_GRID_COORD_FIRST"] = "1"
     os.environ["ERP_ADD_ROW_COORD_FIRST"] = "0"
     os.environ["ERP_FORM_COORD_FIRST"] = "0"
     os.environ["ERP_VERIFY_GRID_PASTE"] = "1"
