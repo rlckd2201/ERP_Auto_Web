@@ -1912,7 +1912,7 @@ class ERPLoginBot:
             # WEB Fix24: click the intersection of the real account header and the
             # first data row. The previous loose fallback could drift into the
             # right-side "부가세행추가" button area.
-            grid_coord_first = str(os.getenv("ERP_GRID_COORD_FIRST", "1")).strip().lower() not in ("0", "false", "no", "off")
+            grid_coord_first = str(os.getenv("ERP_GRID_COORD_FIRST", "0")).strip().lower() not in ("0", "false", "no", "off")
             if grid_coord_first:
                 self.logger.info(f"  [FORM-GRID] account cell coordinate-first: {fallback_xy}")
                 _click_form_xy(*fallback_xy, "grid first account cell")
@@ -2018,7 +2018,7 @@ class ERPLoginBot:
         def _click_add_row(add_clicks, fallback_xy):
             if add_clicks <= 0:
                 return
-            if _env_flag("ERP_ADD_ROW_COORD_FIRST", "1"):
+            if _env_flag("ERP_ADD_ROW_COORD_FIRST", "0"):
                 r = main_win.rectangle()
                 ax, ay = r.left + fallback_xy[0], r.top + fallback_xy[1]
                 for _ in range(add_clicks):
@@ -2074,6 +2074,43 @@ class ERPLoginBot:
             for _ in range(add_clicks):
                 _click_form_xy(*fallback_xy, "행추가")
                 time.sleep(ERP_CLICK_WAIT)
+
+        def _expected_first_grid_account():
+            for line in str(original_clipboard or "").splitlines():
+                cols = line.split("\t")
+                if cols and cols[0].strip():
+                    return cols[0].strip()
+            return ""
+
+        def _verify_grid_paste_or_fail(first_account_cell_xy):
+            if not _env_flag("ERP_VERIFY_GRID_PASTE", "1"):
+                self.logger.info("  [FORM-VERIFY] 그리드 붙여넣기 검증 스킵")
+                return
+            expected = _expected_first_grid_account()
+            if not expected:
+                _fail_form("그리드 붙여넣기 데이터가 비어 있어 저장을 중단합니다.")
+            sentinel = f"__ERP_GRID_VERIFY_{int(time.time() * 1000)}__"
+            copied = ""
+            try:
+                pyperclip.copy(sentinel)
+                time.sleep(0.03)
+                _click_grid_first_account_cell(first_account_cell_xy)
+                pyautogui.hotkey("ctrl", "c")
+                time.sleep(max(0.08, ERP_FORM_WAIT))
+                copied = str(pyperclip.paste() or "")
+            finally:
+                try:
+                    pyperclip.copy(original_clipboard)
+                except:
+                    pass
+            copied_norm = _norm_text(copied)
+            expected_norm = _norm_text(expected)
+            if copied == sentinel or not copied_norm or expected_norm not in copied_norm:
+                _fail_form(
+                    "그리드 붙여넣기 검증 실패: "
+                    f"expected_account={expected}, copied={copied[:120]}"
+                )
+            self.logger.info(f"  [FORM-VERIFY] 그리드 붙여넣기 검증 완료: {expected}")
 
         def _select_acc_unit_by_coord(target_site):
             order = ["P1공장", "P2공장", "P3공장", "P4공장", "D1공장", "D2공장", "D3공장", "일강 1공장", "일강 2공장", "제이엠", "더원"]
@@ -3364,6 +3401,7 @@ class ERPLoginBot:
             pyautogui.hotkey('ctrl', 'v')
             self.logger.info("  [FORM-XY] 그리드 좌표 붙여넣기 완료")
             time.sleep(mgmt_after_grid_paste_wait)
+            _verify_grid_paste_or_fail(first_account_cell_xy)
 
             # 6. 행별 적요를 더블클릭한 뒤 하단 증빙/관리항목 필수값 입력
             _fill_management_items_by_coord()
