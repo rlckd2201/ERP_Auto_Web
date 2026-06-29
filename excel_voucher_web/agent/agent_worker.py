@@ -36,6 +36,40 @@ def _connection_error_message(server: str, exc: Exception) -> str:
     return f"server unreachable: {server} ({exc.__class__.__name__}: {exc})"
 
 
+def _safe_filename(value: str, default: str) -> str:
+    cleaned = "".join(ch if ch.isalnum() or ch in (" ", ".", "_", "-", "(", ")") else "_" for ch in value)
+    cleaned = cleaned.strip(" .")
+    return cleaned or default
+
+
+def _download_job_source(
+    session: requests.Session,
+    server: str,
+    task: dict[str, Any],
+    output_dir: Path,
+    *,
+    verify_tls: bool,
+) -> Path:
+    job_id = str(task.get("id") or task.get("job_id") or "unknown")
+    payload = task.get("payload") if isinstance(task.get("payload"), dict) else {}
+    source_name = _safe_filename(str(payload.get("source_filename") or ""), f"{job_id}.xlsx")
+    source_suffix = Path(source_name).suffix.lower()
+    if source_suffix not in (".xlsx", ".xlsm", ".xls"):
+        source_name = f"{Path(source_name).stem or job_id}.xlsx"
+    source_dir = output_dir / "source_files"
+    source_dir.mkdir(parents=True, exist_ok=True)
+    source_path = source_dir / f"{_safe_filename(job_id, 'job')}_{source_name}"
+
+    response = session.get(
+        f"{server.rstrip('/')}/api/jobs/{job_id}/source",
+        timeout=90,
+        verify=verify_tls,
+    )
+    response.raise_for_status()
+    source_path.write_bytes(response.content)
+    return source_path
+
+
 def _heartbeat(agent_id: str, client_ip: str = "", print_mode: str = "default-printer", printer_name: str = "", erp_mode: str = "dry-run") -> dict[str, Any]:
     return {
         "agent_id": agent_id,
@@ -303,6 +337,28 @@ def run_loop(
                 },
                 verify_tls=verify_tls,
             )
+            if erp_mode == "real":
+                source_path = _download_job_source(
+                    session,
+                    server,
+                    task,
+                    output_dir,
+                    verify_tls=verify_tls,
+                )
+                task = dict(task)
+                task["source_file_path"] = str(source_path)
+                _post(
+                    session,
+                    server,
+                    f"/api/agent/jobs/{job_id}/event",
+                    {
+                        "agent_id": agent_id,
+                        "status": "running",
+                        "progress": 38,
+                        "message": "업로드 원본 엑셀을 자동 전표처리 PC로 가져왔습니다.",
+                    },
+                    verify_tls=verify_tls,
+                )
             result = run_erp_voucher_task(
                 task,
                 output_dir=output_dir,

@@ -105,7 +105,7 @@ def _erp_clipboard_rows(lines: list[VoucherLine]) -> list[str]:
     for line in lines:
         debit = line.amount if line.side == "debit" else 0
         credit = line.amount if line.side == "credit" else 0
-        rows.append(f"{line.account_name}\t{debit}\t{credit}\t{line.summary}")
+        rows.append(f"{line.account_name}\t{debit}\t{credit}\t\t{line.summary}")
     return rows
 
 

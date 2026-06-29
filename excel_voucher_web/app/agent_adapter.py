@@ -345,7 +345,12 @@ def _normalize_erp_clipboard_row(row: Any) -> str:
     text = str(row or "")
     cols = text.split("\t")
     if len(cols) >= 5 and not cols[1].strip():
-        return "\t".join([cols[0], cols[2], cols[3], "\t".join(cols[4:])])
+        summary_cols = cols[4:]
+        if summary_cols and not summary_cols[0].strip():
+            summary_cols = summary_cols[1:]
+        return "\t".join([cols[0], cols[2], cols[3], "", "\t".join(summary_cols)])
+    if len(cols) == 4:
+        return "\t".join([cols[0], cols[1], cols[2], "", cols[3]])
     return text
 
 
@@ -466,6 +471,9 @@ def _run_real_erp_voucher_task(
         raise RuntimeError("ERP payload is invalid.")
 
     data = _legacy_form_data(payload)
+    source_file_path = str(task.get("source_file_path") or "").strip()
+    if source_file_path:
+        data["erp_excel_source_path"] = source_file_path
     rows = [str(row) for row in data.get("erp_clipboard_rows") or []]
     preview_path = output_dir / f"{job_id}_voucher_payload.json"
     preview_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -480,6 +488,7 @@ def _run_real_erp_voucher_task(
     os.environ.setdefault("ERP_OUTPUT_DIR", str(output_dir / "erp_outputs"))
     os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print to PDF")
     os.environ["ERP_GRID_COORD_FIRST"] = "1"
+    os.environ["ERP_GRID_COPY_VIA_EXCEL"] = "1"
     os.environ["ERP_ADD_ROW_COORD_FIRST"] = "0"
     os.environ["ERP_FORM_COORD_FIRST"] = "0"
     os.environ["ERP_VERIFY_GRID_PASTE"] = "1"

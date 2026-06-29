@@ -1498,6 +1498,101 @@ class ERPLoginBot:
             pyautogui.hotkey('ctrl', 'v')
             time.sleep(0.02 if fast_input else 0.04)
 
+        excel_copy_context = {"app": None, "book": None}
+
+        def _grid_row_to_excel_values(line):
+            cols = str(line or "").split("\t")
+            if len(cols) >= 5 and not cols[1].strip():
+                summary_cols = cols[4:]
+                if summary_cols and not summary_cols[0].strip():
+                    summary_cols = summary_cols[1:]
+                cols = [cols[0], cols[2], cols[3], "", "\t".join(summary_cols)]
+            elif len(cols) == 4:
+                cols = [cols[0], cols[1], cols[2], "", cols[3]]
+            elif len(cols) >= 5:
+                cols = [cols[0], cols[1], cols[2], cols[3], "\t".join(cols[4:])]
+            else:
+                cols = (cols + ["", "", "", "", ""])[:5]
+
+            result = [str(value or "").strip() for value in cols[:5]]
+            for idx in (1, 2):
+                compact = result[idx].replace(",", "")
+                if re.fullmatch(r"-?\d+", compact or ""):
+                    result[idx] = int(compact)
+                elif compact == "":
+                    result[idx] = 0
+            return result
+
+        def _copy_grid_rows_via_excel():
+            if not _env_flag("ERP_GRID_COPY_VIA_EXCEL", "0"):
+                return False
+
+            source_path = str(form_data.get("erp_excel_source_path") or "").strip()
+            if not source_path:
+                self.logger.info("  [FORM-GRID] Excel source path empty; clipboard fallback")
+                return False
+            if not os.path.exists(source_path):
+                raise RuntimeError(f"Excel source file not found for ERP paste: {source_path}")
+
+            rows_for_excel = [
+                _grid_row_to_excel_values(line)
+                for line in str(original_clipboard or "").splitlines()
+                if str(line or "").strip()
+            ]
+            if not rows_for_excel:
+                raise RuntimeError("ERP paste rows are empty.")
+
+            abs_source_path = os.path.abspath(source_path)
+            sheet_name = "ERP_PASTE"
+            pythoncom.CoInitialize()
+            app = win32.DispatchEx("Excel.Application")
+            app.Visible = True
+            app.DisplayAlerts = False
+            book = app.Workbooks.Open(abs_source_path)
+            excel_copy_context["app"] = app
+            excel_copy_context["book"] = book
+
+            for idx in range(book.Worksheets.Count, 0, -1):
+                sheet = book.Worksheets(idx)
+                if str(sheet.Name).strip().lower() == sheet_name.lower():
+                    sheet.Delete()
+                    break
+
+            sheet = book.Worksheets.Add(After=book.Worksheets(book.Worksheets.Count))
+            sheet.Name = sheet_name
+            end_row = len(rows_for_excel)
+            end_col = 5
+            target = sheet.Range(sheet.Cells(1, 1), sheet.Cells(end_row, end_col))
+            target.Value = tuple(tuple(row) for row in rows_for_excel)
+            sheet.Columns("A:E").AutoFit()
+            book.Save()
+            sheet.Activate()
+            target.Select()
+            target.Copy()
+            self.logger.info(
+                f"  [FORM-GRID] Excel range copied: path={abs_source_path}, "
+                f"sheet={sheet_name}, range=A1:E{end_row}"
+            )
+            return True
+
+        def _close_excel_copy_workbook():
+            if _env_flag("ERP_KEEP_PASTE_WORKBOOK", "0"):
+                return
+            book = excel_copy_context.get("book")
+            app = excel_copy_context.get("app")
+            if book is not None:
+                try:
+                    book.Close(SaveChanges=True)
+                except Exception as e:
+                    self.logger.warning(f"  [FORM-GRID] Excel paste workbook close failed: {e}")
+            if app is not None:
+                try:
+                    app.Quit()
+                except Exception as e:
+                    self.logger.warning(f"  [FORM-GRID] Excel paste app quit failed: {e}")
+            excel_copy_context["book"] = None
+            excel_copy_context["app"] = None
+
         main_rect_cache = None
 
         def _main_rect():
@@ -3457,8 +3552,10 @@ class ERPLoginBot:
             _click_add_row(add_clicks, (1856, 386))
 
             # 6. 그리드 첫 계정과목 셀에 계정과목/금액/적요 행 전체를 입력합니다.
-            pyperclip.copy(original_clipboard)
-            time.sleep(ERP_FORM_WAIT)
+            excel_copy_used = _copy_grid_rows_via_excel()
+            if not excel_copy_used:
+                pyperclip.copy(original_clipboard)
+                time.sleep(ERP_FORM_WAIT)
             first_clipboard_row = next((line for line in str(original_clipboard or "").splitlines() if line.strip()), "")
             first_clipboard_cols = first_clipboard_row.split("\t") if first_clipboard_row else []
             self.logger.info(
@@ -3468,8 +3565,12 @@ class ERPLoginBot:
             _click_grid_first_account_cell(first_account_cell_xy)
             pyautogui.hotkey('ctrl', 'v')
             self.logger.info("  [FORM-XY] 그리드 좌표 붙여넣기 완료")
-            time.sleep(mgmt_after_grid_paste_wait)
-            _verify_grid_paste_or_fail(first_account_cell_xy)
+            try:
+                time.sleep(mgmt_after_grid_paste_wait)
+                _verify_grid_paste_or_fail(first_account_cell_xy)
+            finally:
+                if excel_copy_used:
+                    _close_excel_copy_workbook()
 
             # 7. 계정과목별 관리항목값을 입력합니다.
             _fill_management_items_by_coord()

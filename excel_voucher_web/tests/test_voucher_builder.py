@@ -61,16 +61,18 @@ def test_build_voucher_payload_adds_bank_credit_line(tmp_path: Path) -> None:
         "금융기관지점": "신한 수원금융센터",
         "거래처": "",
     }
-    assert payload.erp_clipboard_rows[0].split("\t")[:4] == [
+    assert payload.erp_clipboard_rows[0].split("\t")[:5] == [
         "미지급금(원화)",
         "12000",
         "0",
+        "",
         "5월 수시결제 - 가나다상사(A001)",
     ]
-    assert payload.erp_clipboard_rows[-1].split("\t")[:4] == [
+    assert payload.erp_clipboard_rows[-1].split("\t")[:5] == [
         "보통예금",
         "0",
         "15000",
+        "",
         "5월 수시결제 - 신한은행",
     ]
     assert payload.erp_line_management_items[0] == {"거래처": "A001"}
@@ -109,10 +111,11 @@ def test_build_voucher_payload_adds_bank_credit_line(tmp_path: Path) -> None:
         row.replace("\t", "\t\t", 1) for row in old_clipboard_payload["erp_clipboard_rows"]
     ]
     legacy_from_old_clipboard = _legacy_form_data(old_clipboard_payload)
-    assert legacy_from_old_clipboard["erp_clipboard_rows"][0].split("\t")[:4] == [
+    assert legacy_from_old_clipboard["erp_clipboard_rows"][0].split("\t")[:5] == [
         "미지급금(원화)",
         "12000",
         "0",
+        "",
         "5월 수시결제 - 가나다상사(A001)",
     ]
 
