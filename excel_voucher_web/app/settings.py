@@ -61,7 +61,7 @@ class Settings:
     data_server_endpoint: str = _env("EXCEL_VOUCHER_DATA_SERVER_ENDPOINT", "/api/excel-voucher/jobs")
     data_server_timeout_seconds: int = _env_int("EXCEL_VOUCHER_DATA_SERVER_TIMEOUT_SECONDS", 10)
     forward_to_data_server: bool = _env_bool("EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER", False)
-    auth_required: bool = _env_bool("EXCEL_VOUCHER_AUTH_REQUIRED", False)
+    auth_required: bool = _env_bool("EXCEL_VOUCHER_AUTH_REQUIRED", True)
     initial_password: str = _env("EXCEL_VOUCHER_INITIAL_PASSWORD", "wowjd12!@")
     session_cookie_name: str = _env("EXCEL_VOUCHER_SESSION_COOKIE", "excel_voucher_session")
     admin_user_id: str = _env("EXCEL_VOUCHER_ADMIN_USER_ID", "rlckd9646")

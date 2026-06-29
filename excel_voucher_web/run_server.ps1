@@ -6,7 +6,7 @@ param(
   [string]$DataServerEndpoint = "/api/excel-voucher/jobs",
   [string]$DataDir = "C:\ERP_DB\excel_voucher_web_data",
   [switch]$ForwardToDataServer,
-  [switch]$RequireLogin,
+  [switch]$RequireLogin = $true,
   [switch]$GroupwareSyncOnStart,
   [string]$GroupwareDbUser = "dlpadmin2",
   [string]$GroupwareDbPassword = "rlarlckd12!@",
