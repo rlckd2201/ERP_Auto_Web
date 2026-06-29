@@ -712,6 +712,5 @@ loadSettings()
 setInterval(() => {
   if (canUseApp()) {
     refreshJobs();
-    refreshAdminCommands();
   }
 }, 5000);
