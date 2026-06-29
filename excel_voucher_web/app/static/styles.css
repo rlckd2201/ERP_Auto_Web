@@ -366,6 +366,30 @@ select {
   margin-top: 10px;
 }
 
+.adminCommandLatest {
+  display: grid;
+}
+
+.adminCommandHistory {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #fff;
+}
+
+.adminCommandHistory > summary {
+  padding: 10px;
+  cursor: pointer;
+  color: var(--subtle);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.adminCommandHistoryRows {
+  display: grid;
+  gap: 8px;
+  padding: 0 10px 10px;
+}
+
 .adminCommandEmpty {
   padding: 12px;
   border: 1px dashed var(--line);

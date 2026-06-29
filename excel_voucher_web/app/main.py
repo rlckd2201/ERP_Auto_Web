@@ -516,7 +516,7 @@ def api_forward_job(job_id: str) -> dict[str, Any]:
 @app.get("/api/admin/agent-commands")
 def api_admin_agent_commands(request: Request) -> dict[str, Any]:
     _require_admin(request)
-    return {"ok": True, "commands": store.list_agent_commands(30)}
+    return {"ok": True, "commands": store.list_agent_commands(10)}
 
 
 @app.post("/api/admin/jobs/reset")

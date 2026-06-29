@@ -318,34 +318,53 @@ function commandStatus(command) {
   return labels[command.status] || command.status || "-";
 }
 
+function renderAdminCommandItem(command, open = false) {
+  const result = command.result || {};
+  const tail = result.tail ? `<pre class="adminLogTail">${escapeHtml(result.tail)}</pre>` : "";
+  const detail = command.error || result.message || result.path || "";
+  const statusClass = command.status === "error" ? "error" : command.status === "done" ? "done" : "running";
+  return `
+    <details class="adminCommandItem" ${open ? "open" : ""}>
+      <summary>
+        <strong>${escapeHtml(commandTitle(command.command))}</strong>
+        <span class="badge ${statusClass}">${escapeHtml(commandStatus(command))}</span>
+        <time>${escapeHtml(String(command.created_at || "").replace("T", " "))}</time>
+      </summary>
+      ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
+      ${tail}
+    </details>
+  `;
+}
+
 function renderAdminCommands(commands) {
-  state.adminCommands = commands || [];
+  state.adminCommands = (commands || []).slice(0, 10);
   const count = document.querySelector("#adminCommandCount");
   const rows = document.querySelector("#adminCommandRows");
-  count.textContent = `${state.adminCommands.length}건`;
+  const activeCount = state.adminCommands.filter((command) => ["queued", "running"].includes(command.status)).length;
+  count.textContent = activeCount ? `${activeCount}건 진행` : state.adminCommands.length ? "최근 1건" : "0건";
   if (!state.adminCommands.length) {
     rows.innerHTML = `<div class="adminCommandEmpty">실행 내역이 없습니다.</div>`;
     return;
   }
-  rows.innerHTML = state.adminCommands
-    .map((command) => {
-      const result = command.result || {};
-      const tail = result.tail ? `<pre class="adminLogTail">${escapeHtml(result.tail)}</pre>` : "";
-      const detail = command.error || result.message || result.path || "";
-      const statusClass = command.status === "error" ? "error" : command.status === "done" ? "done" : "running";
-      return `
-        <details class="adminCommandItem" ${command.status === "error" || result.tail ? "open" : ""}>
-          <summary>
-            <strong>${escapeHtml(commandTitle(command.command))}</strong>
-            <span class="badge ${statusClass}">${escapeHtml(commandStatus(command))}</span>
-            <time>${escapeHtml(String(command.created_at || "").replace("T", " "))}</time>
-          </summary>
-          ${detail ? `<p>${escapeHtml(detail)}</p>` : ""}
-          ${tail}
-        </details>
-      `;
-    })
-    .join("");
+  const [latest, ...history] = state.adminCommands;
+  const latestResult = latest.result || {};
+  const latestOpen = latest.status === "error" || Boolean(latestResult.tail);
+  const historyHtml = history.length
+    ? `
+      <details class="adminCommandHistory">
+        <summary>지난 실행 내역 ${history.length}건</summary>
+        <div class="adminCommandHistoryRows">
+          ${history.map((command) => renderAdminCommandItem(command, command.status === "error")).join("")}
+        </div>
+      </details>
+    `
+    : "";
+  rows.innerHTML = `
+    <div class="adminCommandLatest">
+      ${renderAdminCommandItem(latest, latestOpen)}
+    </div>
+    ${historyHtml}
+  `;
 }
 
 async function refreshAdminCommands() {
