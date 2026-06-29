@@ -3,6 +3,7 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
+import os
 import secrets
 import sqlite3
 from dataclasses import dataclass
@@ -12,6 +13,7 @@ from typing import Any
 
 
 PBKDF2_ITERATIONS = 260_000
+ERP_SECRET_ENTROPY = b"excel-voucher-erp-credential-v1"
 
 
 def now_text() -> str:
@@ -45,6 +47,40 @@ def verify_password(password: str, stored_hash: str) -> bool:
 def make_temporary_password(length: int = 12) -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#"
     return "".join(secrets.choice(alphabet) for _ in range(length))
+
+
+def protect_secret(secret: str) -> str:
+    raw = str(secret or "").encode("utf-8")
+    if os.name == "nt":
+        try:
+            import win32crypt
+
+            protected = win32crypt.CryptProtectData(raw, "excel-voucher", ERP_SECRET_ENTROPY, None, None, 0)
+            return "dpapi:" + base64.b64encode(protected).decode("ascii")
+        except Exception:
+            pass
+    return "b64:" + base64.b64encode(raw).decode("ascii")
+
+
+def unprotect_secret(blob: str) -> str:
+    text = str(blob or "")
+    if not text:
+        return ""
+    if text.startswith("dpapi:"):
+        try:
+            import win32crypt
+
+            protected = base64.b64decode(text.split(":", 1)[1])
+            _, raw = win32crypt.CryptUnprotectData(protected, ERP_SECRET_ENTROPY, None, None, 0)
+            return raw.decode("utf-8")
+        except Exception:
+            return ""
+    if text.startswith("b64:"):
+        try:
+            return base64.b64decode(text.split(":", 1)[1]).decode("utf-8")
+        except Exception:
+            return ""
+    return ""
 
 
 @dataclass(frozen=True)
@@ -120,6 +156,19 @@ class AccountStore:
                 """
             )
             conn.execute("CREATE INDEX IF NOT EXISTS idx_user_sessions_user_id ON user_sessions(user_id)")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS erp_credentials (
+                    user_id TEXT NOT NULL,
+                    company_key TEXT NOT NULL,
+                    erp_user_id TEXT NOT NULL DEFAULT '',
+                    erp_password_blob TEXT NOT NULL DEFAULT '',
+                    created_at TEXT NOT NULL,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY (user_id, company_key)
+                )
+                """
+            )
 
     def _row_to_user(self, row: sqlite3.Row) -> AccountUser:
         return AccountUser(
@@ -322,3 +371,62 @@ class AccountStore:
                 (hash_password(temporary_password), now_text(), user_id),
             )
         return self.get_user(user_id)
+
+    def get_erp_credential_meta(self, user_id: str, company_key: str) -> dict[str, Any] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT user_id, company_key, erp_user_id, updated_at
+                FROM erp_credentials
+                WHERE user_id = ? AND company_key = ?
+                """,
+                (str(user_id or "").strip(), str(company_key or "").strip()),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            "user_id": row["user_id"],
+            "company_key": row["company_key"],
+            "erp_user_id": row["erp_user_id"] or "",
+            "updated_at": row["updated_at"] or "",
+        }
+
+    def get_erp_credential(self, user_id: str, company_key: str) -> dict[str, str] | None:
+        with self.connect() as conn:
+            row = conn.execute(
+                """
+                SELECT erp_user_id, erp_password_blob
+                FROM erp_credentials
+                WHERE user_id = ? AND company_key = ?
+                """,
+                (str(user_id or "").strip(), str(company_key or "").strip()),
+            ).fetchone()
+        if not row:
+            return None
+        password = unprotect_secret(row["erp_password_blob"] or "")
+        if not password:
+            return None
+        return {"user_id": row["erp_user_id"] or "", "password": password}
+
+    def save_erp_credential(self, user_id: str, company_key: str, erp_user_id: str, erp_password: str) -> None:
+        user_id = str(user_id or "").strip()
+        company_key = str(company_key or "").strip()
+        erp_user_id = str(erp_user_id or "").strip()
+        erp_password = str(erp_password or "")
+        if not user_id or not company_key or not erp_user_id or not erp_password:
+            raise ValueError("ERP 계정과 비밀번호를 입력해야 합니다.")
+        timestamp = now_text()
+        with self.connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO erp_credentials (
+                    user_id, company_key, erp_user_id, erp_password_blob, created_at, updated_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(user_id, company_key) DO UPDATE SET
+                    erp_user_id = excluded.erp_user_id,
+                    erp_password_blob = excluded.erp_password_blob,
+                    updated_at = excluded.updated_at
+                """,
+                (user_id, company_key, erp_user_id, protect_secret(erp_password), timestamp, timestamp),
+            )

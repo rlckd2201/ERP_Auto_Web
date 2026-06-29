@@ -412,8 +412,13 @@ def _apply_company_erp_credentials(payload: dict[str, Any], corp_info: dict[str,
     if company_key != "daeseung":
         return corp_info
 
-    user_id = os.getenv("EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID", "12240413").strip()
-    password = os.getenv("EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD", "").strip()
+    payload_credentials = payload.get("erp_credentials") if isinstance(payload.get("erp_credentials"), dict) else {}
+    user_id = str(payload_credentials.get("user_id") or "").strip()
+    password = str(payload_credentials.get("password") or "").strip()
+    if not user_id:
+        user_id = os.getenv("EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID", "12240413").strip()
+    if not password:
+        password = os.getenv("EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD", "").strip()
     updated = dict(corp_info)
     if user_id:
         updated["user_id"] = user_id

@@ -11,7 +11,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, Response, Uploa
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from .accounts import AccountStore, AccountUser, make_temporary_password
+from .accounts import AccountStore, AccountUser, make_temporary_password, protect_secret, unprotect_secret
 from .data_server import data_server_target_url, forward_job_to_data_server
 from .groupware_directory import fetch_finance_users, groupware_enabled
 from .models import (
@@ -19,6 +19,7 @@ from .models import (
     AgentEventRequest,
     AgentHeartbeat,
     ChangePasswordRequest,
+    ErpCredentialRequest,
     ForgotPasswordRequest,
     LoginRequest,
 )
@@ -157,12 +158,86 @@ def _job_diagnostics(job: Any) -> dict[str, Any]:
 def _job_response(job_id: str, *, include_diagnostics: bool = False) -> dict[str, Any]:
     job = store.get_job(job_id)
     response = {
-        **job.model_dump(mode="json"),
+        **_public_job_dump(job),
         "events": [event.model_dump(mode="json") for event in store.list_events(job_id)],
     }
     if include_diagnostics:
         response["diagnostics"] = _job_diagnostics(job)
     return response
+
+
+def _public_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    public = dict(payload or {})
+    credentials = public.get("erp_credentials")
+    if isinstance(credentials, dict):
+        public["erp_credentials"] = {
+            "user_id": credentials.get("user_id") or "",
+            "saved": bool(credentials.get("password_blob") or credentials.get("password")),
+        }
+    return public
+
+
+def _public_job_dump(job: Any) -> dict[str, Any]:
+    data = job.model_dump(mode="json")
+    data["payload"] = _public_payload(data.get("payload") or {})
+    return data
+
+
+def _form_bool(value: Any) -> bool:
+    return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _credential_payload(user_id: str, password: str, *, source: str) -> dict[str, str]:
+    user_id = str(user_id or "").strip()
+    password = str(password or "")
+    if not user_id or not password:
+        raise HTTPException(status_code=400, detail="ERP 계정과 비밀번호를 입력해 주세요.")
+    return {
+        "user_id": user_id,
+        "password_blob": protect_secret(password),
+        "source": source,
+    }
+
+
+def _resolve_erp_credentials_for_upload(
+    *,
+    user: AccountUser | None,
+    company_key: str,
+    erp_user_id: str,
+    erp_password: str,
+    use_saved: bool,
+    remember: bool,
+) -> dict[str, str]:
+    if use_saved:
+        if not user:
+            raise HTTPException(status_code=401, detail="저장된 ERP 계정을 사용하려면 로그인이 필요합니다.")
+        saved = account_store.get_erp_credential(user.user_id, company_key)
+        if not saved:
+            raise HTTPException(status_code=400, detail="저장된 ERP 계정이 없습니다. ERP 계정을 입력해 주세요.")
+        return _credential_payload(saved["user_id"], saved["password"], source="saved")
+
+    erp_user_id = str(erp_user_id or "").strip()
+    erp_password = str(erp_password or "")
+    if not erp_user_id or not erp_password:
+        raise HTTPException(status_code=400, detail="ERP 계정과 비밀번호를 입력해 주세요.")
+    if remember and user:
+        account_store.save_erp_credential(user.user_id, company_key, erp_user_id, erp_password)
+    return _credential_payload(erp_user_id, erp_password, source="input")
+
+
+def _agent_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    agent_payload = dict(payload or {})
+    credentials = agent_payload.get("erp_credentials")
+    if isinstance(credentials, dict):
+        password = str(credentials.get("password") or "")
+        if not password and credentials.get("password_blob"):
+            password = unprotect_secret(str(credentials.get("password_blob") or ""))
+        agent_payload["erp_credentials"] = {
+            "user_id": str(credentials.get("user_id") or ""),
+            "password": password,
+            "source": str(credentials.get("source") or ""),
+        }
+    return agent_payload
 
 
 def _current_user(request: Request) -> AccountUser | None:
@@ -269,6 +344,31 @@ def api_auth_forgot_password(payload: ForgotPasswordRequest) -> dict[str, Any]:
     return {"ok": True, "mail": mail_result}
 
 
+@app.get("/api/erp-credentials/{company_key}")
+def api_erp_credential_status(company_key: str, request: Request) -> dict[str, Any]:
+    user = _require_user(request)
+    manager = manager_profile(company_key)
+    meta = account_store.get_erp_credential_meta(user.user_id, manager.key)
+    return {
+        "saved": bool(meta),
+        "company_key": manager.key,
+        "company_name": manager.company_name,
+        "erp_user_id": (meta or {}).get("erp_user_id", ""),
+        "updated_at": (meta or {}).get("updated_at", ""),
+    }
+
+
+@app.post("/api/erp-credentials/{company_key}")
+def api_save_erp_credential(company_key: str, payload: ErpCredentialRequest, request: Request) -> dict[str, Any]:
+    user = _require_user(request)
+    manager = manager_profile(company_key)
+    if not manager.enabled:
+        raise HTTPException(status_code=400, detail=f"{manager.company_name} 전표 처리는 개발 예정입니다.")
+    account_store.save_erp_credential(user.user_id, manager.key, payload.erp_user_id, payload.erp_password)
+    meta = account_store.get_erp_credential_meta(user.user_id, manager.key)
+    return {"ok": True, "credential": meta}
+
+
 @app.post("/api/uploads/voucher")
 def api_upload_voucher(
     request: Request,
@@ -276,6 +376,10 @@ def api_upload_voucher(
     accounting_date: str = Form(default=""),
     requester: str = Form(default=""),
     company_key: str = Form(default="daeseung"),
+    erp_user_id: str = Form(default=""),
+    erp_password: str = Form(default=""),
+    use_saved_erp_credentials: str = Form(default="0"),
+    remember_erp_credentials: str = Form(default="1"),
 ) -> dict[str, Any]:
     user = _current_user(request)
     if settings.auth_required and not user:
@@ -293,6 +397,14 @@ def api_upload_voucher(
             status_code=400,
             detail=f"{manager.company_name} 전표 처리는 개발 예정입니다. {manager.disabled_reason}".strip(),
         )
+    erp_credentials = _resolve_erp_credentials_for_upload(
+        user=user,
+        company_key=manager.key,
+        erp_user_id=erp_user_id,
+        erp_password=erp_password,
+        use_saved=_form_bool(use_saved_erp_credentials),
+        remember=_form_bool(remember_erp_credentials),
+    )
     filename = _safe_filename(file.filename or "upload.xlsx")
     accounting_date = (accounting_date or default_accounting_date()).strip()
     requester = (requester or "담당자").strip()
@@ -309,6 +421,7 @@ def api_upload_voucher(
             source_filename=filename,
             manager=manager,
         )
+        payload = payload.model_copy(update={"erp_credentials": erp_credentials})
         if user:
             payload = payload.model_copy(
                 update={
@@ -342,7 +455,7 @@ def api_upload_voucher(
 
 @app.get("/api/jobs")
 def api_jobs(limit: int = 100) -> list[dict[str, Any]]:
-    return [job.model_dump(mode="json") for job in store.list_jobs(limit)]
+    return [_public_job_dump(job) for job in store.list_jobs(limit)]
 
 
 @app.get("/api/jobs/{job_id}")
@@ -357,7 +470,7 @@ def api_job(job_id: str, request: Request) -> dict[str, Any]:
 @app.get("/api/jobs/{job_id}/voucher")
 def api_job_voucher(job_id: str) -> dict[str, Any]:
     try:
-        return store.get_job(job_id).payload
+        return _public_payload(store.get_job(job_id).payload)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
 
@@ -387,7 +500,7 @@ def api_forward_job(job_id: str) -> dict[str, Any]:
         message=message,
         result={**job.result, "data_server_forward": forward_result},
     )
-    return {"ok": bool(forward_result.get("ok")), "forward": forward_result, "job": updated.model_dump(mode="json")}
+    return {"ok": bool(forward_result.get("ok")), "forward": forward_result, "job": _public_job_dump(updated)}
 
 
 @app.post("/api/agent/heartbeat")
@@ -406,6 +519,7 @@ def api_agent_next(heartbeat: AgentHeartbeat, request: Request) -> dict[str, Any
         "ok": True,
         "task": {
             **job.model_dump(mode="json"),
+            "payload": _agent_payload(job.payload),
             "job_type": "excel_voucher",
             "download_url": f"/api/jobs/{job.id}/source",
             "voucher_url": f"/api/jobs/{job.id}/voucher",
@@ -424,7 +538,7 @@ def api_agent_job_event(job_id: str, event: AgentEventRequest) -> dict[str, Any]
             result=event.result or None,
             error=event.error or None,
         )
-        return {"ok": True, "job": job.model_dump(mode="json")}
+        return {"ok": True, "job": _public_job_dump(job)}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
 
@@ -460,6 +574,6 @@ def api_agent_job_complete(job_id: str, complete: AgentCompleteRequest) -> dict[
                 message=message,
                 result={**job.result, "notification": notification},
             )
-        return {"ok": True, "job": job.model_dump(mode="json")}
+        return {"ok": True, "job": _public_job_dump(job)}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc

@@ -8,8 +8,6 @@ param(
   [double]$PrintWaitSeconds = 3,
   [ValidateSet("dry-run", "real")]
   [string]$ErpMode = "dry-run",
-  [string]$DaeseungErpUserId = "12240413",
-  [string]$DaeseungErpPassword = "",
   [string]$TaskName = "Excel Voucher Agent",
   [switch]$InsecureSkipTlsVerify,
   [switch]$RunNow
@@ -20,15 +18,6 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runner = Join-Path $Root "run_agent.ps1"
 if (-not (Test-Path $Runner)) {
   throw "run_agent.ps1 was not found."
-}
-
-if ($DaeseungErpUserId) {
-  [Environment]::SetEnvironmentVariable("EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID", $DaeseungErpUserId, "User")
-  $env:EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID = $DaeseungErpUserId
-}
-if ($DaeseungErpPassword) {
-  [Environment]::SetEnvironmentVariable("EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD", $DaeseungErpPassword, "User")
-  $env:EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD = $DaeseungErpPassword
 }
 
 $PowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
@@ -72,7 +61,3 @@ Write-Host "Server: $Server"
 Write-Host "ClientIp: $ClientIp"
 Write-Host "PrinterName: $PrinterName"
 Write-Host "ErpMode: $ErpMode"
-Write-Host "DaeseungErpUserId: $DaeseungErpUserId"
-if ($DaeseungErpPassword) {
-  Write-Host "DaeseungErpPassword: configured"
-}

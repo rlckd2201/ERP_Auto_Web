@@ -858,9 +858,21 @@ class ERPLoginBot:
                     word.lower() in compact for word in change_words
                 )
 
+            def _is_login_failure_blocker(win):
+                blob = _window_text_blob(win)
+                compact = re.sub(r"\s+", "", blob).lower()
+                if not compact:
+                    return False
+                login_words = ("로그인", "사용자", "아이디", "id", "user", "비밀번호", "password")
+                fail_words = ("실패", "오류", "오입력", "불일치", "확인", "잘못", "invalid", "incorrect", "fail", "error")
+                return any(word.lower() in compact for word in login_words) and any(
+                    word.lower() in compact for word in fail_words
+                )
+
             main_win = None
             try:
-                for _ in range(12):  # 최대 12초 대기
+                login_wait_deadline = time.time() + float(os.getenv("ERP_LOGIN_MAIN_WAIT_SECONDS", "10") or "10")
+                while time.time() < login_wait_deadline:
                     try:
                         # 무조건 최상단 창을 가져와서 메인 ERP인지 먼저 판별합니다.
                         top = self.app.top_window()
@@ -872,6 +884,13 @@ class ERPLoginBot:
                             msg = (
                                 "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
                                 "대승 ERP 계정 비밀번호를 변경한 뒤 243 Agent의 ERP 비밀번호 설정을 갱신하세요."
+                            )
+                            self.logger.error(msg)
+                            return msg
+                        if top.is_visible() and _is_login_failure_blocker(top):
+                            msg = (
+                                "ERP 로그인 실패: ID 또는 비밀번호가 맞지 않거나 로그인 확인 창이 표시되었습니다. "
+                                "업로드 시 ERP 계정 정보를 다시 입력해 주세요."
                             )
                             self.logger.error(msg)
                             return msg
@@ -892,6 +911,13 @@ class ERPLoginBot:
                                     msg = (
                                         "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
                                         "대승 ERP 계정 비밀번호를 변경한 뒤 243 Agent의 ERP 비밀번호 설정을 갱신하세요."
+                                    )
+                                    self.logger.error(msg)
+                                    return msg
+                                if _is_login_failure_blocker(top):
+                                    msg = (
+                                        "ERP 로그인 실패: ID 또는 비밀번호가 맞지 않거나 로그인 확인 창이 표시되었습니다. "
+                                        "업로드 시 ERP 계정 정보를 다시 입력해 주세요."
                                     )
                                     self.logger.error(msg)
                                     return msg
@@ -920,8 +946,36 @@ class ERPLoginBot:
                 self.logger.warning(f"메인 창 탐색 에러: {e}")
 
             if not main_win:
-                try: main_win = self.app.top_window()
-                except: pass
+                try:
+                    top = self.app.top_window()
+                    if _is_password_change_blocker(top):
+                        msg = (
+                            "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
+                            "대승 ERP 계정 비밀번호를 변경한 뒤 243 Agent의 ERP 비밀번호 설정을 갱신하세요."
+                        )
+                        self.logger.error(msg)
+                        return msg
+                    if _is_login_failure_blocker(top):
+                        msg = (
+                            "ERP 로그인 실패: ID 또는 비밀번호가 맞지 않거나 로그인 확인 창이 표시되었습니다. "
+                            "업로드 시 ERP 계정 정보를 다시 입력해 주세요."
+                        )
+                        self.logger.error(msg)
+                        return msg
+                    top_text = top.window_text() or ""
+                    top_auto = top.element_info.automation_id or ""
+                    main_keywords = [self.corp_info.get("name", ""), "K-System", "대승", "일강", "제이엠", "더원"]
+                    if top.is_visible() and (top_auto == "mainwindow" or any(k and k in top_text for k in main_keywords)):
+                        main_win = top
+                except:
+                    pass
+            if not main_win:
+                msg = (
+                    "ERP 로그인 실패: 10초 안에 ERP 메인 화면이 열리지 않았습니다. "
+                    "업로드 시 입력한 ERP ID/PW를 확인해 주세요."
+                )
+                self.logger.error(msg)
+                return msg
 
             if main_win:
                 if _is_password_change_blocker(main_win):

@@ -4,6 +4,7 @@ from pathlib import Path
 
 from openpyxl import Workbook
 
+from app.accounts import AccountStore, protect_secret, unprotect_secret
 from app.agent_adapter import _apply_company_erp_credentials, _legacy_form_data
 from app.settings import manager_profile, manager_profiles
 from app.voucher_builder import build_voucher_payload
@@ -122,14 +123,31 @@ def test_only_daeseung_manager_is_enabled_for_upload() -> None:
     assert profiles["jm"].enabled is False
 
 
-def test_daeseung_erp_credentials_can_be_overridden(monkeypatch) -> None:
-    monkeypatch.setenv("EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID", "test-user")
-    monkeypatch.setenv("EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD", "test-password")
-
+def test_daeseung_erp_credentials_use_payload_before_environment(monkeypatch) -> None:
+    monkeypatch.setenv("EXCEL_VOUCHER_DAESEUNG_ERP_USER_ID", "env-user")
+    monkeypatch.setenv("EXCEL_VOUCHER_DAESEUNG_ERP_PASSWORD", "env-password")
     corp_info = _apply_company_erp_credentials(
-        {"company_key": "daeseung"},
+        {"company_key": "daeseung", "erp_credentials": {"user_id": "payload-user", "password": "payload-password"}},
         {"user_id": "old-user", "password": "old-password"},
     )
 
-    assert corp_info["user_id"] == "test-user"
-    assert corp_info["password"] == "test-password"
+    assert corp_info["user_id"] == "payload-user"
+    assert corp_info["password"] == "payload-password"
+
+
+def test_erp_credentials_are_saved_per_user_and_company(tmp_path: Path) -> None:
+    store = AccountStore(tmp_path / "accounts.sqlite3", initial_password="wowjd12!@")
+    store.save_erp_credential("finance01", "daeseung", "12240413", "secret-pass")
+
+    meta = store.get_erp_credential_meta("finance01", "daeseung")
+    credential = store.get_erp_credential("finance01", "daeseung")
+
+    assert meta and meta["erp_user_id"] == "12240413"
+    assert credential == {"user_id": "12240413", "password": "secret-pass"}
+
+
+def test_secret_protection_roundtrip() -> None:
+    blob = protect_secret("secret-pass")
+
+    assert "secret-pass" not in blob
+    assert unprotect_secret(blob) == "secret-pass"

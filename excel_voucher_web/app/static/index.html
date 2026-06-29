@@ -120,6 +120,33 @@
       </section>
     </main>
 
+    <div class="modalBackdrop" id="erpCredentialDialog" hidden>
+      <form class="modalPanel" id="erpCredentialForm">
+        <div class="panelTitle">
+          <h2>ERP 로그인 계정</h2>
+          <span class="badge">K-System</span>
+        </div>
+        <p class="modalMessage" id="erpCredentialMessage"></p>
+        <label>
+          ERP ID
+          <input id="erpUserId" name="erp_user_id" autocomplete="username" />
+        </label>
+        <label>
+          ERP 비밀번호
+          <input id="erpPassword" name="erp_password" type="password" autocomplete="current-password" />
+        </label>
+        <label class="checkRow">
+          <input id="rememberErpCredential" type="checkbox" checked />
+          이 계정을 다음 업로드에도 사용
+        </label>
+        <div class="modalActions">
+          <button id="useSavedErpCredential" type="button">저장된 계정 사용</button>
+          <button id="cancelErpCredential" type="button">취소</button>
+          <button class="primaryButton" type="submit">입력한 계정으로 시작</button>
+        </div>
+      </form>
+    </div>
+
     <script src="/static/app.js"></script>
   </body>
 </html>

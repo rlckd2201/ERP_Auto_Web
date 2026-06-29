@@ -183,6 +183,10 @@ async function postJson(url, payload = {}) {
   });
 }
 
+async function erpCredentialStatus(companyKey) {
+  return fetchJson(`/api/erp-credentials/${encodeURIComponent(companyKey)}`);
+}
+
 function canUseApp() {
   if (!state.auth.auth_required) {
     return true;
@@ -235,6 +239,76 @@ function applyAuthUi() {
     companyKey.disabled = false;
   }
   updateUploadAvailability();
+}
+
+function askErpCredentials(status) {
+  return new Promise((resolve) => {
+    const dialog = document.querySelector("#erpCredentialDialog");
+    const form = document.querySelector("#erpCredentialForm");
+    const message = document.querySelector("#erpCredentialMessage");
+    const userId = document.querySelector("#erpUserId");
+    const password = document.querySelector("#erpPassword");
+    const remember = document.querySelector("#rememberErpCredential");
+    const useSaved = document.querySelector("#useSavedErpCredential");
+    const cancel = document.querySelector("#cancelErpCredential");
+    const saved = Boolean(status.saved);
+
+    message.textContent = saved
+      ? `저장된 ERP 계정 ${status.erp_user_id}으로 로그인할까요? 비밀번호가 바뀌었으면 아래에 새 비밀번호를 입력해서 갱신하세요.`
+      : "처음 업로드하는 ERP 계정입니다. 입력한 계정은 다음 업로드 때 다시 확인할 수 있도록 저장됩니다.";
+    userId.value = status.erp_user_id || "12240413";
+    password.value = "";
+    password.required = !saved;
+    remember.checked = true;
+    useSaved.hidden = !saved;
+    dialog.hidden = false;
+    password.focus();
+
+    function close(value) {
+      dialog.hidden = true;
+      form.onsubmit = null;
+      useSaved.onclick = null;
+      cancel.onclick = null;
+      resolve(value);
+    }
+
+    useSaved.onclick = () => close({ useSaved: true });
+    cancel.onclick = () => close(null);
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const erpUserId = userId.value.trim();
+      const erpPassword = password.value;
+      if (!erpUserId || !erpPassword) {
+        password.focus();
+        return;
+      }
+      close({
+        useSaved: false,
+        erpUserId,
+        erpPassword,
+        remember: remember.checked,
+      });
+    };
+  });
+}
+
+async function appendErpCredentials(formData) {
+  const companyKey = String(formData.get("company_key") || "daeseung");
+  const status = await erpCredentialStatus(companyKey);
+  const choice = await askErpCredentials(status);
+  if (!choice) {
+    return false;
+  }
+  if (choice.useSaved) {
+    formData.set("use_saved_erp_credentials", "1");
+    formData.set("remember_erp_credentials", "1");
+    return true;
+  }
+  formData.set("use_saved_erp_credentials", "0");
+  formData.set("remember_erp_credentials", choice.remember ? "1" : "0");
+  formData.set("erp_user_id", choice.erpUserId);
+  formData.set("erp_password", choice.erpPassword);
+  return true;
 }
 
 async function loadSettings() {
@@ -361,6 +435,10 @@ async function uploadVoucher(event) {
   renderTransientProgress("파일을 서버로 보내고 있습니다.", 8);
   try {
     const data = new FormData(form);
+    const credentialReady = await appendErpCredentials(data);
+    if (!credentialReady) {
+      return;
+    }
     const job = await fetchJson("/api/uploads/voucher", {
       method: "POST",
       body: data,

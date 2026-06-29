@@ -56,6 +56,7 @@ class VoucherPayload(BaseModel):
     lines: list[VoucherLine]
     cash_processing_enabled: bool = False
     erp_line_management_items: list[dict[str, str]] = Field(default_factory=list)
+    erp_credentials: dict[str, str] = Field(default_factory=dict)
     bank_transfers: list[BankTransfer] = Field(default_factory=list)
     erp_clipboard_rows: list[str] = Field(default_factory=list)
     source_columns: dict[str, str] = Field(default_factory=dict)
@@ -129,3 +130,8 @@ class ChangePasswordRequest(BaseModel):
 
 class ForgotPasswordRequest(BaseModel):
     user_id: str = Field(default="", max_length=160)
+
+
+class ErpCredentialRequest(BaseModel):
+    erp_user_id: str = Field(default="", max_length=160)
+    erp_password: str = Field(default="", max_length=200)

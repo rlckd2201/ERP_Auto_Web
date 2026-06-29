@@ -16,6 +16,12 @@ def data_server_target_url() -> str:
     return f"{base}{endpoint}"
 
 
+def _voucher_for_data_server(payload: dict[str, Any]) -> dict[str, Any]:
+    voucher = dict(payload or {})
+    voucher.pop("erp_credentials", None)
+    return voucher
+
+
 def forward_job_to_data_server(job: JobRecord) -> dict[str, Any]:
     url = data_server_target_url()
     payload = {
@@ -28,7 +34,7 @@ def forward_job_to_data_server(job: JobRecord) -> dict[str, Any]:
         "source_filename": job.source_filename,
         "target_agent_id": job.target_agent_id,
         "target_client_ip": job.target_client_ip,
-        "voucher": job.payload,
+        "voucher": _voucher_for_data_server(job.payload),
     }
     try:
         response = requests.post(url, json=payload, timeout=settings.data_server_timeout_seconds)
