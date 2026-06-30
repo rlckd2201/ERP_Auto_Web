@@ -1530,8 +1530,12 @@ class ERPLoginBot:
         mgmt_click_wait = max(quick_wait, float(os.getenv("ERP_MGMT_CLICK_WAIT", mgmt_click_default) or mgmt_click_default))
         mgmt_clipboard_wait = max(0.02, float(os.getenv("ERP_MGMT_CLIPBOARD_WAIT", mgmt_clipboard_default) or mgmt_clipboard_default))
         mgmt_summary_open_wait = max(mgmt_click_wait, float(os.getenv("ERP_MGMT_SUMMARY_OPEN_WAIT", "0.55") or "0.55"))
+        mgmt_after_summary_open_wait = max(0.0, float(os.getenv("ERP_MGMT_AFTER_SUMMARY_OPEN_WAIT", "0.05" if fast_management else "0.20") or "0.0"))
         mgmt_after_grid_paste_wait = max(0.40, float(os.getenv("ERP_MGMT_AFTER_GRID_PASTE_WAIT", "0.70") or "0.70"))
         vendor_popup_open_wait = max(0.35, float(os.getenv("ERP_VENDOR_POPUP_OPEN_WAIT", "0.55") or "0.55"))
+        vendor_popup_focus_wait = max(mgmt_focus_wait, float(os.getenv("ERP_VENDOR_POPUP_FOCUS_WAIT", "0.12" if fast_management else "0.45") or "0.45"))
+        vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
+        skip_visible_row_scan = _env_flag("ERP_SKIP_VISIBLE_ROW_SCAN", "1" if fast_management else "0")
 
         if fast_input:
             try:
@@ -2527,11 +2531,20 @@ class ERPLoginBot:
                 f"last_labels={(last_snapshot or {}).get('labels')}"
             )
 
+        management_value_xy_cache = {}
+
         def _management_value_xy(item_name, fallback_y):
             target = _norm_text(item_name)
             snapshot = None
             main_rect = _main_rect()
             fast_anchor = _env_flag("ERP_FAST_MGMT_ANCHOR", "1")
+            cache_key = target or str(item_name or "").strip()
+            if fast_anchor and cache_key in management_value_xy_cache:
+                cached_x, cached_y = management_value_xy_cache[cache_key]
+                self.logger.info(
+                    f"  [MGMT-ANCHOR] {item_name} cached coordinate reuse: rel=({cached_x},{cached_y})"
+                )
+                return int(cached_x), int(cached_y)
             attempts = 1 if fast_anchor else 8
             for attempt in range(attempts):
                 snapshot = _management_grid_snapshot()
@@ -2550,6 +2563,8 @@ class ERPLoginBot:
                         f"  [MGMT-ANCHOR] {item_name} 현재 위치 기준 입력 좌표: "
                         f"rel=({value_x},{value_y}), labels={snapshot.get('labels')}"
                     )
+                    if fast_anchor and cache_key:
+                        management_value_xy_cache[cache_key] = (int(value_x), int(value_y))
                     return int(value_x), int(value_y)
                 if fast_anchor and not (snapshot.get("items") or snapshot.get("header_value")):
                     break
@@ -2562,6 +2577,8 @@ class ERPLoginBot:
                 self.logger.info(log_msg)
             else:
                 self.logger.warning(log_msg)
+            if fast_anchor and cache_key:
+                management_value_xy_cache[cache_key] = (1118, int(fallback_y))
             return 1118, fallback_y
 
         def _select_acc_unit_by_coord(target_site):
@@ -3031,7 +3048,7 @@ class ERPLoginBot:
                 self.logger.info(
                     f"  [MGMT-XY] {label}: vendor popup opened; relation cell untouched, keeping default search-box focus"
                 )
-                time.sleep(max(0.45, mgmt_focus_wait))
+                time.sleep(vendor_popup_focus_wait)
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 키보드 흐름을 사용합니다.
                 # 재정 엑셀 전표는 거래처코드 검색이어야 하므로 보정 Up 횟수를 별도로 받습니다.
@@ -3039,7 +3056,7 @@ class ERPLoginBot:
                 _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
                 time.sleep(max(0.18, mgmt_key_wait))
                 _paste_text_fast(search_text, f"{label} 거래처 {search_label}")
-                time.sleep(max(0.55, vendor_popup_open_wait))
+                time.sleep(vendor_popup_search_wait)
                 self.logger.info(f"  [MGMT-XY] {label}: 거래처 {search_label} 붙여넣기: {search_text}")
                 pyautogui.press('tab', presses=4, interval=0.08)
                 time.sleep(mgmt_key_wait)
@@ -3280,7 +3297,9 @@ class ERPLoginBot:
                 return sorted(candidates, key=lambda item: item[0])[0][1]
 
             def _focus_grid_row(row_no, expected_y):
-                resolved_y = _visible_row_y(row_no, expected_y) if sequential_nav else None
+                resolved_y = None
+                if sequential_nav and not skip_visible_row_scan:
+                    resolved_y = _visible_row_y(row_no, expected_y)
                 target_y = int(resolved_y if resolved_y is not None else expected_y)
                 _double_click_form_xy(summary_x, target_y, f"{row_no}행 적요", wait=mgmt_summary_open_wait)
                 return target_y
@@ -3292,9 +3311,10 @@ class ERPLoginBot:
                 pyautogui.press('down')
                 time.sleep(mgmt_commit_wait)
                 expected_y = current_y + row_height if current_y + row_height <= max_row_y else max_row_y
-                resolved_y = _visible_row_y(next_row_no, expected_y)
-                if resolved_y is not None:
-                    return resolved_y
+                if not skip_visible_row_scan:
+                    resolved_y = _visible_row_y(next_row_no, expected_y)
+                    if resolved_y is not None:
+                        return resolved_y
                 return expected_y
 
             current_y = first_row_y
@@ -3317,7 +3337,8 @@ class ERPLoginBot:
                     continue
                 summary_y = current_y if sequential_nav else first_row_y + (idx * row_height)
                 current_y = _focus_grid_row(row_no, summary_y)
-                time.sleep(mgmt_summary_open_wait)
+                if mgmt_after_summary_open_wait:
+                    time.sleep(mgmt_after_summary_open_wait)
                 _fill_management_for_current_row(row_no, account_name)
                 time.sleep(mgmt_key_wait)
                 if idx < rows_to_fill - 1:

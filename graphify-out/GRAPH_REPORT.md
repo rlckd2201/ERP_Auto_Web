@@ -1,11 +1,11 @@
 # Graph Report - (재정)회계업무 자동화_WEB_Version  (2026-06-30)
 
 ## Corpus Check
-- 1941 files · ~3,512,209 words
+- 1941 files · ~3,512,338 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4865 nodes · 37367 edges · 82 communities detected
+- 4867 nodes · 37367 edges · 84 communities detected
 - Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 3130 edges (avg confidence: 0.79)
 - Token cost: 0 input · 0 output
 
@@ -92,6 +92,8 @@
 - [[_COMMUNITY_Community 318|Community 318]]
 - [[_COMMUNITY_Community 319|Community 319]]
 - [[_COMMUNITY_Community 320|Community 320]]
+- [[_COMMUNITY_Community 321|Community 321]]
+- [[_COMMUNITY_Community 322|Community 322]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `get_invoice()` - 244 edges
@@ -309,15 +311,15 @@ Nodes (1): 캐시된 드라이버 우선 탐색 → 없으면 ChromeDriverManage
 
 ### Community 286 - "Community 286"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 287 - "Community 287"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 288 - "Community 288"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 289 - "Community 289"
 Cohesion: 1.0
@@ -345,15 +347,15 @@ Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the 
 
 ### Community 295 - "Community 295"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 296 - "Community 296"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 297 - "Community 297"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 298 - "Community 298"
 Cohesion: 1.0
@@ -365,15 +367,15 @@ Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the 
 
 ### Community 300 - "Community 300"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 301 - "Community 301"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 302 - "Community 302"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 303 - "Community 303"
 Cohesion: 1.0
@@ -381,47 +383,47 @@ Nodes (1): Placeholder for the real ERP UI automation run on the automatic vouch
 
 ### Community 304 - "Community 304"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
+Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
 
 ### Community 305 - "Community 305"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
+Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
 
 ### Community 306 - "Community 306"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
 
 ### Community 307 - "Community 307"
 Cohesion: 1.0
-Nodes (1): ?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?
+Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
 
 ### Community 308 - "Community 308"
 Cohesion: 1.0
-Nodes (1): KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 309 - "Community 309"
 Cohesion: 1.0
-Nodes (1): Save tax-invoice XML attachments and return file:// URIs.
+Nodes (1): ?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?
 
 ### Community 310 - "Community 310"
 Cohesion: 1.0
-Nodes (1): 硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.
+Nodes (1): KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai
 
 ### Community 311 - "Community 311"
 Cohesion: 1.0
-Nodes (1): ?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫
+Nodes (1): Save tax-invoice XML attachments and return file:// URIs.
 
 ### Community 312 - "Community 312"
 Cohesion: 1.0
-Nodes (1): 硫붿씪 ?섏떊????yymmdd ?뺤떇.
+Nodes (1): 硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.
 
 ### Community 313 - "Community 313"
 Cohesion: 1.0
-Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+Nodes (1): ?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫
 
 ### Community 314 - "Community 314"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): 硫붿씪 ?섏떊????yymmdd ?뺤떇.
 
 ### Community 315 - "Community 315"
 Cohesion: 1.0
@@ -429,7 +431,7 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
 
 ### Community 316 - "Community 316"
 Cohesion: 1.0
-Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 317 - "Community 317"
 Cohesion: 1.0
@@ -447,8 +449,16 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
 Cohesion: 1.0
 Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
 
+### Community 321 - "Community 321"
+Cohesion: 1.0
+Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+
+### Community 322 - "Community 322"
+Cohesion: 1.0
+Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+
 ## Knowledge Gaps
-- **75 isolated node(s):** `DueRule`, `DueContact`, `DueRule`, `DueContact`, `Run a dry-run print preview or the real legacy ERP automation on the voucher PC` (+70 more)
+- **77 isolated node(s):** `DueRule`, `DueContact`, `DueRule`, `DueContact`, `Run a dry-run print preview or the real legacy ERP automation on the voucher PC` (+72 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 34`** (34 nodes): `WEB v1 backend package.`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -474,11 +484,11 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 55`** (1 nodes): `캐시된 드라이버 우선 탐색 → 없으면 ChromeDriverManager 자동 설치.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 286`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 286`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 287`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 287`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 288`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 288`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 289`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -492,49 +502,49 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 294`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 295`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 295`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 296`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 296`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 297`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 297`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 298`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 299`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 300`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 300`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 301`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
+- **Thin community `Community 301`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 302`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
+- **Thin community `Community 302`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 303`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 304`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
+- **Thin community `Community 304`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 305`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
+- **Thin community `Community 305`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 306`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 306`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 307`** (1 nodes): `?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?`
+- **Thin community `Community 307`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 308`** (1 nodes): `KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai`
+- **Thin community `Community 308`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 309`** (1 nodes): `Save tax-invoice XML attachments and return file:// URIs.`
+- **Thin community `Community 309`** (1 nodes): `?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 310`** (1 nodes): `硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.`
+- **Thin community `Community 310`** (1 nodes): `KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 311`** (1 nodes): `?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫`
+- **Thin community `Community 311`** (1 nodes): `Save tax-invoice XML attachments and return file:// URIs.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 312`** (1 nodes): `硫붿씪 ?섏떊????yymmdd ?뺤떇.`
+- **Thin community `Community 312`** (1 nodes): `硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 313`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+- **Thin community `Community 313`** (1 nodes): `?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 314`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 314`** (1 nodes): `硫붿씪 ?섏떊????yymmdd ?뺤떇.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 315`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 316`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+- **Thin community `Community 316`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 317`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -543,6 +553,10 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
 - **Thin community `Community 319`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 320`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 321`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 322`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
