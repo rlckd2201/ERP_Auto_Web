@@ -2266,7 +2266,7 @@ class ERPLoginBot:
             grid_paste_state["verified"] = True
             self.logger.info(f"  [FORM-VERIFY] 그리드 붙여넣기 검증 완료: {expected}")
 
-        def _management_grid_snapshot():
+        def _management_grid_snapshot(include_visual=False):
             main_rect = _main_rect()
             header_label = None
             header_value = None
@@ -2311,13 +2311,26 @@ class ERPLoginBot:
                         item_rows.append(row)
                 except:
                     pass
+            if not include_visual:
+                item_rows.sort(key=lambda row: (row["rel_y"], row["rel_x"]))
+                return {
+                    "header_label": header_label,
+                    "header_value": header_value,
+                    "items": item_rows,
+                    "labels": [row["text"] for row in item_rows],
+                    "label_norms": {row["norm"] for row in item_rows},
+                    "visual_ready": visual_ready,
+                    "visual_score": visual_score,
+                }
             try:
                 # UIA가 ERP 하단 관리항목 글자를 못 읽는 경우가 있어 화면 픽셀도 함께 봅니다.
                 # 사용자가 splitter를 움직여도 잡히도록 ERP 창 내부 후보 band를 아래로 훑습니다.
                 scan_left = main_rect.left + 650
                 scan_right = min(main_rect.right - 40, main_rect.left + 1220)
                 max_top = max(331, min(main_rect.bottom - main_rect.top - 190, 900))
-                for top_rel in range(330, max_top, 80):
+                for top_rel in (360, 480, 600, 720, 820):
+                    if top_rel >= max_top:
+                        continue
                     top = main_rect.top + top_rel
                     bottom = min(main_rect.bottom - 90, top + 120)
                     if scan_right <= scan_left or bottom <= top:
@@ -2327,7 +2340,7 @@ class ERPLoginBot:
                     red_pixels = 0
                     dark_pixels = 0
                     gray_lines = 0
-                    step = 3
+                    step = max(6, int(os.getenv("ERP_MGMT_VISUAL_SCAN_STEP", "10") or "10"))
                     for y in range(0, height, step):
                         for x in range(0, width, step):
                             r, g, b = image.getpixel((x, y))[:3]
@@ -2340,7 +2353,7 @@ class ERPLoginBot:
                     score = red_pixels * 3 + dark_pixels + gray_lines
                     if score > visual_score:
                         visual_score = score
-                    if red_pixels >= 3 and dark_pixels >= 20 and gray_lines >= 25:
+                    if red_pixels >= 1 and dark_pixels >= 4 and gray_lines >= 8:
                         visual_ready = True
                         break
             except Exception as e:
@@ -2377,7 +2390,7 @@ class ERPLoginBot:
             while True:
                 elapsed = time.time() - started
                 snapshot_started = time.time()
-                snapshot = _management_grid_snapshot()
+                snapshot = _management_grid_snapshot(include_visual=True)
                 snapshot_seconds = time.time() - snapshot_started
                 last_snapshot = snapshot
                 labels = snapshot.get("label_norms") or set()
@@ -2412,7 +2425,9 @@ class ERPLoginBot:
             target = _norm_text(item_name)
             snapshot = None
             main_rect = _main_rect()
-            for attempt in range(8):
+            fast_anchor = _env_flag("ERP_FAST_MGMT_ANCHOR", "1")
+            attempts = 1 if fast_anchor else 8
+            for attempt in range(attempts):
                 snapshot = _management_grid_snapshot()
                 value_header = snapshot.get("header_value")
                 for row in snapshot.get("items") or []:
@@ -2430,11 +2445,17 @@ class ERPLoginBot:
                         f"rel=({value_x},{value_y}), labels={snapshot.get('labels')}"
                     )
                     return int(value_x), int(value_y)
+                if fast_anchor and not (snapshot.get("items") or snapshot.get("header_value")):
+                    break
                 time.sleep(0.25)
-            self.logger.warning(
+            log_msg = (
                 f"  [MGMT-ANCHOR] {item_name} 위치 미검출, fallback 사용: rel=(1118,{fallback_y}), "
                 f"labels={(snapshot or {}).get('labels')}"
             )
+            if fast_anchor:
+                self.logger.info(log_msg)
+            else:
+                self.logger.warning(log_msg)
             return 1118, fallback_y
 
         def _select_acc_unit_by_coord(target_site):
