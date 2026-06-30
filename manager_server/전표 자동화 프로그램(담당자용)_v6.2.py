@@ -3825,7 +3825,10 @@ class ERPLoginBot:
 
         def _save_and_open_print_dialog():
             if _env_flag("ERP_VERIFY_GRID_PASTE", "0") and not grid_paste_state.get("verified"):
-                _fail_form("그리드 붙여넣기 검증이 완료되지 않아 저장을 중단합니다.")
+                if _env_flag("ERP_ALLOW_UNVERIFIED_GRID_SAVE", "0"):
+                    self.logger.warning("  [SAVE] 그리드 붙여넣기 검증 미완료 상태지만 저장/전표출력을 계속 진행합니다.")
+                else:
+                    _fail_form("그리드 붙여넣기 검증이 완료되지 않아 저장을 중단합니다.")
             try:
                 self.logger.info("  [SAVE] Ctrl+S 저장 시작")
                 pyautogui.hotkey('ctrl', 's')
