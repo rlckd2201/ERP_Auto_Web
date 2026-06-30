@@ -29,7 +29,7 @@ from .models import (
     ForgotPasswordRequest,
     LoginRequest,
 )
-from .notifications import notify_job_completed, notify_password_reset
+from .notifications import notify_job_completed, notify_job_failed, notify_password_reset
 from .settings import BASE_DIR, default_accounting_date, manager_profile, manager_profiles, settings
 from .storage import JobStore
 from .voucher_builder import build_voucher_payload
@@ -128,6 +128,26 @@ def _safe_filename(filename: str, fallback: str = "upload.xlsx") -> str:
     if not clean.lower().endswith((".xlsx", ".xlsm")):
         raise HTTPException(status_code=400, detail="xlsx 또는 xlsm 파일만 업로드할 수 있습니다.")
     return clean
+
+
+def _safe_artifact_filename(filename: str, fallback: str = "voucher.pdf") -> str:
+    name = Path(filename or fallback).name.strip() or fallback
+    blocked = '<>:"/\\|?*'
+    clean = "".join("_" if ch in blocked else ch for ch in name).strip(" .")
+    if not clean.lower().endswith(".pdf"):
+        clean = f"{Path(clean).stem or Path(fallback).stem}.pdf"
+    return clean
+
+
+def _safe_artifact_type(value: str) -> str:
+    normalized = "".join(ch if ch.isalnum() or ch in ("_", "-") else "_" for ch in str(value or "erp_pdf")).strip("_")
+    return normalized or "erp_pdf"
+
+
+def _artifact_dir(job_id: str) -> Path:
+    path = settings.data_dir / "job_artifacts" / job_id
+    path.mkdir(parents=True, exist_ok=True)
+    return path
 
 
 def _seconds_since_iso(value: str | None) -> int | None:
@@ -524,6 +544,19 @@ def api_job_source(job_id: str) -> FileResponse:
     return FileResponse(path, filename=path.name)
 
 
+@app.get("/api/jobs/{job_id}/artifacts/{artifact_type}")
+def api_job_artifact(job_id: str, artifact_type: str) -> FileResponse:
+    try:
+        job = store.get_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
+    artifact_key = _safe_artifact_type(artifact_type)
+    path = Path(str((job.result or {}).get(f"{artifact_key}_server_path") or ""))
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="보관된 PDF 파일이 없습니다.")
+    return FileResponse(path, filename=path.name, media_type="application/pdf")
+
+
 @app.post("/api/jobs/{job_id}/forward")
 def api_forward_job(job_id: str) -> dict[str, Any]:
     try:
@@ -646,34 +679,96 @@ def api_agent_job_event(job_id: str, event: AgentEventRequest) -> dict[str, Any]
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
 
 
+@app.post("/api/agent/jobs/{job_id}/artifacts")
+def api_agent_job_artifact(
+    job_id: str,
+    file: UploadFile = File(...),
+    agent_id: str = Form(default=""),
+    artifact_type: str = Form(default="erp_pdf"),
+) -> dict[str, Any]:
+    try:
+        job = store.get_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
+    artifact_key = _safe_artifact_type(artifact_type)
+    filename = _safe_artifact_filename(file.filename or f"{artifact_key}.pdf")
+    target = _artifact_dir(job_id) / filename
+    with target.open("wb") as out:
+        shutil.copyfileobj(file.file, out)
+    result = {
+        **(job.result or {}),
+        f"{artifact_key}_server_path": str(target),
+        f"{artifact_key}_filename": filename,
+        f"{artifact_key}_download_url": f"/api/jobs/{job_id}/artifacts/{artifact_key}",
+        f"{artifact_key}_stored_at": datetime.now().isoformat(timespec="seconds"),
+        f"{artifact_key}_agent_id": agent_id,
+        f"{artifact_key}_stored": True,
+    }
+    if artifact_key == "erp_pdf":
+        result["server_pdf_stored"] = True
+    job = store.update_job(
+        job_id,
+        status="running",
+        progress=max(job.progress, 90),
+        message="전표 PDF를 서버에 보관했습니다.",
+        result=result,
+    )
+    return {
+        "ok": True,
+        "artifact": {
+            "type": artifact_key,
+            "filename": filename,
+            "path": str(target),
+            "download_url": f"/api/jobs/{job_id}/artifacts/{artifact_key}",
+        },
+        "job": _public_job_dump(job),
+    }
+
+
 @app.post("/api/agent/jobs/{job_id}/complete")
 def api_agent_job_complete(job_id: str, complete: AgentCompleteRequest) -> dict[str, Any]:
     try:
-        status = "done" if complete.ok else "error"
-        message = complete.message or ("ERP 전표 처리 완료" if complete.ok else "ERP 전표 처리 실패")
+        existing_job = store.get_job(job_id)
+        result = {**(existing_job.result or {}), **(complete.result or {})}
+        effective_ok = bool(complete.ok)
+        effective_error = complete.error or ""
+        if (
+            complete.ok
+            and result.get("erp_saved")
+            and result.get("print_submitted")
+            and not result.get("erp_pdf_server_path")
+        ):
+            effective_ok = False
+            effective_error = "ERP 전표 PDF가 서버에 보관되지 않아 완료 처리할 수 없습니다."
+            result["server_pdf_required"] = True
+        if effective_error:
+            result.setdefault("error", effective_error)
+        status = "done" if effective_ok else "error"
+        message = complete.message or ("ERP 전표 처리 완료" if effective_ok else "ERP 전표 처리 실패")
+        if not effective_ok and effective_error:
+            message = effective_error
         job = store.update_job(
             job_id,
             status=status,
-            progress=100 if complete.ok else 95,
+            progress=100 if effective_ok else 95,
             message=message,
-            result=complete.result,
-            error="" if complete.ok else complete.error,
+            result=result,
+            error="" if effective_ok else effective_error,
             finished=True,
         )
-        if (
-            complete.ok
-            and complete.result.get("erp_saved")
-            and complete.result.get("voucher_no")
-            and complete.result.get("print_submitted")
-        ):
-            try:
+        notification: dict[str, Any] | None = None
+        try:
+            if effective_ok and not job.result.get("dry_run") and job.result.get("erp_saved"):
                 notification = notify_job_completed(job)
-            except Exception as exc:
-                notification = {"sent": False, "queued": False, "error": str(exc)}
+            elif not effective_ok:
+                notification = notify_job_failed(job)
+        except Exception as exc:
+            notification = {"sent": False, "queued": False, "error": str(exc)}
+        if notification is not None:
             job = store.update_job(
                 job_id,
                 status=status,
-                progress=100,
+                progress=100 if effective_ok else 95,
                 message=message,
                 result={**job.result, "notification": notification},
             )

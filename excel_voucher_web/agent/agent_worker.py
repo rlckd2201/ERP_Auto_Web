@@ -72,6 +72,31 @@ def _download_job_source(
     return source_path
 
 
+def _upload_job_artifact(
+    session: requests.Session,
+    server: str,
+    job_id: str,
+    agent_id: str,
+    path: Path,
+    artifact_type: str,
+    *,
+    verify_tls: bool,
+) -> dict[str, Any]:
+    if not path.is_file():
+        raise RuntimeError(f"artifact file was not found: {path}")
+    with path.open("rb") as fp:
+        response = session.post(
+            f"{server.rstrip('/')}/api/agent/jobs/{job_id}/artifacts",
+            data={"agent_id": agent_id, "artifact_type": artifact_type},
+            files={"file": (path.name, fp, "application/pdf")},
+            timeout=180,
+            verify=verify_tls,
+        )
+    response.raise_for_status()
+    data = response.json()
+    return data if isinstance(data, dict) else {}
+
+
 def _heartbeat(agent_id: str, client_ip: str = "", print_mode: str = "default-printer", printer_name: str = "", erp_mode: str = "dry-run") -> dict[str, Any]:
     return {
         "agent_id": agent_id,
@@ -459,6 +484,38 @@ def run_loop(
                 print_wait_seconds=print_wait_seconds,
                 erp_mode=erp_mode,
             )
+            if erp_mode == "real" and result.get("erp_saved"):
+                pdf_path = Path(str(result.get("erp_pdf_path") or ""))
+                _post(
+                    session,
+                    server,
+                    f"/api/agent/jobs/{job_id}/event",
+                    {
+                        "agent_id": agent_id,
+                        "status": "running",
+                        "progress": 90,
+                        "message": "ERP 전표 PDF를 서버에 보관 중입니다.",
+                    },
+                    verify_tls=verify_tls,
+                )
+                artifact_response = _upload_job_artifact(
+                    session,
+                    server,
+                    job_id,
+                    agent_id,
+                    pdf_path,
+                    "erp_pdf",
+                    verify_tls=verify_tls,
+                )
+                artifact = artifact_response.get("artifact") if isinstance(artifact_response, dict) else {}
+                if isinstance(artifact, dict):
+                    result = {
+                        **result,
+                        "server_pdf_stored": True,
+                        "erp_pdf_server_path": artifact.get("path") or "",
+                        "erp_pdf_filename": artifact.get("filename") or "",
+                        "erp_pdf_download_url": artifact.get("download_url") or "",
+                    }
             _post(
                 session,
                 server,

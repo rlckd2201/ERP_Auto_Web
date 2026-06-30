@@ -2271,6 +2271,8 @@ class ERPLoginBot:
             header_label = None
             header_value = None
             item_rows = []
+            visual_ready = False
+            visual_score = 0
             item_needles = {
                 _norm_text("계좌번호"),
                 _norm_text("금융기관지점"),
@@ -2309,6 +2311,40 @@ class ERPLoginBot:
                         item_rows.append(row)
                 except:
                     pass
+            try:
+                # UIA가 ERP 하단 관리항목 글자를 못 읽는 경우가 있어 화면 픽셀도 함께 봅니다.
+                # 사용자가 splitter를 움직여도 잡히도록 ERP 창 내부 후보 band를 아래로 훑습니다.
+                scan_left = main_rect.left + 650
+                scan_right = min(main_rect.right - 40, main_rect.left + 1220)
+                max_top = max(331, min(main_rect.bottom - main_rect.top - 190, 900))
+                for top_rel in range(330, max_top, 80):
+                    top = main_rect.top + top_rel
+                    bottom = min(main_rect.bottom - 90, top + 120)
+                    if scan_right <= scan_left or bottom <= top:
+                        continue
+                    image = pyautogui.screenshot(region=(scan_left, top, scan_right - scan_left, bottom - top))
+                    width, height = image.size
+                    red_pixels = 0
+                    dark_pixels = 0
+                    gray_lines = 0
+                    step = 3
+                    for y in range(0, height, step):
+                        for x in range(0, width, step):
+                            r, g, b = image.getpixel((x, y))[:3]
+                            if r > 150 and g < 95 and b < 95:
+                                red_pixels += 1
+                            elif r < 95 and g < 95 and b < 95:
+                                dark_pixels += 1
+                            elif abs(r - g) < 8 and abs(g - b) < 8 and 145 <= r <= 215:
+                                gray_lines += 1
+                    score = red_pixels * 3 + dark_pixels + gray_lines
+                    if score > visual_score:
+                        visual_score = score
+                    if red_pixels >= 3 and dark_pixels >= 20 and gray_lines >= 25:
+                        visual_ready = True
+                        break
+            except Exception as e:
+                self.logger.debug(f"  [FORM-VERIFY] management visual snapshot failed: {e}")
             item_rows.sort(key=lambda row: (row["rel_y"], row["rel_x"]))
             return {
                 "header_label": header_label,
@@ -2316,6 +2352,8 @@ class ERPLoginBot:
                 "items": item_rows,
                 "labels": [row["text"] for row in item_rows],
                 "label_norms": {row["norm"] for row in item_rows},
+                "visual_ready": visual_ready,
+                "visual_score": visual_score,
             }
 
         def _wait_for_management_grid_ready(context="Excel paste"):
@@ -2345,17 +2383,20 @@ class ERPLoginBot:
                 labels = snapshot.get("label_norms") or set()
                 has_ready_label = bool(labels & ready_needles)
                 has_value_header = bool(snapshot.get("header_value"))
-                if has_ready_label:
+                has_visual_ready = bool(snapshot.get("visual_ready"))
+                if has_ready_label or has_visual_ready:
                     self.logger.info(
                         "  [FORM-VERIFY] 하단 관리항목 표시 감지: "
                         f"context={context}, rows={row_count}, elapsed={elapsed:.1f}s, "
-                        f"value_header={has_value_header}, labels={snapshot.get('labels')}"
+                        f"value_header={has_value_header}, visual_ready={has_visual_ready}, "
+                        f"visual_score={snapshot.get('visual_score')}, labels={snapshot.get('labels')}"
                     )
                     return snapshot
                 self.logger.info(
                     "  [FORM-VERIFY] 하단 관리항목 표시 대기 중: "
                     f"context={context}, elapsed={elapsed:.1f}s/{timeout:.1f}s, "
                     f"next_check={poll_seconds:.1f}s, snapshot={snapshot_seconds:.1f}s, "
+                    f"visual_ready={has_visual_ready}, visual_score={snapshot.get('visual_score')}, "
                     f"labels={snapshot.get('labels')}"
                 )
                 if time.time() >= end_at:
