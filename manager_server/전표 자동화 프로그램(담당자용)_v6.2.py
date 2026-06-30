@@ -107,6 +107,8 @@ ERP_BLOCK_WAIT = 0.30
 ERP_FORM_WAIT = 0.12
 ERP_PRINT_SAVE_WAIT = 3.0
 ERP_PRINT_VIEWER_WAIT = 1.5
+ERP_GUI_MUTEX_NAME = os.getenv("ERP_GUI_MUTEX_NAME", r"Global\DSS_ERP_GUI_AUTOMATION_LOCK")
+ERP_GUI_LOCK_INFO_PATH = os.getenv("ERP_GUI_LOCK_INFO_PATH", r"C:\ERP_DB\erp_gui_automation.lock.json")
 APPROVAL_GW_URL = "https://gw.dae-seung.co.kr"
 APPROVAL_DEFAULT_USER = "admpdm"
 APPROVAL_DEFAULT_PASSWORD = "eotmd12#$"
@@ -115,6 +117,101 @@ PRINT_TARGET_OPTIONS = [
     {"label": "김제 프린터", "match": "172.17.30.162", "kind": "printer"},
     {"label": "PDF 저장(병합본)", "match": "Microsoft Print To PDF", "kind": "pdf_merge"},
 ]
+
+
+class _ErpGuiAutomationLock:
+    WAIT_OBJECT_0 = 0
+    WAIT_ABANDONED = 0x80
+    WAIT_TIMEOUT = 0x102
+
+    def __init__(self, logger: logging.Logger, owner: str):
+        self.logger = logger
+        self.owner = owner
+        self.handle = None
+        self.acquired = False
+
+    def _read_owner(self) -> str:
+        try:
+            with open(ERP_GUI_LOCK_INFO_PATH, "r", encoding="utf-8") as fh:
+                data = json.load(fh)
+            return str(data.get("owner") or data.get("pid") or "").strip()
+        except Exception:
+            return ""
+
+    def _write_owner(self) -> None:
+        try:
+            path = Path(ERP_GUI_LOCK_INFO_PATH)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            data = {
+                "owner": self.owner,
+                "pid": os.getpid(),
+                "started_at": datetime.now().isoformat(timespec="seconds"),
+                "mutex": ERP_GUI_MUTEX_NAME,
+            }
+            path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+        except Exception as exc:
+            self.logger.warning(f"[ERP-LOCK] lock info write failed: {exc}")
+
+    def acquire(self) -> None:
+        if os.name != "nt" or str(os.getenv("ERP_GUI_LOCK_DISABLED", "")).lower() in {"1", "true", "yes", "y"}:
+            return
+        timeout_seconds = max(1.0, float(os.getenv("ERP_GUI_LOCK_TIMEOUT_SECONDS", "7200") or "7200"))
+        log_seconds = max(5.0, float(os.getenv("ERP_GUI_LOCK_LOG_SECONDS", "30") or "30"))
+        kernel32 = ctypes.windll.kernel32
+        kernel32.CreateMutexW.restype = ctypes.c_void_p
+        kernel32.WaitForSingleObject.argtypes = [ctypes.c_void_p, ctypes.c_uint32]
+        kernel32.ReleaseMutex.argtypes = [ctypes.c_void_p]
+        kernel32.CloseHandle.argtypes = [ctypes.c_void_p]
+        self.handle = kernel32.CreateMutexW(None, False, ERP_GUI_MUTEX_NAME)
+        if not self.handle:
+            self.logger.warning("[ERP-LOCK] CreateMutex failed; continuing without lock")
+            return
+        started = time.time()
+        self.logger.info(f"[ERP-LOCK] waiting for shared ERP GUI lock: owner={self.owner}")
+        while True:
+            elapsed = time.time() - started
+            remaining = timeout_seconds - elapsed
+            if remaining <= 0:
+                waiting_owner = self._read_owner() or "unknown"
+                raise RuntimeError(
+                    f"ERP GUI automation lock timeout after {timeout_seconds:.0f}s. "
+                    f"current owner={waiting_owner}"
+                )
+            wait_ms = int(min(log_seconds, remaining) * 1000)
+            result = kernel32.WaitForSingleObject(self.handle, wait_ms)
+            if result in (self.WAIT_OBJECT_0, self.WAIT_ABANDONED):
+                self.acquired = True
+                self._write_owner()
+                self.logger.info(
+                    f"[ERP-LOCK] acquired shared ERP GUI lock after {elapsed:.1f}s: owner={self.owner}"
+                )
+                return
+            if result == self.WAIT_TIMEOUT:
+                waiting_owner = self._read_owner() or "unknown"
+                self.logger.warning(
+                    f"[ERP-LOCK] waiting {elapsed:.1f}s/{timeout_seconds:.0f}s; current owner={waiting_owner}"
+                )
+                continue
+            raise RuntimeError(f"ERP GUI automation lock wait failed: result={result}")
+
+    def release(self) -> None:
+        if os.name != "nt" or not self.handle:
+            return
+        kernel32 = ctypes.windll.kernel32
+        try:
+            if self.acquired:
+                try:
+                    Path(ERP_GUI_LOCK_INFO_PATH).unlink(missing_ok=True)
+                except Exception:
+                    pass
+                kernel32.ReleaseMutex(self.handle)
+                self.logger.info(f"[ERP-LOCK] released shared ERP GUI lock: owner={self.owner}")
+        finally:
+            kernel32.CloseHandle(self.handle)
+            self.handle = None
+            self.acquired = False
+
+
 APPROVAL_HELPER_SOURCE = r'''
 import asyncio
 import json
@@ -619,6 +716,15 @@ class ERPLoginBot:
         return ok
 
     def run(self):
+        owner = f"corp={self.corp_code} pid={os.getpid()}"
+        lock = _ErpGuiAutomationLock(self.logger, owner)
+        lock.acquire()
+        try:
+            return self._run_unlocked()
+        finally:
+            lock.release()
+
+    def _run_unlocked(self):
         try:
             process_exe = self.install_info["process_name"].lower().replace('.exe', '')
             confirmed_pid = 0
