@@ -486,7 +486,7 @@ def _run_real_erp_voucher_task(
     _render_print_text(payload, print_text_path)
 
     os.environ.setdefault("ERP_OUTPUT_DIR", str(output_dir / "erp_outputs"))
-    os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print to PDF")
+    os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print To PDF")
     os.environ["ERP_GRID_COORD_FIRST"] = "1"
     os.environ["ERP_GRID_COPY_VIA_EXCEL"] = "1"
     os.environ["ERP_ADD_ROW_COORD_FIRST"] = "0"
@@ -525,7 +525,7 @@ def _run_real_erp_voucher_task(
     erp_pdf_path = erp_pdf_dir / f"{job_id}_erp_voucher.pdf"
     print_choice = {
         "label": "엑셀 전표 PDF 보관",
-        "match": os.getenv("ERP_PRINT_TARGET", "Microsoft Print to PDF"),
+        "match": os.getenv("ERP_PRINT_TARGET", "Microsoft Print To PDF"),
         "kind": "pdf_merge",
         "save_path": str(erp_pdf_path),
     }

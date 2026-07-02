@@ -3721,6 +3721,37 @@ class ERPLoginBot:
             self.logger.warning("  [PRINT] PDF 저장창 감지 시간초과")
             return None
 
+        def _focus_rd_viewer_window(timeout_sec=8):
+            title_re = r".*(Report Designer Viewer|RD Viewer|Designer Viewer).*"
+            end_at = time.time() + timeout_sec
+            while time.time() < end_at:
+                for backend in ("win32", "uia"):
+                    try:
+                        for win in Desktop(backend=backend).windows():
+                            title = (win.window_text() or "").strip()
+                            if not re.search(title_re, title, re.I):
+                                continue
+                            try:
+                                win.restore()
+                            except Exception:
+                                pass
+                            try:
+                                win.set_focus()
+                            except Exception:
+                                pass
+                            try:
+                                r = win.rectangle()
+                                pyautogui.click(r.left + 40, r.top + 15)
+                            except Exception:
+                                pass
+                            self.logger.info(f"  [PRINT] RD Viewer 포커스 완료: backend={backend}, title={title}")
+                            return win
+                    except Exception:
+                        pass
+                time.sleep(ERP_CLICK_WAIT)
+            self.logger.warning("  [PRINT] RD Viewer 창 포커스 시간초과")
+            return None
+
         def _close_rd_viewer(timeout_sec=5):
             """전표 출력 후 열린 Report Designer Viewer 창을 정리합니다."""
             closed = False
@@ -4061,14 +4092,18 @@ class ERPLoginBot:
             if re.fullmatch(r"\d{1,3}(?:\.\d{1,3}){3}", target):
                 pattern = rf"(?<![0-9A-Za-z_.-]){re.escape(target)}(?![0-9A-Za-z_.-])"
                 return re.search(pattern, blob or "") is not None
-            return target in (blob or "")
+            return target.casefold() in (blob or "").casefold()
 
         def _select_printer_in_dialog(choice):
             if not choice:
                 self.logger.info("  [PRINT] 출력안함 선택. Ctrl+P/인쇄를 진행하지 않습니다.")
                 return False
 
-            dialog = _wait_print_dialog(timeout_sec=10)
+            try:
+                print_dialog_timeout = float(os.getenv("ERP_PRINT_DIALOG_TIMEOUT_SECONDS", "25") or "25")
+            except ValueError:
+                print_dialog_timeout = 25.0
+            dialog = _wait_print_dialog(timeout_sec=print_dialog_timeout)
             if not dialog:
                 return False
 
@@ -4166,6 +4201,8 @@ class ERPLoginBot:
                 except ValueError:
                     viewer_timeout = 45.0
                 if _wait_process_by_name("rdviewer_u.exe", timeout_sec=viewer_timeout):
+                    if not _focus_rd_viewer_window(timeout_sec=10):
+                        raise RuntimeError("RD Viewer 프로세스는 감지됐지만 창 포커스를 잡지 못했습니다.")
                     time.sleep(ERP_PRINT_VIEWER_WAIT)
                 else:
                     raise RuntimeError("전표출력 후 RD Viewer가 감지되지 않아 인쇄를 중단합니다.")
@@ -4176,6 +4213,8 @@ class ERPLoginBot:
                     return
 
                 self.logger.info("  [PRINT] RD Viewer Ctrl+P 전송")
+                if not _focus_rd_viewer_window(timeout_sec=8):
+                    raise RuntimeError("RD Viewer 창을 찾지 못해 Ctrl+P를 전송하지 못했습니다.")
                 pyautogui.hotkey('ctrl', 'p')
                 time.sleep(ERP_BLOCK_WAIT)
                 self.logger.info("  [PRINT] 인쇄 프린터 선택창 호출 완료")
@@ -4183,8 +4222,11 @@ class ERPLoginBot:
                 if printed:
                     time.sleep(ERP_SETTLE_WAIT)
                     _close_rd_viewer(timeout_sec=8)
+                else:
+                    raise RuntimeError("RD Viewer 인쇄/PDF 저장 단계가 실패했습니다.")
             except Exception as e:
                 self.logger.warning(f"  [SAVE/PRINT] 자동 저장/출력 흐름 실패: {e}")
+                raise
 
         def _setup_by_coordinates_only():
             nonlocal main_rect_cache
