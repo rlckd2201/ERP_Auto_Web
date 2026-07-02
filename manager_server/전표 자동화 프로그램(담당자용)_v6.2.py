@@ -1608,7 +1608,7 @@ class ERPLoginBot:
             pyautogui.hotkey('ctrl', 'v')
             time.sleep(0.02 if fast_input else 0.04)
 
-        excel_copy_context = {"app": None, "book": None}
+        excel_copy_context = {"app": None, "book": None, "sheet_name": None, "end_row": 0, "end_col": 0}
 
         def _grid_row_to_excel_values(line):
             cols = str(line or "").split("\t")
@@ -1679,11 +1679,37 @@ class ERPLoginBot:
             sheet.Activate()
             target.Select()
             target.Copy()
+            excel_copy_context["sheet_name"] = sheet_name
+            excel_copy_context["end_row"] = end_row
+            excel_copy_context["end_col"] = end_col
+            time.sleep(max(0.2, float(os.getenv("ERP_EXCEL_COPY_SETTLE_SECONDS", "0.8") or "0.8")))
             self.logger.info(
                 f"  [FORM-GRID] Excel range copied: path={abs_source_path}, "
                 f"sheet={sheet_name}, range=A1:E{end_row}"
             )
             return True
+
+        def _refresh_excel_grid_clipboard():
+            book = excel_copy_context.get("book")
+            if book is None:
+                return False
+            try:
+                sheet_name = str(excel_copy_context.get("sheet_name") or "ERP_PASTE")
+                end_row = int(excel_copy_context.get("end_row") or 0)
+                end_col = int(excel_copy_context.get("end_col") or 0)
+                if end_row <= 0 or end_col <= 0:
+                    return False
+                sheet = book.Worksheets(sheet_name)
+                target = sheet.Range(sheet.Cells(1, 1), sheet.Cells(end_row, end_col))
+                sheet.Activate()
+                target.Select()
+                target.Copy()
+                time.sleep(max(0.2, float(os.getenv("ERP_EXCEL_COPY_SETTLE_SECONDS", "0.8") or "0.8")))
+                self.logger.info(f"  [FORM-GRID] Excel range re-copied for ERP paste: range=A1:E{end_row}")
+                return True
+            except Exception as e:
+                self.logger.warning(f"  [FORM-GRID] Excel range re-copy failed; text clipboard fallback: {e}")
+                return False
 
         def _close_excel_copy_workbook():
             if _env_flag("ERP_KEEP_PASTE_WORKBOOK", "0"):
@@ -1702,6 +1728,9 @@ class ERPLoginBot:
                     self.logger.warning(f"  [FORM-GRID] Excel paste app quit failed: {e}")
             excel_copy_context["book"] = None
             excel_copy_context["app"] = None
+            excel_copy_context["sheet_name"] = None
+            excel_copy_context["end_row"] = 0
+            excel_copy_context["end_col"] = 0
 
         main_rect_cache = None
 
@@ -2384,6 +2413,41 @@ class ERPLoginBot:
                 )
             grid_paste_state["verified"] = True
             self.logger.info(f"  [FORM-VERIFY] 그리드 붙여넣기 검증 완료: {expected}")
+
+        def _grid_first_cell_matches_expected(first_account_cell_xy, context="grid paste"):
+            expected = _expected_first_grid_account()
+            if not expected:
+                self.logger.warning("  [FORM-VERIFY] grid first-cell check skipped: expected account is empty")
+                return False
+            sentinel = f"__ERP_GRID_VERIFY_{int(time.time() * 1000)}__"
+            copied = ""
+            try:
+                pyperclip.copy(sentinel)
+                time.sleep(0.05)
+                _click_grid_first_account_cell(first_account_cell_xy)
+                pyautogui.hotkey("ctrl", "c")
+                _release_modifiers(f"{context} Ctrl+C", wait=False)
+                time.sleep(max(0.15, ERP_FORM_WAIT))
+                copied = str(pyperclip.paste() or "")
+            finally:
+                try:
+                    pyperclip.copy(original_clipboard)
+                except:
+                    pass
+            copied_norm = _norm_text(copied)
+            expected_norm = _norm_text(expected)
+            matched = copied != sentinel and expected_norm and expected_norm in copied_norm
+            if matched:
+                grid_paste_state["verified"] = True
+                self.logger.info(
+                    f"  [FORM-VERIFY] grid paste reflected in first cell: context={context}, expected={expected}"
+                )
+            else:
+                self.logger.warning(
+                    f"  [FORM-VERIFY] grid paste not reflected yet: context={context}, "
+                    f"expected={expected}, copied={copied[:120]}"
+                )
+            return matched
 
         def _management_grid_snapshot(include_visual=False):
             main_rect = _main_rect()
@@ -4269,9 +4333,51 @@ class ERPLoginBot:
                 "  [FORM-GRID] clipboard first row cols="
                 f"{len(first_clipboard_cols)} preview={first_clipboard_cols[:5]}"
             )
-            _click_grid_first_account_cell(first_account_cell_xy)
-            pyautogui.hotkey('ctrl', 'v')
-            self.logger.info("  [FORM-XY] 그리드 좌표 붙여넣기 완료")
+            def _paste_grid_until_reflected():
+                nonlocal main_rect_cache
+                attempts = max(1, int(os.getenv("ERP_GRID_PASTE_RETRIES", "3") or "3"))
+                first_cell_wait = max(
+                    3.0,
+                    float(os.getenv("ERP_GRID_PASTE_FIRST_CELL_WAIT_SECONDS", "20") or "20"),
+                )
+                for attempt in range(1, attempts + 1):
+                    self._force_erp_window_maximized(
+                        main_win,
+                        f"grid paste attempt {attempt} before ERP main window",
+                    )
+                    main_rect_cache = None
+                    used_excel_clipboard = False
+                    if excel_copy_used:
+                        used_excel_clipboard = _refresh_excel_grid_clipboard()
+                    if not used_excel_clipboard:
+                        pyperclip.copy(original_clipboard)
+                        time.sleep(max(0.2, ERP_FORM_WAIT))
+                    _release_modifiers(f"grid paste attempt {attempt} before paste", wait=False)
+                    _click_grid_first_account_cell(first_account_cell_xy)
+                    pyautogui.hotkey('ctrl', 'v')
+                    _release_modifiers(f"grid paste attempt {attempt} after paste", wait=False)
+                    source = "excel-range" if used_excel_clipboard else "text"
+                    self.logger.info(
+                        f"  [FORM-XY] grid paste sent: attempt={attempt}/{attempts}, source={source}"
+                    )
+                    time.sleep(first_cell_wait)
+                    if _grid_first_cell_matches_expected(first_account_cell_xy, f"grid paste attempt {attempt}"):
+                        self.logger.info(
+                            f"  [FORM-VERIFY] grid paste first-cell confirmed: attempt={attempt}/{attempts}"
+                        )
+                        return
+                    if attempt < attempts:
+                        self.logger.warning(
+                            f"  [FORM-VERIFY] grid paste will retry because ERP grid is still blank: "
+                            f"attempt={attempt}/{attempts}"
+                        )
+                _fail_form(
+                    "ERP grid paste was sent but the first account cell stayed blank. "
+                    "The voucher grid paste did not reach ERP, so saving was stopped."
+                )
+
+            _paste_grid_until_reflected()
+            self.logger.info("  [FORM-XY] grid paste reflected; waiting for management items")
             try:
                 if excel_copy_used:
                     _wait_for_management_grid_ready("Excel range paste")
