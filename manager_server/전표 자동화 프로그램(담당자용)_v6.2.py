@@ -3822,6 +3822,92 @@ class ERPLoginBot:
                     time.sleep(0.2)
                 return False
 
+            def _save_pdf_by_filename_edit():
+                def _edit_candidates(save_dialog):
+                    candidates = []
+                    seen = set()
+                    for query in ({"control_type": "Edit"}, {"class_name": "Edit"}):
+                        try:
+                            controls = save_dialog.descendants(**query)
+                        except Exception:
+                            controls = []
+                        for edit in controls:
+                            try:
+                                r = edit.rectangle()
+                                key = (r.left, r.top, r.right, r.bottom)
+                                if key in seen:
+                                    continue
+                                seen.add(key)
+                                if r.width() < 180 or r.height() < 14:
+                                    continue
+                                candidates.append((r, edit))
+                            except Exception:
+                                continue
+                    return candidates
+
+                try:
+                    save_dialog = _wait_pdf_save_dialog(timeout_sec=1) or dialog
+                    save_dialog.set_focus()
+                    dlg_r = save_dialog.rectangle()
+                    dlg_h = max(1, dlg_r.bottom - dlg_r.top)
+                    lower_top = dlg_r.top + int(dlg_h * 0.55)
+                    candidates = _edit_candidates(save_dialog)
+                    lower_candidates = [(r, edit) for r, edit in candidates if r.top >= lower_top]
+                    if lower_candidates:
+                        # In the common Save As dialog the file-name edit is the first wide edit
+                        # in the lower form area; the file-type combo usually sits below it.
+                        target_r, target_edit = sorted(
+                            lower_candidates,
+                            key=lambda item: (item[0].top, -item[0].width()),
+                        )[0]
+                    elif candidates:
+                        target_r, target_edit = sorted(
+                            candidates,
+                            key=lambda item: (-item[0].width(), item[0].top),
+                        )[0]
+                    else:
+                        self.logger.warning("  [PRINT] PDF 저장창 파일명 입력칸 후보를 찾지 못했습니다.")
+                        return False
+
+                    try:
+                        target_edit.set_focus()
+                    except Exception:
+                        pass
+                    try:
+                        target_edit.click_input()
+                    except Exception:
+                        pyautogui.click(
+                            target_r.left + target_r.width() // 2,
+                            target_r.top + target_r.height() // 2,
+                        )
+                    time.sleep(0.2)
+                    pyperclip.copy(norm_path)
+                    pyautogui.hotkey("ctrl", "a")
+                    time.sleep(0.05)
+                    pyautogui.press("backspace")
+                    time.sleep(0.05)
+                    pyautogui.hotkey("ctrl", "v")
+                    time.sleep(0.15)
+                    pyautogui.press("enter")
+                    self.logger.info(
+                        f"  [PRINT] PDF 파일명 입력칸 직접 저장 시도: rect=({target_r.left},{target_r.top})-({target_r.right},{target_r.bottom}), path={norm_path}"
+                    )
+                except Exception as e:
+                    self.logger.warning(f"  [PRINT] PDF 파일명 입력칸 직접 저장 실패: {e}")
+                    return False
+
+                if _wait_pdf_created(timeout_sec=12):
+                    return True
+
+                for _ in range(4):
+                    try:
+                        pyautogui.press("enter")
+                    except Exception:
+                        pass
+                    if _wait_pdf_created(timeout_sec=3):
+                        return True
+                return False
+
             def _save_pdf_by_common_dialog_hotkeys():
                 folder = os.path.dirname(norm_path)
                 filename = os.path.basename(norm_path)
@@ -3862,6 +3948,10 @@ class ERPLoginBot:
                     if _wait_pdf_created(timeout_sec=3):
                         return True
                 return False
+
+            if _save_pdf_by_filename_edit():
+                _restore_pdf_clipboard()
+                return True
 
             if _save_pdf_by_common_dialog_hotkeys():
                 _restore_pdf_clipboard()
