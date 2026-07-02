@@ -4422,9 +4422,14 @@ class ERPLoginBot:
             def _paste_grid_until_reflected():
                 nonlocal main_rect_cache
                 attempts = max(1, int(os.getenv("ERP_GRID_PASTE_RETRIES", "3") or "3"))
+                verify_first_cell = _env_flag("ERP_VERIFY_GRID_PASTE", "0")
                 first_cell_wait = max(
-                    3.0,
+                    0.3,
                     float(os.getenv("ERP_GRID_PASTE_FIRST_CELL_WAIT_SECONDS", "20") or "20"),
+                )
+                sent_wait = max(
+                    0.3,
+                    float(os.getenv("ERP_GRID_PASTE_SENT_WAIT_SECONDS", "1.0") or "1.0"),
                 )
                 for attempt in range(1, attempts + 1):
                     self._force_erp_window_maximized(
@@ -4446,7 +4451,14 @@ class ERPLoginBot:
                     self.logger.info(
                         f"  [FORM-XY] grid paste sent: attempt={attempt}/{attempts}, source={source}"
                     )
-                    time.sleep(first_cell_wait)
+                    time.sleep(first_cell_wait if verify_first_cell else sent_wait)
+                    if not verify_first_cell:
+                        grid_paste_state["verified"] = False
+                        self.logger.info(
+                            "  [FORM-VERIFY] grid first-cell copy check skipped after paste; "
+                            "management-item display will be used as the completion signal"
+                        )
+                        return
                     if _grid_first_cell_matches_expected(first_account_cell_xy, f"grid paste attempt {attempt}"):
                         self.logger.info(
                             f"  [FORM-VERIFY] grid paste first-cell confirmed: attempt={attempt}/{attempts}"
