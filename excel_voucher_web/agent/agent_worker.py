@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import mimetypes
 import os
 import shutil
 import socket
@@ -84,11 +85,12 @@ def _upload_job_artifact(
 ) -> dict[str, Any]:
     if not path.is_file():
         raise RuntimeError(f"artifact file was not found: {path}")
+    content_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
     with path.open("rb") as fp:
         response = session.post(
             f"{server.rstrip('/')}/api/agent/jobs/{job_id}/artifacts",
             data={"agent_id": agent_id, "artifact_type": artifact_type},
-            files={"file": (path.name, fp, "application/pdf")},
+            files={"file": (path.name, fp, content_type)},
             timeout=180,
             verify=verify_tls,
         )
@@ -485,6 +487,18 @@ def run_loop(
                 erp_mode=erp_mode,
             )
             if erp_mode == "real" and result.get("erp_saved"):
+                _post(
+                    session,
+                    server,
+                    f"/api/agent/jobs/{job_id}/event",
+                    {
+                        "agent_id": agent_id,
+                        "status": "running",
+                        "progress": 82,
+                        "message": "ERP 전표 저장이 완료되었습니다.",
+                    },
+                    verify_tls=verify_tls,
+                )
                 pdf_path = Path(str(result.get("erp_pdf_path") or ""))
                 _post(
                     session,
@@ -516,6 +530,34 @@ def run_loop(
                         "erp_pdf_filename": artifact.get("filename") or "",
                         "erp_pdf_download_url": artifact.get("download_url") or "",
                     }
+                if result.get("print_submitted"):
+                    _post(
+                        session,
+                        server,
+                        f"/api/agent/jobs/{job_id}/event",
+                        {
+                            "agent_id": agent_id,
+                            "status": "running",
+                            "progress": 96,
+                            "message": "출력 요청이 완료되었습니다.",
+                        },
+                        verify_tls=verify_tls,
+                    )
+            if erp_mode == "real":
+                log_path = Path(str(result.get("erp_log_path") or output_dir / f"{job_id}_erp_input.log"))
+                if log_path.is_file():
+                    try:
+                        _upload_job_artifact(
+                            session,
+                            server,
+                            job_id,
+                            agent_id,
+                            log_path,
+                            "agent_log",
+                            verify_tls=verify_tls,
+                        )
+                    except Exception as log_exc:
+                        result = {**result, "agent_log_upload_error": str(log_exc)}
             _post(
                 session,
                 server,
@@ -530,6 +572,22 @@ def run_loop(
             )
             print(f"completed {job_id}")
         except Exception as exc:
+            error_result: dict[str, Any] = {}
+            log_path = output_dir / f"{job_id}_erp_input.log"
+            if log_path.is_file():
+                error_result["erp_log_path"] = str(log_path)
+                try:
+                    _upload_job_artifact(
+                        session,
+                        server,
+                        job_id,
+                        agent_id,
+                        log_path,
+                        "agent_log",
+                        verify_tls=verify_tls,
+                    )
+                except Exception as log_exc:
+                    error_result["agent_log_upload_error"] = str(log_exc)
             try:
                 _post(
                     session,
@@ -539,6 +597,7 @@ def run_loop(
                         "agent_id": agent_id,
                         "ok": False,
                         "message": "자동 전표처리 PC 처리 실패",
+                        "result": error_result,
                         "error": str(exc),
                     },
                     verify_tls=verify_tls,

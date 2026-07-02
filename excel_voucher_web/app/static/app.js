@@ -87,15 +87,31 @@ function renderStep(label, done, active) {
 function renderSteps(job) {
   const progress = Number(job.progress || 0);
   const status = job.status;
+  const result = job.result || {};
   const done = status === "done";
   const error = status === "error";
+  const erpStarted = progress >= 35 || result.erp_saved || result.print_submitted || done;
+  const saved = Boolean(result.erp_saved || result.server_pdf_stored) || done;
+  const printed = Boolean(result.print_submitted) || done;
+
+  let activeStep = "";
+  if (status === "queued") {
+    activeStep = "업로드완료";
+  } else if (status === "claimed") {
+    activeStep = "ERP 입력시작";
+  } else if (status === "running") {
+    activeStep = !erpStarted ? "ERP 입력시작" : !saved ? "저장완료" : !printed ? "출력완료" : "출력완료";
+  } else if (error) {
+    activeStep = !erpStarted ? "ERP 입력시작" : !saved ? "저장완료" : !printed ? "출력완료" : "출력완료";
+  }
+
   return `
     <ol class="stepList">
-      ${renderStep("접수", progress >= 5, status === "queued")}
-      ${renderStep("자료 확인", progress >= 15, status === "claimed")}
-      ${renderStep("전표 처리", progress >= 35, status === "running")}
-      ${renderStep("출력", done, done)}
-      ${error ? renderStep("확인 필요", true, true) : ""}
+      ${renderStep("작업시작", progress >= 5 || erpStarted || done || error, activeStep === "작업시작")}
+      ${renderStep("업로드완료", progress >= 5 || erpStarted || done || error, activeStep === "업로드완료")}
+      ${renderStep("ERP 입력시작", erpStarted || saved || printed, activeStep === "ERP 입력시작")}
+      ${renderStep("저장완료", saved || printed, activeStep === "저장완료")}
+      ${renderStep("출력완료", printed, activeStep === "출력완료")}
     </ol>
   `;
 }

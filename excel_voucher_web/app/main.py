@@ -5,6 +5,7 @@ import sqlite3
 import tempfile
 import uuid
 import zipfile
+import mimetypes
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -130,12 +131,21 @@ def _safe_filename(filename: str, fallback: str = "upload.xlsx") -> str:
     return clean
 
 
-def _safe_artifact_filename(filename: str, fallback: str = "voucher.pdf") -> str:
+def _safe_artifact_filename(
+    filename: str,
+    fallback: str = "voucher.pdf",
+    *,
+    allowed_suffixes: tuple[str, ...] | None = (".pdf",),
+) -> str:
     name = Path(filename or fallback).name.strip() or fallback
     blocked = '<>:"/\\|?*'
     clean = "".join("_" if ch in blocked else ch for ch in name).strip(" .")
-    if not clean.lower().endswith(".pdf"):
-        clean = f"{Path(clean).stem or Path(fallback).stem}.pdf"
+    if not clean:
+        clean = fallback
+    if allowed_suffixes:
+        suffixes = tuple(s.lower() for s in allowed_suffixes)
+        if Path(clean).suffix.lower() not in suffixes:
+            clean = f"{Path(clean).stem or Path(fallback).stem}{suffixes[0]}"
     return clean
 
 
@@ -246,10 +256,12 @@ def _send_job_notification_once(job: Any, *, ok: bool) -> Any:
     result = job.result or {}
     notification: dict[str, Any] | None = None
     try:
+        events = store.list_events(job.id)
+        source_path = store.get_source_path(job.id) if not ok else None
         if ok and not result.get("dry_run"):
-            notification = notify_job_completed(job)
+            notification = notify_job_completed(job, events=events)
         elif not ok:
-            notification = notify_job_failed(job)
+            notification = notify_job_failed(job, events=events, source_path=source_path)
     except Exception as exc:
         notification = {"sent": False, "queued": False, "error": str(exc)}
 
@@ -585,8 +597,9 @@ def api_job_artifact(job_id: str, artifact_type: str) -> FileResponse:
     artifact_key = _safe_artifact_type(artifact_type)
     path = Path(str((job.result or {}).get(f"{artifact_key}_server_path") or ""))
     if not path.is_file():
-        raise HTTPException(status_code=404, detail="보관된 PDF 파일이 없습니다.")
-    return FileResponse(path, filename=path.name, media_type="application/pdf")
+        raise HTTPException(status_code=404, detail="보관된 파일이 없습니다.")
+    media_type = mimetypes.guess_type(str(path))[0] or "application/octet-stream"
+    return FileResponse(path, filename=path.name, media_type=media_type)
 
 
 @app.post("/api/jobs/{job_id}/forward")
@@ -726,7 +739,13 @@ def api_agent_job_artifact(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
     artifact_key = _safe_artifact_type(artifact_type)
-    filename = _safe_artifact_filename(file.filename or f"{artifact_key}.pdf")
+    pdf_only = artifact_key == "erp_pdf" or artifact_key.endswith("_pdf")
+    fallback = f"{artifact_key}.pdf" if pdf_only else f"{artifact_key}.txt"
+    filename = _safe_artifact_filename(
+        file.filename or fallback,
+        fallback=fallback,
+        allowed_suffixes=(".pdf",) if pdf_only else None,
+    )
     target = _artifact_dir(job_id) / filename
     with target.open("wb") as out:
         shutil.copyfileobj(file.file, out)
@@ -741,11 +760,12 @@ def api_agent_job_artifact(
     }
     if artifact_key == "erp_pdf":
         result["server_pdf_stored"] = True
+    artifact_message = "전표 PDF를 서버에 보관했습니다." if artifact_key == "erp_pdf" else "처리 로그를 서버에 보관했습니다."
     job = store.update_job(
         job_id,
         status="running",
-        progress=max(job.progress, 90),
-        message="전표 PDF를 서버에 보관했습니다.",
+        progress=max(job.progress, 90) if artifact_key == "erp_pdf" else job.progress,
+        message=artifact_message,
         result=result,
     )
     return {
