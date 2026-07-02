@@ -246,7 +246,7 @@ def _send_job_notification_once(job: Any, *, ok: bool) -> Any:
     result = job.result or {}
     notification: dict[str, Any] | None = None
     try:
-        if ok and not result.get("dry_run") and result.get("erp_saved"):
+        if ok and not result.get("dry_run"):
             notification = notify_job_completed(job)
         elif not ok:
             notification = notify_job_failed(job)

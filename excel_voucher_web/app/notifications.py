@@ -84,15 +84,23 @@ def send_mail(to_addr: str, subject: str, body: str, *, attachments: list[Path] 
         return _write_outbox(message, reason="recipient email is empty")
     if not settings.smtp_host or not from_addr:
         return _write_outbox(message, reason="SMTP is not configured")
-    with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
-        smtp.ehlo()
-        if settings.smtp_starttls and smtp.has_extn("STARTTLS"):
-            smtp.starttls()
+    try:
+        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=20) as smtp:
             smtp.ehlo()
-        if settings.smtp_user:
-            smtp.login(settings.smtp_user, settings.smtp_password)
-        smtp.send_message(message)
+            if settings.smtp_starttls and smtp.has_extn("STARTTLS"):
+                smtp.starttls()
+                smtp.ehlo()
+            if settings.smtp_user:
+                smtp.login(settings.smtp_user, settings.smtp_password)
+            smtp.send_message(message)
+    except Exception as exc:
+        return _write_outbox(message, reason=f"SMTP send failed: {exc}")
     return {"sent": True, "queued": False, "to": to_addr, "attachments": attached}
+
+
+def _job_recipient(job: JobRecord) -> str:
+    payload = job.payload or {}
+    return str(payload.get("requester_email") or settings.admin_email or "").strip()
 
 
 def completion_mail_body(job: JobRecord) -> str:
@@ -119,9 +127,8 @@ def completion_mail_body(job: JobRecord) -> str:
 
 
 def notify_job_completed(job: JobRecord) -> dict[str, Any]:
-    payload = job.payload or {}
     result = job.result or {}
-    recipient = str(payload.get("requester_email") or "").strip()
+    recipient = _job_recipient(job)
     subject = f"[엑셀 전표 처리 완료] {job.title}"
     attachment = Path(str(result.get("erp_pdf_server_path") or ""))
     attachments = [attachment] if attachment.is_file() else []
@@ -148,8 +155,7 @@ def failure_mail_body(job: JobRecord) -> str:
 
 
 def notify_job_failed(job: JobRecord) -> dict[str, Any]:
-    payload = job.payload or {}
-    recipient = str(payload.get("requester_email") or "").strip()
+    recipient = _job_recipient(job)
     subject = f"[엑셀 전표 처리 오류] {job.title}"
     return send_mail(recipient, subject, failure_mail_body(job))
 
