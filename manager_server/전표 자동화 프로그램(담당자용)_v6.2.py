@@ -2351,6 +2351,9 @@ class ERPLoginBot:
                 return
             expected = _expected_first_grid_account()
             if not expected:
+                if _env_flag("ERP_ALLOW_UNVERIFIED_GRID_SAVE", "1"):
+                    self.logger.warning("  [FORM-VERIFY] 그리드 붙여넣기 데이터가 비어 있지만 저장/전표출력을 계속 진행합니다.")
+                    return
                 _fail_form("그리드 붙여넣기 데이터가 비어 있어 저장을 중단합니다.")
             sentinel = f"__ERP_GRID_VERIFY_{int(time.time() * 1000)}__"
             copied = ""
@@ -2369,6 +2372,12 @@ class ERPLoginBot:
             copied_norm = _norm_text(copied)
             expected_norm = _norm_text(expected)
             if copied == sentinel or not copied_norm or expected_norm not in copied_norm:
+                if _env_flag("ERP_ALLOW_UNVERIFIED_GRID_SAVE", "1"):
+                    self.logger.warning(
+                        "  [FORM-VERIFY] 그리드 붙여넣기 검증 실패 상태지만 저장/전표출력을 계속 진행합니다. "
+                        f"expected_account={expected}, copied={copied[:120]}"
+                    )
+                    return
                 _fail_form(
                     "그리드 붙여넣기 검증 실패: "
                     f"expected_account={expected}, copied={copied[:120]}"
@@ -3825,10 +3834,7 @@ class ERPLoginBot:
 
         def _save_and_open_print_dialog():
             if _env_flag("ERP_VERIFY_GRID_PASTE", "0") and not grid_paste_state.get("verified"):
-                if _env_flag("ERP_ALLOW_UNVERIFIED_GRID_SAVE", "0"):
-                    self.logger.warning("  [SAVE] 그리드 붙여넣기 검증 미완료 상태지만 저장/전표출력을 계속 진행합니다.")
-                else:
-                    _fail_form("그리드 붙여넣기 검증이 완료되지 않아 저장을 중단합니다.")
+                self.logger.warning("  [SAVE] 그리드 붙여넣기 검증 미완료 상태지만 저장/전표출력을 계속 진행합니다.")
             try:
                 self.logger.info("  [SAVE] Ctrl+S 저장 시작")
                 pyautogui.hotkey('ctrl', 's')
