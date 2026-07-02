@@ -3515,24 +3515,104 @@ class ERPLoginBot:
             return False
 
         def _click_print_button():
-            try:
-                for el in main_win.descendants():
-                    try:
-                        if (el.window_text() or '').strip() == "전표출력":
-                            r = el.rectangle()
-                            pyautogui.click(r.left + r.width() // 2, r.top + r.height() // 2)
-                            self.logger.info(f"  [PRINT] UI 요소로 전표출력 클릭: rect=({r.left},{r.top})-({r.right},{r.bottom})")
-                            time.sleep(ERP_SETTLE_WAIT)
-                            return True
-                    except:
-                        pass
-            except Exception as e:
-                self.logger.warning(f"  [PRINT] 전표출력 UI 탐색 실패: {e}")
+            def _ui_text(el):
+                values = []
+                try:
+                    values.append(el.window_text() or "")
+                except:
+                    pass
+                try:
+                    values.append(getattr(el.element_info, "name", "") or "")
+                except:
+                    pass
+                normalized = []
+                for value in values:
+                    text = re.sub(r"\s+", "", str(value or ""))
+                    if text and text not in normalized:
+                        normalized.append(text)
+                return normalized
 
-            _click_form_xy(812, 80, "전표출력")
-            self.logger.info("  [PRINT] 전표출력 좌표 fallback 클릭")
-            time.sleep(ERP_SETTLE_WAIT)
-            return True
+            def _toolbar_snapshot(scope, label):
+                try:
+                    main_r = _main_rect()
+                    items = []
+                    for el in scope.descendants():
+                        try:
+                            r = el.rectangle()
+                            if not (main_r.top + 35 <= r.top <= main_r.top + 135):
+                                continue
+                            text = "/".join(_ui_text(el))
+                            if text:
+                                items.append(f"{text}@({r.left},{r.top})-({r.right},{r.bottom})")
+                        except:
+                            pass
+                    if items:
+                        self.logger.info(f"  [PRINT] {label} toolbar candidates: {' | '.join(items[:40])}")
+                except Exception as e:
+                    self.logger.warning(f"  [PRINT] {label} toolbar snapshot 실패: {e}")
+
+            def _click_print_in_scope(scope, label):
+                main_r = _main_rect()
+                for el in scope.descendants():
+                    try:
+                        texts = _ui_text(el)
+                        if "전표출력" not in texts:
+                            continue
+                        r = el.rectangle()
+                        if not (main_r.top + 35 <= r.top <= main_r.top + 135):
+                            self.logger.warning(
+                                f"  [PRINT] 전표출력 후보 무시: toolbar 영역 밖 rect=({r.left},{r.top})-({r.right},{r.bottom})"
+                            )
+                            continue
+                        if r.left > main_r.left + 760:
+                            self.logger.warning(
+                                f"  [PRINT] 전표출력 후보 무시: 변경내역 영역에 가까움 rect=({r.left},{r.top})-({r.right},{r.bottom})"
+                            )
+                            continue
+                        pyautogui.click(r.left + r.width() // 2, r.top + r.height() // 2)
+                        self.logger.info(
+                            f"  [PRINT] {label} UI 요소로 전표출력 클릭: rect=({r.left},{r.top})-({r.right},{r.bottom})"
+                        )
+                        time.sleep(ERP_SETTLE_WAIT)
+                        return True
+                    except Exception as e:
+                        self.logger.warning(f"  [PRINT] {label} 전표출력 후보 처리 실패: {e}")
+                _toolbar_snapshot(scope, label)
+                return False
+
+            try:
+                if _click_print_in_scope(main_win, "main_win"):
+                    return True
+            except Exception as e:
+                self.logger.warning(f"  [PRINT] 전표출력 main_win 탐색 실패: {e}")
+
+            handle = None
+            try:
+                handle = main_win.handle
+            except:
+                handle = None
+            if handle:
+                for backend in ("uia", "win32"):
+                    try:
+                        fresh_win = Application(backend=backend).connect(handle=handle).window(handle=handle)
+                        if _click_print_in_scope(fresh_win, f"fresh-{backend}"):
+                            return True
+                    except Exception as e:
+                        self.logger.warning(f"  [PRINT] 전표출력 fresh-{backend} 탐색 실패: {e}")
+
+            override_xy = os.getenv("ERP_PRINT_BUTTON_XY", "").strip()
+            if override_xy:
+                try:
+                    x_text, y_text = re.split(r"[,xX ]+", override_xy, maxsplit=1)
+                    x, y = int(float(x_text)), int(float(y_text))
+                    _click_form_xy(x, y, "전표출력 환경변수 좌표 fallback")
+                    self.logger.warning(f"  [PRINT] ERP_PRINT_BUTTON_XY 좌표 fallback 클릭: rel=({x},{y})")
+                    time.sleep(ERP_SETTLE_WAIT)
+                    return True
+                except Exception as e:
+                    self.logger.warning(f"  [PRINT] ERP_PRINT_BUTTON_XY 파싱/클릭 실패: {e}")
+
+            raise RuntimeError("전표출력 버튼을 UIA로 찾지 못해 좌표 fallback을 중단했습니다.")
 
         def _ask_print_target():
             override = getattr(self.manager.main_app, "print_choice_override", None)
