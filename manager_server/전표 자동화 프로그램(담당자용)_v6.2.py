@@ -3600,19 +3600,20 @@ class ERPLoginBot:
                     except Exception as e:
                         self.logger.warning(f"  [PRINT] 전표출력 fresh-{backend} 탐색 실패: {e}")
 
-            override_xy = os.getenv("ERP_PRINT_BUTTON_XY", "").strip()
-            if override_xy:
-                try:
-                    x_text, y_text = re.split(r"[,xX ]+", override_xy, maxsplit=1)
-                    x, y = int(float(x_text)), int(float(y_text))
-                    _click_form_xy(x, y, "전표출력 환경변수 좌표 fallback")
-                    self.logger.warning(f"  [PRINT] ERP_PRINT_BUTTON_XY 좌표 fallback 클릭: rel=({x},{y})")
-                    time.sleep(ERP_SETTLE_WAIT)
-                    return True
-                except Exception as e:
-                    self.logger.warning(f"  [PRINT] ERP_PRINT_BUTTON_XY 파싱/클릭 실패: {e}")
+            if _env_flag("ERP_DISABLE_PRINT_BUTTON_XY_FALLBACK", "0"):
+                raise RuntimeError("전표출력 버튼을 UIA로 찾지 못했고 좌표 fallback이 비활성화되어 있습니다.")
 
-            raise RuntimeError("전표출력 버튼을 UIA로 찾지 못해 좌표 fallback을 중단했습니다.")
+            override_xy = os.getenv("ERP_PRINT_BUTTON_XY", "620,80").strip()
+            try:
+                x_text, y_text = re.split(r"[,xX ]+", override_xy, maxsplit=1)
+                x, y = int(float(x_text)), int(float(y_text))
+                _click_form_xy(x, y, "전표출력 검증형 좌표 fallback")
+                self.logger.warning(f"  [PRINT] UIA 미검출, ERP 메인창 기준 좌표 fallback 클릭: rel=({x},{y})")
+                time.sleep(ERP_SETTLE_WAIT)
+                return True
+            except Exception as e:
+                self.logger.warning(f"  [PRINT] ERP_PRINT_BUTTON_XY 파싱/클릭 실패: {e}")
+                raise RuntimeError("전표출력 버튼을 UIA/좌표 fallback 모두에서 클릭하지 못했습니다.") from e
 
         def _ask_print_target():
             override = getattr(self.manager.main_app, "print_choice_override", None)
@@ -4066,13 +4067,18 @@ class ERPLoginBot:
                 self.logger.info("  [SAVE] 저장 알림 닫기용 Enter 전송 완료")
                 time.sleep(ERP_SETTLE_WAIT)
 
-                self.logger.info("  [PRINT] 전표출력 버튼 클릭 시작")
-                _click_print_button()
+                self.logger.info("  [PRINT] ERP 전표출력 Ctrl+P 전송")
+                pyautogui.hotkey('ctrl', 'p')
+                time.sleep(ERP_SETTLE_WAIT)
 
-                if _wait_process_by_name("rdviewer_u.exe", timeout_sec=10):
+                try:
+                    viewer_timeout = float(os.getenv("ERP_PRINT_VIEWER_DETECT_TIMEOUT_SECONDS", "45") or "45")
+                except ValueError:
+                    viewer_timeout = 45.0
+                if _wait_process_by_name("rdviewer_u.exe", timeout_sec=viewer_timeout):
                     time.sleep(ERP_PRINT_VIEWER_WAIT)
                 else:
-                    time.sleep(ERP_PRINT_VIEWER_WAIT)
+                    raise RuntimeError("전표출력 후 RD Viewer가 감지되지 않아 인쇄를 중단합니다.")
 
                 choice = _ask_print_target()
                 if not choice:
