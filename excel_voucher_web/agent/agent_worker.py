@@ -26,6 +26,15 @@ from app.agent_adapter import run_erp_voucher_task
 
 
 DEFAULT_REPO_ZIP_URL = "https://github.com/rlckd2201/ERP_Auto_Web/archive/refs/heads/main.zip"
+DEFAULT_PRINTER_NAME = "재정 프린터 (172.16.10.173)"
+TEST_PRINTER_NAMES = {"김제 프린터 (172.17.30.162)", "172.17.30.162"}
+
+
+def _normalize_printer_name(value: str) -> str:
+    printer_name = str(value or "").strip()
+    if not printer_name or printer_name in TEST_PRINTER_NAMES:
+        return DEFAULT_PRINTER_NAME
+    return printer_name
 
 
 def _post(session: requests.Session, server: str, path: str, payload: dict[str, Any], *, verify_tls: bool) -> dict[str, Any]:
@@ -623,6 +632,7 @@ def main() -> None:
     parser.add_argument("--print-wait-seconds", type=float, default=3.0)
     parser.add_argument("--erp-mode", choices=["dry-run", "real"], default="dry-run")
     args = parser.parse_args()
+    printer_name = _normalize_printer_name(args.printer_name)
     run_loop(
         args.server,
         args.agent_id,
@@ -631,7 +641,7 @@ def main() -> None:
         args.once,
         not args.insecure_skip_tls_verify,
         args.print_mode,
-        args.printer_name,
+        printer_name,
         max(0.0, args.print_wait_seconds),
         args.erp_mode,
     )

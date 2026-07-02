@@ -16,6 +16,7 @@ param(
   [string]$SmtpUser = "",
   [string]$SmtpPassword = "",
   [string]$SmtpFrom = "admpdm@dae-seung.co.kr",
+  [string]$SmtpFromName = "재정전표자동화 시스템",
   [string]$SslCertFile = "",
   [string]$SslKeyFile = ""
 )
@@ -59,6 +60,7 @@ $env:EXCEL_VOUCHER_SMTP_PORT = [string]$SmtpPort
 if ($SmtpUser) { $env:EXCEL_VOUCHER_SMTP_USER = $SmtpUser }
 if ($SmtpPassword) { $env:EXCEL_VOUCHER_SMTP_PASSWORD = $SmtpPassword }
 $env:EXCEL_VOUCHER_SMTP_FROM = $SmtpFrom
+$env:EXCEL_VOUCHER_SMTP_FROM_NAME = $SmtpFromName
 
 & $Python -m pip install -r requirements.txt
 

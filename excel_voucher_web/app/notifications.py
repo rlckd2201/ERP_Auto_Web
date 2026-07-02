@@ -7,6 +7,7 @@ import re
 import smtplib
 from datetime import datetime
 from email.message import EmailMessage
+from email.utils import formataddr, parseaddr
 from pathlib import Path
 from typing import Any, Iterable
 
@@ -30,6 +31,16 @@ def _recipients(value: str | Iterable[str] | None) -> list[str]:
         if address and address not in result:
             result.append(address)
     return result
+
+
+def _email_only(value: str) -> str:
+    return parseaddr(value or "")[1] or str(value or "").strip()
+
+
+def _display_address(address: str, display_name: str = "") -> str:
+    email_addr = _email_only(address)
+    name = str(display_name or "").strip()
+    return formataddr((name, email_addr)) if name else email_addr
 
 
 def _message_text(message: EmailMessage) -> str:
@@ -106,16 +117,24 @@ def send_mail(
     html_body: str = "",
     attachments: list[Path] | None = None,
     cc_addr: str | Iterable[str] | None = None,
+    to_name: str = "",
+    cc_name: str = "",
+    from_name: str = "",
 ) -> dict[str, Any]:
-    to_list = _recipients(to_addr)
-    cc_list = [addr for addr in _recipients(cc_addr) if addr not in to_list]
+    to_list = [_email_only(addr) for addr in _recipients(to_addr)]
+    cc_list = [addr for addr in (_email_only(item) for item in _recipients(cc_addr)) if addr and addr not in to_list]
     from_addr = (settings.smtp_from or settings.smtp_user or "").strip()
+    sender_name = from_name or str(getattr(settings, "smtp_from_name", "") or "재정전표자동화 시스템").strip()
 
     message = EmailMessage()
-    message["To"] = ", ".join(to_list)
+    message["To"] = ", ".join(
+        _display_address(addr, to_name if len(to_list) == 1 else "") for addr in to_list
+    )
     if cc_list:
-        message["Cc"] = ", ".join(cc_list)
-    message["From"] = from_addr
+        message["Cc"] = ", ".join(
+            _display_address(addr, cc_name if len(cc_list) == 1 else "") for addr in cc_list
+        )
+    message["From"] = _display_address(from_addr, sender_name)
     message["Subject"] = subject
     message.set_content(body)
     if html_body:
@@ -155,6 +174,11 @@ def send_mail(
 def _job_recipient(job: JobRecord) -> str:
     payload = job.payload or {}
     return str(payload.get("requester_email") or settings.admin_email or "").strip()
+
+
+def _job_recipient_name(job: JobRecord) -> str:
+    payload = job.payload or {}
+    return str(payload.get("requester") or job.requester or "").strip()
 
 
 def _support_email() -> str:
@@ -270,15 +294,23 @@ def _details_table(job: JobRecord) -> str:
 def _mail_shell(title: str, subtitle: str, body_html: str, *, failed: bool = False) -> str:
     accent = "#b91c1c" if failed else "#0f766e"
     soft = "#fef2f2" if failed else "#ecfdf5"
+    badge = "오류 확인 필요" if failed else "처리 완료"
     return f"""<!doctype html>
 <html>
   <body style="margin:0;background:#f3f6f8;font-family:Arial,'Malgun Gothic',sans-serif;color:#0f172a;">
     <div style="max-width:760px;margin:0 auto;padding:28px 16px;">
-      <div style="background:#fff;border:1px solid #dbe3ea;border-radius:12px;overflow:hidden;">
-        <div style="background:{soft};border-bottom:1px solid #dbe3ea;padding:20px 24px;">
-          <div style="font-size:12px;font-weight:700;color:{accent};letter-spacing:.04em;">EXCEL VOUCHER</div>
-          <h2 style="margin:8px 0 6px;font-size:22px;color:#0f172a;">{html.escape(title)}</h2>
-          <p style="margin:0;color:#475569;font-size:14px;">{html.escape(subtitle)}</p>
+      <div style="background:#fff;border:1px solid #dbe3ea;border-radius:10px;overflow:hidden;">
+        <div style="border-top:5px solid {accent};background:{soft};border-bottom:1px solid #dbe3ea;padding:20px 24px;">
+          <table role="presentation" style="border-collapse:collapse;width:100%;">
+            <tr>
+              <td style="font-size:12px;font-weight:700;color:{accent};letter-spacing:.04em;">재정전표자동화 시스템</td>
+              <td style="text-align:right;">
+                <span style="border:1px solid {accent};color:{accent};border-radius:999px;padding:4px 10px;font-size:12px;font-weight:700;">{badge}</span>
+              </td>
+            </tr>
+          </table>
+          <h2 style="margin:10px 0 6px;font-size:22px;color:#0f172a;line-height:1.35;">{html.escape(title)}</h2>
+          <p style="margin:0;color:#475569;font-size:14px;line-height:1.5;">{html.escape(subtitle)}</p>
         </div>
         <div style="padding:22px 24px;">
           {body_html}
@@ -358,11 +390,13 @@ def _existing_paths(paths: Iterable[Path | None]) -> list[Path]:
 def completion_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) -> str:
     payload = job.payload or {}
     result = job.result or {}
+    requester = _job_recipient_name(job) or "담당자"
     return "\n".join(
         [
-            f"{payload.get('requester') or job.requester}님",
+            f"{requester}님",
             "",
             "엑셀 수시결제 전표 처리가 완료되었습니다.",
+            "전표 PDF 저장과 재정 프린터 출력 요청까지 정상 제출되었습니다.",
             "",
             _steps_text(job, events),
             "",
@@ -375,18 +409,19 @@ def completion_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = Non
             f"- 출력 파일: {result.get('print_file') or '-'}",
             f"- 서버 보관 PDF: {result.get('erp_pdf_server_path') or '-'}",
             "",
-            "첨부된 PDF를 확인해 주세요.",
+            "첨부된 전표 PDF를 확인해 주세요.",
         ]
     )
 
 
 def completion_mail_html(job: JobRecord, events: Iterable[JobEvent] | None = None) -> str:
     payload = job.payload or {}
+    requester = _job_recipient_name(job) or "담당자"
     body = f"""
-      <p style="margin:0 0 12px;font-size:15px;">{html.escape(str(payload.get('requester') or job.requester or '담당자'))}님, 전표 저장과 출력 요청이 완료되었습니다.</p>
+      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">{html.escape(requester)}님, 전표 PDF 저장과 재정 프린터 출력 요청까지 정상 제출되었습니다.</p>
       {_steps_html(job, events)}
       {_details_table(job)}
-      <p style="margin:16px 0 0;color:#475569;font-size:13px;">서버에 보관된 PDF를 첨부했습니다. 재출력이 필요하면 전산팀에 요청해 주세요.</p>
+      <p style="margin:16px 0 0;color:#475569;font-size:13px;line-height:1.6;">첨부된 PDF는 서버에도 보관됩니다. 재출력이 필요하면 전산팀에 요청해 주세요.</p>
     """
     return _mail_shell("엑셀 수시결제 전표 처리 완료", job.title, body)
 
@@ -394,6 +429,7 @@ def completion_mail_html(job: JobRecord, events: Iterable[JobEvent] | None = Non
 def notify_job_completed(job: JobRecord, events: Iterable[JobEvent] | None = None) -> dict[str, Any]:
     result = job.result or {}
     recipient = _job_recipient(job)
+    recipient_name = _job_recipient_name(job)
     subject = f"[엑셀 전표 처리 완료] {job.title}"
     attachment = Path(str(result.get("erp_pdf_server_path") or ""))
     attachments = _existing_paths([attachment])
@@ -403,16 +439,19 @@ def notify_job_completed(job: JobRecord, events: Iterable[JobEvent] | None = Non
         completion_mail_body(job, events),
         html_body=completion_mail_html(job, events),
         attachments=attachments,
+        to_name=recipient_name,
     )
 
 
 def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) -> str:
     payload = job.payload or {}
+    requester = _job_recipient_name(job) or "담당자"
     return "\n".join(
         [
-            f"{payload.get('requester') or job.requester}님",
+            f"{requester}님",
             "",
             "엑셀 수시결제 전표 처리 중 오류가 발생했습니다.",
+            "전산팀에 원본 엑셀, 진단 로그, 오류 내용을 함께 전달했습니다.",
             "",
             _steps_text(job, events),
             "",
@@ -428,15 +467,16 @@ def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) 
 
 def failure_mail_html(job: JobRecord, events: Iterable[JobEvent] | None = None) -> str:
     payload = job.payload or {}
+    requester = _job_recipient_name(job) or "담당자"
     body = f"""
-      <p style="margin:0 0 12px;font-size:15px;">{html.escape(str(payload.get('requester') or job.requester or '담당자'))}님, 처리 중 오류가 발생했습니다. 전산팀에서 확인할 수 있도록 진단 자료를 함께 전달했습니다.</p>
+      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">{html.escape(requester)}님, 처리 중 오류가 발생했습니다. 전산팀에서 바로 확인할 수 있도록 원본 엑셀, 진단 로그, 오류 내용을 함께 전달했습니다.</p>
       {_steps_html(job, events)}
       <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:12px 14px;margin:12px 0 18px;">
         <div style="font-weight:700;color:#991b1b;margin-bottom:4px;">오류 내용</div>
         <div style="color:#7f1d1d;font-size:14px;white-space:pre-wrap;">{html.escape(_job_error(job))}</div>
       </div>
       {_details_table(job)}
-      <p style="margin:16px 0 0;color:#475569;font-size:13px;">전산팀 메일에는 원본 엑셀, 진단 로그, 저장된 PDF가 있으면 함께 첨부됩니다.</p>
+      <p style="margin:16px 0 0;color:#475569;font-size:13px;line-height:1.6;">오류 화면은 자동으로 닫지 않습니다. 전산팀 확인 전에는 243 PC의 ERP 화면을 그대로 두세요.</p>
     """
     return _mail_shell("엑셀 수시결제 전표 처리 오류", job.title, body, failed=True)
 
@@ -448,6 +488,7 @@ def notify_job_failed(
     source_path: Path | None = None,
 ) -> dict[str, Any]:
     recipient = _job_recipient(job)
+    recipient_name = _job_recipient_name(job)
     support_email = _support_email()
     subject = f"[엑셀 전표 처리 오류] {job.title}"
     result = job.result or {}
@@ -467,6 +508,8 @@ def notify_job_failed(
         html_body=failure_mail_html(job, events),
         attachments=attachments,
         cc_addr=support_email,
+        to_name=recipient_name,
+        cc_name="전산팀",
     )
 
 

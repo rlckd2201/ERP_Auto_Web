@@ -68,7 +68,7 @@
 
 ## 2026-06-26 기존 메일/DB 기본값 반영
 - 그룹웨어 DB 기본 계정은 `dlpadmin2`를 사용하도록 반영했다.
-- 기존 회계업무 WEB의 메일 기본값을 참고해 SMTP 기본값을 `35.216.76.148:25`, 발신자 `admpdm@dae-seung.co.kr`로 맞췄다.
+- 기존 회계업무 WEB의 메일 기본값을 참고해 SMTP 기본값을 `35.216.76.148:25`, 발신 주소 `admpdm@dae-seung.co.kr`, 표시명 `재정전표자동화 시스템`으로 맞췄다.
 - 기존 전산 코드처럼 SMTP 서버가 STARTTLS를 지원할 때만 TLS를 시작하도록 수정했다.
 - 실제 DB 컬럼 확인: `gw_emp.EmpID`, `gw_emp.GwID`, `gw_emp.Use_yn`, `ds_t_emp.EmpID`, `ds_t_emp.kor_name`, `ds_t_emp.bu_code`, `ds_t_emp.DeptName`, `ds_t_emp.use_yn`.
 - 재정 하위 부서 활성 계정 조회 결과 17건 확인.
@@ -109,7 +109,7 @@
 
 ## 2026-06-26 지정 프린터 출력
 - 172.17.30.243 프린터 목록에서 운영 출력 대상은 `재정 프린터 (172.16.10.173)`.
-- 완전 테스트 전까지 실제 출력은 `김제 프린터 (172.17.30.162)`로 보낸다.
+- 테스트 완료 후 운영 출력 대상은 `재정 프린터 (172.16.10.173)`로 전환했다.
 - Windows 기본 프린터는 변경하지 않는다.
 - `run_agent.ps1`, `install_agent_task.ps1`, `agent_worker.py`에 `PrinterName` 옵션을 추가했다.
 - `PrinterName`이 있으면 `notepad.exe /pt <file> <printer>`로 지정 프린터 출력한다.

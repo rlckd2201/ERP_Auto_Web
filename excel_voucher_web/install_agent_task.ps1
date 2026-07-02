@@ -4,7 +4,7 @@ param(
   [string]$ClientIp = "172.17.30.243",
   [ValidateSet("default-printer", "off")]
   [string]$PrintMode = "default-printer",
-  [string]$PrinterName = "",
+  [string]$PrinterName = "재정 프린터 (172.16.10.173)",
   [double]$PrintWaitSeconds = 3,
   [ValidateSet("dry-run", "real")]
   [string]$ErpMode = "dry-run",

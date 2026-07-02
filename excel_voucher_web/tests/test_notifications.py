@@ -20,6 +20,7 @@ def _fake_settings(tmp_path, outbox):
         smtp_password="",
         admin_email="admin@example.com",
         support_email="ds1501@dae-seung.co.kr",
+        smtp_from_name="재정전표자동화 시스템",
     )
 
 
@@ -41,6 +42,7 @@ def test_send_mail_outbox_records_pdf_attachment(tmp_path, monkeypatch):
     outbox_files = list(outbox.glob("*.json"))
     assert len(outbox_files) == 1
     payload = json.loads(outbox_files[0].read_text(encoding="utf-8"))
+    assert "재정전표자동화 시스템" in payload["from"]
     assert payload["attachments"] == [{"filename": "voucher.pdf", "content_type": "application/pdf"}]
 
 
@@ -100,7 +102,9 @@ def test_failure_notification_ccs_support_and_attaches_debug_files(tmp_path, mon
     outbox_files = list(outbox.glob("*.json"))
     assert len(outbox_files) == 1
     payload = json.loads(outbox_files[0].read_text(encoding="utf-8"))
-    assert payload["cc"] == "ds1501@dae-seung.co.kr"
+    assert payload["cc"] == "전산팀 <ds1501@dae-seung.co.kr>"
+    assert "재정전표자동화 시스템" in payload["from"]
+    assert "requester@example.com" in payload["to"]
     attachment_names = {item["filename"] for item in payload["attachments"]}
     assert "upload.xlsx" in attachment_names
     assert "agent.log" in attachment_names
