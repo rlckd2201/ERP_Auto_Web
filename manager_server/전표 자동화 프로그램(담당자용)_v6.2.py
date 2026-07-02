@@ -2541,6 +2541,8 @@ class ERPLoginBot:
             )
 
         management_value_xy_cache = {}
+        management_bank_coordinate_fallback_rows = set()
+        management_active_row_context = {"row_no": None}
 
         def _management_value_xy(item_name, fallback_y):
             target = _norm_text(item_name)
@@ -2548,7 +2550,11 @@ class ERPLoginBot:
             main_rect = _main_rect()
             fast_anchor = _env_flag("ERP_FAST_MGMT_ANCHOR", "1")
             cache_key = target or str(item_name or "").strip()
-            if fast_anchor and cache_key in management_value_xy_cache:
+            strict_item = target in {
+                _norm_text("계좌번호"),
+                _norm_text("금융기관지점"),
+            }
+            if fast_anchor and not strict_item and cache_key in management_value_xy_cache:
                 cached_x, cached_y = management_value_xy_cache[cache_key]
                 self.logger.info(
                     f"  [MGMT-ANCHOR] {item_name} cached coordinate reuse: rel=({cached_x},{cached_y})"
@@ -2572,12 +2578,18 @@ class ERPLoginBot:
                         f"  [MGMT-ANCHOR] {item_name} 현재 위치 기준 입력 좌표: "
                         f"rel=({value_x},{value_y}), labels={snapshot.get('labels')}"
                     )
-                    if fast_anchor and cache_key:
+                    if fast_anchor and not strict_item and cache_key:
                         management_value_xy_cache[cache_key] = (int(value_x), int(value_y))
                     return int(value_x), int(value_y)
                 if fast_anchor and not (snapshot.get("items") or snapshot.get("header_value")):
                     break
                 time.sleep(0.25)
+            active_row_no = management_active_row_context.get("row_no")
+            if strict_item and active_row_no not in management_bank_coordinate_fallback_rows:
+                raise RuntimeError(
+                    f"{item_name} management item is not visible; aborting strict bank-account input. "
+                    f"labels={(snapshot or {}).get('labels')}"
+                )
             log_msg = (
                 f"  [MGMT-ANCHOR] {item_name} 위치 미검출, fallback 사용: rel=(1118,{fallback_y}), "
                 f"labels={(snapshot or {}).get('labels')}"
@@ -2586,7 +2598,7 @@ class ERPLoginBot:
                 self.logger.info(log_msg)
             else:
                 self.logger.warning(log_msg)
-            if fast_anchor and cache_key:
+            if fast_anchor and not strict_item and cache_key:
                 management_value_xy_cache[cache_key] = (1118, int(fallback_y))
             return 1118, fallback_y
 
@@ -3171,8 +3183,28 @@ class ERPLoginBot:
                 _input_value_xy(x, y, vendor_name, label, enter_count=1, clear=True)
 
             def _fill_explicit_management_items():
+                management_active_row_context["row_no"] = row_no
                 if str(form_data.get('cash_processing_enabled', '')).strip().lower() not in ("1", "true", "yes", "on"):
                     _uncheck_cash_processing(row_no)
+                explicit_key_norms = {_norm_text(key) for key in explicit_management.keys()}
+                bank_required = {
+                    _norm_text("계좌번호"),
+                    _norm_text("금융기관지점"),
+                }
+                if explicit_key_norms & bank_required:
+                    snapshot = _management_grid_snapshot()
+                    visible_labels = snapshot.get("label_norms") or set()
+                    missing = [label for label in bank_required if label not in visible_labels]
+                    if missing and row_no not in management_bank_coordinate_fallback_rows:
+                        raise RuntimeError(
+                            f"{row_no}행 보통예금 관리항목이 표시되지 않아 계좌번호 입력을 중단합니다. "
+                            f"visible_labels={snapshot.get('labels')}"
+                        )
+                    if missing:
+                        self.logger.warning(
+                            f"  [MGMT-XY] {row_no}행 보통예금 관리항목 라벨은 미검출이지만 "
+                            "계정과목 검증 완료로 고정 좌표 입력을 진행합니다."
+                        )
                 y = 797
                 for item_name, item_value in explicit_management.items():
                     text = str(item_value or "").strip()
@@ -3239,6 +3271,7 @@ class ERPLoginBot:
             first_row_y = int(os.getenv("ERP_MGMT_FIRST_ROW_Y", "231") or "231")
             row_height = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
             sequential_nav = _env_flag("ERP_MGMT_SEQUENTIAL_NAV", "1")
+            account_x = int(os.getenv("ERP_MGMT_ACCOUNT_X", "229") or "229")
 
             def _grid_visible_rows():
                 explicit = str(os.getenv("ERP_MGMT_VISIBLE_ROWS", "") or "").strip()
@@ -3326,6 +3359,115 @@ class ERPLoginBot:
                         return resolved_y
                 return expected_y
 
+            bank_management_norms = {
+                _norm_text("계좌번호"),
+                _norm_text("금융기관지점"),
+            }
+
+            def _explicit_management_for_index(idx):
+                if (
+                    isinstance(line_management_items, list)
+                    and idx < len(line_management_items)
+                    and isinstance(line_management_items[idx], dict)
+                ):
+                    return line_management_items[idx]
+                return {}
+
+            def _requires_bank_management(management):
+                if not isinstance(management, dict):
+                    return False
+                return bool({_norm_text(key) for key in management.keys()} & bank_management_norms)
+
+            def _bank_management_visible():
+                snapshot = _management_grid_snapshot()
+                labels = snapshot.get("label_norms") or set()
+                return bank_management_norms.issubset(labels), snapshot
+
+            def _current_row_account_matches(row_no, current_y, expected_account):
+                expected_norm = _norm_text(expected_account)
+                if not expected_norm:
+                    return False
+                old_clipboard = None
+                copied = ""
+                try:
+                    old_clipboard = pyperclip.paste()
+                except Exception:
+                    old_clipboard = None
+                try:
+                    _click_form_xy(account_x, int(current_y), f"{row_no}행 계정과목 검증", wait=mgmt_key_wait)
+                    pyautogui.hotkey('ctrl', 'c')
+                    time.sleep(max(0.08, mgmt_key_wait))
+                    copied = str(pyperclip.paste() or "")
+                except Exception as e:
+                    self.logger.warning(f"  [MGMT-XY] {row_no}행 계정과목 복사 검증 실패: {e}")
+                    copied = ""
+                finally:
+                    if old_clipboard is not None:
+                        try:
+                            pyperclip.copy(old_clipboard)
+                        except Exception:
+                            pass
+                copied_norm = _norm_text(copied)
+                ok = expected_norm in copied_norm
+                self.logger.info(
+                    f"  [MGMT-XY] {row_no}행 계정과목 검증: expected={expected_account}, "
+                    f"copied={copied[:80]}, ok={ok}"
+                )
+                return ok
+
+            def _ensure_bank_management_row(row_no, current_y, expected_account):
+                ok, snapshot = _bank_management_visible()
+                if ok:
+                    self.logger.info(f"  [MGMT-XY] {row_no}행 보통예금 관리항목 표시 확인")
+                    return current_y
+                if _current_row_account_matches(row_no, current_y, expected_account):
+                    management_bank_coordinate_fallback_rows.add(row_no)
+                    self.logger.warning(
+                        f"  [MGMT-XY] {row_no}행 보통예금 계정과목은 확인됐지만 관리항목 라벨이 미검출되어 "
+                        "고정 좌표 입력 fallback을 허용합니다."
+                    )
+                    return current_y
+                for wait_try in range(2):
+                    time.sleep(max(0.25, mgmt_commit_wait))
+                    ok, snapshot = _bank_management_visible()
+                    if ok:
+                        self.logger.info(f"  [MGMT-XY] {row_no}행 보통예금 관리항목 지연 표시 확인({wait_try + 1})")
+                        return current_y
+                    if _current_row_account_matches(row_no, current_y, expected_account):
+                        management_bank_coordinate_fallback_rows.add(row_no)
+                        self.logger.warning(
+                            f"  [MGMT-XY] {row_no}행 보통예금 계정과목 검증 완료로 "
+                            "관리항목 고정 좌표 입력 fallback을 허용합니다."
+                        )
+                        return current_y
+                for retry in range(5):
+                    self.logger.warning(
+                        f"  [MGMT-XY] {row_no}행 보통예금 관리항목 미표시, 다음 행 이동 재시도 "
+                        f"({retry + 1}/5): labels={snapshot.get('labels')}"
+                    )
+                    _click_form_xy(summary_x, int(current_y), f"{row_no}행 보통예금 행 이동 재시도", wait=mgmt_key_wait)
+                    pyautogui.press('down')
+                    time.sleep(max(0.35, mgmt_commit_wait))
+                    current_y = max_row_y
+                    _double_click_form_xy(summary_x, int(current_y), f"{row_no}행 보통예금 재선택", wait=mgmt_summary_open_wait)
+                    if mgmt_after_summary_open_wait:
+                        time.sleep(mgmt_after_summary_open_wait)
+                    ok, snapshot = _bank_management_visible()
+                    if ok:
+                        self.logger.info(f"  [MGMT-XY] {row_no}행 보통예금 관리항목 표시 확인(재시도 {retry + 1})")
+                        return current_y
+                    if _current_row_account_matches(row_no, current_y, expected_account):
+                        management_bank_coordinate_fallback_rows.add(row_no)
+                        self.logger.warning(
+                            f"  [MGMT-XY] {row_no}행 보통예금 계정과목 검증 완료(재시도 {retry + 1})로 "
+                            "관리항목 고정 좌표 입력 fallback을 허용합니다."
+                        )
+                        return current_y
+                _fail_form(
+                    f"{row_no}행 보통예금 관리항목이 표시되지 않아 계좌번호 입력을 중단합니다. "
+                    f"visible_labels={snapshot.get('labels')}"
+                )
+
             current_y = first_row_y
             for idx in range(rows_to_fill):
                 account_name = ""
@@ -3333,11 +3475,10 @@ class ERPLoginBot:
                     account_name = str(erp_rows[idx]).split('\t')[0].strip()
                 row_no = idx + 1
                 account_key, corp, plan = _management_plan(account_name)
+                explicit_management_for_row = _explicit_management_for_index(idx)
                 has_explicit_management = (
-                    isinstance(line_management_items, list)
-                    and idx < len(line_management_items)
-                    and isinstance(line_management_items[idx], dict)
-                    and bool(line_management_items[idx])
+                    isinstance(explicit_management_for_row, dict)
+                    and bool(explicit_management_for_row)
                 )
                 if not plan and not has_explicit_management:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 스킵: account={account_key}, corp={corp}, 입력 불필요")
@@ -3348,6 +3489,8 @@ class ERPLoginBot:
                 current_y = _focus_grid_row(row_no, summary_y)
                 if mgmt_after_summary_open_wait:
                     time.sleep(mgmt_after_summary_open_wait)
+                if _requires_bank_management(explicit_management_for_row):
+                    current_y = _ensure_bank_management_row(row_no, current_y, account_name)
                 _fill_management_for_current_row(row_no, account_name)
                 time.sleep(mgmt_key_wait)
                 if idx < rows_to_fill - 1:

@@ -33,6 +33,25 @@ def _write_cash_sheet_sample(path: Path) -> None:
     workbook.save(path)
 
 
+def _write_many_cash_sheet_sample(path: Path, count: int = 208) -> None:
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = "수시결제현금"
+    total = sum(index * 1000 for index in range(1, count + 1))
+    sheet["A6"] = f"합 계  : {total:,}원 {count}(件)"
+    sheet.append([])
+    sheet.append(["구분", "NO", "거래일자", "부서", "코드", "업체명", "적         요", "금액"])
+    sheet.append(["", "", "", "", "", "", "", ""])
+    for index in range(1, count + 1):
+        code = f"HD{index:03d}"
+        name = f"거래처{index:03d}"
+        if index == count:
+            code = "HD084"
+            name = "현대리바트"
+        sheet.append(["", index, 430, "구매", code, name, "수시결제", index * 1000])
+    workbook.save(path)
+
+
 def test_build_voucher_payload_adds_bank_credit_line(tmp_path: Path) -> None:
     source = tmp_path / "sample.xlsx"
     _write_sample(source)
@@ -140,6 +159,31 @@ def test_build_voucher_payload_uses_cash_sheet_rows_only(tmp_path: Path) -> None
     assert payload.lines[0].amount == 12000
     assert payload.lines[0].management_items == {"거래처": "A001"}
     assert payload.source_columns["amount"] == "수시결제현금!H"
+
+
+def test_build_voucher_payload_keeps_last_vendor_before_bank_line(tmp_path: Path) -> None:
+    source = tmp_path / "cash_many.xlsx"
+    _write_many_cash_sheet_sample(source, count=208)
+
+    payload = build_voucher_payload(
+        source,
+        accounting_date="2026-05-20",
+        requester="tester",
+        source_filename="cash_many.xlsx",
+        manager=manager_profile("daeseung"),
+    )
+
+    assert payload.source_row_count == 208
+    assert payload.line_count == 209
+    assert payload.lines[-2].account_name == "미지급금(원화)"
+    assert payload.lines[-2].vendor_code == "HD084"
+    assert payload.lines[-2].management_items == {"거래처": "HD084"}
+    assert payload.lines[-1].account_name == "보통예금"
+    assert payload.lines[-1].management_items["계좌번호"] == "140-000-948562"
+    assert payload.erp_line_management_items[207] == {"거래처": "HD084"}
+    assert payload.erp_line_management_items[208]["계좌번호"] == "140-000-948562"
+    assert payload.erp_clipboard_rows[207].split("\t")[0] == "미지급금(원화)"
+    assert payload.erp_clipboard_rows[208].split("\t")[0] == "보통예금"
 
 
 def test_only_daeseung_manager_is_enabled_for_upload() -> None:
