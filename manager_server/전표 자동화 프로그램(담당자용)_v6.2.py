@@ -3882,6 +3882,11 @@ class ERPLoginBot:
                 return False
             norm_path = os.path.abspath(save_path)
             os.makedirs(os.path.dirname(norm_path), exist_ok=True)
+            pdf_started_at = time.time()
+            try:
+                pdf_wait_seconds = max(30.0, float(os.getenv("ERP_PDF_SAVE_WAIT_SECONDS", "90") or "90"))
+            except Exception:
+                pdf_wait_seconds = 90.0
             try:
                 if os.path.exists(norm_path):
                     os.remove(norm_path)
@@ -3906,15 +3911,80 @@ class ERPLoginBot:
                 except Exception:
                     pass
 
+            def _is_stable_pdf(path, interval=0.5):
+                try:
+                    size1 = os.path.getsize(path)
+                    time.sleep(interval)
+                    size2 = os.path.getsize(path)
+                    return size1 == size2 and size2 > 0
+                except Exception:
+                    return False
+
+            def _recover_misplaced_pdf():
+                target = Path(norm_path)
+                roots = [
+                    target.parent,
+                    Path.home() / "Documents",
+                    Path.home() / "Downloads",
+                    Path.home() / "Desktop",
+                ]
+                seen = set()
+                for root in roots:
+                    try:
+                        root = root.resolve()
+                    except Exception:
+                        continue
+                    if root in seen or not root.exists():
+                        continue
+                    seen.add(root)
+                    candidates = []
+                    try:
+                        candidates.extend(root.glob(target.name))
+                        candidates.extend(root.glob(f"**/{target.name}"))
+                    except Exception:
+                        continue
+                    try:
+                        candidates = sorted(
+                            set(candidates),
+                            key=lambda p: p.stat().st_mtime if p.exists() else 0,
+                            reverse=True,
+                        )
+                    except Exception:
+                        pass
+                    for candidate in candidates:
+                        try:
+                            if candidate.resolve() == target.resolve():
+                                continue
+                            if candidate.suffix.lower() != ".pdf" or candidate.name != target.name:
+                                continue
+                            if candidate.stat().st_mtime < pdf_started_at - 10:
+                                continue
+                            if not _is_stable_pdf(str(candidate), interval=0.5):
+                                continue
+                            target.parent.mkdir(parents=True, exist_ok=True)
+                            if target.exists():
+                                target.unlink()
+                            candidate.replace(target)
+                            self.logger.info(f"  [PRINT] misplaced PDF recovered: {candidate} -> {target}")
+                            return True
+                        except Exception:
+                            continue
+                return False
+
             def _wait_pdf_created(timeout_sec=20):
                 end_at = time.time() + timeout_sec
                 while time.time() < end_at:
-                    if os.path.exists(norm_path):
+                    if os.path.exists(norm_path) and _is_stable_pdf(norm_path, interval=0.3):
                         getattr(self.manager.main_app, "last_erp_print_output", "")
                         self.manager.main_app.last_erp_print_output = norm_path
                         self.logger.info(f"  [PRINT] ERP PDF saved: {norm_path}")
                         return True
-                    time.sleep(0.2)
+                    if _recover_misplaced_pdf():
+                        getattr(self.manager.main_app, "last_erp_print_output", "")
+                        self.manager.main_app.last_erp_print_output = norm_path
+                        self.logger.info(f"  [PRINT] ERP PDF saved after recovery: {norm_path}")
+                        return True
+                    time.sleep(0.4)
                 return False
 
             def _save_pdf_by_filename_edit():
@@ -4006,49 +4076,70 @@ class ERPLoginBot:
             def _save_pdf_by_common_dialog_hotkeys():
                 folder = os.path.dirname(norm_path)
                 filename = os.path.basename(norm_path)
-                try:
-                    dialog.set_focus()
-                except Exception:
-                    pass
-                time.sleep(0.25)
-                try:
-                    pyperclip.copy(folder)
-                    pyautogui.hotkey("alt", "d")
-                    time.sleep(0.15)
-                    pyautogui.hotkey("ctrl", "v")
-                    time.sleep(0.15)
-                    pyautogui.press("enter")
-                    time.sleep(0.60)
-
-                    pyperclip.copy(filename)
-                    pyautogui.hotkey("alt", "n")
-                    time.sleep(0.15)
-                    pyautogui.hotkey("ctrl", "a")
-                    time.sleep(0.05)
-                    pyautogui.hotkey("ctrl", "v")
-                    time.sleep(0.15)
-                    pyautogui.hotkey("alt", "s")
-                    self.logger.info(f"  [PRINT] PDF Save As hotkeys sent: folder={folder}, filename={filename}")
-                except Exception as e:
-                    self.logger.warning(f"  [PRINT] PDF Save As hotkey path failed: {e}")
-                    return False
-
-                if _wait_pdf_created(timeout_sec=6):
-                    return True
-                for _ in range(3):
+                for attempt in range(1, 4):
                     try:
-                        pyautogui.press("enter")
+                        save_dialog = _wait_pdf_save_dialog(timeout_sec=1) or dialog
+                        save_dialog.set_focus()
                     except Exception:
-                        pass
-                    if _wait_pdf_created(timeout_sec=3):
+                        save_dialog = dialog
+                    time.sleep(0.25)
+                    try:
+                        for key in ("alt", "ctrl", "shift", "win"):
+                            pyautogui.keyUp(key)
+
+                        pyperclip.copy(folder)
+                        pyautogui.hotkey("alt", "d")
+                        time.sleep(0.10)
+                        pyautogui.hotkey("ctrl", "a")
+                        time.sleep(0.05)
+                        pyautogui.hotkey("ctrl", "v")
+                        time.sleep(0.10)
+                        pyautogui.press("enter")
+                        time.sleep(0.90)
+
+                        pyperclip.copy(filename)
+                        pyautogui.hotkey("alt", "n")
+                        time.sleep(0.10)
+                        pyautogui.hotkey("ctrl", "a")
+                        time.sleep(0.05)
+                        pyautogui.hotkey("ctrl", "v")
+                        time.sleep(0.15)
+                        pyautogui.hotkey("alt", "s")
+                        self.logger.info(
+                            f"  [PRINT] PDF Save As folder/name sent ({attempt}/3): folder={folder}, filename={filename}"
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"  [PRINT] PDF Save As hotkey path failed ({attempt}/3): {e}")
+                        continue
+
+                    for _ in range(8):
+                        try:
+                            overwrite = _wait_pdf_save_dialog(timeout_sec=0.2)
+                            if not overwrite:
+                                break
+                            blob = _dialog_text_blob(overwrite)
+                            if not any(token in blob for token in ("이미", "바꾸", "덮어", "already", "replace", "overwrite")):
+                                break
+                            pyautogui.press("left")
+                            pyautogui.press("enter")
+                            self.logger.info("  [PRINT] existing PDF overwrite confirmed")
+                            break
+                        except Exception:
+                            try:
+                                pyautogui.press("enter")
+                            except Exception:
+                                pass
+                            break
+
+                    if _wait_pdf_created(timeout_sec=min(20, pdf_wait_seconds)):
                         return True
                 return False
 
-            if _save_pdf_by_filename_edit():
+            if _save_pdf_by_common_dialog_hotkeys():
                 _restore_pdf_clipboard()
                 return True
 
-            if _save_pdf_by_common_dialog_hotkeys():
+            if _save_pdf_by_filename_edit():
                 _restore_pdf_clipboard()
                 return True
 
@@ -4120,15 +4211,10 @@ class ERPLoginBot:
                     pyautogui.press("enter")
                 self.logger.info("  [PRINT] 기존 PDF 덮어쓰기 확인 완료")
 
-            end_at = time.time() + 15
-            while time.time() < end_at:
-                if os.path.exists(norm_path):
-                    getattr(self.manager.main_app, "last_erp_print_output", "")
-                    self.manager.main_app.last_erp_print_output = norm_path
-                    _restore_pdf_clipboard()
-                    self.logger.info(f"  [PRINT] ERP PDF 저장 완료: {norm_path}")
-                    return True
-                time.sleep(0.2)
+            if _wait_pdf_created(timeout_sec=pdf_wait_seconds):
+                _restore_pdf_clipboard()
+                self.logger.info(f"  [PRINT] ERP PDF 저장 완료: {norm_path}")
+                return True
             _restore_pdf_clipboard()
             self.logger.warning(f"  [PRINT] ERP PDF 저장 대기 시간초과: {norm_path}")
             return False
