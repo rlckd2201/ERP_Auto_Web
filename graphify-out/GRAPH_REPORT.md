@@ -1,12 +1,12 @@
 # Graph Report - (재정)회계업무 자동화_WEB_Version  (2026-07-02)
 
 ## Corpus Check
-- 1941 files · ~3,527,640 words
+- 1941 files · ~3,527,967 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 4892 nodes · 37448 edges · 83 communities detected
-- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 3150 edges (avg confidence: 0.79)
+- 4895 nodes · 37452 edges · 85 communities detected
+- Extraction: 92% EXTRACTED · 8% INFERRED · 0% AMBIGUOUS · INFERRED: 3152 edges (avg confidence: 0.79)
 - Token cost: 0 input · 0 output
 
 ## Community Hubs (Navigation)
@@ -93,12 +93,14 @@
 - [[_COMMUNITY_Community 319|Community 319]]
 - [[_COMMUNITY_Community 320|Community 320]]
 - [[_COMMUNITY_Community 321|Community 321]]
+- [[_COMMUNITY_Community 322|Community 322]]
+- [[_COMMUNITY_Community 323|Community 323]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `get_invoice()` - 244 edges
 2. `build_output_set_status()` - 182 edges
 3. `update_invoice_json()` - 161 edges
-4. `sleep()` - 138 edges
+4. `sleep()` - 139 edges
 5. `JobCreateRequest` - 136 edges
 6. `add_invoice_log()` - 131 edges
 7. `ERPAutoApp` - 92 edges
@@ -108,105 +110,105 @@
 
 ## Surprising Connections (you probably didn't know these)
 - `api_regular_due_status()` --calls--> `regular_due_status()`  [INFERRED]
-  _codex_app_zoom_agent_ascii_patch.py → _codex_stage_zoom_oneclick_enable_fix195_20260622_131614\web_v1\backend\regular_due_monitor.py
-- `api_regular_due_history()` --calls--> `regular_due_history()`  [INFERRED]
-  _codex_app_zoom_agent_ascii_patch.py → _codex_stage_zoom_oneclick_enable_fix195_20260622_131614\web_v1\backend\regular_due_monitor.py
-- `api_regular_due_vendor_alert_sample()` --calls--> `send_regular_due_vendor_alert_sample()`  [INFERRED]
-  _codex_app_zoom_agent_ascii_patch.py → _codex_stage_zoom_oneclick_enable_fix195_20260622_131614\web_v1\backend\regular_due_monitor.py
-- `api_setup_installer()` --calls--> `find_installer()`  [INFERRED]
-  _codex_app_zoom_agent_ascii_patch.py → _codex_stage_zoom_billing_manual_amount_fix184_20260617_154500\web_v1\backend\setup_state.py
-- `api_regular_due_status()` --calls--> `regular_due_status()`  [INFERRED]
   _codex_app_zoom_manual_output_fix193.py → _codex_stage_zoom_oneclick_enable_fix195_20260622_131614\web_v1\backend\regular_due_monitor.py
+- `api_regular_due_history()` --calls--> `regular_due_history()`  [INFERRED]
+  _codex_app_zoom_manual_output_fix193.py → _codex_stage_zoom_oneclick_enable_fix195_20260622_131614\web_v1\backend\regular_due_monitor.py
+- `api_regular_due_vendor_alert_sample()` --calls--> `send_regular_due_vendor_alert_sample()`  [INFERRED]
+  _codex_app_zoom_manual_output_fix193.py → _codex_stage_zoom_oneclick_enable_fix195_20260622_131614\web_v1\backend\regular_due_monitor.py
+- `api_setup_installer()` --calls--> `find_installer()`  [INFERRED]
+  _codex_app_zoom_manual_output_fix193.py → _codex_stage_zoom_billing_manual_amount_fix184_20260617_154500\web_v1\backend\setup_state.py
+- `_queue_expense_report_after_erp()` --calls--> `write_expense_report_queue()`  [INFERRED]
+  _codex_app_probe.py → _codex_stage_zoom_billing_manual_amount_fix184_20260617_154500\web_v1\backend\erp_queue.py
 
 ## Communities
 
 ### Community 0 - "Community 0"
 Cohesion: 0.01
-Nodes (826): _legacy_form_data(), _legacy_site_name(), _validate_erp_runtime_info(), _update_server_files(), _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task() (+818 more)
+Nodes (659): add_invoice_log(), _clean_int(), _columns(), delete_invoice(), detect_invoice_type(), _ensure_column(), get_conn(), get_invoice() (+651 more)
 
 ### Community 1 - "Community 1"
 Cohesion: 0.02
-Nodes (207): AccountStore, AccountUser, hash_password(), make_temporary_password(), now_text(), protect_secret(), unprotect_secret(), verify_password() (+199 more)
+Nodes (208): AccountStore, AccountUser, hash_password(), make_temporary_password(), now_text(), protect_secret(), unprotect_secret(), verify_password() (+200 more)
 
 ### Community 2 - "Community 2"
-Cohesion: 0.06
-Nodes (50): auto_attach_compuzone_quote(), _clean_order_no(), _click_print_button(), _close_context(), _compuzone_accounts(), CompuzoneQuoteError, _emit(), fetch_compuzone_quote_pdf() (+42 more)
+Cohesion: 0.04
+Nodes (33): _active_invoice_items(), claim_next_erp_task(), now_text(), _read_task(), _task_files(), update_erp_task(), _write_task(), _check_playwright_runtime() (+25 more)
 
 ### Community 3 - "Community 3"
+Cohesion: 0.02
+Nodes (124): _connection_error_message(), _download_job_source(), _execute_admin_command(), _heartbeat(), _install_agent_task(), _latest_agent_log(), main(), _popen_hidden() (+116 more)
+
+### Community 4 - "Community 4"
 Cohesion: 0.38
 Nodes (124): _add_installer_file(), _add_installer_tree(), _admin_db_conn(), admin_db_page(), _admin_table_names(), _agent_bootstrap_script(), _agent_cmd_launcher(), _agent_exe_launcher() (+116 more)
 
-### Community 4 - "Community 4"
-Cohesion: 0.04
-Nodes (44): _connection_error_message(), _download_job_source(), _execute_admin_command(), _heartbeat(), _install_agent_task(), _latest_agent_log(), main(), _popen_hidden() (+36 more)
-
 ### Community 5 - "Community 5"
-Cohesion: 0.06
-Nodes (47): ABC, _add_months(), BaseTaxInvoiceHandler, digits_only(), _do_process(), _get_chromedriver_service(), _is_stable(), _period_rule_key() (+39 more)
+Cohesion: 0.09
+Nodes (51): _app_version(), _env(), _env_bool(), _env_int(), _legacy_manager_path(), _load_env_file(), Settings, _version_file_default() (+43 more)
 
 ### Community 6 - "Community 6"
+Cohesion: 0.03
+Nodes (24): UplusEDocuHandler, portal_name(), LG U+ eDocu tax invoice portal adapter.  This adapter intentionally routes edo, UplusPortalHandler, main(), print_result(), 세금계산서 크롤링 모듈 개별 테스트 도구 실행: python test.py  포털별로 URL/파일경로를 직접 입력해서 단독 테스트 가능., URL 자동 감지 테스트 (crawler_main 사용) (+16 more)
+
+### Community 7 - "Community 7"
+Cohesion: 0.06
+Nodes (48): ABC, BaseTaxInvoiceHandler, _add_months(), BaseTaxInvoiceHandler, digits_only(), _do_process(), _get_chromedriver_service(), _is_stable() (+40 more)
+
+### Community 8 - "Community 8"
 Cohesion: 0.22
 Nodes (137): accountOptions(), addLog(), agentConnectedFromSetup(), agentUpdateRequiredFromSetup(), applyDetailMode(), applyModeUi(), approvalPaths(), approvalStatusText() (+129 more)
 
-### Community 7 - "Community 7"
-Cohesion: 0.04
-Nodes (121): addLog(), agentConnectedFromSetup(), agentUpdateRequiredFromSetup(), applyDetailMode(), applyModeUi(), approvalPaths(), approvalStatusText(), autoStartAgentAfterLogin() (+113 more)
-
-### Community 8 - "Community 8"
-Cohesion: 0.04
-Nodes (121): addLog(), agentConnectedFromSetup(), agentUpdateRequiredFromSetup(), applyDetailMode(), applyModeUi(), approvalPaths(), approvalStatusText(), autoStartAgentAfterLogin() (+113 more)
-
 ### Community 9 - "Community 9"
-Cohesion: 0.34
-Nodes (87): _add_months(), _alert_hour(), _alert_start_date(), _alias_matches_text(), _amount(), build_regular_due_report(), _clean_text(), _compact() (+79 more)
+Cohesion: 0.05
+Nodes (28): escapeHtml(), loadOverview(), loadTable(), renderRows(), renderTables(), requestJson(), shortCell(), showError() (+20 more)
 
 ### Community 10 - "Community 10"
-Cohesion: 0.03
-Nodes (15): UplusEDocuHandler, _format_biz_no(), _format_date(), parse_tax_invoice_xml(), 반환: (supplier_dict, buyer_dict, content_dict)     content_dict 안에 '항목' 리스트 포함., _text(), child_text(), clean_text() (+7 more)
+Cohesion: 0.04
+Nodes (121): addLog(), agentConnectedFromSetup(), agentUpdateRequiredFromSetup(), applyDetailMode(), applyModeUi(), approvalPaths(), approvalStatusText(), autoStartAgentAfterLogin() (+113 more)
 
 ### Community 11 - "Community 11"
-Cohesion: 0.2
-Nodes (53): _active_install_job(), _add_check(), _age_seconds(), authenticate_user(), change_initial_password(), claim_install_job(), _columns(), complete_install_job() (+45 more)
+Cohesion: 0.04
+Nodes (121): addLog(), agentConnectedFromSetup(), agentUpdateRequiredFromSetup(), applyDetailMode(), applyModeUi(), approvalPaths(), approvalStatusText(), autoStartAgentAfterLogin() (+113 more)
 
 ### Community 12 - "Community 12"
-Cohesion: 0.23
-Nodes (70): _apply_company_erp_credentials(), _archive_pdf(), _clean_management_items(), _clipboard_account_name(), _clipboard_vendor_value(), _fallback_bank_management_items(), _fallback_line_management_items(), _file_uri() (+62 more)
+Cohesion: 0.32
+Nodes (90): _add_months(), _alert_hour(), _alert_start_date(), _alias_matches_text(), _amount(), build_regular_due_report(), _clean_text(), _compact() (+82 more)
 
 ### Community 13 - "Community 13"
-Cohesion: 0.21
-Nodes (42): _allow_xml_attachment_fallback(), collect_mail_once(), CollectResult, _compact_text(), _crawl_invoice_with_retry(), _crawled_invoice_text(), _crawler_api(), _ensure_crawler_path() (+34 more)
+Cohesion: 0.15
+Nodes (69): _active_install_job(), _add_check(), _age_seconds(), authenticate_user(), change_initial_password(), claim_install_job(), _columns(), complete_install_job() (+61 more)
 
 ### Community 14 - "Community 14"
-Cohesion: 0.24
-Nodes (42): _check_playwright_runtime(), fetch_approval_documents(), _ai_parse(), analyze_purchase_documents(), _clean_match_text(), _clean_text(), _collapse_duplicate_total_prices(), _collapse_repeated_words() (+34 more)
+Cohesion: 0.22
+Nodes (73): _apply_company_erp_credentials(), _archive_pdf(), _clean_management_items(), _clipboard_account_name(), _clipboard_vendor_value(), _fallback_bank_management_items(), _fallback_line_management_items(), _file_uri() (+65 more)
 
 ### Community 15 - "Community 15"
+Cohesion: 0.07
+Nodes (16): 메일 본문에서 법인 키워드를 찾아 사업자번호 후보 dict 반환., HometaxHandler, _parse_amount(), _parse_field(), portal_name(), _write_text(), _build_data(), _build_subject() (+8 more)
+
+### Community 16 - "Community 16"
 Cohesion: 0.48
 Nodes (53): _aggregate_expense_items(), _appdata_template_candidates(), _build_expense_report_text(), _build_zoom_expense_report_text(), _clean_expense_item_name(), _clean_path(), _copy_or_merge_doc(), _docs_for_output() (+45 more)
 
-### Community 16 - "Community 16"
+### Community 17 - "Community 17"
 Cohesion: 0.34
 Nodes (51): _acquire_single_instance(), _agent_bundle_hash(), _agent_update_required(), AgentTray, _apply_server_setup_config(), _browser_pdf_print_app_candidates(), _cert_cache_path(), _cert_store_has_thumbprint() (+43 more)
 
-### Community 17 - "Community 17"
-Cohesion: 0.05
-Nodes (70): Program, _add_months(), _alert_hour(), _alert_start_date(), _alias_matches_text(), _amount(), build_regular_due_report(), _clean_text() (+62 more)
-
 ### Community 18 - "Community 18"
-Cohesion: 0.08
-Nodes (14): portal_name(), LG U+ eDocu tax invoice portal adapter.  This adapter intentionally routes edo, UplusPortalHandler, main(), print_result(), 세금계산서 크롤링 모듈 개별 테스트 도구 실행: python test.py  포털별로 URL/파일경로를 직접 입력해서 단독 테스트 가능., URL 자동 감지 테스트 (crawler_main 사용), test_auto() (+6 more)
-
-### Community 19 - "Community 19"
 Cohesion: 0.15
 Nodes (21): _clean_html_cell(), _clean_text(), _date_after(), _element_label(), extract_smileedi_links(), _field_after(), _font_rows(), _format_biz_no() (+13 more)
 
-### Community 20 - "Community 20"
+### Community 19 - "Community 19"
 Cohesion: 0.06
 Nodes (4): _digits_only(), LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름, _safe_name(), UplusEdocuHandler
 
-### Community 21 - "Community 21"
+### Community 20 - "Community 20"
 Cohesion: 0.12
 Nodes (6): EtaxUnipostHandler, format_biz_no(), format_date_yyyymmdd(), safe_filename(), split_classification(), text_or_none()
+
+### Community 21 - "Community 21"
+Cohesion: 0.33
+Nodes (53): _ai_parse(), analyze_purchase_documents(), _clean_match_text(), _clean_text(), _collapse_duplicate_total_prices(), _collapse_repeated_words(), _extract_amounts_from_tax(), _extract_compuzone_quote_items() (+45 more)
 
 ### Community 22 - "Community 22"
 Cohesion: 0.15
@@ -221,24 +223,24 @@ Cohesion: 0.2
 Nodes (9): clean_amount(), find_text(), format_biz_no(), format_date_yyyymmdd(), parse_tax_invoice_xml(), parse_tax_invoice_xml_to_dict(), 지정된 경로의 세금계산서 XML을 파싱하여 딕셔너리 3개를 반환합니다., split_classification() (+1 more)
 
 ### Community 25 - "Community 25"
-Cohesion: 0.1
-Nodes (12): BaseTaxInvoiceHandler, 메일 본문에서 법인 키워드를 찾아 사업자번호 후보 dict 반환., HometaxHandler, _parse_amount(), _parse_field(), portal_name(), _write_text(), _build_data() (+4 more)
+Cohesion: 0.08
+Nodes (69): _add_months(), _alert_hour(), _alert_start_date(), _alias_matches_text(), _amount(), build_regular_due_report(), _clean_text(), _compact() (+61 more)
 
 ### Community 26 - "Community 26"
+Cohesion: 0.08
+Nodes (69): _add_months(), _alert_hour(), _alert_start_date(), _alias_matches_text(), _amount(), build_regular_due_report(), _clean_text(), _compact() (+61 more)
+
+### Community 27 - "Community 27"
 Cohesion: 0.3
 Nodes (37): AutoEverHandler(), crawl_invoice(), _csbill_link_bill_no(), _csbill_link_priority(), CsbillHandler(), decode_mime_header(), _dedupe_csbill_links(), detect_handler() (+29 more)
 
-### Community 27 - "Community 27"
-Cohesion: 0.08
-Nodes (58): _add_months(), _alert_hour(), _alert_start_date(), _alias_matches_text(), build_regular_due_report(), _compact(), _contact_label(), _cycle_for_report() (+50 more)
-
 ### Community 28 - "Community 28"
-Cohesion: 0.28
-Nodes (13): _customer_name_from_lines(), _extract_kt_statement_date(), _file_uri_to_path(), _find_sequence(), _fitz(), KtAttachmentHandler, _normalize_issue(), _normalize_mail_date() (+5 more)
+Cohesion: 0.54
+Nodes (27): auto_attach_compuzone_quote(), _clean_order_no(), _click_print_button(), _close_context(), _compuzone_accounts(), CompuzoneQuoteError, _emit(), fetch_compuzone_quote_pdf() (+19 more)
 
 ### Community 29 - "Community 29"
-Cohesion: 0.11
-Nodes (4): _digits_only(), LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름, _safe_name(), UplusEdocuHandler
+Cohesion: 0.28
+Nodes (13): _customer_name_from_lines(), _extract_kt_statement_date(), _file_uri_to_path(), _find_sequence(), _fitz(), KtAttachmentHandler, _normalize_issue(), _normalize_mail_date() (+5 more)
 
 ### Community 30 - "Community 30"
 Cohesion: 0.22
@@ -273,16 +275,16 @@ Cohesion: 0.4
 Nodes (9): clean_amount(), find_text(), format_biz_no(), format_date_yyyymmdd(), parse_tax_invoice_xml(), parse_tax_invoice_xml_to_dict(), 지정된 경로의 세금계산서 XML을 파싱하여 딕셔너리 3개를 반환합니다., split_classification() (+1 more)
 
 ### Community 38 - "Community 38"
-Cohesion: 0.07
-Nodes (1): main()
-
-### Community 39 - "Community 39"
 Cohesion: 0.15
 Nodes (2): Resolve-EnvValue(), Resolve-EnvValueAllowBlank()
 
-### Community 40 - "Community 40"
+### Community 39 - "Community 39"
 Cohesion: 0.15
 Nodes (2): Resolve-PythonExe(), Resolve-PythonwExe()
+
+### Community 40 - "Community 40"
+Cohesion: 0.11
+Nodes (1): Program
 
 ### Community 43 - "Community 43"
 Cohesion: 1.0
@@ -306,23 +308,23 @@ Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the 
 
 ### Community 285 - "Community 285"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 286 - "Community 286"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 287 - "Community 287"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 288 - "Community 288"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 289 - "Community 289"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 290 - "Community 290"
 Cohesion: 1.0
@@ -350,15 +352,15 @@ Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the 
 
 ### Community 296 - "Community 296"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 297 - "Community 297"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 298 - "Community 298"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 299 - "Community 299"
 Cohesion: 1.0
@@ -370,15 +372,15 @@ Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the 
 
 ### Community 301 - "Community 301"
 Cohesion: 1.0
-Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 302 - "Community 302"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 303 - "Community 303"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
+Nodes (1): Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 
 ### Community 304 - "Community 304"
 Cohesion: 1.0
@@ -386,47 +388,47 @@ Nodes (1): Placeholder for the real ERP UI automation run on the automatic vouch
 
 ### Community 305 - "Community 305"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
+Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
 
 ### Community 306 - "Community 306"
 Cohesion: 1.0
-Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
+Nodes (1): Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
 
 ### Community 307 - "Community 307"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
 
 ### Community 308 - "Community 308"
 Cohesion: 1.0
-Nodes (1): ?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?
+Nodes (1): Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
 
 ### Community 309 - "Community 309"
 Cohesion: 1.0
-Nodes (1): KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 310 - "Community 310"
 Cohesion: 1.0
-Nodes (1): Save tax-invoice XML attachments and return file:// URIs.
+Nodes (1): ?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?
 
 ### Community 311 - "Community 311"
 Cohesion: 1.0
-Nodes (1): 硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.
+Nodes (1): KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai
 
 ### Community 312 - "Community 312"
 Cohesion: 1.0
-Nodes (1): ?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫
+Nodes (1): Save tax-invoice XML attachments and return file:// URIs.
 
 ### Community 313 - "Community 313"
 Cohesion: 1.0
-Nodes (1): 硫붿씪 ?섏떊????yymmdd ?뺤떇.
+Nodes (1): 硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.
 
 ### Community 314 - "Community 314"
 Cohesion: 1.0
-Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+Nodes (1): ?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫
 
 ### Community 315 - "Community 315"
 Cohesion: 1.0
-Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
+Nodes (1): 硫붿씪 ?섏떊????yymmdd ?뺤떇.
 
 ### Community 316 - "Community 316"
 Cohesion: 1.0
@@ -434,7 +436,7 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
 
 ### Community 317 - "Community 317"
 Cohesion: 1.0
-Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+Nodes (1): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 
 ### Community 318 - "Community 318"
 Cohesion: 1.0
@@ -452,8 +454,16 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
 Cohesion: 1.0
 Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
 
+### Community 322 - "Community 322"
+Cohesion: 1.0
+Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+
+### Community 323 - "Community 323"
+Cohesion: 1.0
+Nodes (1): The legacy UI module imports fitz at module load, but ERP input does not use it
+
 ## Knowledge Gaps
-- **78 isolated node(s):** `DueRule`, `DueContact`, `DueRule`, `DueContact`, `Run a dry-run print preview or the real legacy ERP automation on the voucher PC` (+73 more)
+- **80 isolated node(s):** `DueRule`, `DueContact`, `DueRule`, `DueContact`, `Run a dry-run print preview or the real legacy ERP automation on the voucher PC` (+75 more)
   These have ≤1 connection - possible missing edges or undocumented components.
 - **Thin community `Community 33`** (34 nodes): `WEB v1 backend package.`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -463,11 +473,11 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 36`** (31 nodes): `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `__init__.py`, `Accounting automation WEB v1 package.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 38`** (27 nodes): `main()`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`, `expense_excel_export.py`
+- **Thin community `Community 38`** (25 nodes): `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `Resolve-EnvValue()`, `Resolve-EnvValueAllowBlank()`, `install_operating_server.ps1`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 39`** (25 nodes): `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `install_operating_server.ps1`, `Resolve-EnvValue()`, `Resolve-EnvValueAllowBlank()`, `install_operating_server.ps1`
+- **Thin community `Community 39`** (25 nodes): `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `Resolve-PythonExe()`, `Resolve-PythonwExe()`, `start_user_erp_agent.ps1`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 40`** (25 nodes): `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `start_user_erp_agent.ps1`, `Resolve-PythonExe()`, `Resolve-PythonwExe()`, `start_user_erp_agent.ps1`
+- **Thin community `Community 40`** (20 nodes): `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `AccountingWebRequiredSetup.cs`, `Program`, `.Main()`, `.ReadServerUrl()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 43`** (2 nodes): `Excel voucher web application.`, `__init__.py`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -479,15 +489,15 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 284`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 285`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 285`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 286`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 286`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 287`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 287`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 288`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 288`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 289`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 289`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 290`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -501,49 +511,49 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 295`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 296`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 296`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 297`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 297`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 298`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 298`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 299`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 300`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 301`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
+- **Thin community `Community 301`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 302`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
+- **Thin community `Community 302`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 303`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
+- **Thin community `Community 303`** (1 nodes): `Run a dry-run print preview or the real legacy ERP automation on the voucher PC`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 304`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 305`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
+- **Thin community `Community 305`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 306`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
+- **Thin community `Community 306`** (1 nodes): `Placeholder for the real ERP UI automation run on the automatic voucher PC Agent`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 307`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 307`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 308`** (1 nodes): `?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?`
+- **Thin community `Community 308`** (1 nodes): `Placeholder for the real ERP UI automation run on the 담당자 PC Agent.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 309`** (1 nodes): `KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai`
+- **Thin community `Community 309`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 310`** (1 nodes): `Save tax-invoice XML attachments and return file:// URIs.`
+- **Thin community `Community 310`** (1 nodes): `?멸툑怨꾩궛??URL(?먮뒗 濡쒖뺄 file:// 寃쎈줈) ??PDF ?ㅼ슫濡쒕뱶 ??寃곌낵 dict 諛섑솚.      諛섑솚媛?`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 311`** (1 nodes): `硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.`
+- **Thin community `Community 311`** (1 nodes): `KT 硫붿씪 紐낆꽭??PDF 泥⑤?瑜???ν븯怨?file:// URI 紐⑸줉 諛섑솚.     ?쒕ぉ ?먮뒗 泥⑤??뚯씪紐낆뿉 'KT emai`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 312`** (1 nodes): `?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫`
+- **Thin community `Community 312`** (1 nodes): `Save tax-invoice XML attachments and return file:// URIs.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 313`** (1 nodes): `硫붿씪 ?섏떊????yymmdd ?뺤떇.`
+- **Thin community `Community 313`** (1 nodes): `硫붿씪 HTML 蹂몃Ц?먯꽌 ?멸툑怨꾩궛???ы꽭 留곹겕留?異붿텧.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 314`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+- **Thin community `Community 314`** (1 nodes): `?대찓??硫붿떆吏?먯꽌 NTS_eTaxInvoice.html 泥⑤??뚯씪??李얠븘 ?????     file:// URI 諛섑솚. ?놁쑝硫`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 315`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
+- **Thin community `Community 315`** (1 nodes): `硫붿씪 ?섏떊????yymmdd ?뺤떇.`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 316`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 317`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+- **Thin community `Community 317`** (1 nodes): `분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 318`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
@@ -553,21 +563,25 @@ Nodes (1): The legacy UI module imports fitz at module load, but ERP input does 
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 - **Thin community `Community 321`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 322`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
+- **Thin community `Community 323`** (1 nodes): `The legacy UI module imports fitz at module load, but ERP input does not use it`
+  Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `sleep()` connect `Community 6` to `Community 0`, `Community 2`, `Community 3`, `Community 4`, `Community 5`, `Community 10`, `Community 12`, `Community 13`, `Community 15`, `Community 16`, `Community 18`, `Community 19`, `Community 20`, `Community 21`, `Community 25`, `Community 29`, `Community 30`, `Community 31`?**
-  _High betweenness centrality (0.093) - this node is a cross-community bridge._
-- **Why does `EtaxUnipostHandler` connect `Community 21` to `Community 22`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
+- **Why does `sleep()` connect `Community 8` to `Community 0`, `Community 3`, `Community 4`, `Community 5`, `Community 6`, `Community 7`, `Community 9`, `Community 14`, `Community 15`, `Community 16`, `Community 17`, `Community 18`, `Community 19`, `Community 20`, `Community 28`, `Community 30`, `Community 31`?**
+  _High betweenness centrality (0.083) - this node is a cross-community bridge._
+- **Why does `collect_mail_once()` connect `Community 5` to `Community 0`, `Community 1`, `Community 3`, `Community 28`?**
+  _High betweenness centrality (0.023) - this node is a cross-community bridge._
 - **Are the 205 inferred relationships involving `get_invoice()` (e.g. with `_start_purchase_approval_fetch_background()` and `_queue_expense_report_after_erp()`) actually correct?**
   _`get_invoice()` has 205 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 131 inferred relationships involving `build_output_set_status()` (e.g. with `_invoice_output_set_ready()` and `_queue_expense_report_after_erp()`) actually correct?**
   _`build_output_set_status()` has 131 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 128 inferred relationships involving `update_invoice_json()` (e.g. with `_regular_auto_mark_skip()` and `_queue_regular_auto_job()`) actually correct?**
   _`update_invoice_json()` has 128 INFERRED edges - model-reasoned connections that need verification._
-- **Are the 118 inferred relationships involving `sleep()` (e.g. with `api_generate_expense_report()` and `api_generate_expense_report()`) actually correct?**
-  _`sleep()` has 118 INFERRED edges - model-reasoned connections that need verification._
+- **Are the 119 inferred relationships involving `sleep()` (e.g. with `api_generate_expense_report()` and `api_generate_expense_report()`) actually correct?**
+  _`sleep()` has 119 INFERRED edges - model-reasoned connections that need verification._
 - **Are the 102 inferred relationships involving `JobCreateRequest` (e.g. with `JobEvent` and `JobRecord`) actually correct?**
   _`JobCreateRequest` has 102 INFERRED edges - model-reasoned connections that need verification._

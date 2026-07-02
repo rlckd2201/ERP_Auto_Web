@@ -658,6 +658,7 @@ class ERPLoginBot:
         self.logger = logger
         self.app = None
         self.login_win = None
+        self.erp_process_pid = 0
         
     def _force_erp_window_maximized(self, win, label="ERP 메인 창"):
         if not win:
@@ -714,6 +715,117 @@ class ERPLoginBot:
         except Exception as e:
             self.logger.warning(f"[{self.corp_code}] {label} 크기 확인 실패: {e}")
         return ok
+
+    def _close_erp_after_success(self, main_win=None):
+        enabled = str(os.getenv("ERP_CLOSE_AFTER_SUCCESS", "1")).strip().lower()
+        if enabled in ("0", "false", "no", "off", ""):
+            self.logger.info("[CLEANUP] ERP close after success disabled")
+            return
+
+        def _terminate_pid(pid, label, timeout=5):
+            if not pid:
+                return False
+            try:
+                pid = int(pid)
+            except Exception:
+                return False
+            try:
+                if not psutil.pid_exists(pid):
+                    return False
+                proc = psutil.Process(pid)
+                name = proc.name()
+                self.logger.info(f"[CLEANUP] closing {label}: pid={pid} name={name}")
+                proc.terminate()
+                try:
+                    proc.wait(timeout=timeout)
+                except psutil.TimeoutExpired:
+                    self.logger.warning(f"[CLEANUP] {label} did not exit; killing pid={pid}")
+                    proc.kill()
+                    try:
+                        proc.wait(timeout=3)
+                    except Exception:
+                        pass
+                return True
+            except Exception as exc:
+                self.logger.warning(f"[CLEANUP] failed to close {label} pid={pid}: {exc}")
+                return False
+
+        try:
+            rd_procs = []
+            for proc in psutil.process_iter(["pid", "name"]):
+                try:
+                    name = (proc.info.get("name") or "").lower()
+                    if "rdviewer" in name:
+                        proc.terminate()
+                        rd_procs.append(proc)
+                except Exception:
+                    pass
+            if rd_procs:
+                try:
+                    gone, alive = psutil.wait_procs(rd_procs, timeout=3)
+                except Exception:
+                    alive = []
+                for proc in alive:
+                    try:
+                        proc.kill()
+                    except Exception:
+                        pass
+                self.logger.info(f"[CLEANUP] RD Viewer closed after successful automation: count={len(rd_procs)}")
+        except Exception as exc:
+            self.logger.warning(f"[CLEANUP] RD Viewer cleanup failed: {exc}")
+
+        try:
+            if main_win:
+                main_win.close()
+                time.sleep(0.7)
+                self.logger.info("[CLEANUP] ERP main window close requested after successful automation")
+        except Exception as exc:
+            self.logger.warning(f"[CLEANUP] ERP window close request failed: {exc}")
+
+        try:
+            if self.app:
+                for win in self.app.windows():
+                    try:
+                        if main_win and getattr(win, "handle", None) == getattr(main_win, "handle", None):
+                            continue
+                        win.close()
+                    except Exception:
+                        pass
+                time.sleep(0.5)
+        except Exception as exc:
+            self.logger.warning(f"[CLEANUP] ERP app window cleanup failed: {exc}")
+
+        pid = self.erp_process_pid
+        if not pid and main_win:
+            try:
+                pid = int(getattr(main_win.element_info, "process_id", 0) or 0)
+            except Exception:
+                pid = 0
+        if not pid:
+            try:
+                pid = int(self.manager.erp_pids.get(self.corp_code, 0) or 0)
+            except Exception:
+                pid = 0
+        closed = _terminate_pid(pid, "ERP")
+
+        if not closed:
+            process_name = str(self.install_info.get("process_name") or "").lower()
+            if process_name:
+                for proc in psutil.process_iter(["pid", "name"]):
+                    try:
+                        if (proc.info.get("name") or "").lower() == process_name:
+                            _terminate_pid(proc.info.get("pid"), "ERP fallback")
+                    except Exception:
+                        pass
+
+        try:
+            self.manager.erp_pids[self.corp_code] = 0
+        except Exception:
+            pass
+        self.app = None
+        self.login_win = None
+        self.erp_process_pid = 0
+        self.logger.info("[CLEANUP] ERP closed after successful automation")
 
     def run(self):
         owner = f"corp={self.corp_code} pid={os.getpid()}"
@@ -1084,6 +1196,10 @@ class ERPLoginBot:
                 return msg
 
             if main_win:
+                try:
+                    self.erp_process_pid = int(confirmed_pid or getattr(main_win.element_info, "process_id", 0) or 0)
+                except Exception:
+                    self.erp_process_pid = int(confirmed_pid or 0)
                 if _is_password_change_blocker(main_win):
                     msg = (
                         "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
@@ -1460,6 +1576,7 @@ class ERPLoginBot:
                     if opened_slip_form:
                         self.logger.info("👉 폼 데이터 세팅을 시작합니다...")
                         self._setup_slip_form(main_win)
+                        self._close_erp_after_success(main_win)
                     else:
                         raise RuntimeError("분개전표입력 화면 진입 검증 실패. 폼 세팅을 중단합니다.")
                     

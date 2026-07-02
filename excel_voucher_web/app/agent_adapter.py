@@ -487,6 +487,7 @@ def _run_real_erp_voucher_task(
 
     os.environ.setdefault("ERP_OUTPUT_DIR", str(output_dir / "erp_outputs"))
     os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print To PDF")
+    os.environ["ERP_CLOSE_AFTER_SUCCESS"] = "1"
     os.environ["ERP_GRID_COORD_FIRST"] = "1"
     os.environ["ERP_GRID_COPY_VIA_EXCEL"] = "1"
     os.environ["ERP_ADD_ROW_COORD_FIRST"] = "0"
