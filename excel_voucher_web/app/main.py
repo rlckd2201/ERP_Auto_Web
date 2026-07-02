@@ -234,6 +234,38 @@ def _public_job_dump(job: Any) -> dict[str, Any]:
     return data
 
 
+def _job_notification_already_recorded(job: Any) -> bool:
+    notification = (job.result or {}).get("notification")
+    return isinstance(notification, dict)
+
+
+def _send_job_notification_once(job: Any, *, ok: bool) -> Any:
+    if _job_notification_already_recorded(job):
+        return job
+
+    result = job.result or {}
+    notification: dict[str, Any] | None = None
+    try:
+        if ok and not result.get("dry_run") and result.get("erp_saved"):
+            notification = notify_job_completed(job)
+        elif not ok:
+            notification = notify_job_failed(job)
+    except Exception as exc:
+        notification = {"sent": False, "queued": False, "error": str(exc)}
+
+    if notification is None:
+        return job
+
+    return store.update_job(
+        job.id,
+        status=job.status,
+        progress=job.progress,
+        message=job.message,
+        result={**result, "notification": notification},
+        error=job.error,
+    )
+
+
 def _form_bool(value: Any) -> bool:
     return str(value or "").strip().lower() in {"1", "true", "yes", "on"}
 
@@ -673,7 +705,10 @@ def api_agent_job_event(job_id: str, event: AgentEventRequest) -> dict[str, Any]
             message=event.message or "자동 전표처리 PC 진행 중",
             result=event.result or None,
             error=event.error or None,
+            finished=event.status == "error",
         )
+        if event.status == "error":
+            job = _send_job_notification_once(job, ok=False)
         return {"ok": True, "job": _public_job_dump(job)}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
@@ -756,22 +791,7 @@ def api_agent_job_complete(job_id: str, complete: AgentCompleteRequest) -> dict[
             error="" if effective_ok else effective_error,
             finished=True,
         )
-        notification: dict[str, Any] | None = None
-        try:
-            if effective_ok and not job.result.get("dry_run") and job.result.get("erp_saved"):
-                notification = notify_job_completed(job)
-            elif not effective_ok:
-                notification = notify_job_failed(job)
-        except Exception as exc:
-            notification = {"sent": False, "queued": False, "error": str(exc)}
-        if notification is not None:
-            job = store.update_job(
-                job_id,
-                status=status,
-                progress=100 if effective_ok else 95,
-                message=message,
-                result={**job.result, "notification": notification},
-            )
+        job = _send_job_notification_once(job, ok=effective_ok)
         return {"ok": True, "job": _public_job_dump(job)}
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
