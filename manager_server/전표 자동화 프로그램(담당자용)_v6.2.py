@@ -3258,7 +3258,11 @@ class ERPLoginBot:
                 _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
                 time.sleep(max(0.18, mgmt_key_wait))
                 _paste_text_fast(search_text, f"{label} 거래처 {search_label}")
-                time.sleep(vendor_popup_search_wait)
+                search_settle_wait = max(
+                    vendor_popup_search_wait,
+                    1.0 if search_label == "거래처코드" else 0.0,
+                )
+                time.sleep(search_settle_wait)
                 self.logger.info(f"  [MGMT-XY] {label}: 거래처 {search_label} 붙여넣기: {search_text}")
                 pyautogui.press('tab', presses=4, interval=0.08)
                 time.sleep(mgmt_key_wait)
