@@ -3288,15 +3288,15 @@ class ERPLoginBot:
                 )
                 time.sleep(vendor_popup_focus_wait)
 
-                if search_label == "거래처코드":
+                if search_label == "거래처번호":
                     if not _select_vendor_popup_filter(popup, search_label, up_presses):
-                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처코드 검색조건 선택 실패")
+                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처번호 검색조건 선택 실패")
                         return False
                     if not _input_vendor_popup_search_text(popup, search_text, search_label):
-                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처코드 검색칸 입력 실패")
+                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처번호 검색칸 입력 실패")
                         return False
                     time.sleep(max(1.0, vendor_popup_search_wait))
-                    self.logger.info(f"  [MGMT-XY] {label}: 거래처코드 입력 후 1초 대기 완료: {search_text}")
+                    self.logger.info(f"  [MGMT-XY] {label}: 거래처번호 입력 후 1초 대기 완료: {search_text}")
                     pyautogui.press('enter')
                     time.sleep(max(0.8, ERP_FORM_WAIT))
                     return _select_first_vendor_popup_result(popup, label)
@@ -3309,7 +3309,7 @@ class ERPLoginBot:
                 _paste_text_fast(search_text, f"{label} 거래처 {search_label}")
                 search_settle_wait = max(
                     vendor_popup_search_wait,
-                    1.0 if search_label == "거래처코드" else 0.0,
+                    1.0 if search_label == "거래처번호" else 0.0,
                 )
                 time.sleep(search_settle_wait)
                 self.logger.info(f"  [MGMT-XY] {label}: 거래처 {search_label} 붙여넣기: {search_text}")
@@ -3332,8 +3332,8 @@ class ERPLoginBot:
             def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
                 return _input_vendor_by_popup_keyboard(x, y, label, target_biz_no, "사업자번호", 1)
 
-            def _input_vendor_by_code_keyboard(x, y, label, vendor_code):
-                return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처코드", 2)
+            def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
+                return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
 
             def _input_vendor_value_xy(x, y, label):
                 if not vendor_name and not vendor_target_biz_no:
@@ -3449,11 +3449,11 @@ class ERPLoginBot:
                     value_x, value_y = _management_value_xy(item_name, y)
                     item_key = re.sub(r"\s+", "", str(item_name or "")).lower()
                     if item_key in ("거래처", "거래처코드", "업체코드", "vendor", "vendor_code"):
-                        if _input_vendor_by_code_keyboard(value_x, value_y, f"{row_no}행 {item_name}", text):
+                        if _input_vendor_by_number_keyboard(value_x, value_y, f"{row_no}행 {item_name}", text):
                             y += 20
                             continue
                         self.logger.warning(
-                            f"  [MGMT-XY] {row_no}행 {item_name}: 거래처코드 팝업 입력 실패, 직접 입력 fallback: {text}"
+                            f"  [MGMT-XY] {row_no}행 {item_name}: 거래처번호 팝업 입력 실패, 직접 입력 fallback: {text}"
                         )
                     _input_value_xy(value_x, value_y, text, f"{row_no}행 {item_name}", enter_count=1, clear=True)
                     y += 20
