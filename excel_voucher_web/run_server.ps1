@@ -16,7 +16,7 @@ param(
   [string]$SmtpUser = "",
   [string]$SmtpPassword = "",
   [string]$SmtpFrom = "admpdm@dae-seung.co.kr",
-  [string]$SmtpFromName = "재정전표자동화 시스템",
+  [string]$SmtpFromName = "",
   [string]$SslCertFile = "",
   [string]$SslKeyFile = ""
 )
@@ -24,6 +24,12 @@ param(
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
+
+if (-not $SmtpFromName) {
+  $SmtpFromName = [Text.Encoding]::UTF8.GetString(
+    [Convert]::FromBase64String("7J6s7KCV7KCE7ZGc7J6Q64+Z7ZmUIOyLnOyKpO2FnA==")
+  )
+}
 
 $Candidates = @(@(
   "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",

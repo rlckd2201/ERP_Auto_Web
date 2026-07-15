@@ -1,7 +1,7 @@
 # Graph Report - (재정)회계업무 자동화_WEB_Version  (2026-07-15)
 
 ## Corpus Check
-- 1941 files · ~3,528,371 words
+- 1941 files · ~3,528,380 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
