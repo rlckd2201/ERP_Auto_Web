@@ -3167,7 +3167,7 @@ class ERPLoginBot:
                 except Exception:
                     pyautogui.write(text, interval=0.01)
 
-            def _select_vendor_popup_business_filter(popup):
+            def _select_vendor_popup_filter(popup, search_label, up_presses):
                 combos = []
                 try:
                     combos = [ctrl for ctrl in popup.descendants() if str(ctrl.element_info.control_type or "") == "ComboBox"]
@@ -3176,12 +3176,12 @@ class ERPLoginBot:
                 combos.sort(key=lambda ctrl: (ctrl.rectangle().top, ctrl.rectangle().left))
                 for combo in combos:
                     try:
-                        if "사업자번호" in (combo.window_text() or ""):
+                        if search_label in (combo.window_text() or ""):
                             return True
                     except Exception:
                         pass
                     try:
-                        combo.select("사업자번호")
+                        combo.select(search_label)
                         time.sleep(ERP_CLICK_WAIT)
                         return True
                     except Exception:
@@ -3189,15 +3189,30 @@ class ERPLoginBot:
                     try:
                         combo.click_input()
                         time.sleep(ERP_CLICK_WAIT)
-                        pyautogui.press('down', presses=2, interval=0.03)
+                        pyautogui.press('down', presses=5, interval=0.08)
+                        pyautogui.press('up', presses=max(1, int(up_presses)), interval=0.08)
                         pyautogui.press('enter')
                         time.sleep(ERP_CLICK_WAIT)
                         return True
                     except Exception:
                         pass
-                return False
+                try:
+                    popup_rect = popup.rectangle()
+                    pyautogui.click(popup_rect.left + 80, popup_rect.top + 58)
+                    time.sleep(ERP_CLICK_WAIT)
+                    pyautogui.press('down', presses=5, interval=0.08)
+                    pyautogui.press('up', presses=max(1, int(up_presses)), interval=0.08)
+                    pyautogui.press('enter')
+                    time.sleep(ERP_CLICK_WAIT)
+                    self.logger.info(
+                        f"  [MGMT-XY] 거래처 팝업 검색조건 직접 선택: {search_label} "
+                        f"(Up {max(1, int(up_presses))})"
+                    )
+                    return True
+                except Exception:
+                    return False
 
-            def _input_vendor_popup_search_text(popup, text):
+            def _input_vendor_popup_search_text(popup, text, label):
                 edits = []
                 try:
                     edits = [ctrl for ctrl in popup.descendants() if str(ctrl.element_info.control_type or "") == "Edit"]
@@ -3210,21 +3225,42 @@ class ERPLoginBot:
                         time.sleep(ERP_CLICK_WAIT)
                         pyautogui.hotkey('ctrl', 'a')
                         _release_modifiers("거래처 팝업 검색어 Ctrl+A 후", wait=False)
-                        _paste_text_fast(text, "거래처 팝업 사업자번호 검색어")
+                        _paste_text_fast(text, f"거래처 팝업 {label} 검색어")
                         return True
                     except Exception:
                         pass
                 try:
-                    # 거래처 팝업에서 UIA가 검색 Edit을 노출하지 않으면
-                    # 검색조건 콤보 다음 탭 순서가 검색어 칸인 ERP 기본 흐름을 사용한다.
-                    pyautogui.press('tab')
+                    popup_rect = popup.rectangle()
+                    pyautogui.click(
+                        popup_rect.left + max(240, popup_rect.width() // 2),
+                        popup_rect.top + 58,
+                    )
                     time.sleep(ERP_CLICK_WAIT)
                     pyautogui.hotkey('ctrl', 'a')
-                    _release_modifiers("거래처 팝업 검색어 탭 이동 Ctrl+A 후", wait=False)
-                    _paste_text_fast(text, "거래처 팝업 사업자번호 검색어")
+                    _release_modifiers("거래처 팝업 검색어 직접 클릭 Ctrl+A 후", wait=False)
+                    _paste_text_fast(text, f"거래처 팝업 {label} 검색어")
                     return True
                 except Exception:
                     return False
+
+            def _select_first_vendor_popup_result(popup, label):
+                try:
+                    popup_rect = popup.rectangle()
+                    first_row_x = popup_rect.left + 82
+                    first_row_y = popup_rect.top + 174
+                    pyautogui.doubleClick(first_row_x, first_row_y, interval=0.08)
+                    time.sleep(ERP_FORM_WAIT)
+                    if not _find_vendor_popup(timeout=0.45):
+                        self.logger.info(f"  [MGMT-XY] {label}: 거래처 검색 첫 행 확정 완료")
+                        return True
+                    pyautogui.press('enter')
+                    time.sleep(ERP_FORM_WAIT)
+                    if not _find_vendor_popup(timeout=0.45):
+                        self.logger.info(f"  [MGMT-XY] {label}: 거래처 검색 첫 행 Enter 확정 완료")
+                        return True
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 검색 첫 행 확정 실패: {exc}")
+                return False
 
             def _input_vendor_by_popup_keyboard(x, y, label, search_text, search_label, up_presses):
                 popup = None
@@ -3252,8 +3288,21 @@ class ERPLoginBot:
                 )
                 time.sleep(vendor_popup_focus_wait)
 
+                if search_label == "거래처코드":
+                    if not _select_vendor_popup_filter(popup, search_label, up_presses):
+                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처코드 검색조건 선택 실패")
+                        return False
+                    if not _input_vendor_popup_search_text(popup, search_text, search_label):
+                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처코드 검색칸 입력 실패")
+                        return False
+                    time.sleep(max(1.0, vendor_popup_search_wait))
+                    self.logger.info(f"  [MGMT-XY] {label}: 거래처코드 입력 후 1초 대기 완료: {search_text}")
+                    pyautogui.press('enter')
+                    time.sleep(max(0.8, ERP_FORM_WAIT))
+                    return _select_first_vendor_popup_result(popup, label)
+
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 키보드 흐름을 사용합니다.
-                # 재정 엑셀 전표는 거래처코드 검색이어야 하므로 보정 Up 횟수를 별도로 받습니다.
+                # 사업자번호를 사용하는 기존 전산 자동화 경로만 이 키보드 흐름을 유지합니다.
                 pyautogui.hotkey('ctrl', 'a')
                 _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
                 time.sleep(max(0.18, mgmt_key_wait))
