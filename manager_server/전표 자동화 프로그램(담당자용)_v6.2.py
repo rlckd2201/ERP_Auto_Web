@@ -2724,6 +2724,7 @@ class ERPLoginBot:
         management_value_xy_cache = {}
         management_bank_coordinate_fallback_rows = set()
         management_active_row_context = {"row_no": None}
+        finance_vendor_entry_state = {"popup_seeded": False}
 
         def _management_value_xy(item_name, fallback_y):
             target = _norm_text(item_name)
@@ -3243,6 +3244,22 @@ class ERPLoginBot:
                 except Exception:
                     return False
 
+            def _click_vendor_popup_search_button(popup, label):
+                try:
+                    popup_rect = popup.rectangle()
+                    search_x = popup_rect.right - 58
+                    search_y = popup_rect.top + 58
+                    pyautogui.click(search_x, search_y)
+                    self.logger.info(
+                        f"  [MGMT-XY] {label}: 거래처 팝업 검색 버튼 클릭: "
+                        f"popup_rel=({popup_rect.width() - 58},58), abs=({search_x},{search_y})"
+                    )
+                    time.sleep(max(1.0, vendor_popup_search_wait))
+                    return True
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업 검색 버튼 클릭 실패: {exc}")
+                    return False
+
             def _select_first_vendor_popup_result(popup, label):
                 try:
                     popup_rect = popup.rectangle()
@@ -3289,16 +3306,16 @@ class ERPLoginBot:
                 time.sleep(vendor_popup_focus_wait)
 
                 if search_label == "거래처번호":
-                    if not _select_vendor_popup_filter(popup, search_label, up_presses):
-                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처번호 검색조건 선택 실패")
-                        return False
                     if not _input_vendor_popup_search_text(popup, search_text, search_label):
                         self.logger.warning(f"  [MGMT-XY] {label}: 거래처번호 검색칸 입력 실패")
                         return False
                     time.sleep(max(1.0, vendor_popup_search_wait))
                     self.logger.info(f"  [MGMT-XY] {label}: 거래처번호 입력 후 1초 대기 완료: {search_text}")
-                    pyautogui.press('enter')
-                    time.sleep(max(0.8, ERP_FORM_WAIT))
+                    if not _select_vendor_popup_filter(popup, search_label, up_presses):
+                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처번호 검색조건 선택 실패")
+                        return False
+                    if not _click_vendor_popup_search_button(popup, label):
+                        return False
                     return _select_first_vendor_popup_result(popup, label)
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 키보드 흐름을 사용합니다.
@@ -3331,6 +3348,9 @@ class ERPLoginBot:
 
             def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
                 return _input_vendor_by_popup_keyboard(x, y, label, target_biz_no, "사업자번호", 1)
+
+            def _seed_vendor_by_number_popup(x, y, label, vendor_code):
+                return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
 
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
                 return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
@@ -3449,11 +3469,36 @@ class ERPLoginBot:
                     value_x, value_y = _management_value_xy(item_name, y)
                     item_key = re.sub(r"\s+", "", str(item_name or "")).lower()
                     if item_key in ("거래처", "거래처코드", "업체코드", "vendor", "vendor_code"):
-                        if _input_vendor_by_number_keyboard(value_x, value_y, f"{row_no}행 {item_name}", text):
+                        label = f"{row_no}행 {item_name}"
+                        if account_key == "미지급금(원화)":
+                            if not finance_vendor_entry_state["popup_seeded"]:
+                                if not _seed_vendor_by_number_popup(value_x, value_y, label, text):
+                                    raise RuntimeError(
+                                        f"{row_no}행 거래처번호 최초 검색 또는 결과 선택에 실패했습니다."
+                                    )
+                                finance_vendor_entry_state["popup_seeded"] = True
+                                self.logger.info(
+                                    f"  [MGMT-XY] {label}: 최초 팝업 검색 확정 완료, 이후 행 직접 입력 전환"
+                                )
+                            else:
+                                _input_value_xy(
+                                    value_x,
+                                    value_y,
+                                    text,
+                                    label,
+                                    enter_count=1,
+                                    clear=False,
+                                )
+                                self.logger.info(
+                                    f"  [MGMT-XY] {label}: 관리항목값 셀 직접 입력 후 Enter 완료: {text}"
+                                )
+                            y += 20
+                            continue
+                        if _input_vendor_by_number_keyboard(value_x, value_y, label, text):
                             y += 20
                             continue
                         self.logger.warning(
-                            f"  [MGMT-XY] {row_no}행 {item_name}: 거래처번호 팝업 입력 실패, 직접 입력 fallback: {text}"
+                            f"  [MGMT-XY] {label}: 거래처번호 팝업 입력 실패, 직접 입력 fallback: {text}"
                         )
                     _input_value_xy(value_x, value_y, text, f"{row_no}행 {item_name}", enter_count=1, clear=True)
                     y += 20
