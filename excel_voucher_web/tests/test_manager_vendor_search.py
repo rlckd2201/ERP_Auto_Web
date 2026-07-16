@@ -607,6 +607,161 @@ def test_slip_tree_navigation_waits_between_each_menu_level():
     ]
 
 
+def test_ds_slip_menu_uses_coordinate_keyboard_sequence_with_waits():
+    events = []
+    loaded = _load_nested_functions(
+        "_slip_menu_fallback_points",
+        "_open_slip_menu_by_ds_coordinates",
+        namespace={
+            "_click_rel": lambda x, y, label: events.append(("click", x, y)),
+            "pyautogui": SimpleNamespace(
+                press=lambda key: events.append(("key", key))
+            ),
+            "time": SimpleNamespace(
+                sleep=lambda seconds: events.append(("sleep", seconds))
+            ),
+            "menu_tree_wait": 0.18,
+            "menu_step_wait": 0.45,
+            "menu_entry_settle_wait": 0.30,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(corp_code="DS", logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_open_slip_menu_by_ds_coordinates"]() is True
+    assert events == [
+        ("click", 105, 150),
+        ("sleep", 0.18),
+        ("key", "right"),
+        ("sleep", 0.45),
+        ("click", 126, 185),
+        ("sleep", 0.18),
+        ("key", "right"),
+        ("sleep", 0.45),
+        ("click", 155, 220),
+        ("sleep", 0.18),
+        ("key", "enter"),
+        ("sleep", 0.30),
+    ]
+
+
+def test_ds_accounting_menu_uses_only_fixed_coordinates_and_waits():
+    events = []
+
+    def _forbidden(*_args, **_kwargs):
+        raise AssertionError("DS coordinate menu must not call UIA/tree helpers")
+
+    loaded = _load_nested_functions(
+        "_open_accounting_menu",
+        namespace={
+            "ds_coordinate_menu": True,
+            "_click_rel": lambda x, y, label: events.append(("click", x, y)),
+            "_click_text_exact": _forbidden,
+            "_tree_has": _forbidden,
+            "Desktop": _forbidden,
+            "pyautogui": SimpleNamespace(
+                press=lambda key: events.append(("key", key))
+            ),
+            "time": SimpleNamespace(
+                sleep=lambda seconds: events.append(("sleep", seconds))
+            ),
+            "menu_step_wait": 0.45,
+            "menu_entry_settle_wait": 0.30,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(corp_code="DS", logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_open_accounting_menu"]() is True
+    assert events == [
+        ("click", 30, 70),
+        ("sleep", 0.45),
+        ("click", 145, 70),
+        ("sleep", 0.45),
+        ("click", 304, 201),
+        ("sleep", 0.45),
+        ("key", "escape"),
+        ("sleep", 0.30),
+    ]
+
+
+def test_ds_main_branch_is_coordinate_only_and_keeps_uia_in_non_ds_branch():
+    manager_source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
+    tree = ast.parse(manager_source)
+
+    assert '_env_flag("ERP_DS_MENU_COORDINATE_ONLY", "1")' in manager_source
+    for env_name, value in {
+        "ERP_DS_MENU_COORDINATE_ONLY": "1",
+        "ERP_DS_ACCOUNTING_TILE_X": "304",
+        "ERP_DS_ACCOUNTING_TILE_Y": "201",
+        "ERP_DS_SLIP_ROOT_Y": "150",
+        "ERP_DS_SLIP_ROW_H": "35",
+        "ERP_DS_SLIP_ROOT_X": "105",
+        "ERP_DS_SLIP_PROCESS_X": "126",
+        "ERP_DS_SLIP_ENTRY_X": "155",
+    }.items():
+        assert f'os.environ["{env_name}"] = "{value}"' in adapter_source
+
+    def _call_names(nodes):
+        return {
+            child.func.id
+            for node in nodes
+            for child in ast.walk(node)
+            if isinstance(child, ast.Call) and isinstance(child.func, ast.Name)
+        }
+
+    ds_branches = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        if ast.unparse(node.test) != "ds_coordinate_menu":
+            continue
+        if "_open_slip_menu_by_ds_coordinates" in _call_names(node.body):
+            ds_branches.append(node)
+
+    assert len(ds_branches) == 1
+    ds_branch = ds_branches[0]
+    ds_calls = _call_names(ds_branch.body)
+    non_ds_calls = _call_names(ds_branch.orelse)
+
+    assert "_open_slip_menu_by_ds_coordinates" in ds_calls
+    assert {
+        "_open_slip_menu_by_uia_path",
+        "_tree_has",
+        "_click_slip_menu_by_uia",
+    }.isdisjoint(ds_calls)
+    assert "_open_slip_menu_by_uia_path" in non_ds_calls
+
+    retry_branches = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.If):
+            continue
+        if ast.unparse(node.test) != "ds_coordinate_menu":
+            continue
+        body_calls = _call_names(node.body)
+        else_calls = _call_names(node.orelse)
+        if (
+            "_click_slip_menu_by_uia" in else_calls
+            and "_wait_slip_form_ready" in else_calls
+        ):
+            retry_branches.append(node)
+
+    assert len(retry_branches) == 1
+    retry_branch = retry_branches[0]
+    retry_ds_calls = _call_names(retry_branch.body)
+    retry_non_ds_calls = _call_names(retry_branch.orelse)
+
+    assert {
+        "_open_slip_menu_by_uia_path",
+        "_tree_has",
+        "_click_slip_menu_by_uia",
+        "_click_rel",
+        "_slip_menu_fallback_points",
+    }.isdisjoint(retry_ds_calls)
+    assert "_click_slip_menu_by_uia" in retry_non_ds_calls
+
+
 def test_slip_entry_settles_before_immediate_uia_ready_check():
     events = []
     main = _FakeControl("K-System", "Window", _FakeRect(0, 0, 1600, 900))

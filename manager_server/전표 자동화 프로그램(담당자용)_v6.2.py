@@ -1221,6 +1221,10 @@ class ERPLoginBot:
                         ERP_SETTLE_WAIT,
                         float(os.getenv("ERP_MENU_ENTRY_SETTLE_WAIT", "0.30") or "0.30"),
                     )
+                    ds_coordinate_menu = (
+                        self.corp_code == "DS"
+                        and _env_flag("ERP_DS_MENU_COORDINATE_ONLY", "1")
+                    )
                     self._force_erp_window_maximized(main_win, "메뉴 진입 전 ERP 메인 창")
                     time.sleep(menu_step_wait)
                     self.logger.info("메인 창을 최대화/활성화했습니다. 내비게이션 시작...")
@@ -1379,15 +1383,19 @@ class ERPLoginBot:
 
                     def _slip_menu_fallback_points():
                         if self.corp_code == "DS":
-                            base_y = int(os.getenv("ERP_DS_SLIP_ROOT_Y", "137") or "137")
-                            row_h = int(os.getenv("ERP_DS_SLIP_ROW_H", "29") or "29")
+                            base_y = int(os.getenv("ERP_DS_SLIP_ROOT_Y", "150") or "150")
+                            row_h = int(os.getenv("ERP_DS_SLIP_ROW_H", "35") or "35")
+                            slip_x = int(os.getenv("ERP_DS_SLIP_ROOT_X", "105") or "105")
+                            process_x = int(os.getenv("ERP_DS_SLIP_PROCESS_X", "126") or "126")
+                            entry_x = int(os.getenv("ERP_DS_SLIP_ENTRY_X", "155") or "155")
                             self.logger.info(
-                                f"  [TREE-XY] DS 메뉴 fallback 사용: 전표 y={base_y}, row_h={row_h}"
+                                f"  [TREE-XY] DS 고정 메뉴 좌표 사용: "
+                                f"전표=({slip_x},{base_y}), row_h={row_h}"
                             )
                             return {
-                                "slip": (105, base_y),
-                                "process": (126, base_y + row_h),
-                                "entry": (155, base_y + row_h * 2),
+                                "slip": (slip_x, base_y),
+                                "process": (process_x, base_y + row_h),
+                                "entry": (entry_x, base_y + row_h * 2),
                             }
                         return {
                             "slip": (105, 107),
@@ -1395,12 +1403,39 @@ class ERPLoginBot:
                             "entry": (155, 166),
                         }
 
+                    def _open_slip_menu_by_ds_coordinates():
+                        """DS 1920x1040 고정 화면에서 UIA 없이 전표 메뉴를 엽니다."""
+                        points = _slip_menu_fallback_points()
+                        self.logger.info(
+                            "  [TREE-XY] DS 좌표 전용 경로: "
+                            "전표 선택/Right -> 전표처리 선택/Right -> 분개전표입력 선택/Enter"
+                        )
+
+                        _click_rel(*points["slip"], "전표")
+                        time.sleep(menu_tree_wait)
+                        pyautogui.press("right")
+                        time.sleep(menu_step_wait)
+
+                        _click_rel(*points["process"], "전표처리")
+                        time.sleep(menu_tree_wait)
+                        pyautogui.press("right")
+                        time.sleep(menu_step_wait)
+
+                        _click_rel(*points["entry"], "분개전표입력")
+                        time.sleep(menu_tree_wait)
+                        pyautogui.press("enter")
+                        time.sleep(menu_entry_settle_wait)
+                        return True
+
                     def _open_accounting_menu():
                         self.logger.info("  [MENU-START] 메뉴 진입 시작")
 
                         # 1. 왼쪽 상단 '메뉴' 버튼
                         self.logger.info("  [MENU-01] 왼쪽 상단 '메뉴' 버튼 클릭 시도")
-                        if _click_text_exact("메뉴", ("Button", "Text")):
+                        if ds_coordinate_menu:
+                            _click_rel(30, 70, "메뉴")
+                            self.logger.info("  [MENU-01] DS 좌표 전용으로 '메뉴' 클릭 성공")
+                        elif _click_text_exact("메뉴", ("Button", "Text")):
                             self.logger.info("  [MENU-01] UI 요소로 '메뉴' 클릭 성공")
                         else:
                             self.logger.warning("  [MENU-01] UI 요소 '메뉴' 미발견, 좌표 fallback 실행")
@@ -1417,41 +1452,50 @@ class ERPLoginBot:
                         # 3. 메뉴 화면의 '회계관리' 타일 클릭
                         self.logger.info("  [MENU-03] 메뉴 내부 '회계관리' 타일 클릭 시도")
                         clicked_tile = False
-                        try:
-                            scopes = [main_win]
-                            scopes += [w for w in Desktop(backend="uia").windows()
-                                       if getattr(w.element_info, 'process_id', None) == confirmed_pid]
-                            for scope in scopes:
-                                if clicked_tile: break
-                                for ct in ("Button", "ListItem", "Text"):
-                                    try:
-                                        for el in scope.descendants(control_type=ct):
-                                            if _elem_name(el).strip() == "회계관리":
-                                                r = el.rectangle()
-                                                # 왼쪽 트리의 '회계관리 >>'가 아니라 메뉴 타일 영역만 허용합니다.
-                                                rel_left = r.left - main_win.rectangle().left
-                                                rel_top = r.top - main_win.rectangle().top
-                                                is_ds_accounting_tile = self.corp_code == "DS" and rel_left >= 60 and rel_top >= 120
-                                                is_legacy_accounting_tile = rel_left > 250
-                                                if is_ds_accounting_tile or is_legacy_accounting_tile:
-                                                    try:
-                                                        el.click_input()
-                                                    except Exception:
-                                                        pyautogui.click(r.left + r.width() // 2, r.top + r.height() // 2)
-                                                    self.logger.info(f"  [MENU-03] UI 요소로 메뉴 타일 '회계관리' 클릭 성공: rect=({r.left},{r.top})-({r.right},{r.bottom})")
-                                                    clicked_tile = True
-                                                    break
-                                    except: pass
+                        if ds_coordinate_menu:
+                            tile_x = int(os.getenv("ERP_DS_ACCOUNTING_TILE_X", "304") or "304")
+                            tile_y = int(os.getenv("ERP_DS_ACCOUNTING_TILE_Y", "201") or "201")
+                            _click_rel(tile_x, tile_y, "DS accounting menu tile")
+                            self.logger.info("  [MENU-03] DS 좌표 전용으로 회계관리 타일 클릭 성공")
+                            clicked_tile = True
+                        if not ds_coordinate_menu:
+                            try:
+                                scopes = [main_win]
+                                scopes += [w for w in Desktop(backend="uia").windows()
+                                           if getattr(w.element_info, 'process_id', None) == confirmed_pid]
+                                for scope in scopes:
                                     if clicked_tile: break
-                        except Exception as e:
-                            self.logger.warning(f"  [MENU-03] UI 타일 탐색 중 예외: {e}")
+                                    for ct in ("Button", "ListItem", "Text"):
+                                        try:
+                                            for el in scope.descendants(control_type=ct):
+                                                if _elem_name(el).strip() == "회계관리":
+                                                    r = el.rectangle()
+                                                    # 왼쪽 트리의 '회계관리 >>'가 아니라 메뉴 타일 영역만 허용합니다.
+                                                    rel_left = r.left - main_win.rectangle().left
+                                                    rel_top = r.top - main_win.rectangle().top
+                                                    is_ds_accounting_tile = self.corp_code == "DS" and rel_left >= 60 and rel_top >= 120
+                                                    is_legacy_accounting_tile = rel_left > 250
+                                                    if is_ds_accounting_tile or is_legacy_accounting_tile:
+                                                        try:
+                                                            el.click_input()
+                                                        except Exception:
+                                                            pyautogui.click(r.left + r.width() // 2, r.top + r.height() // 2)
+                                                        self.logger.info(f"  [MENU-03] UI 요소로 메뉴 타일 '회계관리' 클릭 성공: rect=({r.left},{r.top})-({r.right},{r.bottom})")
+                                                        clicked_tile = True
+                                                        break
+                                        except: pass
+                                        if clicked_tile: break
+                            except Exception as e:
+                                self.logger.warning(f"  [MENU-03] UI 타일 탐색 중 예외: {e}")
 
                         if not clicked_tile:
                             self.logger.warning("  [MENU-03] 메뉴 타일 UI 미발견, 좌표 fallback 실행")
                             # 화면 기준: 두 번째 이미지의 회계관리 타일 중앙 부근
                             # DS accounting menu tile moved to first column, second row after operation-management permission was added.
                             if self.corp_code == "DS":
-                                _click_rel(137, 183, "DS accounting menu tile")
+                                tile_x = int(os.getenv("ERP_DS_ACCOUNTING_TILE_X", "304") or "304")
+                                tile_y = int(os.getenv("ERP_DS_ACCOUNTING_TILE_Y", "201") or "201")
+                                _click_rel(tile_x, tile_y, "DS accounting menu tile")
                             else:
                                 _click_rel(390, 115, "accounting menu tile")
                         time.sleep(menu_step_wait)
@@ -1459,6 +1503,10 @@ class ERPLoginBot:
                         pyautogui.press("escape")
                         self.logger.info("  [MENU-03] 메뉴 닫기용 ESC 1회 전송 완료")
                         time.sleep(menu_entry_settle_wait)
+
+                        if ds_coordinate_menu:
+                            self.logger.info("  [MENU-04] DS 좌표 전용 경로이므로 UIA 트리 검증을 건너뜁니다.")
+                            return True
 
                         # 4. 전환 검증
                         self.logger.info("  [MENU-04] 왼쪽 트리에 '전표'가 보이는지 검증 시작")
@@ -1536,7 +1584,7 @@ class ERPLoginBot:
                         return _wait_slip_form_ready(0.35)
 
                     # Step 1~3: 실제 사용자 동선 그대로 메뉴 -> 왼쪽 회계관리>> -> 메뉴 내부 회계관리 타일 선택
-                    if not _tree_has("전표"):
+                    if ds_coordinate_menu or not _tree_has("전표"):
                         self.logger.info("  [MENU] 메뉴 버튼 -> 왼쪽 회계관리>> -> 메뉴 내부 회계관리 타일 선택 시작")
                         if _open_accounting_menu():
                             self.logger.info("  ✅ 회계관리 트리 전환 확인")
@@ -1544,12 +1592,15 @@ class ERPLoginBot:
                             self.logger.warning("  [MENU] 회계관리 전환 확인 실패")
 
                     # Step 3~5: 트리 탐색 및 분개전표입력 클릭
-                    # 계정별 메뉴 구성이 달라질 수 있으므로 UIA 텍스트 경로를 먼저 사용하고,
-                    # 실패할 때만 회사별 보정 좌표 fallback을 사용합니다.
+                    # DS는 고정 1920x1040 화면의 좌표/키 경로만 사용합니다.
+                    # 다른 법인은 UIA 텍스트 경로를 먼저 사용하고 실패할 때만 좌표 fallback을 사용합니다.
                     opened_slip_form = False
                     self.logger.info("  [TREE] 전표 -> 전표처리 -> 분개전표입력 진입 시작")
 
-                    if _open_slip_menu_by_uia_path():
+                    if ds_coordinate_menu:
+                        _open_slip_menu_by_ds_coordinates()
+                        self.logger.info("  [TREE-XY] DS 좌표 전용 경로 클릭 완료")
+                    elif _open_slip_menu_by_uia_path():
                         self.logger.info("  [TREE-UIA] 분개전표입력 텍스트 경로 클릭 완료")
                     else:
                         points = _slip_menu_fallback_points()
@@ -1581,13 +1632,19 @@ class ERPLoginBot:
                         float(os.getenv("ERP_SLIP_OPEN_WAIT", "0.45") or "0.45")
                     )
                     if not opened_slip_form:
-                        self.logger.warning("  [TREE-VERIFY] 분개전표입력 화면 검증 실패. UIA 재클릭 후 Enter 재시도")
-                        if _click_slip_menu_by_uia():
-                            opened_slip_form = _wait_slip_form_ready(0.35)
-                        if not opened_slip_form:
-                            pyautogui.press("enter")
-                            time.sleep(menu_entry_settle_wait)
-                            opened_slip_form = _wait_slip_form_ready(0.35)
+                        if ds_coordinate_menu:
+                            self.logger.error(
+                                "  [TREE-VERIFY] DS 좌표 전용 경로 검증 실패. "
+                                "다른 메뉴나 폼 셀 오클릭을 막기 위해 추가 클릭 없이 중단합니다."
+                            )
+                        else:
+                            self.logger.warning("  [TREE-VERIFY] 분개전표입력 화면 검증 실패. 진입을 한 번 재시도합니다.")
+                            if _click_slip_menu_by_uia():
+                                opened_slip_form = _wait_slip_form_ready(0.35)
+                            if not opened_slip_form:
+                                pyautogui.press("enter")
+                                time.sleep(menu_entry_settle_wait)
+                                opened_slip_form = _wait_slip_form_ready(0.35)
                     if opened_slip_form:
                         self.logger.info("  [TREE-VERIFY] 분개전표입력 화면 진입 확인")
                         if _close_left_menu_before_form_input():
