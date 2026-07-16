@@ -1209,9 +1209,25 @@ class ERPLoginBot:
                     self.logger.error(msg)
                     return msg
                 try:
+                    menu_step_wait = max(
+                        ERP_BLOCK_WAIT,
+                        float(os.getenv("ERP_MENU_STEP_WAIT", "0.45") or "0.45"),
+                    )
+                    menu_tree_wait = max(
+                        ERP_CLICK_WAIT,
+                        float(os.getenv("ERP_MENU_TREE_WAIT", "0.18") or "0.18"),
+                    )
+                    menu_entry_settle_wait = max(
+                        ERP_SETTLE_WAIT,
+                        float(os.getenv("ERP_MENU_ENTRY_SETTLE_WAIT", "0.30") or "0.30"),
+                    )
                     self._force_erp_window_maximized(main_win, "메뉴 진입 전 ERP 메인 창")
-                    time.sleep(ERP_BLOCK_WAIT)
+                    time.sleep(menu_step_wait)
                     self.logger.info("메인 창을 최대화/활성화했습니다. 내비게이션 시작...")
+                    self.logger.info(
+                        f"  [MENU-SPEED] step={menu_step_wait:.2f}s, "
+                        f"tree={menu_tree_wait:.2f}s, entry={menu_entry_settle_wait:.2f}s"
+                    )
                     
                     def _elem_autoid(e):
                         try: return e.element_info.automation_id or ""
@@ -1260,7 +1276,7 @@ class ERPLoginBot:
                         before = _count_items(tree)
                         try:
                             item.expand()
-                            time.sleep(ERP_BLOCK_WAIT)
+                            time.sleep(menu_step_wait)
                             if _count_items(tree) > before: return True
                         except: pass
                         try:
@@ -1270,12 +1286,12 @@ class ERPLoginBot:
                                     expander = ch; break
                             if expander:
                                 expander.click_input()
-                                time.sleep(ERP_BLOCK_WAIT)
+                                time.sleep(menu_step_wait)
                                 if _count_items(tree) > before: return True
                         except: pass
                         try:
                             item.click_input()
-                            time.sleep(ERP_BLOCK_WAIT)
+                            time.sleep(menu_step_wait)
                             if _count_items(tree) > before: return True
                         except: pass
                         self.logger.warning(f"  '{label}' 노드를 여는데 실패했습니다.")
@@ -1353,12 +1369,12 @@ class ERPLoginBot:
                             return _click_slip_menu_by_uia()
                         if not _click_tree_item_by_text("전표", expand=True):
                             return False
-                        time.sleep(ERP_CLICK_WAIT)
+                        time.sleep(menu_tree_wait)
                         if _tree_has("분개전표입력"):
                             return _click_slip_menu_by_uia()
                         if not _click_tree_item_by_text("전표처리", expand=True):
                             return False
-                        time.sleep(ERP_CLICK_WAIT)
+                        time.sleep(menu_tree_wait)
                         return _click_slip_menu_by_uia()
 
                     def _slip_menu_fallback_points():
@@ -1389,13 +1405,13 @@ class ERPLoginBot:
                         else:
                             self.logger.warning("  [MENU-01] UI 요소 '메뉴' 미발견, 좌표 fallback 실행")
                             _click_rel(30, 70, "메뉴")
-                        time.sleep(ERP_BLOCK_WAIT)
+                        time.sleep(menu_step_wait)
                         self.logger.info("  [MENU-01] 메뉴 클릭 후 짧은 대기 완료")
 
                         # 2. 왼쪽의 현재 모듈 버튼 '회계관리 >>' 위치 클릭
                         self.logger.info("  [MENU-02] 왼쪽 '회계관리 >>' 위치 클릭 시도")
                         _click_rel(145, 70, "왼쪽 회계관리>>")
-                        time.sleep(ERP_BLOCK_WAIT)
+                        time.sleep(menu_step_wait)
                         self.logger.info("  [MENU-02] 왼쪽 '회계관리 >>' 클릭 후 짧은 대기 완료")
 
                         # 3. 메뉴 화면의 '회계관리' 타일 클릭
@@ -1438,11 +1454,11 @@ class ERPLoginBot:
                                 _click_rel(137, 183, "DS accounting menu tile")
                             else:
                                 _click_rel(390, 115, "accounting menu tile")
-                        time.sleep(ERP_BLOCK_WAIT)
+                        time.sleep(menu_step_wait)
                         self.logger.info("  [MENU-03] 회계관리 타일 클릭 후 짧은 대기 완료")
                         pyautogui.press("escape")
                         self.logger.info("  [MENU-03] 메뉴 닫기용 ESC 1회 전송 완료")
-                        time.sleep(ERP_SETTLE_WAIT)
+                        time.sleep(menu_entry_settle_wait)
 
                         # 4. 전환 검증
                         self.logger.info("  [MENU-04] 왼쪽 트리에 '전표'가 보이는지 검증 시작")
@@ -1450,8 +1466,11 @@ class ERPLoginBot:
                             if _tree_has("전표"):
                                 self.logger.info(f"  [MENU-04] 검증 성공: '전표' 발견 (시도 {attempt}/4)")
                                 return True
-                            self.logger.warning(f"  [MENU-04] 아직 '전표' 미발견 (시도 {attempt}/2), 0.5초 대기")
-                            time.sleep(ERP_SETTLE_WAIT)
+                            self.logger.warning(
+                                f"  [MENU-04] 아직 '전표' 미발견 (시도 {attempt}/2), "
+                                f"{menu_entry_settle_wait:.2f}초 대기"
+                            )
+                            time.sleep(menu_entry_settle_wait)
                         self.logger.warning("  [MENU-04] UIA로 '전표' 미검출. 화면상 노출 가능성이 높아 좌표 fallback으로 진행합니다.")
                         return True
 
@@ -1465,6 +1484,7 @@ class ERPLoginBot:
                                         f"  [TREE-UIA] 분개전표입력 UI 요소 클릭 전송: "
                                         f"rect=({rect.left},{rect.top})-({rect.right},{rect.bottom})"
                                     )
+                                    time.sleep(menu_entry_settle_wait)
                                     return True
                         except Exception as e:
                             self.logger.warning(f"  [TREE-UIA] 분개전표입력 UI 클릭 실패: {e}")
@@ -1501,7 +1521,7 @@ class ERPLoginBot:
                         """분개전표입력 선택 후 남는 좌측 메뉴 패널을 닫아 첫 입력 클릭이 먹히지 않게 합니다."""
                         try:
                             pyautogui.press("escape")
-                            time.sleep(ERP_CLICK_WAIT)
+                            time.sleep(menu_tree_wait)
                         except Exception as e:
                             self.logger.warning(f"  [MENU-CLOSE] ESC 메뉴 닫기 실패: {e}")
                         try:
@@ -1510,7 +1530,7 @@ class ERPLoginBot:
                             y = int(os.getenv("ERP_MENU_CLOSE_CLICK_Y", "124") or "124")
                             pyautogui.click(r.left + x, r.top + y)
                             self.logger.info(f"  [MENU-CLOSE] 폼 영역 클릭으로 좌측 메뉴 닫기 시도: rel=({x}, {y})")
-                            time.sleep(ERP_SETTLE_WAIT)
+                            time.sleep(menu_entry_settle_wait)
                         except Exception as e:
                             self.logger.warning(f"  [MENU-CLOSE] 폼 영역 클릭 실패: {e}")
                         return _wait_slip_form_ready(0.35)
@@ -1544,17 +1564,18 @@ class ERPLoginBot:
                                 self.logger.info("  [TREE-XY] '전표처리'가 이미 보임. 전표 클릭 스킵")
                             else:
                                 _click_rel(*points["slip"], "전표")
-                                time.sleep(ERP_CLICK_WAIT)
+                                time.sleep(menu_tree_wait)
 
                             if _tree_has("분개전표입력"):
                                 self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표처리 클릭 스킵")
                             else:
                                 _click_rel(*points["process"], "전표처리")
-                                time.sleep(ERP_CLICK_WAIT)
+                                time.sleep(menu_tree_wait)
 
                         if not _click_slip_menu_by_uia():
                             _click_rel(*points["entry"], "분개전표입력")
                             self.logger.info("  [TREE-XY] 분개전표입력 좌표 클릭 전송")
+                            time.sleep(menu_entry_settle_wait)
 
                     opened_slip_form = _wait_slip_form_ready(
                         float(os.getenv("ERP_SLIP_OPEN_WAIT", "0.45") or "0.45")
@@ -1565,6 +1586,7 @@ class ERPLoginBot:
                             opened_slip_form = _wait_slip_form_ready(0.35)
                         if not opened_slip_form:
                             pyautogui.press("enter")
+                            time.sleep(menu_entry_settle_wait)
                             opened_slip_form = _wait_slip_form_ready(0.35)
                     if opened_slip_form:
                         self.logger.info("  [TREE-VERIFY] 분개전표입력 화면 진입 확인")

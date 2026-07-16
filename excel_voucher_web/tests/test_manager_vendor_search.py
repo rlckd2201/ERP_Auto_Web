@@ -9,6 +9,7 @@ MANAGER_SOURCE = (
     / "manager_server"
     / "전표 자동화 프로그램(담당자용)_v6.2.py"
 )
+AGENT_ADAPTER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "agent_adapter.py"
 
 
 def _load_nested_functions(*names: str, namespace: dict | None = None) -> dict:
@@ -575,6 +576,108 @@ def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
         ("sleep", 0.16),
         ("sleep", 0.16),
     ]
+
+
+def test_slip_tree_navigation_waits_between_each_menu_level():
+    events = []
+    loaded = _load_nested_functions(
+        "_open_slip_menu_by_uia_path",
+        namespace={
+            "_tree_has": lambda _text: False,
+            "_click_tree_item_by_text": (
+                lambda text, *, expand=False, label=None: (
+                    events.append(("tree", text, expand)) or True
+                )
+            ),
+            "_click_slip_menu_by_uia": lambda: events.append(("entry",)) or True,
+            "time": SimpleNamespace(
+                sleep=lambda seconds: events.append(("sleep", seconds))
+            ),
+            "menu_tree_wait": 0.37,
+        },
+    )
+
+    assert loaded["_open_slip_menu_by_uia_path"]() is True
+    assert events == [
+        ("tree", "전표", True),
+        ("sleep", 0.37),
+        ("tree", "전표처리", True),
+        ("sleep", 0.37),
+        ("entry",),
+    ]
+
+
+def test_slip_entry_settles_before_immediate_uia_ready_check():
+    events = []
+    main = _FakeControl("K-System", "Window", _FakeRect(0, 0, 1600, 900))
+    main.add(
+        _FakeControl(
+            "분개전표입력",
+            "Text",
+            _FakeRect(100, 180, 300, 220),
+        )
+    )
+    loaded = _load_nested_functions(
+        "_click_slip_menu_by_uia",
+        "_wait_slip_form_ready",
+        namespace={
+            "main_win": main,
+            "pyautogui": SimpleNamespace(
+                click=lambda x, y: events.append(("click", x, y))
+            ),
+            "time": SimpleNamespace(
+                time=lambda: 0.0,
+                sleep=lambda seconds: events.append(("sleep", seconds)),
+            ),
+            "menu_entry_settle_wait": 0.61,
+            "_slip_form_ready": lambda: events.append(("ready",)) or True,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_click_slip_menu_by_uia"]() is True
+    assert loaded["_wait_slip_form_ready"](0.45) is True
+    assert events == [
+        ("click", 200, 200),
+        ("sleep", 0.61),
+        ("ready",),
+    ]
+
+
+def test_menu_timing_defaults_and_agent_launch_overrides_stay_in_sync():
+    manager_source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
+    expected = {
+        "ERP_MENU_STEP_WAIT": "0.45",
+        "ERP_MENU_TREE_WAIT": "0.18",
+        "ERP_MENU_ENTRY_SETTLE_WAIT": "0.30",
+    }
+
+    for env_name, default in expected.items():
+        assert f'os.getenv("{env_name}", "{default}")' in manager_source
+        assert f'os.environ["{env_name}"] = "{default}"' in adapter_source
+
+    helper_start = manager_source.index("def _open_accounting_menu")
+    helper_end = manager_source.index("def _click_slip_menu_by_uia", helper_start)
+    accounting_menu = manager_source[helper_start:helper_end]
+
+    assert accounting_menu.count("time.sleep(menu_step_wait)") == 3
+    assert "time.sleep(ERP_BLOCK_WAIT)" not in accounting_menu
+
+    retry_start = manager_source.index(
+        "if not opened_slip_form:",
+        manager_source.index("opened_slip_form = _wait_slip_form_ready"),
+    )
+    retry_end = manager_source.index("if opened_slip_form:", retry_start)
+    retry_flow = manager_source[retry_start:retry_end]
+    enter_at = retry_flow.index('pyautogui.press("enter")')
+    settle_at = retry_flow.index("time.sleep(menu_entry_settle_wait)", enter_at)
+    ready_at = retry_flow.index(
+        "opened_slip_form = _wait_slip_form_ready(0.35)",
+        settle_at,
+    )
+
+    assert enter_at < settle_at < ready_at
 
 
 def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
