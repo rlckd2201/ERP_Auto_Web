@@ -103,36 +103,34 @@ class _FakeLogger:
         pass
 
 
-def test_finance_vendor_search_uses_vendor_number_filter():
+def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
-    branch_start = source.index('if search_label == "거래처번호":')
-    branch_end = source.index("# ERP 거래처 팝업은", branch_start)
-    first_row_branch = source[branch_start:branch_end]
+    helper_start = source.index("def _seed_vendor_by_number_f9")
+    helper_end = source.index("def _input_vendor_by_number_keyboard", helper_start)
+    helper = source[helper_start:helper_end]
+    expected_order = [
+        "_click_form_xy",
+        "pyautogui.press('f9')",
+        "_find_vendor_popup",
+        "_paste_text_fast",
+        "pyautogui.press('tab', presses=4",
+        "pyautogui.press('down', presses=5",
+        "pyautogui.press('up', presses=2",
+        "pyautogui.press('tab', presses=3",
+        "pyautogui.press('enter', presses=2",
+    ]
+    positions = [helper.index(token) for token in expected_order]
 
-    assert first_row_branch.index("_input_vendor_popup_search_text") < first_row_branch.index(
-        "_select_vendor_popup_filter"
-    )
-    assert first_row_branch.index("_select_vendor_popup_filter") < first_row_branch.index(
-        "_click_vendor_popup_search_button"
-    )
-    assert first_row_branch.index("_click_vendor_popup_search_button") < first_row_branch.index(
-        "_select_first_vendor_popup_result"
-    )
-    assert "pyautogui.press('enter')" not in first_row_branch
-    assert (
-        'return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)'
-        in source
-    )
-    assert (
-        'return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처코드", 2)'
-        not in source
-    )
-    assert 'finance_vendor_entry_state = {"popup_seeded": False}' in source
+    assert positions == sorted(positions)
+    assert "doubleClick" not in helper
+    assert "_double_click" not in helper
+    assert "_input_vendor_by_popup_keyboard" not in helper
+    assert 'finance_vendor_entry_state = {"f9_seeded": False}' in source
     assert 'if account_key == "미지급금(원화)":' in source
-    assert 'if not finance_vendor_entry_state["popup_seeded"]:' in source
-    assert 'finance_vendor_entry_state["popup_seeded"] = True' in source
-    assert "allow_result_enter_fallback=False" in source
+    assert 'if not finance_vendor_entry_state["f9_seeded"]:' in source
+    assert 'finance_vendor_entry_state["f9_seeded"] = True' in source
+    assert "최초 F9 키보드 입력 완료, 이후 행 직접 입력 전환" in source
     assert "관리항목값 셀 직접 입력 후 Enter 완료" in source
     assert "거래처번호 팝업 입력 실패, 직접 입력 fallback" in source
 
@@ -160,7 +158,7 @@ def test_vendor_popup_detects_internal_erp_page_and_filters_visible_controls():
     assert candidate_branch.index("candidate_edits =") < candidate_branch.index("return candidate_popup")
 
 
-def test_finance_first_vendor_result_requires_double_click_without_enter_fallback():
+def test_generic_vendor_result_requires_double_click_without_unsafe_enter_fallback():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
     helper_start = source.index("def _select_first_vendor_popup_result")
@@ -172,12 +170,6 @@ def test_finance_first_vendor_result_requires_double_click_without_enter_fallbac
     assert "if not allow_enter_fallback:" in helper
     assert helper.index("if not allow_enter_fallback:") < helper.index("pyautogui.press('enter')")
     assert "거래처 검색 첫 행 더블클릭 후 화면이 닫히지 않아 중단" in helper
-
-    seed_start = source.index("def _seed_vendor_by_number_popup")
-    seed_end = source.index("def _input_vendor_by_number_keyboard", seed_start)
-    seed_helper = source[seed_start:seed_end]
-    assert "allow_result_enter_fallback=False" in seed_helper
-
 
 def test_vendor_search_button_prefers_visible_uia_button_before_coordinate_fallback():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
@@ -432,135 +424,94 @@ def test_vendor_popup_close_wait_ignores_single_transient_detection_miss():
     assert len(calls) == 4
 
 
-def test_finance_first_vendor_executes_required_search_order():
+def test_finance_first_vendor_executes_exact_f9_key_order():
     events = []
-    popup = {"source": "internal-uia"}
-    popup_results = iter([None, popup])
+
+    class _FakePyAutoGui:
+        @staticmethod
+        def press(key, presses=1, interval=0):
+            events.append(("key", key, presses))
 
     loaded = _load_nested_functions(
-        "_input_vendor_by_popup_keyboard",
+        "_seed_vendor_by_number_f9",
         namespace={
-            "_find_vendor_popup": lambda timeout=0: next(popup_results),
-            "_double_click_vendor_value_xy": lambda x, y, label, wait=0: events.append("cell-double-click"),
-            "_input_vendor_popup_search_text": lambda *_args: events.append("search-value") or True,
-            "_select_vendor_popup_filter": lambda *_args: events.append("vendor-number-filter") or True,
-            "_click_vendor_popup_search_button": lambda *_args: events.append("search-button") or True,
-            "_select_first_vendor_popup_result": (
-                lambda *_args, **kwargs: events.append(
-                    f"result-double-click:enter-fallback={kwargs['allow_enter_fallback']}"
-                )
-                or True
+            "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y)),
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_find_vendor_popup": (
+                lambda timeout=0: events.append(("popup-check", timeout))
+                or {"source": "internal-title"}
             ),
-            "vendor_popup_open_wait": 0.0,
-            "vendor_popup_focus_wait": 0.0,
-            "vendor_popup_search_wait": 0.0,
-            "ERP_FORM_WAIT": 0.0,
+            "_paste_text_fast": lambda text, label: events.append(("paste", text)),
+            "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(sleep=lambda _seconds: None),
-            "self": SimpleNamespace(logger=_FakeLogger()),
-        },
-    )
-
-    result = loaded["_input_vendor_by_popup_keyboard"](
-        1118,
-        797,
-        "1행 거래처",
-        "A001",
-        "거래처번호",
-        2,
-        allow_result_enter_fallback=False,
-    )
-
-    assert result is True
-    assert events == [
-        "cell-double-click",
-        "search-value",
-        "vendor-number-filter",
-        "search-button",
-        "result-double-click:enter-fallback=False",
-    ]
-
-
-def test_finance_first_vendor_detects_same_handle_title_transition_after_double_click():
-    events = []
-    main_rect = _FakeRect(0, 0, 1600, 900)
-    main = _FakeControl("분개전표입력 - K-System", "Window", main_rect)
-    main_wrapper = _FakeControl("분개전표입력 - K-System", "Window", main_rect)
-    main_wrapper.handle = main.handle
-
-    class _FakeClock:
-        now = 0.0
-
-        @classmethod
-        def time(cls):
-            return cls.now
-
-        @classmethod
-        def sleep(cls, seconds):
-            cls.now += max(0.01, float(seconds))
-
-    class _FakeDesktop:
-        def __init__(self, **_kwargs):
-            pass
-
-        def windows(self):
-            return [main_wrapper]
-
-    def _open_vendor_mdi(*_args, **_kwargs):
-        events.append("cell-double-click")
-        main_wrapper._text = "거래처DS - K-System"
-        main_wrapper.element_info.name = main_wrapper._text
-
-    loaded = _load_nested_functions(
-        "_vendor_popup_context",
-        "_find_vendor_popup",
-        "_input_vendor_by_popup_keyboard",
-        namespace={
-            "Desktop": _FakeDesktop,
-            "main_win": main,
-            "_main_rect": lambda: main_rect,
-            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")),
-            "UiaRect": _FakeRect,
-            "_find_internal_vendor_popup": lambda: None,
-            "_log_vendor_popup_detection": lambda _popup: None,
-            "_double_click_vendor_value_xy": _open_vendor_mdi,
-            "_input_vendor_popup_search_text": lambda *_args: events.append("search-value") or True,
-            "_select_vendor_popup_filter": lambda *_args: events.append("vendor-number-filter") or True,
-            "_click_vendor_popup_search_button": lambda *_args: events.append("search-button") or True,
-            "_select_first_vendor_popup_result": (
-                lambda *_args, **_kwargs: events.append("result-double-click") or True
-            ),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
             "vendor_popup_open_wait": 0.0,
             "vendor_popup_focus_wait": 0.0,
             "vendor_popup_search_wait": 0.0,
+            "mgmt_key_wait": 0.0,
             "ERP_FORM_WAIT": 0.0,
-            "time": _FakeClock,
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
 
-    result = loaded["_input_vendor_by_popup_keyboard"](
-        1118,
-        797,
-        "1행 거래처",
-        "A001",
-        "거래처번호",
-        2,
-        allow_result_enter_fallback=False,
-    )
+    result = loaded["_seed_vendor_by_number_f9"](1118, 797, "1행 거래처", "A001")
 
     assert result is True
     assert events == [
-        "cell-double-click",
-        "search-value",
-        "vendor-number-filter",
-        "search-button",
-        "result-double-click",
+        ("click", 1118, 797),
+        ("key", "f9", 1),
+        ("popup-check", 3.5),
+        ("paste", "A001"),
+        ("key", "tab", 4),
+        ("key", "down", 5),
+        ("key", "up", 2),
+        ("key", "tab", 3),
+        ("key", "enter", 2),
     ]
 
 
-def test_finance_vendor_state_uses_popup_once_then_preserves_bank_path():
+def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
     events = []
-    state = {"popup_seeded": False}
+
+    class _FakePyAutoGui:
+        @staticmethod
+        def press(key, presses=1, interval=0):
+            events.append(("key", key, presses))
+
+    loaded = _load_nested_functions(
+        "_seed_vendor_by_number_f9",
+        namespace={
+            "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y)),
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_find_vendor_popup": lambda timeout=0: events.append(("popup-check", timeout)),
+            "_paste_text_fast": lambda text, label: events.append(("paste", text)),
+            "pyautogui": _FakePyAutoGui,
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "vendor_popup_open_wait": 0.0,
+            "vendor_popup_focus_wait": 0.0,
+            "vendor_popup_search_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "ERP_FORM_WAIT": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    result = loaded["_seed_vendor_by_number_f9"](1118, 797, "1행 거래처", "A001")
+
+    assert result is False
+    assert events == [
+        ("click", 1118, 797),
+        ("key", "f9", 1),
+        ("popup-check", 3.5),
+    ]
+
+
+def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
+    events = []
+    state = {"f9_seeded": False}
     loaded = _load_nested_functions(
         "_fill_explicit_management_items",
         namespace={
@@ -575,7 +526,7 @@ def test_finance_vendor_state_uses_popup_once_then_preserves_bank_path():
             "management_bank_coordinate_fallback_rows": set(),
             "_management_value_xy": lambda item_name, fallback_y: (1118, fallback_y),
             "finance_vendor_entry_state": state,
-            "_seed_vendor_by_number_popup": lambda x, y, label, text: (
+            "_seed_vendor_by_number_f9": lambda x, y, label, text: (
                 events.append(("seed", x, y, label, text)) or True
             ),
             "_input_vendor_by_number_keyboard": lambda *_args, **_kwargs: events.append(("popup",)),
@@ -590,7 +541,7 @@ def test_finance_vendor_state_uses_popup_once_then_preserves_bank_path():
     fill = loaded["_fill_explicit_management_items"]
 
     fill()
-    assert state["popup_seeded"] is True
+    assert state["f9_seeded"] is True
     assert [event[0] for event in events] == ["seed"]
 
     loaded["row_no"] = 2

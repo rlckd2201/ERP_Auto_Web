@@ -2737,7 +2737,7 @@ class ERPLoginBot:
         management_value_xy_cache = {}
         management_bank_coordinate_fallback_rows = set()
         management_active_row_context = {"row_no": None}
-        finance_vendor_entry_state = {"popup_seeded": False}
+        finance_vendor_entry_state = {"f9_seeded": False}
         vendor_popup_detection_state = {"signature": None}
 
         def _management_value_xy(item_name, fallback_y):
@@ -3692,16 +3692,40 @@ class ERPLoginBot:
             def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
                 return _input_vendor_by_popup_keyboard(x, y, label, target_biz_no, "사업자번호", 1)
 
-            def _seed_vendor_by_number_popup(x, y, label, vendor_code):
-                return _input_vendor_by_popup_keyboard(
-                    x,
-                    y,
-                    label,
-                    vendor_code,
-                    "거래처번호",
-                    2,
-                    allow_result_enter_fallback=False,
-                )
+            def _seed_vendor_by_number_f9(x, y, label, vendor_code):
+                try:
+                    # 재정 미지급금 첫 행은 ERP에서 확인한 키보드 흐름만 사용한다.
+                    # 관리항목값 셀 1회 클릭 -> F9 -> 거래처번호 ->
+                    # Tab 4 -> Down 5 -> Up 2 -> Tab 3 -> Enter 2.
+                    _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
+                    _release_modifiers(f"{label} F9 직전", wait=False)
+                    time.sleep(mgmt_focus_wait)
+                    pyautogui.press('f9')
+                    time.sleep(vendor_popup_open_wait)
+                    if not _find_vendor_popup(timeout=3.5):
+                        self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
+                        return False
+                    time.sleep(vendor_popup_focus_wait)
+                    _paste_text_fast(vendor_code, f"{label} 거래처번호")
+                    time.sleep(max(1.0, vendor_popup_search_wait))
+                    pyautogui.press('tab', presses=4, interval=0.08)
+                    time.sleep(mgmt_key_wait)
+                    pyautogui.press('down', presses=5, interval=0.08)
+                    time.sleep(mgmt_key_wait)
+                    pyautogui.press('up', presses=2, interval=0.08)
+                    time.sleep(mgmt_key_wait)
+                    pyautogui.press('tab', presses=3, interval=0.08)
+                    time.sleep(mgmt_key_wait)
+                    pyautogui.press('enter', presses=2, interval=0.12)
+                    time.sleep(ERP_FORM_WAIT)
+                    self.logger.info(
+                        f"  [MGMT-XY] {label}: F9 거래처번호 키보드 시퀀스 완료"
+                        f"(Tab 4, Down 5, Up 2, Tab 3, Enter 2): {vendor_code}"
+                    )
+                    return True
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-XY] {label}: F9 거래처번호 입력 실패: {exc}")
+                    return False
 
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
                 return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
@@ -3822,14 +3846,14 @@ class ERPLoginBot:
                     if item_key in ("거래처", "거래처코드", "업체코드", "vendor", "vendor_code"):
                         label = f"{row_no}행 {item_name}"
                         if account_key == "미지급금(원화)":
-                            if not finance_vendor_entry_state["popup_seeded"]:
-                                if not _seed_vendor_by_number_popup(value_x, value_y, label, text):
+                            if not finance_vendor_entry_state["f9_seeded"]:
+                                if not _seed_vendor_by_number_f9(value_x, value_y, label, text):
                                     raise RuntimeError(
-                                        f"{row_no}행 거래처번호 최초 검색 또는 결과 선택에 실패했습니다."
+                                        f"{row_no}행 거래처번호 F9 키보드 입력에 실패했습니다."
                                     )
-                                finance_vendor_entry_state["popup_seeded"] = True
+                                finance_vendor_entry_state["f9_seeded"] = True
                                 self.logger.info(
-                                    f"  [MGMT-XY] {label}: 최초 팝업 검색 확정 완료, 이후 행 직접 입력 전환"
+                                    f"  [MGMT-XY] {label}: 최초 F9 키보드 입력 완료, 이후 행 직접 입력 전환"
                                 )
                             else:
                                 _input_value_xy(
