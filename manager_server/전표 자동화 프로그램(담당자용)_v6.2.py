@@ -1653,6 +1653,18 @@ class ERPLoginBot:
         vendor_popup_open_wait = max(0.35, float(os.getenv("ERP_VENDOR_POPUP_OPEN_WAIT", "0.55") or "0.55"))
         vendor_popup_focus_wait = max(mgmt_focus_wait, float(os.getenv("ERP_VENDOR_POPUP_FOCUS_WAIT", "0.12" if fast_management else "0.45") or "0.45"))
         vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
+        vendor_double_click_hold = min(
+            0.25,
+            max(0.04, float(os.getenv("ERP_VENDOR_DOUBLE_CLICK_HOLD", "0.08") or "0.08")),
+        )
+        vendor_double_click_interval = min(
+            0.40,
+            max(0.12, float(os.getenv("ERP_VENDOR_DOUBLE_CLICK_INTERVAL", "0.18") or "0.18")),
+        )
+        vendor_popup_result_close_wait = max(
+            1.0,
+            float(os.getenv("ERP_VENDOR_POPUP_RESULT_CLOSE_WAIT", "2.5") or "2.5"),
+        )
         skip_visible_row_scan = _env_flag("ERP_SKIP_VISIBLE_ROW_SCAN", "1" if fast_management else "0")
 
         if fast_input:
@@ -2855,6 +2867,34 @@ class ERPLoginBot:
             self.logger.info(f"  [MGMT-XY] {label} 더블클릭: rel=({x},{y}), abs=({ax},{ay})")
             time.sleep(ERP_FORM_WAIT if wait is None else wait)
 
+        def _vendor_double_click_abs(x, y, label, wait=None):
+            # K-System GDI 관리항목 셀은 너무 짧은 synthetic doubleClick을
+            # 한 번의 포커스 클릭으로만 처리할 수 있다. 두 번의 down/up을
+            # 사람이 누르는 간격으로 보내 최초 셀과 검색 결과 모두 같은
+            # 방식으로 확정한다.
+            _release_modifiers(f"{label} 더블클릭 직전", wait=False)
+            pyautogui.moveTo(int(x), int(y))
+            for click_no in range(2):
+                pyautogui.mouseDown(button="left")
+                time.sleep(vendor_double_click_hold)
+                pyautogui.mouseUp(button="left")
+                if click_no == 0:
+                    time.sleep(vendor_double_click_interval)
+            self.logger.info(
+                f"  [MGMT-XY] {label} 안정 더블클릭: abs=({int(x)},{int(y)}), "
+                f"hold={vendor_double_click_hold:.2f}, interval={vendor_double_click_interval:.2f}"
+            )
+            time.sleep(ERP_FORM_WAIT if wait is None else wait)
+
+        def _double_click_vendor_value_xy(x, y, label, wait=None):
+            r = _main_rect()
+            _vendor_double_click_abs(
+                r.left + int(x),
+                r.top + int(y),
+                label,
+                wait=wait,
+            )
+
         def _value_text(value, comma=False):
             if value is None:
                 return ""
@@ -3199,6 +3239,23 @@ class ERPLoginBot:
                         pass
                 return values
 
+            def _vendor_control_identity(ctrl):
+                try:
+                    handle = int(ctrl.handle or 0)
+                    if handle:
+                        return ("handle", handle)
+                except Exception:
+                    pass
+                try:
+                    runtime_id = ctrl.element_info.runtime_id
+                    if callable(runtime_id):
+                        runtime_id = runtime_id()
+                    if runtime_id:
+                        return ("runtime", tuple(runtime_id))
+                except Exception:
+                    pass
+                return ("object", id(ctrl))
+
             def _find_internal_vendor_popup():
                 try:
                     descendants = main_win.descendants()
@@ -3269,15 +3326,41 @@ class ERPLoginBot:
                             break
 
                 if candidates:
-                    _, root, popup_rect = min(candidates, key=lambda item: item[0])
-                    nearly_main_window = (
-                        abs(popup_rect.left - main_rect.left) <= 12
-                        and abs(popup_rect.top - main_rect.top) <= 12
-                        and popup_rect.width() >= int(main_rect.width() * 0.95)
-                        and popup_rect.height() >= int(main_rect.height() * 0.90)
-                    )
-                    if not nearly_main_window:
-                        return _vendor_popup_context(root, popup_rect, "internal-uia")
+                    seen_candidates = set()
+                    for _, root, popup_rect in sorted(candidates, key=lambda item: item[0]):
+                        candidate_key = (
+                            _vendor_control_identity(root),
+                            popup_rect.left,
+                            popup_rect.top,
+                            popup_rect.right,
+                            popup_rect.bottom,
+                        )
+                        if candidate_key in seen_candidates:
+                            continue
+                        seen_candidates.add(candidate_key)
+                        nearly_main_window = (
+                            abs(popup_rect.left - main_rect.left) <= 12
+                            and abs(popup_rect.top - main_rect.top) <= 12
+                            and popup_rect.width() >= int(main_rect.width() * 0.95)
+                            and popup_rect.height() >= int(main_rect.height() * 0.90)
+                        )
+                        if nearly_main_window:
+                            continue
+                        candidate_popup = _vendor_popup_context(root, popup_rect, "internal-uia")
+                        # 결과 그리드도 충분히 큰 조상 컨테이너일 수 있다. 검색조건과
+                        # 검색값 컨트롤을 모두 포함한 후보만 실제 MDI 화면으로 채택한다.
+                        candidate_combos = _visible_vendor_popup_controls(
+                            candidate_popup,
+                            "ComboBox",
+                            top_band=True,
+                        )
+                        candidate_edits = _visible_vendor_popup_controls(
+                            candidate_popup,
+                            "Edit",
+                            top_band=True,
+                        )
+                        if candidate_combos and candidate_edits:
+                            return candidate_popup
 
                 # 거래처ds는 ERP MDI 내부 화면이라 UIA가 컨테이너 대신 메인 창만
                 # 반환할 수 있다. 이때는 메인 창의 고정된 MDI 여백만 제외한다.
@@ -3311,10 +3394,24 @@ class ERPLoginBot:
             def _find_vendor_popup(timeout=3.0):
                 end_at = time.time() + timeout
                 while time.time() < end_at:
+                    same_handle_vendor_win = None
                     try:
                         for win in Desktop(backend="uia").windows():
                             try:
                                 title = win.window_text() or ""
+                                same_as_main = win is main_win
+                                try:
+                                    same_as_main = same_as_main or int(win.handle) == int(main_win.handle)
+                                except Exception:
+                                    pass
+                                if same_as_main:
+                                    # K-System의 거래처ds는 별도 최상위 창이 아니라 기존 ERP
+                                    # native handle의 MDI 제목만 거래처ds로 바뀌어 노출될 수 있다.
+                                    # 이 신호까지 무조건 제외하면 최초 관리항목값 셀만 선택된 채
+                                    # 팝업을 열지 못한 것으로 판단한다.
+                                    if win.is_visible() and "거래처ds" in _norm_text(title).lower():
+                                        same_handle_vendor_win = win
+                                    continue
                                 if win.is_visible() and "거래처" in title:
                                     popup = _vendor_popup_context(win, source="top-level")
                                     _log_vendor_popup_detection(popup)
@@ -3325,6 +3422,20 @@ class ERPLoginBot:
                         pass
                     popup = _find_internal_vendor_popup()
                     if popup:
+                        _log_vendor_popup_detection(popup)
+                        return popup
+                    if same_handle_vendor_win is not None:
+                        main_rect = _main_rect()
+                        popup = _vendor_popup_context(
+                            same_handle_vendor_win,
+                            UiaRect(
+                                main_rect.left + 8,
+                                main_rect.top + 52,
+                                main_rect.right - 8,
+                                main_rect.bottom - 8,
+                            ),
+                            "internal-title",
+                        )
                         _log_vendor_popup_detection(popup)
                         return popup
                     time.sleep(0.1)
@@ -3411,10 +3522,36 @@ class ERPLoginBot:
                     return False
 
             def _click_vendor_popup_search_button(popup, label):
+                search_norm = _norm_text("검색")
+                popup_rect = _vendor_popup_rect(popup)
+                search_x = popup_rect.right - 58
+                search_y = popup_rect.top + 58
+                buttons = _visible_vendor_popup_controls(popup, "Button", top_band=True)
+                buttons.sort(
+                    key=lambda ctrl: (
+                        (((ctrl.rectangle().left + ctrl.rectangle().right) // 2) - search_x) ** 2
+                        + (((ctrl.rectangle().top + ctrl.rectangle().bottom) // 2) - search_y) ** 2
+                    )
+                )
+                for button in buttons:
+                    try:
+                        direct_values = _direct_vendor_popup_text(button)
+                        if not any(
+                            value == search_norm
+                            or re.fullmatch(
+                                rf"{re.escape(search_norm)}(?:\(.+\)|\[.+\])",
+                                value,
+                            )
+                            for value in direct_values
+                        ):
+                            continue
+                        button.click_input()
+                        self.logger.info(f"  [MGMT-XY] {label}: 거래처 팝업 검색 버튼 클릭(UIA)")
+                        time.sleep(max(1.0, vendor_popup_search_wait))
+                        return True
+                    except Exception:
+                        pass
                 try:
-                    popup_rect = _vendor_popup_rect(popup)
-                    search_x = popup_rect.right - 58
-                    search_y = popup_rect.top + 58
                     pyautogui.click(search_x, search_y)
                     self.logger.info(
                         f"  [MGMT-XY] {label}: 거래처 팝업 검색 버튼 클릭: "
@@ -3426,26 +3563,57 @@ class ERPLoginBot:
                     self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업 검색 버튼 클릭 실패: {exc}")
                     return False
 
-            def _select_first_vendor_popup_result(popup, label):
+            def _wait_vendor_popup_closed(timeout):
+                end_at = time.time() + max(0.1, float(timeout))
+                consecutive_misses = 0
+                while time.time() < end_at:
+                    if not _find_vendor_popup(timeout=0.15):
+                        consecutive_misses += 1
+                        if consecutive_misses >= 2:
+                            return True
+                    else:
+                        consecutive_misses = 0
+                    time.sleep(0.10)
+                return False
+
+            def _select_first_vendor_popup_result(popup, label, allow_enter_fallback=True):
                 try:
                     popup_rect = _vendor_popup_rect(popup)
                     first_row_x = popup_rect.left + 82
                     first_row_y = popup_rect.top + 174
-                    pyautogui.doubleClick(first_row_x, first_row_y, interval=0.08)
-                    time.sleep(ERP_FORM_WAIT)
-                    if not _find_vendor_popup(timeout=0.45):
+                    _vendor_double_click_abs(
+                        first_row_x,
+                        first_row_y,
+                        f"{label} 거래처 검색 첫 행",
+                        wait=ERP_FORM_WAIT,
+                    )
+                    close_wait = vendor_popup_result_close_wait if not allow_enter_fallback else 0.45
+                    if _wait_vendor_popup_closed(close_wait):
                         self.logger.info(f"  [MGMT-XY] {label}: 거래처 검색 첫 행 확정 완료")
                         return True
+                    if not allow_enter_fallback:
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: 거래처 검색 첫 행 더블클릭 후 화면이 닫히지 않아 중단"
+                        )
+                        return False
                     pyautogui.press('enter')
                     time.sleep(ERP_FORM_WAIT)
-                    if not _find_vendor_popup(timeout=0.45):
+                    if _wait_vendor_popup_closed(0.45):
                         self.logger.info(f"  [MGMT-XY] {label}: 거래처 검색 첫 행 Enter 확정 완료")
                         return True
                 except Exception as exc:
                     self.logger.warning(f"  [MGMT-XY] {label}: 거래처 검색 첫 행 확정 실패: {exc}")
                 return False
 
-            def _input_vendor_by_popup_keyboard(x, y, label, search_text, search_label, up_presses):
+            def _input_vendor_by_popup_keyboard(
+                x,
+                y,
+                label,
+                search_text,
+                search_label,
+                up_presses,
+                allow_result_enter_fallback=True,
+            ):
                 popup = None
                 popup = _find_vendor_popup(timeout=0.70)
                 if popup:
@@ -3453,7 +3621,12 @@ class ERPLoginBot:
                 for open_try in range(2):
                     if popup:
                         break
-                    _double_click_form_xy(x, y, f"{label} 팝업 열기", wait=vendor_popup_open_wait)
+                    _double_click_vendor_value_xy(
+                        x,
+                        y,
+                        f"{label} 팝업 열기",
+                        wait=vendor_popup_open_wait,
+                    )
                     time.sleep(0.75 if open_try == 0 else ERP_FORM_WAIT + 0.65)
                     popup = _find_vendor_popup(timeout=0.80 if open_try == 0 else 3.5)
                     if popup:
@@ -3482,7 +3655,11 @@ class ERPLoginBot:
                         return False
                     if not _click_vendor_popup_search_button(popup, label):
                         return False
-                    return _select_first_vendor_popup_result(popup, label)
+                    return _select_first_vendor_popup_result(
+                        popup,
+                        label,
+                        allow_enter_fallback=allow_result_enter_fallback,
+                    )
 
                 # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 키보드 흐름을 사용합니다.
                 # 사업자번호를 사용하는 기존 전산 자동화 경로만 이 키보드 흐름을 유지합니다.
@@ -3516,7 +3693,15 @@ class ERPLoginBot:
                 return _input_vendor_by_popup_keyboard(x, y, label, target_biz_no, "사업자번호", 1)
 
             def _seed_vendor_by_number_popup(x, y, label, vendor_code):
-                return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
+                return _input_vendor_by_popup_keyboard(
+                    x,
+                    y,
+                    label,
+                    vendor_code,
+                    "거래처번호",
+                    2,
+                    allow_result_enter_fallback=False,
+                )
 
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
                 return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
