@@ -46,6 +46,7 @@ import win32com.client as win32
 import win32print
 import fitz
 from pywinauto import Application, Desktop
+from pywinauto.win32structures import RECT as UiaRect
 
 
 # 🚨 버전 V6.1 고정
@@ -2725,6 +2726,7 @@ class ERPLoginBot:
         management_bank_coordinate_fallback_rows = set()
         management_active_row_context = {"row_no": None}
         finance_vendor_entry_state = {"popup_seeded": False}
+        vendor_popup_detection_state = {"signature": None}
 
         def _management_value_xy(item_name, fallback_y):
             target = _norm_text(item_name)
@@ -3140,6 +3142,172 @@ class ERPLoginBot:
                 # 증빙 칸은 Enter 입력 시 ERP가 통화 필드로 포커스를 넘기는 경우가 있어 타이핑만 수행합니다.
                 _input_value_xy(408, 826, evidence_text, f"{row_no}행 증빙", enter_count=0, clear=True)
 
+            def _vendor_popup_context(root, rect=None, source="top-level"):
+                return {
+                    "root": root,
+                    "rect": rect if rect is not None else root.rectangle(),
+                    "source": source,
+                }
+
+            def _vendor_popup_root(popup):
+                return popup.get("root") if isinstance(popup, dict) else popup
+
+            def _vendor_popup_rect(popup):
+                return popup.get("rect") if isinstance(popup, dict) else popup.rectangle()
+
+            def _visible_vendor_popup_controls(popup, control_type=None, top_band=False):
+                root = _vendor_popup_root(popup)
+                popup_rect = _vendor_popup_rect(popup)
+                try:
+                    controls = root.descendants()
+                except Exception:
+                    return []
+                visible = []
+                top_limit = popup_rect.top + min(150, max(80, popup_rect.height() // 4))
+                for ctrl in controls:
+                    try:
+                        if not ctrl.is_visible() or not ctrl.is_enabled():
+                            continue
+                        if control_type and str(ctrl.element_info.control_type or "") != control_type:
+                            continue
+                        rect = ctrl.rectangle()
+                        center_x = (rect.left + rect.right) // 2
+                        center_y = (rect.top + rect.bottom) // 2
+                        if not (
+                            popup_rect.left <= center_x <= popup_rect.right
+                            and popup_rect.top <= center_y <= popup_rect.bottom
+                        ):
+                            continue
+                        if top_band and center_y > top_limit:
+                            continue
+                        visible.append(ctrl)
+                    except Exception:
+                        pass
+                return visible
+
+            def _direct_vendor_popup_text(ctrl):
+                values = []
+                for getter in (
+                    lambda: ctrl.window_text(),
+                    lambda: ctrl.element_info.name,
+                ):
+                    try:
+                        value = _norm_text(getter())
+                        if value and value not in values:
+                            values.append(value)
+                    except Exception:
+                        pass
+                return values
+
+            def _find_internal_vendor_popup():
+                try:
+                    descendants = main_win.descendants()
+                except Exception:
+                    return None
+                controls = []
+                for ctrl in descendants:
+                    try:
+                        if ctrl.is_visible():
+                            controls.append(ctrl)
+                    except Exception:
+                        pass
+
+                title_controls = []
+                marker_controls = []
+                marker_names = {
+                    _norm_text("거래처번호"),
+                    _norm_text("거래처코드"),
+                    _norm_text("거래처명"),
+                    _norm_text("사업자번호"),
+                    _norm_text("대표자"),
+                    _norm_text("유통분류"),
+                    _norm_text("종사업자번호"),
+                    _norm_text("부서명"),
+                }
+                seen_markers = set()
+                for ctrl in controls:
+                    direct_values = _direct_vendor_popup_text(ctrl)
+                    if any("거래처ds" in value.lower() for value in direct_values):
+                        title_controls.append(ctrl)
+                    for value in direct_values:
+                        if value in marker_names:
+                            seen_markers.add(value)
+                            marker_controls.append(ctrl)
+
+                required_headers = {_norm_text("거래처코드"), _norm_text("거래처명")}
+                has_title = bool(title_controls)
+                has_header_signature = required_headers.issubset(seen_markers) and len(seen_markers) >= 3
+                if not has_title and not has_header_signature:
+                    return None
+
+                main_rect = _main_rect()
+                candidates = []
+                for ctrl in title_controls + marker_controls:
+                    current = ctrl
+                    for _ in range(10):
+                        try:
+                            rect = current.rectangle()
+                            width = rect.width()
+                            height = rect.height()
+                            inside_main = (
+                                rect.left >= main_rect.left - 5
+                                and rect.top >= main_rect.top - 5
+                                and rect.right <= main_rect.right + 5
+                                and rect.bottom <= main_rect.bottom + 5
+                            )
+                            if (
+                                inside_main
+                                and width >= int(main_rect.width() * 0.65)
+                                and height >= int(main_rect.height() * 0.45)
+                            ):
+                                candidates.append((width * height, current, rect))
+                            parent = current.parent()
+                            if parent is None:
+                                break
+                            current = parent
+                        except Exception:
+                            break
+
+                if candidates:
+                    _, root, popup_rect = min(candidates, key=lambda item: item[0])
+                    nearly_main_window = (
+                        abs(popup_rect.left - main_rect.left) <= 12
+                        and abs(popup_rect.top - main_rect.top) <= 12
+                        and popup_rect.width() >= int(main_rect.width() * 0.95)
+                        and popup_rect.height() >= int(main_rect.height() * 0.90)
+                    )
+                    if not nearly_main_window:
+                        return _vendor_popup_context(root, popup_rect, "internal-uia")
+
+                # 거래처ds는 ERP MDI 내부 화면이라 UIA가 컨테이너 대신 메인 창만
+                # 반환할 수 있다. 이때는 메인 창의 고정된 MDI 여백만 제외한다.
+                popup_rect = UiaRect(
+                    main_rect.left + 8,
+                    main_rect.top + 52,
+                    main_rect.right - 8,
+                    main_rect.bottom - 8,
+                )
+                return _vendor_popup_context(main_win, popup_rect, "internal-signature")
+
+            def _log_vendor_popup_detection(popup):
+                popup_rect = _vendor_popup_rect(popup)
+                source = popup.get("source", "top-level") if isinstance(popup, dict) else "top-level"
+                signature = (
+                    source,
+                    popup_rect.left,
+                    popup_rect.top,
+                    popup_rect.right,
+                    popup_rect.bottom,
+                )
+                if signature == vendor_popup_detection_state["signature"]:
+                    return
+                vendor_popup_detection_state["signature"] = signature
+                self.logger.info(
+                    "  [MGMT-XY] 거래처 팝업 감지: "
+                    f"source={source}, rect=({popup_rect.left},{popup_rect.top})-"
+                    f"({popup_rect.right},{popup_rect.bottom})"
+                )
+
             def _find_vendor_popup(timeout=3.0):
                 end_at = time.time() + timeout
                 while time.time() < end_at:
@@ -3147,12 +3315,18 @@ class ERPLoginBot:
                         for win in Desktop(backend="uia").windows():
                             try:
                                 title = win.window_text() or ""
-                                if "거래처" in title:
-                                    return win
+                                if win.is_visible() and "거래처" in title:
+                                    popup = _vendor_popup_context(win, source="top-level")
+                                    _log_vendor_popup_detection(popup)
+                                    return popup
                             except Exception:
                                 pass
                     except Exception:
                         pass
+                    popup = _find_internal_vendor_popup()
+                    if popup:
+                        _log_vendor_popup_detection(popup)
+                        return popup
                     time.sleep(0.1)
                 return None
 
@@ -3169,11 +3343,7 @@ class ERPLoginBot:
                     pyautogui.write(text, interval=0.01)
 
             def _select_vendor_popup_filter(popup, search_label, up_presses):
-                combos = []
-                try:
-                    combos = [ctrl for ctrl in popup.descendants() if str(ctrl.element_info.control_type or "") == "ComboBox"]
-                except Exception:
-                    combos = []
+                combos = _visible_vendor_popup_controls(popup, "ComboBox", top_band=True)
                 combos.sort(key=lambda ctrl: (ctrl.rectangle().top, ctrl.rectangle().left))
                 for combo in combos:
                     try:
@@ -3198,7 +3368,7 @@ class ERPLoginBot:
                     except Exception:
                         pass
                 try:
-                    popup_rect = popup.rectangle()
+                    popup_rect = _vendor_popup_rect(popup)
                     pyautogui.click(popup_rect.left + 80, popup_rect.top + 58)
                     time.sleep(ERP_CLICK_WAIT)
                     pyautogui.press('down', presses=5, interval=0.08)
@@ -3214,11 +3384,7 @@ class ERPLoginBot:
                     return False
 
             def _input_vendor_popup_search_text(popup, text, label):
-                edits = []
-                try:
-                    edits = [ctrl for ctrl in popup.descendants() if str(ctrl.element_info.control_type or "") == "Edit"]
-                except Exception:
-                    edits = []
+                edits = _visible_vendor_popup_controls(popup, "Edit", top_band=True)
                 edits.sort(key=lambda ctrl: (ctrl.rectangle().top, -ctrl.rectangle().width()))
                 for edit in edits:
                     try:
@@ -3231,7 +3397,7 @@ class ERPLoginBot:
                     except Exception:
                         pass
                 try:
-                    popup_rect = popup.rectangle()
+                    popup_rect = _vendor_popup_rect(popup)
                     pyautogui.click(
                         popup_rect.left + max(240, popup_rect.width() // 2),
                         popup_rect.top + 58,
@@ -3246,7 +3412,7 @@ class ERPLoginBot:
 
             def _click_vendor_popup_search_button(popup, label):
                 try:
-                    popup_rect = popup.rectangle()
+                    popup_rect = _vendor_popup_rect(popup)
                     search_x = popup_rect.right - 58
                     search_y = popup_rect.top + 58
                     pyautogui.click(search_x, search_y)
@@ -3262,7 +3428,7 @@ class ERPLoginBot:
 
             def _select_first_vendor_popup_result(popup, label):
                 try:
-                    popup_rect = popup.rectangle()
+                    popup_rect = _vendor_popup_rect(popup)
                     first_row_x = popup_rect.left + 82
                     first_row_y = popup_rect.top + 174
                     pyautogui.doubleClick(first_row_x, first_row_y, interval=0.08)

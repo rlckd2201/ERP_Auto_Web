@@ -39,3 +39,16 @@ def test_finance_vendor_search_uses_vendor_number_filter():
     assert 'finance_vendor_entry_state["popup_seeded"] = True' in source
     assert "관리항목값 셀 직접 입력 후 Enter 완료" in source
     assert "거래처번호 팝업 입력 실패, 직접 입력 fallback" in source
+
+
+def test_vendor_popup_detects_internal_erp_page_and_filters_visible_controls():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    assert "def _find_internal_vendor_popup():" in source
+    assert "main_win.descendants()" in source
+    assert '"internal-uia"' in source
+    assert '"internal-signature"' in source
+    assert "def _visible_vendor_popup_controls" in source
+    assert '_visible_vendor_popup_controls(popup, "ComboBox", top_band=True)' in source
+    assert '_visible_vendor_popup_controls(popup, "Edit", top_band=True)' in source
+    assert "not ctrl.is_visible() or not ctrl.is_enabled()" in source
