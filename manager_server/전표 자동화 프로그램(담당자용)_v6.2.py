@@ -3958,76 +3958,331 @@ class ERPLoginBot:
             sequential_nav = _env_flag("ERP_MGMT_SEQUENTIAL_NAV", "1")
             account_x = int(os.getenv("ERP_MGMT_ACCOUNT_X", "229") or "229")
 
-            def _grid_visible_rows():
-                explicit = str(os.getenv("ERP_MGMT_VISIBLE_ROWS", "") or "").strip()
-                if explicit:
-                    try:
-                        return max(1, int(explicit))
-                    except:
-                        pass
+            def _median_number(values, fallback):
+                ordered = sorted(float(value) for value in values)
+                if not ordered:
+                    return float(fallback)
+                middle = len(ordered) // 2
+                if len(ordered) % 2:
+                    return ordered[middle]
+                return (ordered[middle - 1] + ordered[middle]) / 2.0
+
+            def _fully_visible_voucher_row_snapshot():
+                """Return actual UIA row centers, excluding the clipped bottom row."""
                 try:
                     main_rect = _main_rect()
-                    best = None
-                    for ctrl in _iter_visible("Custom"):
+                    controls = _iter_visible()
+                    viewport_candidates = []
+                    lower_pane_tops = []
+                    horizontal_scrollbars = []
+
+                    for ctrl in controls:
                         try:
-                            if (ctrl.element_info.automation_id or "") != "SS_Row":
-                                continue
+                            control_type = str(ctrl.element_info.control_type or "")
+                            automation_id = str(ctrl.element_info.automation_id or "")
                             rect = ctrl.rectangle()
+                            width = rect.right - rect.left
+                            height = rect.bottom - rect.top
                             rel_left = rect.left - main_rect.left
                             rel_top = rect.top - main_rect.top
                             rel_bottom = rect.bottom - main_rect.top
-                            width = rect.right - rect.left
-                            height = rect.bottom - rect.top
-                            if rel_left > 160 or width < 700 or height < 120:
-                                continue
-                            if rel_top - 20 <= first_row_y <= rel_bottom:
-                                best = rel_bottom
-                                break
-                        except:
+
+                            if (
+                                control_type == "Custom"
+                                and automation_id == "SS_Row"
+                                and rel_left <= 180
+                                and width >= 700
+                                and height >= 120
+                                and rel_top - row_height <= first_row_y <= rel_bottom
+                            ):
+                                viewport_candidates.append((height, -width, rect))
+
+                            if control_type == "ScrollBar" and width >= max(300, height * 5):
+                                if rel_top > first_row_y + (row_height * 3):
+                                    horizontal_scrollbars.append(rect)
+
+                            if control_type in ("Header", "HeaderItem", "Text", "Custom"):
+                                text = _norm_text(_control_text(ctrl) or ctrl.window_text())
+                                if text in (_norm_text("관리항목"), _norm_text("관리항목값")):
+                                    center_x = ((rect.left + rect.right) // 2) - main_rect.left
+                                    if 500 <= center_x <= 1250 and rel_top > first_row_y + (row_height * 3):
+                                        lower_pane_tops.append(rect.top)
+                        except Exception:
                             pass
-                    if best:
-                        bottom_margin = max(10, int(os.getenv("ERP_MGMT_GRID_BOTTOM_MARGIN", "24") or "24"))
-                        last_y = best - bottom_margin
-                        return max(1, min(80, ((last_y - first_row_y) // row_height) + 1))
-                except Exception as e:
-                    self.logger.warning(f"  [MGMT-XY] 그리드 표시 행 수 계산 실패: {e}")
-                return max(1, int(os.getenv("ERP_MGMT_VISIBLE_ROWS_DEFAULT", "27") or "27"))
 
-            visible_rows = _grid_visible_rows()
-            max_row_y = first_row_y + ((visible_rows - 1) * row_height)
-            self.logger.info(
-                f"  [MGMT-XY] 행 이동 방식: sequential={sequential_nav}, "
-                f"first_y={first_row_y}, row_h={row_height}, visible_rows={visible_rows}, max_y={max_row_y}"
-            )
+                    viewport_rect = None
+                    if viewport_candidates:
+                        viewport_rect = sorted(viewport_candidates, key=lambda item: (item[0], item[1]))[0][2]
 
-            def _visible_row_y(row_no, expected_y):
-                target = f"{row_no:03d}"
-                main_rect = _main_rect()
-                candidates = []
-                for ctrl_type in ("Text", "Custom"):
-                    for ctrl in _iter_visible(ctrl_type):
+                    clip_bottom_candidates = []
+                    if viewport_rect is not None:
+                        clip_bottom_candidates.append(viewport_rect.bottom)
+                    for scrollbar_rect in horizontal_scrollbars:
+                        if viewport_rect is not None:
+                            if (
+                                scrollbar_rect.right <= viewport_rect.left
+                                or scrollbar_rect.left >= viewport_rect.right
+                                or scrollbar_rect.top > viewport_rect.bottom + row_height
+                            ):
+                                continue
+                        clip_bottom_candidates.append(scrollbar_rect.top)
+                    clip_bottom_candidates.extend(lower_pane_tops)
+                    if not clip_bottom_candidates:
+                        self.logger.warning("  [MGMT-XY] UIA 전표 그리드 하단 경계 미검출")
+                        return None
+
+                    clip_bottom = min(clip_bottom_candidates)
+                    viewport_top = (
+                        viewport_rect.top
+                        if viewport_rect is not None
+                        else main_rect.top + first_row_y - row_height
+                    )
+                    viewport_left = viewport_rect.left if viewport_rect is not None else main_rect.left
+                    viewport_right = viewport_rect.right if viewport_rect is not None else main_rect.right - 200
+                    raw_rows = []
+
+                    for ctrl in controls:
                         try:
-                            text = _norm_text(_control_text(ctrl) or ctrl.window_text())
-                            if text != target:
+                            control_type = str(ctrl.element_info.control_type or "")
+                            if control_type not in ("Text", "Custom", "DataItem"):
                                 continue
                             rect = ctrl.rectangle()
-                            rel_x = ((rect.left + rect.right) // 2) - main_rect.left
-                            rel_y = ((rect.top + rect.bottom) // 2) - main_rect.top
-                            if rel_x > 520:
+                            center_x = (rect.left + rect.right) / 2.0
+                            center_y = (rect.top + rect.bottom) / 2.0
+                            height = rect.bottom - rect.top
+                            if (
+                                height <= 0
+                                or height > max(50.0, row_height * 2.50)
+                                or rect.right <= viewport_left
+                                or rect.left >= viewport_right
+                            ):
                                 continue
-                            if first_row_y - row_height <= rel_y <= max_row_y + row_height:
-                                candidates.append((abs(rel_y - expected_y), rel_y))
-                        except:
+                            if center_y < main_rect.top + first_row_y - row_height or rect.top >= clip_bottom:
+                                continue
+
+                            text = _norm_text(_control_text(ctrl) or ctrl.window_text())
+                            row_no = None
+                            row_source = None
+                            if re.fullmatch(r"\d{3}", text or ""):
+                                relative_center_x = center_x - main_rect.left
+                                if not (0 <= relative_center_x <= 180):
+                                    continue
+                                row_no = int(text)
+                                row_source = "label"
+                            elif control_type == "DataItem":
+                                try:
+                                    grid_row = int(ctrl.iface_grid_item.CurrentRow)
+                                    if grid_row >= 0:
+                                        row_no = grid_row + 1
+                                        row_source = "grid"
+                                except Exception:
+                                    row_no = None
+                            else:
+                                continue
+
+                            raw_rows.append(
+                                {
+                                    "center_y": center_y,
+                                    "height": float(height),
+                                    "top": float(rect.top),
+                                    "bottom": float(rect.bottom),
+                                    "row_no": row_no,
+                                    "row_source": row_source,
+                                }
+                            )
+                        except Exception:
                             pass
-                if not candidates:
+
+                    if len(raw_rows) < 2:
+                        self.logger.warning(
+                            f"  [MGMT-XY] UIA 전표 행 마커 부족: count={len(raw_rows)}"
+                        )
+                        return None
+
+                    cluster_tolerance = max(2.0, min(6.0, row_height * 0.30))
+                    clusters = []
+                    for item in sorted(raw_rows, key=lambda value: value["center_y"]):
+                        if (
+                            not clusters
+                            or abs(item["center_y"] - clusters[-1]["center_y"]) > cluster_tolerance
+                        ):
+                            clusters.append(
+                                {
+                                    "items": [item],
+                                    "center_y": item["center_y"],
+                                }
+                            )
+                        else:
+                            clusters[-1]["items"].append(item)
+                            clusters[-1]["center_y"] = _median_number(
+                                [value["center_y"] for value in clusters[-1]["items"]],
+                                item["center_y"],
+                            )
+
+                    centers = [cluster["center_y"] for cluster in clusters]
+                    pitch_candidates = [
+                        current - previous
+                        for previous, current in zip(centers, centers[1:])
+                        if max(7.0, row_height * 0.45)
+                        <= current - previous
+                        <= max(40.0, row_height * 1.80)
+                    ]
+                    measured_pitch = _median_number(pitch_candidates, row_height)
+                    cluster_heights = [
+                        max(item["height"] for item in cluster["items"])
+                        for cluster in clusters
+                    ]
+                    normal_height = _median_number(cluster_heights, measured_pitch * 0.80)
+                    guard = max(
+                        1.0,
+                        float(os.getenv("ERP_MGMT_FULL_ROW_BOTTOM_GUARD", "2") or "2"),
+                    )
+                    min_height_ratio = min(
+                        1.0,
+                        max(
+                            0.50,
+                            float(os.getenv("ERP_MGMT_FULL_ROW_MIN_HEIGHT_RATIO", "0.80") or "0.80"),
+                        ),
+                    )
+                    full_clusters = []
+                    for cluster, cluster_height in zip(clusters, cluster_heights):
+                        center_y = cluster["center_y"]
+                        representative_top = min(item["top"] for item in cluster["items"])
+                        representative_bottom = max(item["bottom"] for item in cluster["items"])
+                        intersection_height = max(
+                            0.0,
+                            min(representative_bottom, float(clip_bottom))
+                            - max(representative_top, float(viewport_top)),
+                        )
+                        if center_y + (measured_pitch / 2.0) > float(clip_bottom) - guard:
+                            continue
+                        if cluster_height < normal_height * min_height_ratio:
+                            continue
+                        if intersection_height < normal_height * min_height_ratio:
+                            continue
+                        full_clusters.append(cluster)
+
+                    if not full_clusters:
+                        self.logger.warning(
+                            f"  [MGMT-XY] 완전 표시 전표 행 미검출: clip_bottom={clip_bottom}"
+                        )
+                        return None
+
+                    slot_ys = [
+                        int(round(cluster["center_y"] - main_rect.top))
+                        for cluster in full_clusters
+                    ]
+                    named_rows = {}
+                    exact_label_rows = set()
+                    for cluster, relative_y in zip(full_clusters, slot_ys):
+                        label_row_numbers = [
+                            item["row_no"]
+                            for item in cluster["items"]
+                            if item.get("row_source") == "label" and item.get("row_no") is not None
+                        ]
+                        grid_row_numbers = [
+                            item["row_no"]
+                            for item in cluster["items"]
+                            if item.get("row_source") == "grid" and item.get("row_no") is not None
+                        ]
+                        row_numbers = label_row_numbers or grid_row_numbers
+                        if row_numbers:
+                            named_rows[int(round(_median_number(row_numbers, row_numbers[0])))] = relative_y
+                        exact_label_rows.update(int(value) for value in label_row_numbers)
+
+                    snapshot = {
+                        "rows": named_rows,
+                        "slot_ys": slot_ys,
+                        "first_y": slot_ys[0],
+                        "last_full_y": slot_ys[-1],
+                        "row_pitch": max(1, int(round(measured_pitch))),
+                        "clip_bottom": int(round(clip_bottom - main_rect.top)),
+                        "has_exact_row_numbers": bool(exact_label_rows),
+                        "has_logical_row_numbers": bool(named_rows),
+                    }
+                    self.logger.info(
+                        f"  [MGMT-XY] UIA 완전 표시 행 스냅샷: slots={len(slot_ys)}, "
+                        f"first_y={snapshot['first_y']}, last_y={snapshot['last_full_y']}, "
+                        f"pitch={snapshot['row_pitch']}, named={sorted(named_rows)[:3]}.."
+                        f"{sorted(named_rows)[-3:] if named_rows else []}"
+                    )
+                    return snapshot
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-XY] UIA 완전 표시 행 스냅샷 실패: {exc}")
                     return None
-                return sorted(candidates, key=lambda item: item[0])[0][1]
+
+            def _validate_initial_voucher_row_snapshot(snapshot):
+                if not snapshot or not snapshot.get("slot_ys"):
+                    _fail_form(
+                        "전표 그리드의 완전히 표시된 마지막 행을 UIA로 확인하지 못해 "
+                        "관리항목 입력을 중단합니다."
+                    )
+                if (
+                    snapshot.get("has_logical_row_numbers")
+                    and 1 not in (snapshot.get("rows") or {})
+                ):
+                    _fail_form(
+                        "관리항목 입력 시작 전 UIA 전표 그리드에서 001행을 찾지 못했습니다. "
+                        "스크롤 위치가 첫 행이 아니므로 입력을 중단합니다."
+                    )
+                return snapshot
+
+            initial_snapshot = _validate_initial_voucher_row_snapshot(
+                _fully_visible_voucher_row_snapshot()
+            )
+            row_geometry_state = {
+                "snapshot": initial_snapshot,
+                "bottom_scroll_mode": False,
+            }
+
+            first_row_y = int(initial_snapshot["rows"].get(1, initial_snapshot["first_y"]))
+            row_height = int(initial_snapshot["row_pitch"])
+            visible_rows = len(initial_snapshot["slot_ys"])
+            max_row_y = int(initial_snapshot["last_full_y"])
+            self.logger.info(
+                f"  [MGMT-XY] 행 이동 방식: sequential={sequential_nav}, dynamic_uia=True, "
+                f"first_y={first_row_y}, row_h={row_height}, visible_rows={visible_rows}, "
+                f"last_full_y={max_row_y}, skip_name_scan={skip_visible_row_scan}"
+            )
+
+            def _next_visible_voucher_row_y(current_y, next_row_no, snapshot):
+                pitch = max(1, int(snapshot.get("row_pitch") or row_height))
+                tolerance = max(2.0, pitch * 0.35)
+                named_y = (snapshot.get("rows") or {}).get(int(next_row_no))
+                if named_y is not None and float(named_y) > float(current_y) + tolerance:
+                    return int(named_y), False
+                lower_slots = [
+                    int(value)
+                    for value in (snapshot.get("slot_ys") or [])
+                    if float(value) > float(current_y) + tolerance
+                ]
+                if lower_slots:
+                    return min(lower_slots), False
+                return int(snapshot["last_full_y"]), True
+
+            def _refresh_voucher_row_snapshot(expected_row_no=None):
+                best = None
+                for attempt in range(3):
+                    snapshot = _fully_visible_voucher_row_snapshot()
+                    if snapshot and snapshot.get("slot_ys"):
+                        best = snapshot
+                        if expected_row_no is None or expected_row_no in (snapshot.get("rows") or {}):
+                            break
+                    if attempt < 2:
+                        time.sleep(max(0.08, mgmt_key_wait))
+                if best is not None:
+                    row_geometry_state["snapshot"] = best
+                return best
 
             def _focus_grid_row(row_no, expected_y):
-                resolved_y = None
-                if sequential_nav and not skip_visible_row_scan:
-                    resolved_y = _visible_row_y(row_no, expected_y)
-                target_y = int(resolved_y if resolved_y is not None else expected_y)
+                snapshot = row_geometry_state["snapshot"]
+                target_y = expected_y
+                if not row_geometry_state["bottom_scroll_mode"]:
+                    target_y = (snapshot.get("rows") or {}).get(row_no, target_y)
+                target_y = min(
+                    int(snapshot["last_full_y"]),
+                    max(int(snapshot["first_y"]), int(target_y)),
+                )
                 _double_click_form_xy(summary_x, target_y, f"{row_no}행 적요", wait=mgmt_summary_open_wait)
                 return target_y
 
@@ -4037,12 +4292,33 @@ class ERPLoginBot:
                 _click_form_xy(summary_x, int(current_y), f"{next_row_no - 1}행 선택 복귀", wait=mgmt_key_wait)
                 pyautogui.press('down')
                 time.sleep(mgmt_commit_wait)
-                expected_y = current_y + row_height if current_y + row_height <= max_row_y else max_row_y
-                if not skip_visible_row_scan:
-                    resolved_y = _visible_row_y(next_row_no, expected_y)
-                    if resolved_y is not None:
-                        return resolved_y
-                return expected_y
+
+                snapshot = row_geometry_state["snapshot"]
+                if row_geometry_state["bottom_scroll_mode"]:
+                    return int(snapshot["last_full_y"])
+
+                next_y, reached_bottom = _next_visible_voucher_row_y(
+                    current_y,
+                    next_row_no,
+                    snapshot,
+                )
+                if not reached_bottom:
+                    return next_y
+
+                refreshed = _refresh_voucher_row_snapshot(expected_row_no=next_row_no)
+                if refreshed is None:
+                    _fail_form(
+                        f"{next_row_no}행 이동 후 UIA 전표 행을 다시 확인하지 못해 입력을 중단합니다."
+                    )
+                if (
+                    snapshot.get("has_logical_row_numbers")
+                    and next_row_no not in (refreshed.get("rows") or {})
+                ):
+                    _fail_form(
+                        f"{next_row_no}행이 마지막 완전 표시 행으로 이동했는지 UIA로 확인하지 못했습니다."
+                    )
+                row_geometry_state["bottom_scroll_mode"] = True
+                return int((refreshed.get("rows") or {}).get(next_row_no, refreshed["last_full_y"]))
 
             bank_management_norms = {
                 _norm_text("계좌번호"),
@@ -4133,7 +4409,7 @@ class ERPLoginBot:
                     _click_form_xy(summary_x, int(current_y), f"{row_no}행 보통예금 행 이동 재시도", wait=mgmt_key_wait)
                     pyautogui.press('down')
                     time.sleep(max(0.35, mgmt_commit_wait))
-                    current_y = max_row_y
+                    current_y = int(row_geometry_state["snapshot"]["last_full_y"])
                     _double_click_form_xy(summary_x, int(current_y), f"{row_no}행 보통예금 재선택", wait=mgmt_summary_open_wait)
                     if mgmt_after_summary_open_wait:
                         time.sleep(mgmt_after_summary_open_wait)

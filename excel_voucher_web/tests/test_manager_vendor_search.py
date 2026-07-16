@@ -52,6 +52,8 @@ class _FakeControl:
         *,
         visible: bool = True,
         enabled: bool = True,
+        automation_id: str = "",
+        grid_row: int | None = None,
     ):
         self._text = text
         self._rect = rect
@@ -59,7 +61,13 @@ class _FakeControl:
         self._enabled = enabled
         self._parent = None
         self._children = []
-        self.element_info = SimpleNamespace(control_type=control_type, name=text)
+        self.element_info = SimpleNamespace(
+            control_type=control_type,
+            name=text,
+            automation_id=automation_id,
+        )
+        if grid_row is not None:
+            self.iface_grid_item = SimpleNamespace(CurrentRow=grid_row)
         self.handle = self._next_handle
         self.click_count = 0
         type(self)._next_handle += 1
@@ -632,3 +640,353 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     assert [event[0] for event in events] == ["input", "input"]
     assert [event[1][2] for event in events] == ["140-000-948562", "신한 수원금융센터"]
     assert all(event[2] == {"enter_count": 1, "clear": True} for event in events)
+
+
+def _visible_voucher_snapshot(
+    *,
+    first_logical_row: int,
+    full_row_count: int,
+    clipped_provider_rect: bool = False,
+):
+    first_y = 231
+    pitch = 20
+    last_full_y = first_y + ((full_row_count - 1) * pitch)
+    clip_bottom = last_full_y + 12
+    controls = [
+        _FakeControl(
+            "",
+            "Custom",
+            _FakeRect(60, 210, 1450, clip_bottom + 80),
+            automation_id="SS_Row",
+        ),
+        _FakeControl(
+            "관리항목",
+            "Header",
+            _FakeRect(620, clip_bottom, 760, clip_bottom + 20),
+        ),
+    ]
+    for slot in range(full_row_count):
+        logical_row = first_logical_row + slot
+        center_y = first_y + (slot * pitch)
+        controls.append(
+            _FakeControl(
+                f"{logical_row:03d}",
+                "Text",
+                _FakeRect(90, center_y - 8, 135, center_y + 8),
+            )
+        )
+
+    partial_row = first_logical_row + full_row_count
+    partial_center = first_y + (full_row_count * pitch)
+    if clipped_provider_rect:
+        partial_rect = _FakeRect(90, clip_bottom - 5, 135, clip_bottom - 1)
+    else:
+        partial_rect = _FakeRect(90, partial_center - 13, 135, partial_center + 8)
+    controls.append(_FakeControl(f"{partial_row:03d}", "Text", partial_rect))
+
+    loaded = _load_nested_functions(
+        "_median_number",
+        "_fully_visible_voucher_row_snapshot",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_iter_visible": lambda: controls,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")),
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "first_row_y": first_y,
+            "row_height": pitch,
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+    return loaded["_fully_visible_voucher_row_snapshot"]()
+
+
+def test_uia_geometry_uses_row_24_as_last_full_row():
+    snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
+
+    assert snapshot["last_full_y"] == 691
+    assert snapshot["rows"][24] == 691
+    assert 25 not in snapshot["rows"]
+    assert len(snapshot["slot_ys"]) == 24
+
+
+def test_uia_geometry_uses_row_26_when_viewport_expands():
+    snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=26)
+
+    assert snapshot["last_full_y"] == 731
+    assert snapshot["rows"][26] == 731
+    assert 27 not in snapshot["rows"]
+    assert len(snapshot["slot_ys"]) == 26
+
+
+def test_uia_geometry_excludes_provider_clipped_partial_row():
+    snapshot = _visible_voucher_snapshot(
+        first_logical_row=1,
+        full_row_count=24,
+        clipped_provider_rect=True,
+    )
+
+    assert snapshot["last_full_y"] == 691
+    assert 25 not in snapshot["rows"]
+
+
+def test_uia_geometry_maps_scrolled_logical_row_to_dynamic_bottom():
+    snapshot = _visible_voucher_snapshot(first_logical_row=2, full_row_count=24)
+
+    assert snapshot["rows"][25] == snapshot["last_full_y"] == 691
+    assert 26 not in snapshot["rows"]
+
+
+def test_uia_geometry_supports_unnamed_data_items_with_grid_rows():
+    first_y = 231
+    pitch = 20
+    clip_bottom = 703
+    controls = [
+        _FakeControl(
+            "",
+            "Custom",
+            _FakeRect(60, 210, 1450, clip_bottom + 80),
+            automation_id="SS_Row",
+        ),
+        _FakeControl("관리항목", "Header", _FakeRect(620, clip_bottom, 760, clip_bottom + 20)),
+    ]
+    for row_no in range(1, 25):
+        center_y = first_y + ((row_no - 1) * pitch)
+        controls.append(
+            _FakeControl(
+                "",
+                "DataItem",
+                _FakeRect(150, center_y - 8, 500, center_y + 8),
+                grid_row=row_no - 1,
+            )
+        )
+    controls.append(
+        _FakeControl(
+            "",
+            "DataItem",
+            _FakeRect(150, clip_bottom - 5, 500, clip_bottom - 1),
+            grid_row=24,
+        )
+    )
+    controls.append(
+        _FakeControl(
+            "",
+            "DataItem",
+            _FakeRect(100, 220, 1400, 650),
+            grid_row=999,
+        )
+    )
+
+    loaded = _load_nested_functions(
+        "_median_number",
+        "_fully_visible_voucher_row_snapshot",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_iter_visible": lambda: controls,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")),
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "first_row_y": first_y,
+            "row_height": pitch,
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    snapshot = loaded["_fully_visible_voucher_row_snapshot"]()
+
+    assert snapshot["last_full_y"] == 691
+    assert snapshot["rows"][24] == 691
+    assert snapshot["has_exact_row_numbers"] is False
+    assert snapshot["has_logical_row_numbers"] is True
+    assert 25 not in snapshot["rows"]
+    assert 1000 not in snapshot["rows"]
+
+
+def test_uia_exact_row_labels_override_relative_data_item_grid_rows_after_scroll():
+    first_y = 231
+    pitch = 20
+    clip_bottom = 703
+    controls = [
+        _FakeControl(
+            "",
+            "Custom",
+            _FakeRect(60, 210, 1450, clip_bottom + 80),
+            automation_id="SS_Row",
+        ),
+        _FakeControl("관리항목", "Header", _FakeRect(620, clip_bottom, 760, clip_bottom + 20)),
+    ]
+    for slot in range(24):
+        logical_row = slot + 2
+        center_y = first_y + (slot * pitch)
+        controls.append(
+            _FakeControl(
+                f"{logical_row:03d}",
+                "Text",
+                _FakeRect(90, center_y - 8, 135, center_y + 8),
+            )
+        )
+        for column in range(5):
+            controls.append(
+                _FakeControl(
+                    "",
+                    "DataItem",
+                    _FakeRect(150 + (column * 180), center_y - 8, 320 + (column * 180), center_y + 8),
+                    grid_row=slot,
+                )
+            )
+    controls.append(
+        _FakeControl("026", "Text", _FakeRect(90, clip_bottom - 5, 135, clip_bottom - 1))
+    )
+
+    loaded = _load_nested_functions(
+        "_median_number",
+        "_fully_visible_voucher_row_snapshot",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_iter_visible": lambda: controls,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")),
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "first_row_y": first_y,
+            "row_height": pitch,
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    snapshot = loaded["_fully_visible_voucher_row_snapshot"]()
+
+    assert snapshot["rows"][25] == snapshot["last_full_y"] == 691
+    assert 24 in snapshot["rows"]
+    assert 1 not in snapshot["rows"]
+    assert snapshot["has_exact_row_numbers"] is True
+
+
+def test_dynamic_next_row_reuses_24_or_26_row_bottom_anchor():
+    loaded = _load_nested_functions(
+        "_next_visible_voucher_row_y",
+        namespace={"row_height": 20},
+    )
+    next_y = loaded["_next_visible_voucher_row_y"]
+
+    row_24_snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
+    assert next_y(671, 24, row_24_snapshot) == (691, False)
+    assert next_y(691, 25, row_24_snapshot) == (691, True)
+
+    row_26_snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=26)
+    assert next_y(711, 26, row_26_snapshot) == (731, False)
+    assert next_y(731, 27, row_26_snapshot) == (731, True)
+
+
+def test_initial_dynamic_snapshot_stops_if_grid_is_already_scrolled():
+    scrolled = _visible_voucher_snapshot(first_logical_row=2, full_row_count=24)
+    loaded = _load_nested_functions(
+        "_validate_initial_voucher_row_snapshot",
+        namespace={
+            "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        },
+    )
+
+    try:
+        loaded["_validate_initial_voucher_row_snapshot"](scrolled)
+    except RuntimeError as exc:
+        assert "001행을 찾지 못했습니다" in str(exc)
+    else:
+        raise AssertionError("already-scrolled ERP grid must stop before the first row click")
+
+
+def test_advance_grid_row_refreshes_once_at_dynamic_bottom_then_reuses_anchor():
+    for full_row_count in (24, 26):
+        initial = _visible_voucher_snapshot(first_logical_row=1, full_row_count=full_row_count)
+        refreshed = _visible_voucher_snapshot(first_logical_row=2, full_row_count=full_row_count)
+        state = {"snapshot": initial, "bottom_scroll_mode": False}
+        events = []
+
+        class _FakePyAutoGui:
+            @staticmethod
+            def press(key):
+                events.append(("key", key))
+
+        def _refresh(expected_row_no=None):
+            events.append(("refresh", expected_row_no))
+            state["snapshot"] = refreshed
+            return refreshed
+
+        loaded = _load_nested_functions(
+            "_next_visible_voucher_row_y",
+            "_advance_grid_row",
+            namespace={
+                "row_height": 20,
+                "row_geometry_state": state,
+                "sequential_nav": True,
+                "_click_form_xy": (
+                    lambda x, y, label, wait=0: events.append(("click", x, y, wait))
+                ),
+                "summary_x": 970,
+                "mgmt_key_wait": 0.05,
+                "mgmt_commit_wait": 0.08,
+                "pyautogui": _FakePyAutoGui,
+                "time": SimpleNamespace(sleep=lambda seconds: events.append(("sleep", seconds))),
+                "_refresh_voucher_row_snapshot": _refresh,
+                "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+            },
+        )
+        advance = loaded["_advance_grid_row"]
+        bottom_y = initial["last_full_y"]
+        next_row_no = full_row_count + 1
+
+        assert advance(bottom_y, next_row_no) == refreshed["rows"][next_row_no]
+        assert state["bottom_scroll_mode"] is True
+        assert ("refresh", next_row_no) in events
+
+        events.clear()
+        assert advance(bottom_y, next_row_no + 1) == refreshed["last_full_y"]
+        assert not any(event[0] == "refresh" for event in events)
+
+
+def test_advance_grid_row_stops_when_expected_row_is_missing_after_refresh():
+    initial = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
+    stale = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
+    state = {"snapshot": initial, "bottom_scroll_mode": False}
+
+    loaded = _load_nested_functions(
+        "_next_visible_voucher_row_y",
+        "_advance_grid_row",
+        namespace={
+            "row_height": 20,
+            "row_geometry_state": state,
+            "sequential_nav": True,
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "summary_x": 970,
+            "mgmt_key_wait": 0.05,
+            "mgmt_commit_wait": 0.08,
+            "pyautogui": SimpleNamespace(press=lambda _key: None),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "_refresh_voucher_row_snapshot": lambda expected_row_no=None: stale,
+            "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+        },
+    )
+
+    try:
+        loaded["_advance_grid_row"](initial["last_full_y"], 25)
+    except RuntimeError as exc:
+        assert "25행이 마지막 완전 표시 행" in str(exc)
+    else:
+        raise AssertionError("stale UIA refresh must stop management entry")
+
+
+def test_management_navigation_always_builds_dynamic_uia_snapshot():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    start = source.index("def _fill_management_items_by_coord")
+    end = source.index("def _wait_process_by_name", start)
+    helper = source[start:end]
+
+    assert "_fully_visible_voucher_row_snapshot()" in helper
+    assert "_validate_initial_voucher_row_snapshot" in helper
+    assert '"snapshot": initial_snapshot' in helper
+    assert "ERP_MGMT_VISIBLE_ROWS_DEFAULT" not in helper
+    assert "ERP_MGMT_GRID_BOTTOM_MARGIN" not in helper
+    assert "current_y = max_row_y" not in helper
+    assert "row_geometry_state[\"bottom_scroll_mode\"] = True" in helper
