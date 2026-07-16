@@ -1653,6 +1653,14 @@ class ERPLoginBot:
         vendor_popup_open_wait = max(0.35, float(os.getenv("ERP_VENDOR_POPUP_OPEN_WAIT", "0.55") or "0.55"))
         vendor_popup_focus_wait = max(mgmt_focus_wait, float(os.getenv("ERP_VENDOR_POPUP_FOCUS_WAIT", "0.12" if fast_management else "0.45") or "0.45"))
         vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
+        finance_vendor_paste_settle_wait = max(
+            mgmt_key_wait,
+            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.10") or "0.10"),
+        )
+        finance_vendor_commit_settle_wait = max(
+            mgmt_commit_wait,
+            float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "0.16") or "0.16"),
+        )
         vendor_double_click_hold = min(
             0.25,
             max(0.04, float(os.getenv("ERP_VENDOR_DOUBLE_CLICK_HOLD", "0.08") or "0.08")),
@@ -2909,7 +2917,7 @@ class ERPLoginBot:
 
         mgmt_clipboard_cache = {"text": None}
 
-        def _type_or_paste_text(text, label):
+        def _type_or_paste_text(text, label, settle_wait=None):
             text = str(text or "")
             # 관리항목은 Ctrl+A/Backspace 없이 현재 셀에 바로 붙여넣습니다.
             # 이전 오류 원인은 붙여넣기보다 Ctrl+A 단축키 오동작 가능성이 높아 이 경로로 재검증합니다.
@@ -2920,10 +2928,24 @@ class ERPLoginBot:
                 time.sleep(mgmt_clipboard_wait)
             pyautogui.hotkey('ctrl', 'v')
             _release_modifiers(f"{label} 붙여넣기 직후", wait=False)
-            time.sleep(mgmt_key_wait)
+            effective_settle_wait = (
+                mgmt_key_wait
+                if settle_wait is None
+                else max(mgmt_key_wait, float(settle_wait))
+            )
+            time.sleep(effective_settle_wait)
             self.logger.info(f"  [MGMT-XY] {label} 값 붙여넣기 완료(Ctrl+A 미사용): {text}")
 
-        def _input_value_xy(x, y, text, label, enter_count=0, clear=True):
+        def _input_value_xy(
+            x,
+            y,
+            text,
+            label,
+            enter_count=0,
+            clear=True,
+            paste_settle_wait=None,
+            commit_settle_wait=None,
+        ):
             _click_form_xy(x, y, label, wait=mgmt_click_wait)
             _release_modifiers(f"{label} 클릭 후", wait=False)
             time.sleep(mgmt_focus_wait)
@@ -2931,12 +2953,17 @@ class ERPLoginBot:
             # 기존값 초기화 없이 현재 포커스 위치에 바로 붙여넣습니다.
             if clear and verbose_management_clear:
                 self.logger.info(f"  [MGMT-XY] {label} clear 요청 무시: Ctrl+A/Backspace 미사용")
-            _type_or_paste_text(text, label)
+            _type_or_paste_text(text, label, settle_wait=paste_settle_wait)
+            effective_commit_wait = (
+                mgmt_commit_wait
+                if commit_settle_wait is None
+                else max(mgmt_commit_wait, float(commit_settle_wait))
+            )
             for _ in range(max(0, int(enter_count))):
                 _release_modifiers(f"{label} Enter 직전", wait=False)
                 pyautogui.press('enter')
-                time.sleep(mgmt_commit_wait)
-            time.sleep(mgmt_commit_wait if enter_count else mgmt_key_wait)
+                time.sleep(effective_commit_wait)
+            time.sleep(effective_commit_wait if enter_count else mgmt_key_wait)
         def _business_query_for_management(site):
             text = str(site or "")
             mapping = {
@@ -3863,9 +3890,13 @@ class ERPLoginBot:
                                     label,
                                     enter_count=1,
                                     clear=False,
+                                    paste_settle_wait=finance_vendor_paste_settle_wait,
+                                    commit_settle_wait=finance_vendor_commit_settle_wait,
                                 )
                                 self.logger.info(
-                                    f"  [MGMT-XY] {label}: 관리항목값 셀 직접 입력 후 Enter 완료: {text}"
+                                    f"  [MGMT-XY] {label}: 관리항목값 셀 직접 입력 후 Enter 완료"
+                                    f"(붙여넣기 {finance_vendor_paste_settle_wait:.2f}s, "
+                                    f"Enter 확정 {finance_vendor_commit_settle_wait:.2f}s): {text}"
                                 )
                             y += 20
                             continue

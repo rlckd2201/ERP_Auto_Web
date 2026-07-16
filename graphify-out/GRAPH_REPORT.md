@@ -1,16 +1,16 @@
 # Graph Report - erp_auto_web_release_1c2c9c5  (2026-07-16)
 
 ## Corpus Check
-- 111 files · ~170,585 words
+- 111 files · ~170,778 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2481 nodes · 7201 edges · 193 communities (144 shown, 49 thin omitted)
+- 2475 nodes · 7182 edges · 181 communities (140 shown, 41 thin omitted)
 - Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 624 edges (avg confidence: 0.77)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `2f6645c7`
+- Built from commit: `700848ef`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -89,11 +89,8 @@
 - 회계업무 자동화 WEB v1.0
 - _build_user_pc_payload_zip
 - api_admin_db_overview
-- approval_fetcher.py
 - AGENTS.md
-- main
 - AGENTS.md
-- api_unhandled_exception_handler
 - User Feedback
 - regular_due_history_page
 - 2026-05-20 fix130 AutoEver Password Extraction
@@ -102,16 +99,8 @@
 - AI_HANDOFF.md
 - __init__.py
 - __init__.py
-- ._extract_regular_payload
-- test.py
-- tax_biz_audit.py
-- agent_queue.py
-- Program
-- UplusPortalHandler
-- versioning.py
 - 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 - 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
-- Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 - 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 - 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
@@ -134,11 +123,10 @@
 - The legacy UI module imports fitz at module load, but ERP input does not use it
 - The legacy UI module imports fitz at module load, but ERP input does not use it
 - The legacy UI module imports fitz at module load, but ERP input does not use it
-- The legacy UI module imports fitz at module load, but ERP input does not use it
 
 ## God Nodes (most connected - your core abstractions)
 1. `Communities` - 101 edges
-2. `ERPAutoApp` - 89 edges
+2. `ERPAutoApp` - 88 edges
 3. `SmileEdiHandler` - 64 edges
 4. `get_invoice()` - 57 edges
 5. `Project Status` - 53 edges
@@ -163,35 +151,39 @@
 ## Import Cycles
 - None detected.
 
-## Communities (193 total, 49 thin omitted)
+## Communities (181 total, 41 thin omitted)
 
 ### Community 0 - "JobStore"
-Cohesion: 0.08
-Nodes (41): JobStore, StreamingResponse, _agent_update_notes(), api_delete_invoice(), api_get_invoice(), api_get_invoice_logs(), api_list_invoices(), api_retry_invoice() (+33 more)
+Cohesion: 0.18
+Nodes (29): StreamingResponse, _agent_update_notes(), api_delete_invoice(), api_get_invoice(), api_get_invoice_logs(), api_list_invoices(), api_retry_invoice(), create_demo_job() (+21 more)
 
 ### Community 1 - "main.py"
 Cohesion: 0.11
-Nodes (54): data_server_target_url(), _agent_payload(), api_admin_agent_commands(), api_admin_create_agent_command(), api_admin_reset_jobs(), api_admin_server_update(), api_agent_admin_complete(), api_agent_heartbeat() (+46 more)
+Nodes (54): _agent_payload(), api_admin_agent_commands(), api_admin_create_agent_command(), api_admin_reset_jobs(), api_admin_server_update(), api_agent_admin_complete(), api_agent_admin_next(), api_agent_heartbeat() (+46 more)
 
 ### Community 2 - "config.py"
-Cohesion: 0.17
-Nodes (10): _app_version(), _env(), _env_bool(), _env_int(), _legacy_manager_path(), _load_env_file(), Path, Settings (+2 more)
+Cohesion: 0.09
+Nodes (27): _active_invoice_items(), claim_next_erp_task(), now_text(), Any, Path, _read_task(), _task_files(), update_erp_task() (+19 more)
 
 ### Community 3 - "UplusEdocuHandler"
-Cohesion: 0.15
-Nodes (3): Path, LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름, UplusEdocuHandler
+Cohesion: 0.11
+Nodes (12): JobStore, JobEvent, JobRecord, JobStore, Any, datetime, JobStatus, utc_now() (+4 more)
 
 ### Community 4 - "app.py"
-Cohesion: 0.28
-Nodes (16): IMAP4_SSL, LogRecord, ProgressCallback, _allow_xml_attachment_fallback(), collect_mail_once(), CollectResult, _crawl_invoice_with_retry(), _crawler_api() (+8 more)
+Cohesion: 0.35
+Nodes (13): _aggregate_expense_items(), _build_expense_report_text(), _clean_expense_item_name(), _expense_account(), _expense_footer(), _expense_items(), _expense_payload(), _extract_model_name() (+5 more)
+
+### Community 5 - ".process"
+Cohesion: 0.06
+Nodes (22): UplusEDocuHandler, LG U+ eDocu tax invoice portal adapter.  This adapter intentionally routes edo, UplusPortalHandler, print_result(), 세금계산서 크롤링 모듈 개별 테스트 도구 실행: python test.py  포털별로 URL/파일경로를 직접 입력해서 단독 테스트 가능., URL 자동 감지 테스트 (crawler_main 사용), test_auto(), test_csbill() (+14 more)
 
 ### Community 6 - "SmartBillHandler"
 Cohesion: 0.11
 Nodes (21): BaseTaxInvoiceHandler, _clean_token(), _is_better_parse(), portal_name(), Path, SmartBill print flow based on the actual HTML fnPrint() logic.      The print, 화면을 가리는 광고(크레포트 등)를 닫습니다., 수신미승인 상태면 승인 처리를 진행하고,         최종적으로 '인쇄' 버튼이 렌더링되었는지 확인합니다. (+13 more)
 
 ### Community 7 - "전표 자동화 프로그램(담당자용)_v6.2.py"
-Cohesion: 0.15
-Nodes (11): 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence), _detect_erp_target_monitor(), _ErpGuiAutomationLock, ERPLoginBot, _monitor_summary(), _move_window_to_erp_monitor(), Logger, 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence) (+3 more)
+Cohesion: 0.14
+Nodes (13): _is_sane_amount(), _detect_erp_target_monitor(), _ErpGuiAutomationLock, ERPLoginBot, _monitor_summary(), _move_window_to_erp_monitor(), Logger, 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence) (+5 more)
 
 ### Community 8 - "app.js"
 Cohesion: 0.06
@@ -203,23 +195,27 @@ Nodes (101): Communities, Community 0 - "Community 0", Community 100 - "Communit
 
 ### Community 10 - "app.py"
 Cohesion: 0.07
-Nodes (79): HTMLResponse, JSONResponse, _add_installer_file(), _add_installer_tree(), admin_db_page(), _agent_bootstrap_script(), _agent_cmd_launcher(), _agent_exe_launcher() (+71 more)
+Nodes (98): admin_db_page(), _agent_bootstrap_script(), _agent_cmd_launcher(), _agent_exe_launcher(), api_agent_job_complete(), api_agent_job_event(), api_agent_job_expense_report_upload(), api_agent_job_voucher_upload() (+90 more)
+
+### Community 11 - ".get"
+Cohesion: 0.06
+Nodes (7): _normalize_biz_no(), _normalize_issue_date(), _to_int(), ERPAutoApp, first(), fmt(), main()
 
 ### Community 12 - "purchase_analysis.py"
-Cohesion: 0.15
-Nodes (35): api_agent_job_complete(), api_agent_job_expense_report_upload(), api_agent_job_voucher_upload(), api_analyze_purchase(), api_create_manual_purchase_invoice(), api_get_invoice_output_set(), api_update_purchase_analysis(), api_update_regular_data() (+27 more)
+Cohesion: 0.47
+Nodes (6): _add_installer_file(), _add_installer_tree(), _agent_installer_script(), _agent_self_contained_cmd(), _build_user_pc_payload_zip(), ZipFile
 
 ### Community 13 - "app.js"
 Cohesion: 0.15
 Nodes (42): appendErpCredentials(), applyAuthUi(), askErpCredentials(), badge(), canUseApp(), changePassword(), commandStatus(), commandTitle() (+34 more)
 
 ### Community 14 - "agent_adapter.py"
-Cohesion: 0.18
-Nodes (31): _apply_company_erp_credentials(), _archive_pdf(), _clean_management_items(), _clipboard_account_name(), _clipboard_vendor_value(), _fallback_bank_management_items(), _fallback_line_management_items(), _file_uri() (+23 more)
+Cohesion: 0.14
+Nodes (38): _apply_company_erp_credentials(), _archive_pdf(), _clean_management_items(), _clipboard_account_name(), _clipboard_vendor_value(), _fallback_bank_management_items(), _fallback_line_management_items(), _file_uri() (+30 more)
 
 ### Community 15 - "RuntimeError"
-Cohesion: 0.14
-Nodes (42): _aggregate_expense_items(), _appdata_template_candidates(), _build_expense_report_text(), _clean_expense_item_name(), _clean_path(), _copy_or_merge_doc(), _docs_for_output(), _ensure_appdata_expense_template() (+34 more)
+Cohesion: 0.16
+Nodes (33): _appdata_template_candidates(), _clean_path(), _copy_or_merge_doc(), _docs_for_output(), _ensure_appdata_expense_template(), _excel_process_ids(), _expense_report_path(), _export_expense_report_with_excel() (+25 more)
 
 ### Community 17 - "erp_agent.py"
 Cohesion: 0.08
@@ -230,16 +226,16 @@ Cohesion: 0.12
 Nodes (59): api_regular_due_check(), _add_months(), _alert_hour(), _alert_start_date(), _amount(), build_regular_due_report(), _clean_text(), _compact() (+51 more)
 
 ### Community 19 - "erp_runner.py"
-Cohesion: 0.09
+Cohesion: 0.10
 Nodes (75): _check_playwright_runtime(), fetch_approval_documents(), Any, Progress, build_purchase_erp_payload(), build_regular_erp_payload(), _clean_text(), _configure_pyautogui_for_server() (+67 more)
 
 ### Community 20 - "SmileEdiHandler"
 Cohesion: 0.09
-Nodes (4): Path, WebDriver, SmileEdiHandler, WebElement
+Nodes (5): main(), Path, WebDriver, SmileEdiHandler, WebElement
 
 ### Community 21 - "UplusEdocuHandler"
 Cohesion: 0.07
-Nodes (6): Service, EtaxUnipostHandler, Chrome, Path, LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름, UplusEdocuHandler
+Nodes (7): Service, Path, LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름, UplusEdocuHandler, Path, LG U+ eDocu 전용 처리기.      기준 원칙     - 사업자번호 입력 / 새 사이트 진입 / PDF 저장은 테스트 완료본 흐름, UplusEdocuHandler
 
 ### Community 22 - "CODEBASE WIKI"
 Cohesion: 0.04
@@ -250,7 +246,7 @@ Cohesion: 0.04
 Nodes (50): 2026-05-18 fix123 selective output documents, 2026-05-18 fix124 KT vendor business-number row selection, 2026-05-18 fix125 KT vendor business-number popup search, 2026-05-18 fix126 KT vendor keyboard sequence, 2026-05-18 fix126 KT vendor search input, 2026-05-18 fix127 KT vendor final double-enter, 2026-05-18 fix128 setup installer reuse, 2026-05-18 fix129 Chrome notifications (+42 more)
 
 ### Community 24 - "repair_db_rows"
-Cohesion: 0.55
+Cohesion: 0.49
 Nodes (9): build_pdf_filename(), clean_token(), dedupe_path(), parse_pdf(), patch_crawler_file(), repair_db_rows(), safe_name(), site_from_biz_no() (+1 more)
 
 ### Community 25 - "parse_tax_invoice_xml"
@@ -258,12 +254,12 @@ Cohesion: 0.53
 Nodes (9): clean_amount(), find_text(), format_biz_no(), format_date_yyyymmdd(), parse_tax_invoice_xml(), parse_tax_invoice_xml_to_dict(), 지정된 경로의 세금계산서 XML을 파싱하여 딕셔너리 3개를 반환합니다., split_classification() (+1 more)
 
 ### Community 26 - "setup_state.py"
-Cohesion: 0.17
-Nodes (38): api_agent_heartbeat(), _active_install_job(), _add_check(), _age_seconds(), authenticate_user(), change_initial_password(), claim_install_job(), _columns() (+30 more)
+Cohesion: 0.12
+Nodes (45): STAThread, string, api_agent_heartbeat(), _active_install_job(), _add_check(), _age_seconds(), authenticate_user(), change_initial_password() (+37 more)
 
 ### Community 27 - "collect_mail_once"
-Cohesion: 0.09
-Nodes (31): AutoEverHandler(), crawl_invoice(), _csbill_link_bill_no(), _csbill_link_priority(), CsbillHandler(), decode_mime_header(), _dedupe_csbill_links(), detect_handler() (+23 more)
+Cohesion: 0.08
+Nodes (47): IMAP4_SSL, LogRecord, ProgressCallback, AutoEverHandler(), crawl_invoice(), _csbill_link_bill_no(), _csbill_link_priority(), CsbillHandler() (+39 more)
 
 ### Community 28 - "AI Work Memory"
 Cohesion: 0.04
@@ -286,20 +282,20 @@ Cohesion: 0.18
 Nodes (40): EmailMessage, _add_attachment(), _attachment_paths(), completion_mail_body(), completion_mail_html(), _details_table(), _diagnostic_attachment(), _display_address() (+32 more)
 
 ### Community 42 - "invoice_db.py"
-Cohesion: 0.31
-Nodes (30): add_invoice_log(), _clean_int(), _columns(), delete_invoice(), detect_invoice_type(), _ensure_column(), get_conn(), get_invoice_by_pdf_path() (+22 more)
+Cohesion: 0.29
+Nodes (32): add_invoice_log(), _clean_int(), _columns(), delete_invoice(), detect_invoice_type(), _ensure_column(), get_conn(), get_invoice_by_pdf_path() (+24 more)
 
 ### Community 44 - "WehagoHandler"
 Cohesion: 0.10
 Nodes (7): Path, WEHAGO URL의 Base64 토큰에서 사업자번호(10자리) 추출.         예: .../eTaxMail/VFgyMDI2MDQ2OTQ, visible text input 중 마지막 = 모달 입력창.         확인 클릭 후 visible inputs 수가 줄면 인증 성공., Chrome 외부 앱 실행 권한 팝업에서 '허용' 버튼을 자동 클릭.         WEHAGO 인쇄 버튼 이후 1회성 팝업이 뜨는 구조라,, UIA? ? ?? ?? Chrome ?? ??? ?? ??? ??? ??., Microsoft Print to PDF sometimes ignores the target folder.         If the corr, WehagoHandler
 
 ### Community 45 - "JobStore"
-Cohesion: 0.16
-Nodes (16): api_agent_admin_next(), AgentHeartbeat, JobStore, _json_dumps(), _json_loads(), now_text(), Any, Connection (+8 more)
+Cohesion: 0.17
+Nodes (15): AgentHeartbeat, JobStore, _json_dumps(), _json_loads(), now_text(), Any, Connection, JobEvent (+7 more)
 
 ### Community 46 - "test_manager_vendor_search.py"
-Cohesion: 0.12
-Nodes (14): _FakeControl, _FakeLogger, _FakeRect, _load_nested_functions(), test_finance_first_result_does_not_press_enter_when_mdi_stays_open(), test_finance_first_vendor_executes_exact_f9_key_order(), test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen(), test_finance_vendor_state_uses_f9_once_then_preserves_bank_path() (+6 more)
+Cohesion: 0.11
+Nodes (15): _FakeControl, _FakeLogger, _FakeRect, _load_nested_functions(), test_finance_direct_vendor_waits_before_enter_and_before_next_row(), test_finance_first_result_does_not_press_enter_when_mdi_stays_open(), test_finance_first_vendor_executes_exact_f9_key_order(), test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen() (+7 more)
 
 ### Community 47 - "compuzone_quote.py"
 Cohesion: 0.22
@@ -314,16 +310,20 @@ Cohesion: 0.22
 Nodes (26): VoucherLine, VoucherPayload, ManagerProfile, _bank_management_items(), _build_daeseung_cash_payload(), _build_generic_payload(), build_voucher_payload(), _cash_amount_source() (+18 more)
 
 ### Community 50 - "parse_tax_invoice_xml"
-Cohesion: 0.12
-Nodes (9): ABC, main(), SMILE EDI tax invoice crawler.  Approval is opt-in because SMILE EDI approval, 유니포스트 etax 세금계산서 핸들러 대상: etax.unipost.co.kr, WEHAGO (더존비즈온) 세금계산서 핸들러 대상: www.wehago.com/invoice/#/eTaxMail/... 메일 수신 업체: A, _format_date(), parse_tax_invoice_xml(), 반환: (supplier_dict, buyer_dict, content_dict)     content_dict 안에 '항목' 리스트 포함. (+1 more)
+Cohesion: 0.13
+Nodes (8): ABC, SMILE EDI tax invoice crawler.  Approval is opt-in because SMILE EDI approval, 유니포스트 etax 세금계산서 핸들러 대상: etax.unipost.co.kr, WEHAGO (더존비즈온) 세금계산서 핸들러 대상: www.wehago.com/invoice/#/eTaxMail/... 메일 수신 업체: A, _format_date(), parse_tax_invoice_xml(), 반환: (supplier_dict, buyer_dict, content_dict)     content_dict 안에 '항목' 리스트 포함., _text()
 
 ### Community 51 - "BaseTaxInvoiceHandler"
 Cohesion: 0.12
 Nodes (8): BaseTaxInvoiceHandler, Chrome, Path, 캐시된 드라이버 우선 탐색 → 없으면 ChromeDriverManager 자동 설치., 세금계산서 포털별 핸들러 공통 베이스.     각 포털 핸들러는 이 클래스를 상속하고 supports() / _do_process() 를 구현, 이 핸들러가 처리 가능한 URL인지 반환., 통일 반환값:         {             "ok": bool,             "portal": str,, 실제 크롤링 로직. result dict를 직접 채운다.
 
+### Community 52 - "JobCreateRequest"
+Cohesion: 0.67
+Nodes (3): JSONResponse, api_unhandled_exception_handler(), Exception
+
 ### Community 53 - "BaseModel"
-Cohesion: 0.27
-Nodes (18): BaseModel, forward_job_to_data_server(), Any, JobRecord, _voucher_for_data_server(), AdminAgentCommandRequest, AdminResetJobsRequest, AgentAdminCommandCompleteRequest (+10 more)
+Cohesion: 0.26
+Nodes (19): BaseModel, data_server_target_url(), forward_job_to_data_server(), Any, JobRecord, _voucher_for_data_server(), AdminAgentCommandRequest, AdminResetJobsRequest (+11 more)
 
 ### Community 54 - "DEBUG.md"
 Cohesion: 0.11
@@ -353,10 +353,6 @@ Nodes (11): 2026-05-22 fix149 진행 상태, Current Work - 2026-05-22 fix151, f
 Cohesion: 0.36
 Nodes (10): els, escapeHtml(), loadOverview(), loadTable(), renderRows(), renderTables(), requestJson(), shortCell() (+2 more)
 
-### Community 73 - "test_voucher_builder.py"
-Cohesion: 0.38
-Nodes (9): Path, test_build_voucher_payload_adds_bank_credit_line(), test_build_voucher_payload_keeps_last_vendor_before_bank_line(), test_build_voucher_payload_uses_cash_sheet_rows_only(), test_daeseung_erp_credentials_use_payload_before_environment(), test_only_daeseung_manager_is_enabled_for_upload(), _write_cash_sheet_sample(), _write_many_cash_sheet_sample() (+1 more)
-
 ### Community 74 - "Graph Report - 세금계산서 크롤링  (2026-04-30)"
 Cohesion: 0.22
 Nodes (8): Community Hubs (Navigation), Corpus Check, God Nodes (most connected - your core abstractions), Graph Report - 세금계산서 크롤링  (2026-04-30), Knowledge Gaps, Suggested Questions, Summary, Surprising Connections (you probably didn't know these)
@@ -370,7 +366,7 @@ Cohesion: 0.22
 Nodes (8): Current Portal Test Inputs, Feature Ledger, Graphify Code Map, KT Password Rules, Mail Target Routing, PDF Filename Rule, Project Memory Lite, Tax Invoice Crawling Core
 
 ### Community 77 - "worker.py"
-Cohesion: 0.50
+Cohesion: 0.44
 Nodes (7): _fmt_amount(), _invoice_data(), _invoice_summary_line(), notify_regular_auto_result(), Any, _regular_auto_sender(), _send_mail()
 
 ### Community 78 - "Excel Voucher Web"
@@ -410,64 +406,40 @@ Cohesion: 0.33
 Nodes (5): WEB v1.0 방향, 제외한 것, 폴더 구성, 현재 개발 기준, 회계업무 자동화 WEB v1.0
 
 ### Community 88 - "_build_user_pc_payload_zip"
-Cohesion: 0.16
-Nodes (4): _is_sane_amount(), AppManager, ERPConfig, setup_logger()
+Cohesion: 0.21
+Nodes (3): AppManager, ERPConfig, setup_logger()
 
 ### Community 89 - "api_admin_db_overview"
 Cohesion: 0.53
 Nodes (6): _admin_db_conn(), _admin_table_names(), api_admin_db_overview(), api_admin_db_table(), Connection, _quote_identifier()
 
-### Community 90 - "approval_fetcher.py"
-Cohesion: 0.30
-Nodes (8): Any, Path, queue_dir(), _write_erp_queue(), write_expense_report_queue(), write_output_print_queue(), write_purchase_erp_queue(), write_regular_erp_queue()
-
 ### Community 91 - "AGENTS.md"
 Cohesion: 0.50
 Nodes (3): Git / release hygiene, graphify, Project Memory Lite
 
-### Community 92 - "main"
-Cohesion: 0.83
-Nodes (3): first(), fmt(), main()
-
-### Community 134 - "test.py"
-Cohesion: 0.29
-Nodes (9): print_result(), 세금계산서 크롤링 모듈 개별 테스트 도구 실행: python test.py  포털별로 URL/파일경로를 직접 입력해서 단독 테스트 가능., URL 자동 감지 테스트 (crawler_main 사용), test_auto(), test_csbill(), test_hometax(), test_kt(), test_unipost() (+1 more)
-
-### Community 135 - "tax_biz_audit.py"
-Cohesion: 0.42
-Nodes (9): child_text(), clean_text(), find_child(), fmt_biz(), local_name(), main(), parse_json(), parse_pdf() (+1 more)
-
-### Community 136 - "agent_queue.py"
-Cohesion: 0.51
-Nodes (9): _active_invoice_items(), claim_next_erp_task(), now_text(), Any, Path, _read_task(), _task_files(), update_erp_task() (+1 more)
-
-### Community 137 - "Program"
-Cohesion: 0.40
-Nodes (3): STAThread, string, Program
-
-### Community 139 - "versioning.py"
-Cohesion: 0.67
-Nodes (5): compute_agent_bundle_hash(), expected_agent_bundle_hash(), _iter_bundle_files(), Path, _should_hash()
+### Community 98 - "regular_due_history_page"
+Cohesion: 0.11
+Nodes (3): EtaxUnipostHandler, Chrome, InvoiceMailWatcher
 
 ## Knowledge Gaps
 - **378 isolated node(s):** `state`, `statusText`, `statusMessage`, `state`, `els` (+373 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **49 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **41 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `list_invoices()` connect `invoice_db.py` to `JobStore`, `app.py`, `regular_due_monitor.py`, `JobCreateRequest`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
-- **Why does `BaseTaxInvoiceHandler` connect `BaseTaxInvoiceHandler` to `XmlAttachmentHandler`, `SmartBillHandler`, `WehagoHandler`, `._do_process`, `parse_tax_invoice_xml`, `SmileEdiHandler`, `HometaxHandler`, `KtAttachmentHandler`, `AutoEverHandler`, `CsbillHandler`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
-- **Why does `run_invoice_erp_input()` connect `erp_runner.py` to `JobStore`, `전표 자동화 프로그램(담당자용)_v6.2.py`, `agent_adapter.py`, `erp_agent.py`, `JobCreateRequest`, `approval_fetcher.py`?**
+- **Why does `list_invoices()` connect `invoice_db.py` to `JobStore`, `regular_due_monitor.py`, `app.py`, `.get`?**
+  _High betweenness centrality (0.027) - this node is a cross-community bridge._
+- **Why does `run_invoice_erp_input()` connect `erp_runner.py` to `UplusEdocuHandler`, `전표 자동화 프로그램(담당자용)_v6.2.py`, `.get`, `worker.py`, `erp_agent.py`?**
   _High betweenness centrality (0.024) - this node is a cross-community bridge._
+- **Why does `WehagoHandler` connect `WehagoHandler` to `parse_tax_invoice_xml`, `BaseTaxInvoiceHandler`, `.process`?**
+  _High betweenness centrality (0.020) - this node is a cross-community bridge._
 - **Are the 63 inferred relationships involving `RuntimeError` (e.g. with `_execute_admin_command()` and `_install_agent_task()`) actually correct?**
   _`RuntimeError` has 63 INFERRED edges - model-reasoned connections that need verification._
 - **What connects `state`, `statusText`, `statusMessage` to the rest of the system?**
   _378 weakly-connected nodes found - possible documentation gaps or missing edges._
-- **Should `JobStore` be split into smaller, more focused modules?**
-  _Cohesion score 0.07936507936507936 - nodes in this community are weakly interconnected._
 - **Should `main.py` be split into smaller, more focused modules?**
-  _Cohesion score 0.10572390572390572 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.10707070707070707 - nodes in this community are weakly interconnected._
+- **Should `config.py` be split into smaller, more focused modules?**
+  _Cohesion score 0.09220779220779221 - nodes in this community are weakly interconnected._

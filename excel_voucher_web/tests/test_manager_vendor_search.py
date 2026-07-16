@@ -509,6 +509,66 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
     ]
 
 
+def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
+    events = []
+
+    class _FakePyAutoGui:
+        @staticmethod
+        def hotkey(*keys):
+            events.append(("hotkey", *keys))
+
+        @staticmethod
+        def press(key):
+            events.append(("key", key))
+
+    loaded = _load_nested_functions(
+        "_type_or_paste_text",
+        "_input_value_xy",
+        namespace={
+            "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y, wait)),
+            "_release_modifiers": lambda label, wait=False: events.append(("release", label)),
+            "mgmt_clipboard_cache": {"text": None},
+            "pyperclip": SimpleNamespace(copy=lambda text: events.append(("copy", text))),
+            "pyautogui": _FakePyAutoGui,
+            "time": SimpleNamespace(sleep=lambda seconds: events.append(("sleep", seconds))),
+            "mgmt_click_wait": 0.06,
+            "mgmt_focus_wait": 0.05,
+            "mgmt_commit_wait": 0.08,
+            "mgmt_key_wait": 0.05,
+            "mgmt_clipboard_wait": 0.02,
+            "verbose_management_clear": False,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    loaded["_input_value_xy"](
+        1118,
+        797,
+        "B002",
+        "2행 거래처",
+        enter_count=1,
+        clear=False,
+        paste_settle_wait=0.10,
+        commit_settle_wait=0.16,
+    )
+
+    assert events == [
+        ("click", 1118, 797, 0.06),
+        ("release", "2행 거래처 클릭 후"),
+        ("sleep", 0.05),
+        ("release", "2행 거래처 붙여넣기 직전"),
+        ("copy", "B002"),
+        ("sleep", 0.02),
+        ("hotkey", "ctrl", "v"),
+        ("release", "2행 거래처 붙여넣기 직후"),
+        ("sleep", 0.10),
+        ("release", "2행 거래처 Enter 직전"),
+        ("key", "enter"),
+        ("sleep", 0.16),
+        ("sleep", 0.16),
+    ]
+
+
 def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     events = []
     state = {"f9_seeded": False}
@@ -526,6 +586,8 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
             "management_bank_coordinate_fallback_rows": set(),
             "_management_value_xy": lambda item_name, fallback_y: (1118, fallback_y),
             "finance_vendor_entry_state": state,
+            "finance_vendor_paste_settle_wait": 0.10,
+            "finance_vendor_commit_settle_wait": 0.16,
             "_seed_vendor_by_number_f9": lambda x, y, label, text: (
                 events.append(("seed", x, y, label, text)) or True
             ),
@@ -550,7 +612,12 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     assert [event[0] for event in events] == ["seed", "input"]
     _, direct_args, direct_kwargs = events[-1]
     assert direct_args[2] == "B002"
-    assert direct_kwargs == {"enter_count": 1, "clear": False}
+    assert direct_kwargs == {
+        "enter_count": 1,
+        "clear": False,
+        "paste_settle_wait": 0.10,
+        "commit_settle_wait": 0.16,
+    }
 
     events.clear()
     loaded["row_no"] = 3
