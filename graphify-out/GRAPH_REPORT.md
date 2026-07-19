@@ -1,16 +1,16 @@
 # Graph Report - erp_auto_web_release_1c2c9c5  (2026-07-20)
 
 ## Corpus Check
-- 111 files · ~173,533 words
+- 111 files · ~173,579 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2480 nodes · 7231 edges · 173 communities (142 shown, 31 thin omitted)
+- 2478 nodes · 7231 edges · 171 communities (142 shown, 29 thin omitted)
 - Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 627 edges (avg confidence: 0.77)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `c861186e`
+- Built from commit: `3d5e4b58`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -105,8 +105,6 @@
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
-- Run a dry-run print preview or the real legacy ERP automation on the voucher PC
-- 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 - 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 - 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
@@ -142,7 +140,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (173 total, 31 thin omitted)
+## Communities (171 total, 29 thin omitted)
 
 ### Community 0 - "JobStore"
 Cohesion: 0.08
@@ -419,7 +417,7 @@ Nodes (3): first(), fmt(), main()
 ## Knowledge Gaps
 - **378 isolated node(s):** `state`, `statusText`, `statusMessage`, `state`, `els` (+373 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **31 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **29 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_

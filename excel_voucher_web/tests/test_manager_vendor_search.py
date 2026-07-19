@@ -630,19 +630,24 @@ def test_ds_slip_menu_uses_coordinate_keyboard_sequence_with_waits():
 
     assert loaded["_open_slip_menu_by_ds_coordinates"]() is True
     assert events == [
-        ("click", 105, 150),
+        ("click", 105, 137),
         ("sleep", 0.18),
         ("key", "right"),
         ("sleep", 0.45),
-        ("click", 126, 185),
+        ("click", 126, 166),
         ("sleep", 0.18),
         ("key", "right"),
         ("sleep", 0.45),
-        ("click", 155, 220),
+        ("click", 155, 195),
         ("sleep", 0.18),
         ("key", "enter"),
         ("sleep", 0.30),
     ]
+
+    click_points = [event[1:] for event in events if event[0] == "click"]
+    assert click_points == [(105, 137), (126, 166), (155, 195)]
+    assert (126, 185) not in click_points
+    assert (155, 220) not in click_points
 
 
 def test_ds_accounting_menu_uses_only_fixed_coordinates_and_waits():
@@ -695,13 +700,16 @@ def test_ds_main_branch_is_coordinate_only_and_keeps_uia_in_non_ds_branch():
         "ERP_DS_MENU_COORDINATE_ONLY": "1",
         "ERP_DS_ACCOUNTING_TILE_X": "304",
         "ERP_DS_ACCOUNTING_TILE_Y": "201",
-        "ERP_DS_SLIP_ROOT_Y": "150",
-        "ERP_DS_SLIP_ROW_H": "35",
+        "ERP_DS_SLIP_ROOT_Y": "137",
+        "ERP_DS_SLIP_ROW_H": "29",
         "ERP_DS_SLIP_ROOT_X": "105",
         "ERP_DS_SLIP_PROCESS_X": "126",
         "ERP_DS_SLIP_ENTRY_X": "155",
     }.items():
         assert f'os.environ["{env_name}"] = "{value}"' in adapter_source
+
+    assert 'os.environ["ERP_DS_SLIP_ROOT_Y"] = "150"' not in adapter_source
+    assert 'os.environ["ERP_DS_SLIP_ROW_H"] = "35"' not in adapter_source
 
     def _call_names(nodes):
         return {

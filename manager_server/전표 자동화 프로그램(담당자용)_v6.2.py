@@ -1388,8 +1388,8 @@ class ERPLoginBot:
 
                     def _slip_menu_fallback_points():
                         if self.corp_code == "DS":
-                            base_y = int(os.getenv("ERP_DS_SLIP_ROOT_Y", "150") or "150")
-                            row_h = int(os.getenv("ERP_DS_SLIP_ROW_H", "35") or "35")
+                            base_y = int(os.getenv("ERP_DS_SLIP_ROOT_Y", "137") or "137")
+                            row_h = int(os.getenv("ERP_DS_SLIP_ROW_H", "29") or "29")
                             slip_x = int(os.getenv("ERP_DS_SLIP_ROOT_X", "105") or "105")
                             process_x = int(os.getenv("ERP_DS_SLIP_PROCESS_X", "126") or "126")
                             entry_x = int(os.getenv("ERP_DS_SLIP_ENTRY_X", "155") or "155")
