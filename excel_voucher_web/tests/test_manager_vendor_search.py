@@ -690,7 +690,7 @@ def test_ds_main_branch_is_coordinate_only_and_keeps_uia_in_non_ds_branch():
     adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
     tree = ast.parse(manager_source)
 
-    assert '_env_flag("ERP_DS_MENU_COORDINATE_ONLY", "1")' in manager_source
+    assert 'os.getenv("ERP_DS_MENU_COORDINATE_ONLY", "1")' in manager_source
     for env_name, value in {
         "ERP_DS_MENU_COORDINATE_ONLY": "1",
         "ERP_DS_ACCOUNTING_TILE_X": "304",
@@ -760,6 +760,40 @@ def test_ds_main_branch_is_coordinate_only_and_keeps_uia_in_non_ds_branch():
         "_slip_menu_fallback_points",
     }.isdisjoint(retry_ds_calls)
     assert "_click_slip_menu_by_uia" in retry_non_ds_calls
+
+
+def test_run_menu_initialization_does_not_call_setup_scoped_env_flag():
+    """Menu startup must not depend on a helper local to _setup_slip_form."""
+    tree = ast.parse(MANAGER_SOURCE.read_text(encoding="utf-8"))
+    erp_class = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.ClassDef) and node.name == "ERPLoginBot"
+    )
+    run_unlocked = next(
+        node
+        for node in erp_class.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_run_unlocked"
+    )
+    setup_call = next(
+        node
+        for node in ast.walk(run_unlocked)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and isinstance(node.func.value, ast.Name)
+        and node.func.value.id == "self"
+        and node.func.attr == "_setup_slip_form"
+    )
+    early_env_flag_calls = [
+        node
+        for node in ast.walk(run_unlocked)
+        if isinstance(node, ast.Call)
+        and node.lineno < setup_call.lineno
+        and isinstance(node.func, ast.Name)
+        and node.func.id == "_env_flag"
+    ]
+
+    assert early_env_flag_calls == []
 
 
 def test_slip_entry_settles_before_immediate_uia_ready_check():

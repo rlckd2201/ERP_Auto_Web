@@ -1223,7 +1223,12 @@ class ERPLoginBot:
                     )
                     ds_coordinate_menu = (
                         self.corp_code == "DS"
-                        and _env_flag("ERP_DS_MENU_COORDINATE_ONLY", "1")
+                        and (
+                            str(os.getenv("ERP_DS_MENU_COORDINATE_ONLY", "1"))
+                            .strip()
+                            .lower()
+                            not in {"", "0", "false", "no", "off"}
+                        )
                     )
                     self._force_erp_window_maximized(main_win, "메뉴 진입 전 ERP 메인 창")
                     time.sleep(menu_step_wait)
