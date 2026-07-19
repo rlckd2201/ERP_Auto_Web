@@ -1211,15 +1211,15 @@ class ERPLoginBot:
                 try:
                     menu_step_wait = max(
                         ERP_BLOCK_WAIT,
-                        float(os.getenv("ERP_MENU_STEP_WAIT", "0.45") or "0.45"),
+                        float(os.getenv("ERP_MENU_STEP_WAIT", "0.60") or "0.60"),
                     )
                     menu_tree_wait = max(
                         ERP_CLICK_WAIT,
-                        float(os.getenv("ERP_MENU_TREE_WAIT", "0.18") or "0.18"),
+                        float(os.getenv("ERP_MENU_TREE_WAIT", "0.25") or "0.25"),
                     )
                     menu_entry_settle_wait = max(
                         ERP_SETTLE_WAIT,
-                        float(os.getenv("ERP_MENU_ENTRY_SETTLE_WAIT", "0.30") or "0.30"),
+                        float(os.getenv("ERP_MENU_ENTRY_SETTLE_WAIT", "0.40") or "0.40"),
                     )
                     ds_coordinate_menu = (
                         self.corp_code == "DS"

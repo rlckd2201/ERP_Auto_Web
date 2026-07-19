@@ -4751,8 +4751,8 @@
       "source_location": "L467",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpconfig_get_install_info",
-      "community": 24,
-      "community_name": ".copy_erp",
+      "community": 52,
+      "community_name": "JobCreateRequest",
       "norm_label": ".get_install_info()"
     },
     {
@@ -4762,8 +4762,8 @@
       "source_location": "L476",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpconfig_get_corp_info",
-      "community": 24,
-      "community_name": ".copy_erp",
+      "community": 52,
+      "community_name": "JobCreateRequest",
       "norm_label": ".get_corp_info()"
     },
     {
@@ -5290,8 +5290,8 @@
       "source_location": "L6639",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpautoapp_guess_regular_account",
-      "community": 52,
-      "community_name": "JobCreateRequest",
+      "community": 77,
+      "community_name": "worker.py",
       "norm_label": "._guess_regular_account()"
     },
     {
@@ -5367,8 +5367,8 @@
       "source_location": "L6760",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpautoapp_refresh_regular_action_buttons",
-      "community": 52,
-      "community_name": "JobCreateRequest",
+      "community": 77,
+      "community_name": "worker.py",
       "norm_label": "._refresh_regular_action_buttons()"
     },
     {
@@ -5433,8 +5433,8 @@
       "source_location": "L6972",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpautoapp_load_regular_invoice",
-      "community": 52,
-      "community_name": "JobCreateRequest",
+      "community": 77,
+      "community_name": "worker.py",
       "norm_label": ".load_regular_invoice()"
     },
     {
@@ -5444,8 +5444,8 @@
       "source_location": "L7006",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpautoapp_create_regular_item_fields",
-      "community": 52,
-      "community_name": "JobCreateRequest",
+      "community": 77,
+      "community_name": "worker.py",
       "norm_label": ".create_regular_item_fields()"
     },
     {
@@ -5730,8 +5730,8 @@
       "source_location": "L7802",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpautoapp_get_unit_price",
-      "community": 52,
-      "community_name": "JobCreateRequest",
+      "community": 11,
+      "community_name": ".get",
       "norm_label": ".get_unit_price()"
     },
     {
@@ -5741,8 +5741,8 @@
       "source_location": "L7808",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpautoapp_purchase_summary_name",
-      "community": 24,
-      "community_name": ".copy_erp",
+      "community": 11,
+      "community_name": ".get",
       "norm_label": "._purchase_summary_name()"
     },
     {
@@ -5752,8 +5752,8 @@
       "source_location": "L7814",
       "_origin": "ast",
       "id": "manager_server_\uc804\ud45c_\uc790\ub3d9\ud654_\ud504\ub85c\uadf8\ub7a8_\ub2f4\ub2f9\uc790\uc6a9_v6_2_erpautoapp_copy_erp",
-      "community": 24,
-      "community_name": ".copy_erp",
+      "community": 52,
+      "community_name": "JobCreateRequest",
       "norm_label": ".copy_erp()"
     },
     {
@@ -25022,9 +25022,9 @@
       "file_type": "code",
       "source_file": "C:/Users/user/Desktop/\uac1c\ubc1c\ud30c\uc77c/\ud68c\uacc4\uc5c5\ubb34 \uc790\ub3d9\ud654_WEB_Version/_release_fix9_stage/manager_server/\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
       "source_location": "L2630",
-      "community": 52,
+      "community": 77,
       "norm_label": "_to_int()",
-      "community_name": "JobCreateRequest",
+      "community_name": "worker.py",
       "id": "manager_server_v6_2_to_int"
     },
     {
@@ -26931,16 +26931,6 @@
       "label": "Run a dry-run print preview or the real legacy ERP automation on the voucher PC",
       "file_type": "rationale",
       "source_file": "excel_voucher_web/app/agent_adapter.py",
-      "source_location": "L561",
-      "community": 296,
-      "norm_label": "run a dry-run print preview or the real legacy erp automation on the voucher pc",
-      "community_name": "Run a dry-run print preview or the real legacy ERP automation on the voucher PC",
-      "id": "excel_voucher_web_app_agent_adapter_rationale_561"
-    },
-    {
-      "label": "Run a dry-run print preview or the real legacy ERP automation on the voucher PC",
-      "file_type": "rationale",
-      "source_file": "excel_voucher_web/app/agent_adapter.py",
       "source_location": "L560",
       "community": 297,
       "norm_label": "run a dry-run print preview or the real legacy erp automation on the voucher pc",
@@ -26956,16 +26946,6 @@
       "norm_label": "run a dry-run print preview or the real legacy erp automation on the voucher pc",
       "community_name": "Run a dry-run print preview or the real legacy ERP automation on the voucher PC",
       "id": "excel_voucher_web_app_agent_adapter_rationale_557"
-    },
-    {
-      "label": "\ubd84\uac1c\uc804\ud45c\uc785\ub825 \ud654\uba74 \uc790\ub3d9 \uc138\ud305 (v6.1 - Clipboard & UI ID Independence)",
-      "file_type": "rationale",
-      "source_file": "manager_server/\uc804\ud45c \uc790\ub3d9\ud654 \ud504\ub85c\uadf8\ub7a8(\ub2f4\ub2f9\uc790\uc6a9)_v6.2.py",
-      "source_location": "L1290",
-      "community": 300,
-      "norm_label": "\u1107\u116e\u11ab\u1100\u1162\u110c\u1165\u11ab\u1111\u116d\u110b\u1175\u11b8\u1105\u1167\u11a8 \u1112\u116a\u1106\u1167\u11ab \u110c\u1161\u1103\u1169\u11bc \u1109\u1166\u1110\u1175\u11bc (v6.1 - clipboard & ui id independence)",
-      "community_name": "\ubd84\uac1c\uc804\ud45c\uc785\ub825 \ud654\uba74 \uc790\ub3d9 \uc138\ud305 (v6.1 - Clipboard & UI ID Independence)",
-      "id": "manager_server_v6_2_rationale_1290"
     },
     {
       "label": "Run a dry-run print preview or the real legacy ERP automation on the voucher PC",
@@ -107740,5 +107720,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "3d5e4b583515324ab9128f5689f7fabbcd50aebe"
+  "built_at_commit": "75af5b017b7ef29a54536aa378eb459a2ed55d66"
 }

@@ -5,12 +5,12 @@
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 2478 nodes · 7231 edges · 171 communities (142 shown, 29 thin omitted)
+- 2476 nodes · 7231 edges · 169 communities (144 shown, 25 thin omitted)
 - Extraction: 91% EXTRACTED · 9% INFERRED · 0% AMBIGUOUS · INFERRED: 627 edges (avg confidence: 0.77)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `3d5e4b58`
+- Built from commit: `75af5b01`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -63,7 +63,6 @@
 - voucher_builder.py
 - parse_tax_invoice_xml
 - BaseTaxInvoiceHandler
-- JobCreateRequest
 - BaseModel
 - DEBUG.md
 - HometaxHandler
@@ -107,8 +106,6 @@
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 - 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
-- 분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
-- Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 - Run a dry-run print preview or the real legacy ERP automation on the voucher PC
 - Placeholder for the real ERP UI automation run on the automatic voucher PC Agent
 - Placeholder for the real ERP UI automation run on the 담당자 PC Agent.
@@ -140,7 +137,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (171 total, 29 thin omitted)
+## Communities (169 total, 25 thin omitted)
 
 ### Community 0 - "JobStore"
 Cohesion: 0.08
@@ -231,7 +228,7 @@ Cohesion: 0.04
 Nodes (50): 2026-05-18 fix123 selective output documents, 2026-05-18 fix124 KT vendor business-number row selection, 2026-05-18 fix125 KT vendor business-number popup search, 2026-05-18 fix126 KT vendor keyboard sequence, 2026-05-18 fix126 KT vendor search input, 2026-05-18 fix127 KT vendor final double-enter, 2026-05-18 fix128 setup installer reuse, 2026-05-18 fix129 Chrome notifications (+42 more)
 
 ### Community 24 - ".copy_erp"
-Cohesion: 0.17
+Cohesion: 0.23
 Nodes (3): AppManager, ERPConfig, setup_logger()
 
 ### Community 25 - "parse_tax_invoice_xml"
@@ -346,6 +343,10 @@ Nodes (8): Authentication Notes, Current Status, Final Source Files, Handover, I
 Cohesion: 0.22
 Nodes (8): Current Portal Test Inputs, Feature Ledger, Graphify Code Map, KT Password Rules, Mail Target Routing, PDF Filename Rule, Project Memory Lite, Tax Invoice Crawling Core
 
+### Community 77 - "worker.py"
+Cohesion: 0.23
+Nodes (3): _normalize_biz_no(), _normalize_issue_date(), _to_int()
+
 ### Community 78 - "Excel Voucher Web"
 Cohesion: 0.25
 Nodes (7): Agent 실행 예시, Excel Voucher Web, 데이터 서버 전달, 로그인/그룹웨어 DB 연동, 실행, 작업 내역 초기화, 접속 확인
@@ -417,7 +418,7 @@ Nodes (3): first(), fmt(), main()
 ## Knowledge Gaps
 - **378 isolated node(s):** `state`, `statusText`, `statusMessage`, `state`, `els` (+373 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **29 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **25 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_

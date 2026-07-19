@@ -620,9 +620,9 @@ def test_ds_slip_menu_uses_coordinate_keyboard_sequence_with_waits():
             "time": SimpleNamespace(
                 sleep=lambda seconds: events.append(("sleep", seconds))
             ),
-            "menu_tree_wait": 0.18,
-            "menu_step_wait": 0.45,
-            "menu_entry_settle_wait": 0.30,
+            "menu_tree_wait": 0.25,
+            "menu_step_wait": 0.60,
+            "menu_entry_settle_wait": 0.40,
             "os": SimpleNamespace(getenv=lambda _name, default=None: default),
             "self": SimpleNamespace(corp_code="DS", logger=_FakeLogger()),
         },
@@ -631,17 +631,17 @@ def test_ds_slip_menu_uses_coordinate_keyboard_sequence_with_waits():
     assert loaded["_open_slip_menu_by_ds_coordinates"]() is True
     assert events == [
         ("click", 105, 137),
-        ("sleep", 0.18),
+        ("sleep", 0.25),
         ("key", "right"),
-        ("sleep", 0.45),
+        ("sleep", 0.60),
         ("click", 126, 166),
-        ("sleep", 0.18),
+        ("sleep", 0.25),
         ("key", "right"),
-        ("sleep", 0.45),
+        ("sleep", 0.60),
         ("click", 155, 195),
-        ("sleep", 0.18),
+        ("sleep", 0.25),
         ("key", "enter"),
-        ("sleep", 0.30),
+        ("sleep", 0.40),
     ]
 
     click_points = [event[1:] for event in events if event[0] == "click"]
@@ -670,8 +670,8 @@ def test_ds_accounting_menu_uses_only_fixed_coordinates_and_waits():
             "time": SimpleNamespace(
                 sleep=lambda seconds: events.append(("sleep", seconds))
             ),
-            "menu_step_wait": 0.45,
-            "menu_entry_settle_wait": 0.30,
+            "menu_step_wait": 0.60,
+            "menu_entry_settle_wait": 0.40,
             "os": SimpleNamespace(getenv=lambda _name, default=None: default),
             "self": SimpleNamespace(corp_code="DS", logger=_FakeLogger()),
         },
@@ -680,13 +680,13 @@ def test_ds_accounting_menu_uses_only_fixed_coordinates_and_waits():
     assert loaded["_open_accounting_menu"]() is True
     assert events == [
         ("click", 30, 70),
-        ("sleep", 0.45),
+        ("sleep", 0.60),
         ("click", 145, 70),
-        ("sleep", 0.45),
+        ("sleep", 0.60),
         ("click", 304, 201),
-        ("sleep", 0.45),
+        ("sleep", 0.60),
         ("key", "escape"),
-        ("sleep", 0.30),
+        ("sleep", 0.40),
     ]
 
 
@@ -845,9 +845,9 @@ def test_menu_timing_defaults_and_agent_launch_overrides_stay_in_sync():
     manager_source = MANAGER_SOURCE.read_text(encoding="utf-8")
     adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
     expected = {
-        "ERP_MENU_STEP_WAIT": "0.45",
-        "ERP_MENU_TREE_WAIT": "0.18",
-        "ERP_MENU_ENTRY_SETTLE_WAIT": "0.30",
+        "ERP_MENU_STEP_WAIT": "0.60",
+        "ERP_MENU_TREE_WAIT": "0.25",
+        "ERP_MENU_ENTRY_SETTLE_WAIT": "0.40",
     }
 
     for env_name, default in expected.items():
