@@ -910,13 +910,13 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     )
     fill = loaded["_fill_explicit_management_items"]
 
-    fill()
+    assert fill() is False
     assert state["f9_seeded"] is True
     assert [event[0] for event in events] == ["seed"]
 
     loaded["row_no"] = 2
     loaded["explicit_management"] = {"거래처": "B002"}
-    fill()
+    assert fill() is True
     assert [event[0] for event in events] == ["seed", "input"]
     _, direct_args, direct_kwargs = events[-1]
     assert direct_args[2] == "B002"
@@ -935,7 +935,7 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
         "금융기관지점": "신한 수원금융센터",
         "거래처": "",
     }
-    fill()
+    assert fill() is False
 
     assert [event[0] for event in events] == ["input", "input"]
     assert [event[1][2] for event in events] == ["140-000-948562", "신한 수원금융센터"]
@@ -982,6 +982,209 @@ def test_management_value_xy_reuses_ready_snapshot_without_another_uia_scan():
 
     assert loaded["_management_value_xy"]("거래처", 797) == (1118, 797)
     assert snapshot_calls == []
+
+
+def test_fast_bank_coordinates_reuse_the_existing_first_management_row():
+    vendor_norm = re.sub(r"\s+", "", "거래처").lower()
+    bank_cache = {}
+    loaded = _load_nested_functions(
+        "_prepare_fast_bank_management_coordinates",
+        namespace={
+            "management_grid_ready_state": {
+                "snapshot": {
+                    "header_value": {"rel_x": 1118, "rel_y": 777},
+                    "items": [{"norm": vendor_norm, "rel_y": 797}],
+                }
+            },
+            "management_value_xy_cache": {vendor_norm: (1118, 797)},
+            "management_bank_value_xy_cache": bank_cache,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_prepare_fast_bank_management_coordinates"]() is True
+    assert bank_cache["계좌번호"] == (1118, 797)
+    assert bank_cache["금융기관지점"] == (1118, 817)
+
+
+def test_strict_bank_value_coordinates_do_not_run_a_management_uia_scan():
+    for total_rows in (230, 300):
+        snapshot_calls = []
+        loaded = _load_nested_functions(
+            "_management_value_xy",
+            namespace={
+                "management_grid_ready_state": {"snapshot": {}},
+                "management_value_xy_cache": {},
+                "management_bank_value_xy_cache": {
+                    "계좌번호": (1118, 797),
+                    "금융기관지점": (1118, 817),
+                },
+                "management_bank_coordinate_fallback_rows": {total_rows},
+                "management_active_row_context": {"row_no": total_rows},
+                "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+                "_env_flag": lambda _name, _default="0": True,
+                "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+                "_management_grid_snapshot": (
+                    lambda: snapshot_calls.append("full-management-snapshot") or {}
+                ),
+                "time": SimpleNamespace(sleep=lambda _seconds: None),
+                "self": SimpleNamespace(logger=_FakeLogger()),
+            },
+        )
+
+        assert loaded["_management_value_xy"]("계좌번호", 797) == (1118, 797)
+        assert loaded["_management_value_xy"]("금융기관지점", 817) == (1118, 817)
+        assert snapshot_calls == []
+
+
+def test_fast_bank_row_check_bypasses_full_uia_visibility_scan():
+    for total_rows in (230, 300):
+        fallback_rows = set()
+        full_scan_calls = []
+        loaded = _load_nested_functions(
+            "_ensure_bank_management_row",
+            namespace={
+                "skip_visible_row_scan": True,
+                "_current_row_account_matches": lambda *_args: True,
+                "_prepare_fast_bank_management_coordinates": lambda: True,
+                "management_bank_coordinate_fallback_rows": fallback_rows,
+                "_bank_management_visible": (
+                    lambda: full_scan_calls.append("full-management-snapshot") or (False, {})
+                ),
+                "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+                "time": SimpleNamespace(sleep=lambda _seconds: None),
+                "mgmt_commit_wait": 0.08,
+                "_double_click_form_xy": lambda *_args, **_kwargs: None,
+                "summary_x": 970,
+                "mgmt_summary_open_wait": 0.1,
+                "self": SimpleNamespace(logger=_FakeLogger()),
+            },
+        )
+
+        assert loaded["_ensure_bank_management_row"](
+            total_rows,
+            671,
+            "보통예금",
+        ) == 671
+        assert fallback_rows == {total_rows}
+        assert full_scan_calls == []
+
+
+def test_fast_bank_fill_skips_second_uia_scan_and_inputs_two_values():
+    for total_rows in (230, 300):
+        events = []
+        active_context = {"row_no": None}
+        loaded = _load_nested_functions(
+            "_fill_explicit_management_items",
+            namespace={
+                "management_active_row_context": active_context,
+                "form_data": {"cash_processing_enabled": True},
+                "_uncheck_cash_processing": lambda row_no: events.append(("uncheck", row_no)),
+                "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+                "_management_grid_snapshot": lambda: (_ for _ in ()).throw(
+                    AssertionError("fast bank path must not enumerate the full UIA tree")
+                ),
+                "management_bank_coordinate_fallback_rows": {total_rows},
+                "_management_value_xy": lambda item_name, fallback_y: {
+                    "계좌번호": (1118, 797),
+                    "금융기관지점": (1118, 817),
+                }[item_name],
+                "finance_vendor_entry_state": {"f9_seeded": True},
+                "finance_vendor_paste_settle_wait": 0.10,
+                "finance_vendor_commit_settle_wait": 0.16,
+                "_seed_vendor_by_number_f9": lambda *_args, **_kwargs: True,
+                "_input_vendor_by_number_keyboard": lambda *_args, **_kwargs: True,
+                "_input_value_xy": lambda *args, **kwargs: events.append(("input", args, kwargs)),
+                "re": re,
+                "self": SimpleNamespace(logger=_FakeLogger()),
+                "row_no": total_rows,
+                "account_key": "보통예금",
+                "explicit_management": {
+                    "계좌번호": "140-000-948562",
+                    "금융기관지점": "신한 수원금융센터",
+                    "거래처": "",
+                },
+            },
+        )
+
+        loaded["_fill_explicit_management_items"]()
+
+        assert active_context["row_no"] == total_rows
+        assert [event[0] for event in events] == ["input", "input"]
+        assert [event[1][0:3] for event in events] == [
+            (1118, 797, "140-000-948562"),
+            (1118, 817, "신한 수원금융센터"),
+        ]
+        assert all(event[2] == {"enter_count": 1, "clear": True} for event in events)
+
+
+def test_management_snapshot_caches_cash_processing_checkbox_once():
+    class _FakeCheckBox(_FakeControl):
+        def get_toggle_state(self):
+            return 0
+
+    checkbox = _FakeCheckBox(
+        "출납처리여부",
+        "CheckBox",
+        _FakeRect(370, 750, 520, 790),
+        automation_id="Check1",
+    )
+    loaded = _load_nested_functions(
+        "_management_grid_snapshot",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_iter_visible": lambda: [checkbox],
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "pyautogui": SimpleNamespace(screenshot=lambda **_kwargs: None),
+            "self": SimpleNamespace(logger=SimpleNamespace(debug=lambda *_args: None)),
+        },
+    )
+
+    snapshot = loaded["_management_grid_snapshot"]()
+
+    assert snapshot["cash_processing_checkbox"] is checkbox
+
+
+def test_fast_cash_processing_check_reuses_cached_control_without_descendants():
+    for initial_state, expected_clicks in ((0, 0), (1, 1)):
+        class _CachedCheckBox:
+            def __init__(self):
+                self.click_count = 0
+
+            def get_toggle_state(self):
+                return initial_state
+
+            def click_input(self):
+                self.click_count += 1
+
+        checkbox = _CachedCheckBox()
+        descendant_calls = []
+        loaded = _load_nested_functions(
+            "_uncheck_cash_processing",
+            namespace={
+                "skip_visible_row_scan": True,
+                "management_grid_ready_state": {
+                    "snapshot": {"cash_processing_checkbox": checkbox}
+                },
+                "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+                "main_win": SimpleNamespace(
+                    descendants=lambda **_kwargs: descendant_calls.append("descendants")
+                ),
+                "time": SimpleNamespace(sleep=lambda _seconds: None),
+                "ERP_FORM_WAIT": 0.1,
+                "_click_form_xy": lambda *_args, **_kwargs: None,
+                "self": SimpleNamespace(logger=_FakeLogger()),
+            },
+        )
+
+        loaded["_uncheck_cash_processing"](210)
+
+        assert checkbox.click_count == expected_clicks
+        assert descendant_calls == []
 
 
 def test_management_snapshot_caches_empty_text_voucher_viewport_for_fast_boundary():
@@ -1080,6 +1283,7 @@ def test_uia_geometry_uses_row_24_as_last_full_row():
     snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
 
     assert snapshot["last_full_y"] == 691
+    assert snapshot["scroll_anchor_y"] == 671
     assert snapshot["rows"][24] == 691
     assert 25 not in snapshot["rows"]
     assert len(snapshot["slot_ys"]) == 24
@@ -1089,6 +1293,7 @@ def test_uia_geometry_uses_row_26_when_viewport_expands():
     snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=26)
 
     assert snapshot["last_full_y"] == 731
+    assert snapshot["scroll_anchor_y"] == 711
     assert snapshot["rows"][26] == 731
     assert 27 not in snapshot["rows"]
     assert len(snapshot["slot_ys"]) == 26
@@ -1238,7 +1443,7 @@ def test_uia_exact_row_labels_override_relative_data_item_grid_rows_after_scroll
     assert snapshot["has_exact_row_numbers"] is True
 
 
-def test_dynamic_next_row_reuses_24_or_26_row_bottom_anchor():
+def test_dynamic_next_row_enters_scroll_mode_before_the_lookahead_row():
     loaded = _load_nested_functions(
         "_next_visible_voucher_row_y",
         namespace={"row_height": 20},
@@ -1246,12 +1451,12 @@ def test_dynamic_next_row_reuses_24_or_26_row_bottom_anchor():
     next_y = loaded["_next_visible_voucher_row_y"]
 
     row_24_snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
-    assert next_y(671, 24, row_24_snapshot) == (691, False)
-    assert next_y(691, 25, row_24_snapshot) == (691, True)
+    assert next_y(651, 23, row_24_snapshot) == (671, False)
+    assert next_y(671, 24, row_24_snapshot) == (691, True)
 
     row_26_snapshot = _visible_voucher_snapshot(first_logical_row=1, full_row_count=26)
-    assert next_y(711, 26, row_26_snapshot) == (731, False)
-    assert next_y(731, 27, row_26_snapshot) == (731, True)
+    assert next_y(691, 25, row_26_snapshot) == (711, False)
+    assert next_y(711, 26, row_26_snapshot) == (731, True)
 
 
 def test_initial_dynamic_snapshot_stops_if_grid_is_already_scrolled():
@@ -1271,84 +1476,487 @@ def test_initial_dynamic_snapshot_stops_if_grid_is_already_scrolled():
         raise AssertionError("already-scrolled ERP grid must stop before the first row click")
 
 
-def test_advance_grid_row_refreshes_once_at_dynamic_bottom_then_reuses_anchor():
-    for full_row_count in (24, 26):
-        initial = _visible_voucher_snapshot(first_logical_row=1, full_row_count=full_row_count)
-        refreshed = _visible_voucher_snapshot(first_logical_row=2, full_row_count=full_row_count)
-        state = {"snapshot": initial, "bottom_scroll_mode": False}
-        events = []
-
-        class _FakePyAutoGui:
-            @staticmethod
-            def press(key):
-                events.append(("key", key))
-
-        def _refresh(expected_row_no=None):
-            events.append(("refresh", expected_row_no))
-            state["snapshot"] = refreshed
-            return refreshed
-
-        loaded = _load_nested_functions(
-            "_next_visible_voucher_row_y",
-            "_advance_grid_row",
-            namespace={
-                "row_height": 20,
-                "row_geometry_state": state,
-                "sequential_nav": True,
-                "_click_form_xy": (
-                    lambda x, y, label, wait=0: events.append(("click", x, y, wait))
-                ),
-                "summary_x": 970,
-                "mgmt_key_wait": 0.05,
-                "mgmt_commit_wait": 0.08,
-                "pyautogui": _FakePyAutoGui,
-                "time": SimpleNamespace(sleep=lambda seconds: events.append(("sleep", seconds))),
-                "_refresh_voucher_row_snapshot": _refresh,
-                "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
-            },
-        )
-        advance = loaded["_advance_grid_row"]
-        bottom_y = initial["last_full_y"]
-        next_row_no = full_row_count + 1
-
-        assert advance(bottom_y, next_row_no) == refreshed["rows"][next_row_no]
-        assert state["bottom_scroll_mode"] is True
-        assert ("refresh", next_row_no) in events
-
-        events.clear()
-        assert advance(bottom_y, next_row_no + 1) == refreshed["last_full_y"]
-        assert not any(event[0] == "refresh" for event in events)
-
-
-def test_advance_grid_row_stops_when_expected_row_is_missing_after_refresh():
-    initial = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
-    stale = _visible_voucher_snapshot(first_logical_row=1, full_row_count=24)
-    state = {"snapshot": initial, "bottom_scroll_mode": False}
-
+def test_targeted_uia_row_number_prefers_displayed_label_over_grid_item_index():
+    calls = []
+    conflicting = _FakeControl(
+        "230",
+        "Text",
+        _FakeRect(90, 680, 135, 700),
+        grid_row=0,
+    )
+    desktop = SimpleNamespace(
+        from_point=lambda x, y: calls.append((x, y)) or conflicting
+    )
     loaded = _load_nested_functions(
-        "_next_visible_voucher_row_y",
-        "_advance_grid_row",
+        "_uia_voucher_row_number_at_y",
         namespace={
-            "row_height": 20,
-            "row_geometry_state": state,
-            "sequential_nav": True,
-            "_click_form_xy": lambda *_args, **_kwargs: None,
-            "summary_x": 970,
-            "mgmt_key_wait": 0.05,
-            "mgmt_commit_wait": 0.08,
-            "pyautogui": SimpleNamespace(press=lambda _key: None),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
-            "_refresh_voucher_row_snapshot": lambda expected_row_no=None: stale,
-            "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "row_number_x": 112,
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "rows_to_fill": 300,
+            "initial_snapshot": {"slot_ys": list(range(231, 732, 20))},
+            "re": re,
         },
     )
 
-    try:
-        loaded["_advance_grid_row"](initial["last_full_y"], 25)
-    except RuntimeError as exc:
-        assert "25행이 마지막 완전 표시 행" in str(exc)
-    else:
-        raise AssertionError("stale UIA refresh must stop management entry")
+    assert loaded["_uia_voucher_row_number_at_y"](
+        desktop,
+        691,
+        allow_grid_fallback=True,
+    ) == 230
+    assert calls == [(112, 691)]
+
+
+def test_targeted_uia_row_number_ignores_short_child_viewport_index():
+    parent_label = _FakeControl(
+        "230",
+        "Text",
+        _FakeRect(90, 680, 135, 700),
+    )
+    viewport_child = parent_label.add(
+        _FakeControl(
+            "23",
+            "DataItem",
+            _FakeRect(95, 682, 130, 698),
+            grid_row=22,
+        )
+    )
+    desktop = SimpleNamespace(from_point=lambda _x, _y: viewport_child)
+    loaded = _load_nested_functions(
+        "_uia_voucher_row_number_at_y",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "row_number_x": 112,
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "rows_to_fill": 300,
+            "initial_snapshot": {"slot_ys": list(range(231, 732, 20))},
+            "re": re,
+        },
+    )
+
+    assert loaded["_uia_voucher_row_number_at_y"](
+        desktop,
+        691,
+        allow_grid_fallback=True,
+        expected_row_nos={230},
+    ) == 230
+
+
+def test_targeted_uia_selection_reads_selected_parent_without_descendants():
+    parent = _FakeControl(
+        "230",
+        "DataItem",
+        _FakeRect(90, 680, 135, 700),
+    )
+    parent.iface_selection_item = SimpleNamespace(CurrentIsSelected=True)
+    child = parent.add(
+        _FakeControl("", "Text", _FakeRect(95, 682, 130, 698))
+    )
+    child.iface_selection_item = SimpleNamespace(CurrentIsSelected=False)
+    calls = []
+    desktop = SimpleNamespace(
+        from_point=lambda x, y: calls.append((x, y)) or child
+    )
+    loaded = _load_nested_functions(
+        "_uia_voucher_row_selected_at_y",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "row_number_x": 112,
+        },
+    )
+
+    assert loaded["_uia_voucher_row_selected_at_y"](desktop, 691) is True
+    assert calls == [(112, 691)]
+
+
+def _runtime_calibration_state(snapshot):
+    return {
+        "snapshot": snapshot,
+        "bottom_scroll_mode": False,
+        "scroll_anchor_y": None,
+        "calibrate_on_focus_row": None,
+        "calibrate_after_commit": False,
+        "calibration_focus_y": None,
+        "calibration_focus_next_y": None,
+        "calibration_row_no": len(snapshot.get("slot_ys") or []),
+        "scroll_advance_mode": None,
+    }
+
+
+def _load_runtime_navigation(state, targeted_rows, events, selected_at_y=None):
+    return _load_nested_functions(
+        "_next_visible_voucher_row_y",
+        "_set_calibrated_scroll_anchor",
+        "_calibrate_focused_last_row",
+        "_focus_grid_row",
+        "_advance_grid_row",
+        namespace={
+            "row_geometry_state": state,
+            "row_height": 20,
+            "sequential_nav": True,
+            "_targeted_uia_voucher_rows": targeted_rows,
+            "_uia_voucher_row_selected_at_y": (
+                selected_at_y or (lambda _desktop, _y: False)
+            ),
+            "Desktop": lambda backend=None: SimpleNamespace(backend=backend),
+            "_double_click_form_xy": lambda x, y, label, wait=0: events.append(
+                ("double-click", x, y, wait, label)
+            ),
+            "_click_form_xy": lambda x, y, label, wait=0: events.append(
+                ("click", x, y, wait, label)
+            ),
+            "summary_x": 970,
+            "mgmt_summary_open_wait": 0.55,
+            "mgmt_key_wait": 0.05,
+            "mgmt_commit_wait": 0.08,
+            "pyautogui": SimpleNamespace(
+                press=lambda key: events.append(("key", key))
+            ),
+            "time": SimpleNamespace(
+                sleep=lambda seconds: events.append(("sleep", seconds))
+            ),
+            "_fail_form": lambda message: (_ for _ in ()).throw(
+                RuntimeError(message)
+            ),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+
+def test_boundary_focus_saves_live_current_and_next_row_map():
+    for full_row_count in (24, 26):
+        snapshot = _visible_voucher_snapshot(
+            first_logical_row=1,
+            full_row_count=full_row_count,
+        )
+        state = _runtime_calibration_state(snapshot)
+        state["calibrate_on_focus_row"] = full_row_count
+        moved_y = snapshot["last_full_y"] - snapshot["row_pitch"]
+        probes = []
+        events = []
+
+        def _targeted(_snapshot, targets):
+            probes.append(tuple(sorted(targets)))
+            return {
+                full_row_count: moved_y,
+                full_row_count + 1: snapshot["last_full_y"],
+            }
+
+        loaded = _load_runtime_navigation(state, _targeted, events)
+        assert loaded["_focus_grid_row"](
+            full_row_count,
+            snapshot["last_full_y"],
+        ) == moved_y
+        assert probes == [(full_row_count, full_row_count + 1)]
+        assert events[0][:4] == (
+            "double-click",
+            970,
+            snapshot["last_full_y"],
+            0.55,
+        )
+        assert state["calibrate_after_commit"] is True
+        assert state["calibration_focus_y"] == moved_y
+        assert state["calibration_focus_next_y"] == snapshot["last_full_y"]
+        assert state["bottom_scroll_mode"] is False
+
+
+def test_runtime_anchor_branch_a_uses_down_when_enter_did_not_move():
+    for full_row_count in (24, 26):
+        for total_rows in (230, 300):
+            snapshot = _visible_voucher_snapshot(
+                first_logical_row=1,
+                full_row_count=full_row_count,
+            )
+            state = _runtime_calibration_state(snapshot)
+            state["calibrate_on_focus_row"] = full_row_count
+            moved_y = snapshot["last_full_y"] - snapshot["row_pitch"]
+            probes = []
+            events = []
+
+            def _targeted(_snapshot, targets):
+                probes.append(tuple(sorted(targets)))
+                if len(probes) < 3:
+                    return {
+                        full_row_count: moved_y,
+                        full_row_count + 1: snapshot["last_full_y"],
+                    }
+                return {full_row_count + 1: moved_y}
+
+            loaded = _load_runtime_navigation(state, _targeted, events)
+            current_y = loaded["_focus_grid_row"](
+                full_row_count,
+                snapshot["last_full_y"],
+            )
+            assert loaded["_advance_grid_row"](
+                current_y,
+                full_row_count + 1,
+                management_enter_sent=True,
+            ) == moved_y
+
+            assert probes == [
+                (full_row_count, full_row_count + 1),
+                (full_row_count, full_row_count + 1),
+                (full_row_count + 1,),
+            ]
+            assert [event[0] for event in events] == [
+                "double-click",
+                "click",
+                "key",
+                "sleep",
+            ]
+            assert events[1][1:4] == (970, moved_y, 0.05)
+            assert events[2] == ("key", "down")
+            assert state["bottom_scroll_mode"] is True
+            assert state["scroll_anchor_y"] == moved_y
+            assert state["scroll_advance_mode"] == "down"
+            assert state["calibrate_after_commit"] is False
+            assert total_rows > full_row_count
+
+
+def test_management_enter_observation_skips_down_for_viewport_or_selection():
+    for observation in ("current-row-moved", "next-row-selected"):
+        for full_row_count in (24, 26):
+            for total_rows in (230, 300):
+                snapshot = _visible_voucher_snapshot(
+                    first_logical_row=1,
+                    full_row_count=full_row_count,
+                )
+                state = _runtime_calibration_state(snapshot)
+                state["calibrate_on_focus_row"] = full_row_count
+                moved_y = snapshot["last_full_y"] - snapshot["row_pitch"]
+                probes = []
+                selected_probes = []
+                events = []
+
+                def _targeted(_snapshot, targets):
+                    probes.append(tuple(sorted(targets)))
+                    if observation == "current-row-moved":
+                        if len(probes) == 1:
+                            return {full_row_count: snapshot["last_full_y"]}
+                        return {
+                            full_row_count: moved_y,
+                            full_row_count + 1: snapshot["last_full_y"],
+                        }
+                    return {
+                        full_row_count: moved_y,
+                        full_row_count + 1: snapshot["last_full_y"],
+                    }
+
+                def _selected(_desktop, y):
+                    selected_probes.append(y)
+                    return observation == "next-row-selected"
+
+                loaded = _load_runtime_navigation(
+                    state,
+                    _targeted,
+                    events,
+                    selected_at_y=_selected,
+                )
+                current_y = loaded["_focus_grid_row"](
+                    full_row_count,
+                    snapshot["last_full_y"],
+                )
+                assert loaded["_advance_grid_row"](
+                    current_y,
+                    full_row_count + 1,
+                    management_enter_sent=True,
+                ) == snapshot["last_full_y"]
+
+                assert probes == [
+                    (full_row_count, full_row_count + 1),
+                    (full_row_count, full_row_count + 1),
+                ]
+                assert selected_probes == [snapshot["last_full_y"]]
+                assert [event[0] for event in events] == ["double-click"]
+                assert state["bottom_scroll_mode"] is True
+                assert state["scroll_anchor_y"] == snapshot["last_full_y"]
+                assert state["scroll_advance_mode"] == "enter"
+                assert state["calibrate_after_commit"] is False
+                assert total_rows > full_row_count
+
+
+def test_runtime_anchor_branch_b_fixes_last_y_after_down():
+    for full_row_count in (24, 26):
+        for total_rows in (230, 300):
+            snapshot = _visible_voucher_snapshot(
+                first_logical_row=1,
+                full_row_count=full_row_count,
+            )
+            state = _runtime_calibration_state(snapshot)
+            state["calibrate_on_focus_row"] = full_row_count
+            probes = []
+            events = []
+
+            def _targeted(_snapshot, targets):
+                probes.append(tuple(sorted(targets)))
+                if len(probes) < 3:
+                    return {full_row_count: snapshot["last_full_y"]}
+                return {full_row_count + 1: snapshot["last_full_y"]}
+
+            loaded = _load_runtime_navigation(state, _targeted, events)
+            current_y = loaded["_focus_grid_row"](
+                full_row_count,
+                snapshot["last_full_y"],
+            )
+            assert loaded["_advance_grid_row"](
+                current_y,
+                full_row_count + 1,
+                management_enter_sent=True,
+            ) == snapshot["last_full_y"]
+
+            assert probes == [
+                (full_row_count, full_row_count + 1),
+                (full_row_count, full_row_count + 1),
+                (full_row_count + 1,),
+            ]
+            assert [event[0] for event in events] == [
+                "double-click",
+                "click",
+                "key",
+                "sleep",
+            ]
+            assert events[1][1:4] == (
+                970,
+                snapshot["last_full_y"],
+                0.05,
+            )
+            assert state["bottom_scroll_mode"] is True
+            assert state["scroll_anchor_y"] == snapshot["last_full_y"]
+            assert state["scroll_advance_mode"] == "down"
+            assert total_rows > full_row_count
+
+
+def test_fixed_anchor_reuses_enter_or_down_mode_through_dynamic_total():
+    for full_row_count, enter_anchor, down_anchor in (
+        (24, 671, 691),
+        (26, 711, 731),
+    ):
+        for total_rows in (230, 300):
+            for mode, anchor_y in (("enter", enter_anchor), ("down", down_anchor)):
+                snapshot = _visible_voucher_snapshot(
+                    first_logical_row=1,
+                    full_row_count=full_row_count,
+                )
+                state = _runtime_calibration_state(snapshot)
+                state.update(
+                    {
+                        "bottom_scroll_mode": True,
+                        "scroll_anchor_y": anchor_y,
+                        "scroll_advance_mode": mode,
+                    }
+                )
+                events = []
+                loaded = _load_runtime_navigation(
+                    state,
+                    lambda *_args, **_kwargs: {},
+                    events,
+                )
+
+                current_y = anchor_y
+                for next_row_no in range(full_row_count + 1, total_rows + 1):
+                    current_y = loaded["_advance_grid_row"](
+                        current_y,
+                        next_row_no,
+                        management_enter_sent=True,
+                    )
+                    assert current_y == anchor_y
+
+                move_count = total_rows - full_row_count
+                if mode == "enter":
+                    assert events == []
+                else:
+                    assert [event[0] for event in events] == [
+                        value
+                        for _ in range(move_count)
+                        for value in ("click", "key", "sleep")
+                    ]
+                    assert sum(
+                        event == ("key", "down") for event in events
+                    ) == move_count
+
+
+def test_full_runtime_navigation_reaches_dynamic_bank_row_without_gaps():
+    for full_row_count in (24, 26):
+        for total_rows in (230, 300):
+            for scenario in ("branch-a-down", "enter-observed", "branch-b-down"):
+                snapshot = _visible_voucher_snapshot(
+                    first_logical_row=1,
+                    full_row_count=full_row_count,
+                )
+                state = _runtime_calibration_state(snapshot)
+                probes = []
+                events = []
+                moved_y = snapshot["last_full_y"] - snapshot["row_pitch"]
+                pair_probe_count = {"value": 0}
+
+                def _targeted(_snapshot, targets):
+                    target_tuple = tuple(sorted(targets))
+                    probes.append(target_tuple)
+                    if target_tuple == (full_row_count,):
+                        return {
+                            full_row_count: (
+                                moved_y
+                                if scenario == "branch-a-down"
+                                else snapshot["last_full_y"]
+                            )
+                        }
+                    if target_tuple == (full_row_count + 1,):
+                        return {
+                            full_row_count + 1: (
+                                moved_y
+                                if scenario == "branch-a-down"
+                                else snapshot["last_full_y"]
+                            )
+                        }
+                    pair_probe_count["value"] += 1
+                    pair_call = pair_probe_count["value"]
+                    if scenario == "branch-a-down":
+                        return {
+                            full_row_count: moved_y,
+                            full_row_count + 1: snapshot["last_full_y"],
+                        }
+                    if scenario == "enter-observed":
+                        if pair_call == 1:
+                            return {full_row_count: snapshot["last_full_y"]}
+                        return {
+                            full_row_count: moved_y,
+                            full_row_count + 1: snapshot["last_full_y"],
+                        }
+                    return {full_row_count: snapshot["last_full_y"]}
+
+                loaded = _load_runtime_navigation(state, _targeted, events)
+                current_y = snapshot["first_y"]
+                focused_rows = []
+                bank_calls = []
+
+                for row_no in range(1, total_rows + 1):
+                    current_y = loaded["_focus_grid_row"](row_no, current_y)
+                    focused_rows.append(row_no)
+                    if row_no == total_rows:
+                        bank_calls.append((row_no, current_y, "보통예금"))
+                        break
+                    current_y = loaded["_advance_grid_row"](
+                        current_y,
+                        row_no + 1,
+                        management_enter_sent=True,
+                    )
+
+                expected_anchor = (
+                    moved_y if scenario == "branch-a-down" else snapshot["last_full_y"]
+                )
+                assert focused_rows == list(range(1, total_rows + 1))
+                assert bank_calls == [(total_rows, expected_anchor, "보통예금")]
+                assert current_y == expected_anchor
+                assert state["scroll_anchor_y"] == expected_anchor
+                assert state["scroll_advance_mode"] == (
+                    "enter" if scenario == "enter-observed" else "down"
+                )
+                down_count = sum(event == ("key", "down") for event in events)
+                assert down_count == (
+                    full_row_count - 2
+                    if scenario == "enter-observed"
+                    else total_rows - 2
+                )
 
 
 def test_management_navigation_always_builds_dynamic_uia_snapshot():
@@ -1364,6 +1972,9 @@ def test_management_navigation_always_builds_dynamic_uia_snapshot():
     assert "ERP_MGMT_GRID_BOTTOM_MARGIN" not in helper
     assert "current_y = max_row_y" not in helper
     assert "row_geometry_state[\"bottom_scroll_mode\"] = True" in helper
+    assert "management_enter_sent = bool(" in helper
+    assert "management_enter_sent=management_enter_sent" in helper
+    assert 'row_geometry_state["scroll_advance_mode"] = str(advance_mode)' in helper
 
 
 def _fast_visible_voucher_snapshot(
@@ -1434,7 +2045,7 @@ def test_fast_visible_snapshot_uses_cached_header_for_24_or_26_rows():
         assert snapshot["row_pitch"] == 20
 
 
-def test_fast_visible_snapshot_maps_scrolled_expected_row_to_bottom_slot():
+def test_fast_visible_snapshot_keeps_initial_labels_and_derives_management_gap():
     for full_row_count, expected_row_no, last_full_y in (
         (24, 25, 691),
         (26, 27, 731),
@@ -1444,10 +2055,16 @@ def test_fast_visible_snapshot_maps_scrolled_expected_row_to_bottom_slot():
             expected_row_no=expected_row_no,
         )
 
-        assert snapshot["rows"][expected_row_no] == last_full_y
-        assert min(snapshot["rows"]) == 2
-        assert max(snapshot["rows"]) == expected_row_no
+        assert snapshot["rows"][1] == 231
+        assert snapshot["rows"][full_row_count] == last_full_y
+        assert expected_row_no not in snapshot["rows"]
+        assert min(snapshot["rows"]) == 1
+        assert max(snapshot["rows"]) == full_row_count
         assert len(snapshot["slot_ys"]) == full_row_count
+        assert snapshot["management_value_y"] > snapshot["last_full_y"]
+        assert snapshot["last_summary_raise"] == (
+            snapshot["management_value_y"] - snapshot["last_full_y"]
+        )
 
 
 def test_fast_visible_snapshot_returns_none_without_cached_management_header():
@@ -1514,18 +2131,15 @@ def test_fast_snapshot_helper_and_skip_branch_never_run_full_uia_scan():
 
     assert fast_call < slow_else < full_call
 
-    refresh_start = helper.index("def _refresh_voucher_row_snapshot")
-    refresh_end = helper.index("def _focus_grid_row", refresh_start)
-    refresh_helper = helper[refresh_start:refresh_end]
-    refresh_skip = refresh_helper.index("if skip_visible_row_scan:")
-    refresh_fast = refresh_helper.index(
-        "_fast_visible_voucher_row_snapshot(expected_row_no)",
-        refresh_skip,
-    )
-    refresh_else = refresh_helper.index("else:", refresh_fast)
-    refresh_full = refresh_helper.index(
-        "_fully_visible_voucher_row_snapshot()",
-        refresh_else,
-    )
+    point_start = helper.index("def _uia_voucher_row_number_at_y")
+    point_end = helper.index("if skip_visible_row_scan:", point_start)
+    targeted_helper = helper[point_start:point_end]
 
-    assert refresh_skip < refresh_fast < refresh_else < refresh_full
+    assert "Desktop(backend=\"uia\")" in targeted_helper
+    assert ".from_point(" in targeted_helper
+    assert "_iter_visible" not in targeted_helper
+    assert ".descendants(" not in targeted_helper
+    assert "_fully_visible_voucher_row_snapshot" not in targeted_helper
+    assert "def _refresh_voucher_row_snapshot" not in helper
+    assert "for idx in range(rows_to_fill):" in helper
+    assert "range(2, 211)" not in helper

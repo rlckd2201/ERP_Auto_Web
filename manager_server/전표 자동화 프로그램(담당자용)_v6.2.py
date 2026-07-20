@@ -2677,6 +2677,7 @@ class ERPLoginBot:
             main_rect = _main_rect()
             header_label = None
             header_value = None
+            cash_processing_checkbox = None
             item_rows = []
             visual_ready = False
             visual_score = 0
@@ -2719,6 +2720,12 @@ class ERPLoginBot:
                         voucher_horizontal_scrollbars.append(rect)
                     text = (_control_text(ctrl) or ctrl.window_text() or "").strip()
                     norm = _norm_text(text)
+                    if (
+                        control_type == "CheckBox"
+                        and automation_id == "Check1"
+                        and _norm_text("출납처리여부") in norm
+                    ):
+                        cash_processing_checkbox = ctrl
                     if not norm:
                         continue
                     center_x = (rect.left + rect.right) // 2
@@ -2768,6 +2775,7 @@ class ERPLoginBot:
                 return {
                     "header_label": header_label,
                     "header_value": header_value,
+                    "cash_processing_checkbox": cash_processing_checkbox,
                     "items": item_rows,
                     "labels": [row["text"] for row in item_rows],
                     "label_norms": {row["norm"] for row in item_rows},
@@ -2816,6 +2824,7 @@ class ERPLoginBot:
             return {
                 "header_label": header_label,
                 "header_value": header_value,
+                "cash_processing_checkbox": cash_processing_checkbox,
                 "items": item_rows,
                 "labels": [row["text"] for row in item_rows],
                 "label_norms": {row["norm"] for row in item_rows},
@@ -2878,10 +2887,52 @@ class ERPLoginBot:
             )
 
         management_value_xy_cache = {}
+        management_bank_value_xy_cache = {}
         management_bank_coordinate_fallback_rows = set()
         management_active_row_context = {"row_no": None}
         finance_vendor_entry_state = {"f9_seeded": False}
         vendor_popup_detection_state = {"signature": None}
+
+        def _prepare_fast_bank_management_coordinates():
+            """Reuse the already captured first management row without a full UIA walk."""
+            snapshot = management_grid_ready_state.get("snapshot") or {}
+            pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
+            vendor_key = _norm_text("거래처")
+            anchor = management_value_xy_cache.get(vendor_key)
+            if anchor is None:
+                item_rows = snapshot.get("items") or []
+                vendor_row = next(
+                    (row for row in item_rows if (row.get("norm") or "") == vendor_key),
+                    None,
+                )
+                if vendor_row is None and item_rows:
+                    vendor_row = min(item_rows, key=lambda row: int(row.get("rel_y") or 10 ** 9))
+                value_header = snapshot.get("header_value") or {}
+                value_x = value_header.get("rel_x")
+                value_y = vendor_row.get("rel_y") if vendor_row else None
+                if value_y is None and value_header.get("rel_y") is not None:
+                    value_y = int(value_header["rel_y"]) + pitch
+                if value_x is not None and value_y is not None:
+                    anchor = (int(value_x), int(value_y))
+            if anchor is None:
+                self.logger.warning(
+                    "  [MGMT-ANCHOR] 빠른 보통예금 좌표를 만들 관리항목 첫 행 기준이 없습니다."
+                )
+                return False
+            value_x, first_value_y = (int(anchor[0]), int(anchor[1]))
+            management_bank_value_xy_cache[_norm_text("계좌번호")] = (
+                value_x,
+                first_value_y,
+            )
+            management_bank_value_xy_cache[_norm_text("금융기관지점")] = (
+                value_x,
+                first_value_y + pitch,
+            )
+            self.logger.info(
+                "  [MGMT-ANCHOR] 보통예금 관리항목 좌표를 기존 첫 행 기준으로 준비: "
+                f"account=({value_x},{first_value_y}), bank=({value_x},{first_value_y + pitch})"
+            )
+            return True
 
         def _management_value_xy(item_name, fallback_y):
             target = _norm_text(item_name)
@@ -2893,6 +2944,14 @@ class ERPLoginBot:
                 _norm_text("계좌번호"),
                 _norm_text("금융기관지점"),
             }
+            active_row_no = management_active_row_context.get("row_no")
+            if strict_item and active_row_no in management_bank_coordinate_fallback_rows:
+                cached_bank_xy = management_bank_value_xy_cache.get(target)
+                if cached_bank_xy is not None:
+                    self.logger.info(
+                        f"  [MGMT-ANCHOR] {item_name} 빠른 보통예금 좌표 재사용: rel={cached_bank_xy}"
+                    )
+                    return int(cached_bank_xy[0]), int(cached_bank_xy[1])
             if fast_anchor and not strict_item and cache_key in management_value_xy_cache:
                 cached_x, cached_y = management_value_xy_cache[cache_key]
                 self.logger.info(
@@ -2924,7 +2983,6 @@ class ERPLoginBot:
                 if fast_anchor and not (snapshot.get("items") or snapshot.get("header_value")):
                     break
                 time.sleep(0.25)
-            active_row_no = management_active_row_context.get("row_no")
             if strict_item and active_row_no not in management_bank_coordinate_fallback_rows:
                 raise RuntimeError(
                     f"{item_name} management item is not visible; aborting strict bank-account input. "
@@ -3185,6 +3243,32 @@ class ERPLoginBot:
             return "세금계산서(일반과세)-전자"
 
         def _uncheck_cash_processing(row_no):
+            if skip_visible_row_scan:
+                cached_checkbox = (
+                    (management_grid_ready_state.get("snapshot") or {}).get(
+                        "cash_processing_checkbox"
+                    )
+                )
+                if cached_checkbox is None:
+                    _fail_form(
+                        f"{row_no}행 출납처리여부 체크박스의 최초 UIA 기준을 찾지 못했습니다."
+                    )
+                try:
+                    state = cached_checkbox.get_toggle_state()
+                    self.logger.info(
+                        f"  [MGMT-XY] {row_no}행 출납처리여부 캐시 상태={state}"
+                    )
+                    if state == 1:
+                        cached_checkbox.click_input()
+                        time.sleep(ERP_FORM_WAIT)
+                        self.logger.info(
+                            f"  [MGMT-XY] {row_no}행 출납처리여부 체크 해제 완료(최초 UIA 캐시)"
+                        )
+                    return
+                except Exception as e:
+                    _fail_form(
+                        f"{row_no}행 출납처리여부 최초 UIA 캐시를 재사용하지 못했습니다: {e}"
+                    )
             try:
                 for cb in main_win.descendants(control_type='CheckBox'):
                     try:
@@ -3975,6 +4059,7 @@ class ERPLoginBot:
                 _input_value_xy(x, y, vendor_name, label, enter_count=1, clear=True)
 
             def _fill_explicit_management_items():
+                management_enter_sent = False
                 management_active_row_context["row_no"] = row_no
                 if str(form_data.get('cash_processing_enabled', '')).strip().lower() not in ("1", "true", "yes", "on"):
                     _uncheck_cash_processing(row_no)
@@ -3984,19 +4069,20 @@ class ERPLoginBot:
                     _norm_text("금융기관지점"),
                 }
                 if explicit_key_norms & bank_required:
-                    snapshot = _management_grid_snapshot()
-                    visible_labels = snapshot.get("label_norms") or set()
-                    missing = [label for label in bank_required if label not in visible_labels]
-                    if missing and row_no not in management_bank_coordinate_fallback_rows:
-                        raise RuntimeError(
-                            f"{row_no}행 보통예금 관리항목이 표시되지 않아 계좌번호 입력을 중단합니다. "
-                            f"visible_labels={snapshot.get('labels')}"
-                        )
-                    if missing:
+                    if row_no in management_bank_coordinate_fallback_rows:
                         self.logger.warning(
-                            f"  [MGMT-XY] {row_no}행 보통예금 관리항목 라벨은 미검출이지만 "
-                            "계정과목 검증 완료로 고정 좌표 입력을 진행합니다."
+                            f"  [MGMT-XY] {row_no}행 보통예금은 계정과목 검증과 빠른 좌표 준비가 "
+                            "완료되어 전체 UIA 라벨 탐색을 생략합니다."
                         )
+                    else:
+                        snapshot = _management_grid_snapshot()
+                        visible_labels = snapshot.get("label_norms") or set()
+                        missing = [label for label in bank_required if label not in visible_labels]
+                        if missing:
+                            raise RuntimeError(
+                                f"{row_no}행 보통예금 관리항목이 표시되지 않아 계좌번호 입력을 중단합니다. "
+                                f"visible_labels={snapshot.get('labels')}"
+                            )
                 y = 797
                 for item_name, item_value in explicit_management.items():
                     text = str(item_value or "").strip()
@@ -4029,6 +4115,7 @@ class ERPLoginBot:
                                     paste_settle_wait=finance_vendor_paste_settle_wait,
                                     commit_settle_wait=finance_vendor_commit_settle_wait,
                                 )
+                                management_enter_sent = True
                                 self.logger.info(
                                     f"  [MGMT-XY] {label}: 관리항목값 셀 직접 입력 후 Enter 완료"
                                     f"(붙여넣기 {finance_vendor_paste_settle_wait:.2f}s, "
@@ -4045,10 +4132,10 @@ class ERPLoginBot:
                     _input_value_xy(value_x, value_y, text, f"{row_no}행 {item_name}", enter_count=1, clear=True)
                     y += 20
                 self.logger.info(f"  [MGMT-XY] {row_no}행 명시 관리항목 입력 완료: {list(explicit_management.keys())}")
+                return management_enter_sent
 
             if "explicit" in plan:
-                _fill_explicit_management_items()
-                return
+                return bool(_fill_explicit_management_items())
 
             if account_key == "부가세대급금" and corp == "일강":
                 if "vendor_vat" in plan:
@@ -4060,7 +4147,7 @@ class ERPLoginBot:
                 if "business" in plan and business_query:
                     _input_value_xy(1118, 857, business_query, f"{row_no}행 사업자번호", enter_count=1, clear=True)
                 self.logger.info(f"  [MGMT-XY] {row_no}행 일강 부가세대급금 관리항목 입력 완료")
-                return
+                return False
 
             if "project" in plan:
                 # 일강 집기비품: 거래처 다음 줄(프로젝트코드)에 "일반"을 입력합니다.
@@ -4082,6 +4169,7 @@ class ERPLoginBot:
                 _input_value_xy(1118, 857, business_query, f"{row_no}행 사업자번호", enter_count=1, clear=True)
 
             self.logger.info(f"  [MGMT-XY] {row_no}행 관리항목 입력 완료")
+            return False
 
         def _fill_management_items_by_coord():
             erp_rows = form_data.get('erp_clipboard_rows') or []
@@ -4093,6 +4181,7 @@ class ERPLoginBot:
             row_height = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
             sequential_nav = _env_flag("ERP_MGMT_SEQUENTIAL_NAV", "1")
             account_x = int(os.getenv("ERP_MGMT_ACCOUNT_X", "229") or "229")
+            row_number_x = int(os.getenv("ERP_MGMT_ROW_NUMBER_X", "112") or "112")
 
             def _median_number(values, fallback):
                 ordered = sorted(float(value) for value in values)
@@ -4170,18 +4259,34 @@ class ERPLoginBot:
                         )
                         return None
                     slot_ys = [first_y + (slot * pitch) for slot in range(visible_count)]
+                    scroll_anchor_index = max(0, len(slot_ys) - 2)
                     logical_first = 1
-                    if expected_row_no is not None:
-                        logical_first = max(1, int(expected_row_no) - visible_count + 1)
                     named_rows = {
                         logical_first + slot: relative_y
                         for slot, relative_y in enumerate(slot_ys)
                     }
+                    management_value_ys = [
+                        int(row.get("rel_y"))
+                        for row in (ready_snapshot.get("items") or [])
+                        if row.get("rel_y") is not None
+                    ]
+                    management_value_y = min(management_value_ys) if management_value_ys else None
+                    if management_value_y is None:
+                        value_header = ready_snapshot.get("header_value") or {}
+                        if value_header.get("rel_y") is not None:
+                            management_value_y = int(value_header["rel_y"]) + pitch
                     snapshot = {
                         "rows": named_rows,
                         "slot_ys": slot_ys,
                         "first_y": slot_ys[0],
                         "last_full_y": slot_ys[-1],
+                        "scroll_anchor_y": slot_ys[scroll_anchor_index],
+                        "management_value_y": management_value_y,
+                        "last_summary_raise": (
+                            int(management_value_y) - int(slot_ys[-1])
+                            if management_value_y is not None
+                            else None
+                        ),
                         "row_pitch": pitch,
                         "clip_bottom": int(clip_bottom),
                         "has_exact_row_numbers": False,
@@ -4192,6 +4297,8 @@ class ERPLoginBot:
                         "  [MGMT-XY] 빠른 UIA 완전 표시 행 스냅샷: "
                         f"source={boundary_source}, slots={visible_count}, "
                         f"first_y={snapshot['first_y']}, last_y={snapshot['last_full_y']}, "
+                        f"management_value_y={snapshot['management_value_y']}, "
+                        f"raise={snapshot['last_summary_raise']}, "
                         f"clip_bottom={snapshot['clip_bottom']}, logical={logical_first}.."
                         f"{logical_first + visible_count - 1}"
                     )
@@ -4428,6 +4535,7 @@ class ERPLoginBot:
                         "slot_ys": slot_ys,
                         "first_y": slot_ys[0],
                         "last_full_y": slot_ys[-1],
+                        "scroll_anchor_y": slot_ys[-2] if len(slot_ys) >= 2 else slot_ys[-1],
                         "row_pitch": max(1, int(round(measured_pitch))),
                         "clip_bottom": int(round(clip_bottom - main_rect.top)),
                         "has_exact_row_numbers": bool(exact_label_rows),
@@ -4460,6 +4568,150 @@ class ERPLoginBot:
                     )
                 return snapshot
 
+            def _uia_voucher_row_number_at_y(
+                desktop,
+                relative_y,
+                allow_grid_fallback=False,
+                expected_row_nos=None,
+            ):
+                main_rect = _main_rect()
+                absolute_y = main_rect.top + int(relative_y)
+                x_offsets = (0, -8, 8, -16, 16)
+                expected_rows = {
+                    int(value)
+                    for value in (expected_row_nos or set())
+                    if int(value) > 0
+                }
+                label_candidates = []
+                grid_candidates = []
+                for x_offset in x_offsets:
+                    try:
+                        ctrl = desktop.from_point(
+                            main_rect.left + int(row_number_x) + x_offset,
+                            absolute_y,
+                        )
+                    except Exception:
+                        continue
+                    candidates = []
+                    current = ctrl
+                    for _ in range(4):
+                        if current is None:
+                            break
+                        candidates.append(current)
+                        try:
+                            parent = current.parent()
+                        except Exception:
+                            parent = None
+                        if parent is current:
+                            break
+                        current = parent
+                    # The displayed row label is the real voucher row number. GridItem.Row
+                    # is viewport-relative on this ERP grid after scrolling, so it must not
+                    # win over a label such as "025".
+                    for candidate_index, candidate in enumerate(candidates):
+                        values = []
+                        for getter in (
+                            lambda candidate=candidate: candidate.element_info.name,
+                            lambda candidate=candidate: candidate.window_text(),
+                            lambda candidate=candidate: _control_text(candidate),
+                            lambda candidate=candidate: candidate.iface_value.CurrentValue,
+                        ):
+                            try:
+                                value = str(getter() or "").strip()
+                            except Exception:
+                                value = ""
+                            if value:
+                                values.append(value)
+                        for value in values:
+                            compact = re.sub(r"\s+", "", value)
+                            # ERP displays voucher rows as at least three digits
+                            # (001, 024, 230). Ignore short viewport-relative text.
+                            if re.fullmatch(r"\d{3,6}", compact):
+                                row_no = int(compact)
+                                if 1 <= row_no <= max(rows_to_fill + len(initial_snapshot.get("slot_ys") or []), 1):
+                                    label_candidates.append(
+                                        (
+                                            int(row_no in expected_rows),
+                                            int(compact.startswith("0")),
+                                            -int(candidate_index),
+                                            row_no,
+                                        )
+                                    )
+                    if allow_grid_fallback:
+                        for candidate in candidates:
+                            try:
+                                grid_row = int(candidate.iface_grid_item.CurrentRow)
+                                if grid_row >= 0:
+                                    grid_candidates.append(grid_row + 1)
+                            except Exception:
+                                pass
+                    if label_candidates:
+                        return int(max(label_candidates)[3])
+                if label_candidates:
+                    return int(max(label_candidates)[3])
+                if grid_candidates:
+                    return int(grid_candidates[0])
+                return None
+
+            def _uia_voucher_row_selected_at_y(desktop, relative_y):
+                main_rect = _main_rect()
+                absolute_y = main_rect.top + int(relative_y)
+                saw_unselected = False
+                for x_offset in (0, -8, 8, -16, 16):
+                    try:
+                        current = desktop.from_point(
+                            main_rect.left + int(row_number_x) + x_offset,
+                            absolute_y,
+                        )
+                    except Exception:
+                        continue
+                    for _ in range(4):
+                        if current is None:
+                            break
+                        try:
+                            selected = bool(
+                                current.iface_selection_item.CurrentIsSelected
+                            )
+                            if selected:
+                                return True
+                            saw_unselected = True
+                        except Exception:
+                            pass
+                        try:
+                            parent = current.parent()
+                        except Exception:
+                            parent = None
+                        if parent is current:
+                            break
+                        current = parent
+                return False if saw_unselected else None
+
+            def _targeted_uia_voucher_rows(
+                snapshot,
+                target_row_nos,
+                allow_grid_fallback=False,
+            ):
+                targets = {int(value) for value in (target_row_nos or set()) if int(value) > 0}
+                rows = {}
+                desktop = Desktop(backend="uia")
+                slot_ys = [int(value) for value in (snapshot.get("slot_ys") or [])]
+                for relative_y in reversed(slot_ys):
+                    row_no = _uia_voucher_row_number_at_y(
+                        desktop,
+                        relative_y,
+                        allow_grid_fallback=allow_grid_fallback,
+                        expected_row_nos=targets,
+                    )
+                    if row_no is not None:
+                        rows[int(row_no)] = int(relative_y)
+                    if targets and targets.issubset(rows):
+                        break
+                self.logger.info(
+                    "  [MGMT-XY] 좌표 지점 UIA 행번호 확인: "
+                    f"targets={sorted(targets)}, rows={sorted(rows.items())}"
+                )
+                return rows
+
             if skip_visible_row_scan:
                 initial_snapshot = _validate_initial_voucher_row_snapshot(
                     _fast_visible_voucher_row_snapshot()
@@ -4468,15 +4720,46 @@ class ERPLoginBot:
                 initial_snapshot = _validate_initial_voucher_row_snapshot(
                     _fully_visible_voucher_row_snapshot()
                 )
-            row_geometry_state = {
-                "snapshot": initial_snapshot,
-                "bottom_scroll_mode": False,
-            }
-
             first_row_y = int(initial_snapshot["rows"].get(1, initial_snapshot["first_y"]))
             row_height = int(initial_snapshot["row_pitch"])
             visible_rows = len(initial_snapshot["slot_ys"])
             max_row_y = int(initial_snapshot["last_full_y"])
+            initial_probe_targets = {1, min(max(1, rows_to_fill), visible_rows)}
+            initial_targeted_rows = _targeted_uia_voucher_rows(
+                initial_snapshot,
+                initial_probe_targets,
+                allow_grid_fallback=True,
+            )
+            missing_initial_targets = initial_probe_targets - set(initial_targeted_rows)
+            if missing_initial_targets:
+                _fail_form(
+                    "관리항목 입력 시작 전 행번호 좌표 UIA 확인에 실패했습니다: "
+                    f"missing={sorted(missing_initial_targets)}, found={sorted(initial_targeted_rows)}"
+                )
+            initial_snapshot["rows"] = dict(initial_targeted_rows)
+            initial_snapshot["has_exact_row_numbers"] = True
+            initial_snapshot["has_logical_row_numbers"] = True
+            first_row_y = int(initial_targeted_rows.get(1, first_row_y))
+            last_initial_row_no = max(
+                (
+                    row_no
+                    for row_no in initial_targeted_rows
+                    if 1 <= int(row_no) <= rows_to_fill
+                ),
+                default=1,
+            )
+            calibration_row_no = int(last_initial_row_no)
+            row_geometry_state = {
+                "snapshot": initial_snapshot,
+                "bottom_scroll_mode": False,
+                "scroll_anchor_y": None,
+                "calibrate_on_focus_row": None,
+                "calibrate_after_commit": False,
+                "calibration_focus_y": None,
+                "calibration_focus_next_y": None,
+                "calibration_row_no": calibration_row_no,
+                "scroll_advance_mode": None,
+            }
             self.logger.info(
                 f"  [MGMT-XY] 행 이동 방식: sequential={sequential_nav}, dynamic_uia=True, "
                 f"first_y={first_row_y}, row_h={row_height}, visible_rows={visible_rows}, "
@@ -4488,78 +4771,225 @@ class ERPLoginBot:
                 tolerance = max(2.0, pitch * 0.35)
                 named_y = (snapshot.get("rows") or {}).get(int(next_row_no))
                 if named_y is not None and float(named_y) > float(current_y) + tolerance:
-                    return int(named_y), False
+                    next_y = int(named_y)
+                    return next_y, abs(next_y - int(snapshot["last_full_y"])) <= tolerance
                 lower_slots = [
                     int(value)
                     for value in (snapshot.get("slot_ys") or [])
                     if float(value) > float(current_y) + tolerance
                 ]
                 if lower_slots:
-                    return min(lower_slots), False
+                    next_y = min(lower_slots)
+                    return next_y, abs(next_y - int(snapshot["last_full_y"])) <= tolerance
                 return int(snapshot["last_full_y"]), True
 
-            def _refresh_voucher_row_snapshot(expected_row_no=None):
-                best = None
-                for attempt in range(3):
-                    if skip_visible_row_scan:
-                        snapshot = _fast_visible_voucher_row_snapshot(expected_row_no)
-                    else:
-                        snapshot = _fully_visible_voucher_row_snapshot()
-                    if snapshot and snapshot.get("slot_ys"):
-                        best = snapshot
-                        if expected_row_no is None or expected_row_no in (snapshot.get("rows") or {}):
-                            break
-                    if attempt < 2:
-                        time.sleep(max(0.08, mgmt_key_wait))
-                if best is not None:
-                    row_geometry_state["snapshot"] = best
-                return best
+            def _set_calibrated_scroll_anchor(
+                row_no,
+                relative_y,
+                source,
+                advance_mode,
+            ):
+                snapshot = row_geometry_state["snapshot"]
+                anchor_y = min(
+                    int(snapshot["last_full_y"]),
+                    max(int(snapshot["first_y"]), int(relative_y)),
+                )
+                row_geometry_state["scroll_anchor_y"] = anchor_y
+                row_geometry_state["bottom_scroll_mode"] = True
+                row_geometry_state["calibrate_on_focus_row"] = None
+                row_geometry_state["calibrate_after_commit"] = False
+                row_geometry_state["calibration_focus_y"] = None
+                row_geometry_state["calibration_focus_next_y"] = None
+                row_geometry_state["scroll_advance_mode"] = str(advance_mode)
+                snapshot["scroll_anchor_y"] = anchor_y
+                self.logger.info(
+                    f"  [MGMT-XY] 스크롤 고정 좌표 확정: row={row_no}, y={anchor_y}, "
+                    f"source={source}, advance={advance_mode}"
+                )
+                return anchor_y
+
+            def _calibrate_focused_last_row(row_no, clicked_y):
+                snapshot = row_geometry_state["snapshot"]
+                targeted_rows = _targeted_uia_voucher_rows(
+                    snapshot,
+                    {row_no, row_no + 1},
+                )
+                actual_y = targeted_rows.get(int(row_no))
+                if actual_y is None:
+                    _fail_form(
+                        f"{row_no}행 마지막 적요 더블클릭 후 실제 행 좌표를 UIA로 확인하지 못했습니다."
+                    )
+                tolerance = max(2, int((snapshot.get("row_pitch") or row_height) * 0.35))
+                moved = abs(int(actual_y) - int(clicked_y)) > tolerance
+                next_row_visible = int(row_no + 1) in targeted_rows
+                row_geometry_state["calibrate_after_commit"] = True
+                row_geometry_state["calibrate_on_focus_row"] = None
+                row_geometry_state["calibration_focus_y"] = int(actual_y)
+                row_geometry_state["calibration_focus_next_y"] = targeted_rows.get(
+                    int(row_no + 1)
+                )
+                self.logger.info(
+                    f"  [MGMT-XY] {row_no}행 마지막 적요 더블클릭 뒤 실제 좌표 확인: "
+                    f"clicked_y={clicked_y}, actual_y={actual_y}, moved={moved}, "
+                    f"next_visible={next_row_visible}; 값 입력 뒤 실제 이동 방식을 1회 확정합니다."
+                )
+                return int(actual_y)
 
             def _focus_grid_row(row_no, expected_y):
                 snapshot = row_geometry_state["snapshot"]
                 target_y = expected_y
-                if not row_geometry_state["bottom_scroll_mode"]:
+                if row_geometry_state["bottom_scroll_mode"]:
+                    target_y = int(
+                        row_geometry_state.get("scroll_anchor_y")
+                        or snapshot.get("scroll_anchor_y")
+                        or target_y
+                    )
+                elif row_geometry_state.get("calibrate_on_focus_row") == int(row_no):
+                    # Keep the runtime-calibration candidate Y instead of restoring
+                    # a stale initial slot while the viewport is at its boundary.
+                    target_y = int(expected_y)
+                else:
                     target_y = (snapshot.get("rows") or {}).get(row_no, target_y)
                 target_y = min(
                     int(snapshot["last_full_y"]),
                     max(int(snapshot["first_y"]), int(target_y)),
                 )
                 _double_click_form_xy(summary_x, target_y, f"{row_no}행 적요", wait=mgmt_summary_open_wait)
+                if row_geometry_state.get("calibrate_on_focus_row") == int(row_no):
+                    target_y = _calibrate_focused_last_row(row_no, target_y)
                 return target_y
 
-            def _advance_grid_row(current_y, next_row_no):
+            def _advance_grid_row(
+                current_y,
+                next_row_no,
+                management_enter_sent=False,
+            ):
                 if not sequential_nav:
                     return current_y
-                _click_form_xy(summary_x, int(current_y), f"{next_row_no - 1}행 선택 복귀", wait=mgmt_key_wait)
-                pyautogui.press('down')
-                time.sleep(mgmt_commit_wait)
-
                 snapshot = row_geometry_state["snapshot"]
                 if row_geometry_state["bottom_scroll_mode"]:
-                    return int(snapshot["last_full_y"])
+                    anchor_y = int(
+                        row_geometry_state.get("scroll_anchor_y")
+                        or snapshot.get("scroll_anchor_y")
+                        or current_y
+                    )
+                    if (
+                        management_enter_sent
+                        and row_geometry_state.get("scroll_advance_mode") == "enter"
+                    ):
+                        self.logger.info(
+                            f"  [MGMT-XY] {next_row_no}행 이동: 보정된 Enter 이동 좌표 재사용 "
+                            f"y={anchor_y}"
+                        )
+                        return anchor_y
+                    _click_form_xy(
+                        summary_x,
+                        anchor_y,
+                        f"{next_row_no - 1}행 선택 복귀",
+                        wait=mgmt_key_wait,
+                    )
+                    pyautogui.press('down')
+                    time.sleep(mgmt_commit_wait)
+                    return anchor_y
 
-                next_y, reached_bottom = _next_visible_voucher_row_y(
+                if row_geometry_state.get("calibrate_after_commit"):
+                    before_y = int(
+                        row_geometry_state.get("calibration_focus_y") or current_y
+                    )
+                    targeted_rows = _targeted_uia_voucher_rows(
+                        snapshot,
+                        {next_row_no - 1, next_row_no},
+                    )
+                    current_after_y = targeted_rows.get(int(next_row_no - 1))
+                    next_after_y = targeted_rows.get(int(next_row_no))
+                    tolerance = max(
+                        2,
+                        int((snapshot.get("row_pitch") or row_height) * 0.35),
+                    )
+                    viewport_moved = (
+                        current_after_y is None
+                        or abs(int(current_after_y) - before_y) > tolerance
+                    )
+                    next_selected = None
+                    if next_after_y is not None:
+                        try:
+                            next_selected = _uia_voucher_row_selected_at_y(
+                                Desktop(backend="uia"),
+                                next_after_y,
+                            )
+                        except Exception:
+                            next_selected = None
+                    if (
+                        management_enter_sent
+                        and next_after_y is not None
+                        and (viewport_moved or next_selected is True)
+                    ):
+                        return _set_calibrated_scroll_anchor(
+                            next_row_no,
+                            next_after_y,
+                            "management-enter-observed",
+                            "enter",
+                        )
+                    _click_form_xy(
+                        summary_x,
+                        int(current_after_y if current_after_y is not None else before_y),
+                        f"{next_row_no - 1}행 선택 복귀",
+                        wait=mgmt_key_wait,
+                    )
+                    pyautogui.press('down')
+                    time.sleep(mgmt_commit_wait)
+                    targeted_rows = _targeted_uia_voucher_rows(snapshot, {next_row_no})
+                    actual_y = targeted_rows.get(int(next_row_no))
+                    if actual_y is None:
+                        _fail_form(
+                            f"경계행 Down 후 {next_row_no}행 실제 좌표를 UIA로 확인하지 못했습니다."
+                        )
+                    self.logger.info(
+                        f"  [MGMT-XY] 마지막 적요 더블클릭 뒤 화면 이동이 없어 "
+                        f"Down 1회 후 {next_row_no}행 실제 좌표를 고정합니다."
+                    )
+                    return _set_calibrated_scroll_anchor(
+                        next_row_no,
+                        actual_y,
+                        "down-after-last-row",
+                        "down",
+                    )
+
+                next_y, _ = _next_visible_voucher_row_y(
                     current_y,
                     next_row_no,
                     snapshot,
                 )
-                if not reached_bottom:
-                    return next_y
+                calibration_row = row_geometry_state.get("calibration_row_no")
+                if calibration_row is not None and int(next_row_no) == int(calibration_row):
+                    if management_enter_sent:
+                        targeted_rows = _targeted_uia_voucher_rows(
+                            snapshot,
+                            {next_row_no},
+                        )
+                        live_next_y = targeted_rows.get(int(next_row_no))
+                        if live_next_y is None:
+                            _fail_form(
+                                f"관리항목 Enter 뒤 경계 {next_row_no}행 실제 좌표를 "
+                                "UIA로 확인하지 못했습니다."
+                            )
+                        next_y = int(live_next_y)
+                    row_geometry_state["calibrate_on_focus_row"] = int(next_row_no)
+                    self.logger.info(
+                        f"  [MGMT-XY] {next_row_no}행은 계산된 마지막 적요 좌표에서 직접 더블클릭 후 "
+                        "행번호 지점 UIA로 스크롤 여부를 확인합니다."
+                    )
+                    return int(next_y)
 
-                refreshed = _refresh_voucher_row_snapshot(expected_row_no=next_row_no)
-                if refreshed is None:
-                    _fail_form(
-                        f"{next_row_no}행 이동 후 UIA 전표 행을 다시 확인하지 못해 입력을 중단합니다."
-                    )
-                if (
-                    snapshot.get("has_logical_row_numbers")
-                    and next_row_no not in (refreshed.get("rows") or {})
-                ):
-                    _fail_form(
-                        f"{next_row_no}행이 마지막 완전 표시 행으로 이동했는지 UIA로 확인하지 못했습니다."
-                    )
-                row_geometry_state["bottom_scroll_mode"] = True
-                return int((refreshed.get("rows") or {}).get(next_row_no, refreshed["last_full_y"]))
+                _click_form_xy(
+                    summary_x,
+                    int(current_y),
+                    f"{next_row_no - 1}행 선택 복귀",
+                    wait=mgmt_key_wait,
+                )
+                pyautogui.press('down')
+                time.sleep(mgmt_commit_wait)
+                return int(next_y)
 
             bank_management_norms = {
                 _norm_text("계좌번호"),
@@ -4619,6 +5049,30 @@ class ERPLoginBot:
                 return ok
 
             def _ensure_bank_management_row(row_no, current_y, expected_account):
+                if skip_visible_row_scan:
+                    for attempt in range(3):
+                        if _current_row_account_matches(row_no, current_y, expected_account):
+                            if not _prepare_fast_bank_management_coordinates():
+                                _fail_form(
+                                    f"{row_no}행 보통예금 관리항목의 빠른 입력 좌표를 준비하지 못했습니다."
+                                )
+                            management_bank_coordinate_fallback_rows.add(row_no)
+                            self.logger.info(
+                                f"  [MGMT-XY] {row_no}행 보통예금 계정과목 확인 완료; "
+                                "전체 UIA 탐색 없이 계좌번호/금융기관점 입력을 진행합니다."
+                            )
+                            return current_y
+                        if attempt < 2:
+                            time.sleep(max(0.15, mgmt_commit_wait))
+                            _double_click_form_xy(
+                                summary_x,
+                                int(current_y),
+                                f"{row_no}행 보통예금 재선택",
+                                wait=mgmt_summary_open_wait,
+                            )
+                    _fail_form(
+                        f"{row_no}행 계정과목이 보통예금인지 확인하지 못해 관리항목 입력을 중단합니다."
+                    )
                 ok, snapshot = _bank_management_visible()
                 if ok:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 보통예금 관리항목 표시 확인")
@@ -4651,7 +5105,10 @@ class ERPLoginBot:
                     _click_form_xy(summary_x, int(current_y), f"{row_no}행 보통예금 행 이동 재시도", wait=mgmt_key_wait)
                     pyautogui.press('down')
                     time.sleep(max(0.35, mgmt_commit_wait))
-                    current_y = int(row_geometry_state["snapshot"]["last_full_y"])
+                    retry_snapshot = row_geometry_state["snapshot"]
+                    current_y = int(
+                        retry_snapshot.get("scroll_anchor_y") or retry_snapshot["last_full_y"]
+                    )
                     _double_click_form_xy(summary_x, int(current_y), f"{row_no}행 보통예금 재선택", wait=mgmt_summary_open_wait)
                     if mgmt_after_summary_open_wait:
                         time.sleep(mgmt_after_summary_open_wait)
@@ -4685,6 +5142,8 @@ class ERPLoginBot:
                 )
                 if not plan and not has_explicit_management:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 스킵: account={account_key}, corp={corp}, 입력 불필요")
+                    if row_geometry_state.get("calibrate_on_focus_row") == row_no:
+                        current_y = _focus_grid_row(row_no, current_y)
                     if idx < rows_to_fill - 1:
                         current_y = _advance_grid_row(current_y, row_no + 1)
                     continue
@@ -4694,10 +5153,16 @@ class ERPLoginBot:
                     time.sleep(mgmt_after_summary_open_wait)
                 if _requires_bank_management(explicit_management_for_row):
                     current_y = _ensure_bank_management_row(row_no, current_y, account_name)
-                _fill_management_for_current_row(row_no, account_name)
+                management_enter_sent = bool(
+                    _fill_management_for_current_row(row_no, account_name)
+                )
                 time.sleep(mgmt_key_wait)
                 if idx < rows_to_fill - 1:
-                    current_y = _advance_grid_row(current_y, row_no + 1)
+                    current_y = _advance_grid_row(
+                        current_y,
+                        row_no + 1,
+                        management_enter_sent=management_enter_sent,
+                    )
 
             self.logger.info("  [MGMT-XY] 행별 적요/관리항목 좌표 입력 완료")
 
