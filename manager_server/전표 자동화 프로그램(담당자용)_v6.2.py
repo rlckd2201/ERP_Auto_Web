@@ -5124,31 +5124,82 @@ class ERPLoginBot:
                 expected_norm = _norm_text(expected_account)
                 if not expected_norm:
                     return False
+                expected_summary = ""
+                if 1 <= int(row_no) <= len(erp_rows):
+                    expected_columns = str(erp_rows[int(row_no) - 1] or "").split('\t')
+                    if expected_columns:
+                        expected_summary = expected_columns[-1].strip()
+                expected_summary_norm = _norm_text(expected_summary)
                 old_clipboard = None
                 copied = ""
+                matched_x = None
+                matched_by = None
+                probe_results = []
                 try:
                     old_clipboard = pyperclip.paste()
                 except Exception:
                     old_clipboard = None
                 try:
-                    _click_form_xy(account_x, int(current_y), f"{row_no}행 계정과목 검증", wait=mgmt_key_wait)
-                    pyautogui.hotkey('ctrl', 'c')
-                    time.sleep(max(0.08, mgmt_key_wait))
-                    copied = str(pyperclip.paste() or "")
-                except Exception as e:
-                    self.logger.warning(f"  [MGMT-XY] {row_no}행 계정과목 복사 검증 실패: {e}")
-                    copied = ""
+                    verify_center_x = int(
+                        os.getenv("ERP_MGMT_ACCOUNT_VERIFY_CENTER_X", "295") or "295"
+                    )
+                    if expected_summary_norm:
+                        try:
+                            focus_sentinel = f"__ERP_ACCOUNT_VERIFY_{row_no}_FOCUS__"
+                            pyperclip.copy(focus_sentinel)
+                            pyautogui.hotkey('ctrl', 'c')
+                            time.sleep(max(0.08, mgmt_key_wait))
+                            copied = str(pyperclip.paste() or "")
+                            copied_norm = _norm_text(copied)
+                            probe_results.append(("focus", copied[:80]))
+                            if copied != focus_sentinel and copied_norm == expected_summary_norm:
+                                matched_by = "focused-summary"
+                        except Exception as focus_error:
+                            probe_results.append(("focus", f"ERROR: {focus_error}"))
+                    probe_xs = []
+                    for probe_x in (account_x, verify_center_x):
+                        if probe_x not in probe_xs:
+                            probe_xs.append(probe_x)
+                    for probe_x in ([] if matched_by else probe_xs):
+                        try:
+                            sentinel = f"__ERP_ACCOUNT_VERIFY_{row_no}_{probe_x}__"
+                            pyperclip.copy(sentinel)
+                            _click_form_xy(
+                                probe_x,
+                                int(current_y),
+                                f"{row_no}행 계정과목 검증",
+                                wait=mgmt_key_wait,
+                            )
+                            pyautogui.hotkey('ctrl', 'c')
+                            time.sleep(max(0.08, mgmt_key_wait))
+                            copied = str(pyperclip.paste() or "")
+                            copied_norm = _norm_text(copied)
+                            probe_results.append((probe_x, copied[:80]))
+                            if copied != sentinel and expected_norm in copied_norm:
+                                matched_x = probe_x
+                                matched_by = "account"
+                                break
+                            if (
+                                copied != sentinel
+                                and expected_summary_norm
+                                and copied_norm == expected_summary_norm
+                            ):
+                                matched_x = probe_x
+                                matched_by = "summary"
+                                break
+                        except Exception as probe_error:
+                            probe_results.append((probe_x, f"ERROR: {probe_error}"))
                 finally:
                     if old_clipboard is not None:
                         try:
                             pyperclip.copy(old_clipboard)
                         except Exception:
                             pass
-                copied_norm = _norm_text(copied)
-                ok = expected_norm in copied_norm
+                ok = matched_by is not None
                 self.logger.info(
                     f"  [MGMT-XY] {row_no}행 계정과목 검증: expected={expected_account}, "
-                    f"copied={copied[:80]}, ok={ok}"
+                    f"expected_summary={expected_summary}, matched_by={matched_by}, "
+                    f"matched_x={matched_x}, probes={probe_results}, ok={ok}"
                 )
                 return ok
 

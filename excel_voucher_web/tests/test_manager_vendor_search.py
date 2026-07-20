@@ -1072,6 +1072,79 @@ def test_fast_bank_row_check_bypasses_full_uia_visibility_scan():
         assert full_scan_calls == []
 
 
+def test_bank_account_verification_retries_at_account_cell_center():
+    clipboard = {"value": "original clipboard"}
+    active_x = {"value": None}
+    clicks = []
+
+    def _click(x, y, label, **_kwargs):
+        active_x["value"] = x
+        clicks.append((x, y, label))
+
+    def _hotkey(*keys):
+        if keys == ("ctrl", "c"):
+            clipboard["value"] = (
+                "보통예금" if active_x["value"] == 295 else "6월 수시결제 - 신한은행"
+            )
+
+    loaded = _load_nested_functions(
+        "_current_row_account_matches",
+        namespace={
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "account_x": 229,
+            "erp_rows": [],
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "pyperclip": SimpleNamespace(
+                paste=lambda: clipboard["value"],
+                copy=lambda value: clipboard.update(value=value),
+            ),
+            "pyautogui": SimpleNamespace(hotkey=_hotkey),
+            "_click_form_xy": _click,
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_key_wait": 0.05,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_current_row_account_matches"](210, 691, "보통예금") is True
+    assert [event[0] for event in clicks] == [229, 295]
+    assert clipboard["value"] == "original clipboard"
+
+
+def test_bank_account_verification_accepts_only_the_expected_row_summary():
+    for copied_text, expected in (
+        ("6월 수시결제 - 신한은행\r\n", True),
+        ("6월 수시결제 - 지엔지하이텍(GN023)", False),
+    ):
+        clipboard = {"value": "original clipboard"}
+
+        def _hotkey(*keys):
+            if keys == ("ctrl", "c"):
+                clipboard["value"] = copied_text
+
+        loaded = _load_nested_functions(
+            "_current_row_account_matches",
+            namespace={
+                "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+                "account_x": 229,
+                "erp_rows": ["보통예금\t\t0\t1000\t6월 수시결제 - 신한은행"],
+                "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+                "pyperclip": SimpleNamespace(
+                    paste=lambda: clipboard["value"],
+                    copy=lambda value: clipboard.update(value=value),
+                ),
+                "pyautogui": SimpleNamespace(hotkey=_hotkey),
+                "_click_form_xy": lambda *_args, **_kwargs: None,
+                "time": SimpleNamespace(sleep=lambda _seconds: None),
+                "mgmt_key_wait": 0.05,
+                "self": SimpleNamespace(logger=_FakeLogger()),
+            },
+        )
+
+        assert loaded["_current_row_account_matches"](1, 691, "보통예금") is expected
+        assert clipboard["value"] == "original clipboard"
+
+
 def test_fast_bank_fill_skips_second_uia_scan_and_inputs_two_values():
     for total_rows in (230, 300):
         events = []
