@@ -4712,6 +4712,47 @@ class ERPLoginBot:
                 )
                 return rows
 
+            def _initial_voucher_rows_with_geometry_fallback(
+                snapshot,
+                target_row_nos,
+            ):
+                """Keep validated viewport geometry when GDI hides row labels from UIA."""
+                targets = {
+                    int(value)
+                    for value in (target_row_nos or set())
+                    if int(value) > 0
+                }
+                targeted_rows = _targeted_uia_voucher_rows(
+                    snapshot,
+                    targets,
+                    allow_grid_fallback=True,
+                )
+                merged_rows = {
+                    int(row_no): int(relative_y)
+                    for row_no, relative_y in (snapshot.get("rows") or {}).items()
+                }
+                merged_rows.update(
+                    {
+                        int(row_no): int(relative_y)
+                        for row_no, relative_y in targeted_rows.items()
+                    }
+                )
+                missing_targets = targets - set(targeted_rows)
+                unresolved_targets = missing_targets - set(merged_rows)
+                if unresolved_targets:
+                    _fail_form(
+                        "관리항목 입력 시작 전 행번호 좌표를 확인하지 못했습니다: "
+                        f"missing={sorted(unresolved_targets)}, found={sorted(targeted_rows)}"
+                    )
+                if missing_targets:
+                    self.logger.warning(
+                        "  [MGMT-XY] 점 단위 UIA가 행번호를 노출하지 않아 검증된 "
+                        "전표 viewport 좌표를 사용합니다: "
+                        f"missing={sorted(missing_targets)}, geometry="
+                        f"{[(row_no, merged_rows[row_no]) for row_no in sorted(missing_targets)]}"
+                    )
+                return merged_rows, not bool(missing_targets)
+
             if skip_visible_row_scan:
                 initial_snapshot = _validate_initial_voucher_row_snapshot(
                     _fast_visible_voucher_row_snapshot()
@@ -4725,25 +4766,20 @@ class ERPLoginBot:
             visible_rows = len(initial_snapshot["slot_ys"])
             max_row_y = int(initial_snapshot["last_full_y"])
             initial_probe_targets = {1, min(max(1, rows_to_fill), visible_rows)}
-            initial_targeted_rows = _targeted_uia_voucher_rows(
-                initial_snapshot,
-                initial_probe_targets,
-                allow_grid_fallback=True,
-            )
-            missing_initial_targets = initial_probe_targets - set(initial_targeted_rows)
-            if missing_initial_targets:
-                _fail_form(
-                    "관리항목 입력 시작 전 행번호 좌표 UIA 확인에 실패했습니다: "
-                    f"missing={sorted(missing_initial_targets)}, found={sorted(initial_targeted_rows)}"
+            initial_row_map, initial_point_uia_complete = (
+                _initial_voucher_rows_with_geometry_fallback(
+                    initial_snapshot,
+                    initial_probe_targets,
                 )
-            initial_snapshot["rows"] = dict(initial_targeted_rows)
-            initial_snapshot["has_exact_row_numbers"] = True
+            )
+            initial_snapshot["rows"] = dict(initial_row_map)
+            initial_snapshot["has_exact_row_numbers"] = bool(initial_point_uia_complete)
             initial_snapshot["has_logical_row_numbers"] = True
-            first_row_y = int(initial_targeted_rows.get(1, first_row_y))
+            first_row_y = int(initial_row_map.get(1, first_row_y))
             last_initial_row_no = max(
                 (
                     row_no
-                    for row_no in initial_targeted_rows
+                    for row_no in initial_row_map
                     if 1 <= int(row_no) <= rows_to_fill
                 ),
                 default=1,
@@ -4816,8 +4852,11 @@ class ERPLoginBot:
                 )
                 actual_y = targeted_rows.get(int(row_no))
                 if actual_y is None:
-                    _fail_form(
-                        f"{row_no}행 마지막 적요 더블클릭 후 실제 행 좌표를 UIA로 확인하지 못했습니다."
+                    actual_y = int(clicked_y)
+                    self.logger.warning(
+                        f"  [MGMT-XY] {row_no}행 마지막 적요 더블클릭 후 점 단위 UIA가 "
+                        "행번호를 노출하지 않아 클릭 좌표를 유지합니다. "
+                        "관리항목 Enter 뒤 마지막 완전 표시 좌표를 고정합니다."
                     )
                 tolerance = max(2, int((snapshot.get("row_pitch") or row_height) * 0.35))
                 moved = abs(int(actual_y) - int(clicked_y)) > tolerance
@@ -4902,6 +4941,23 @@ class ERPLoginBot:
                     )
                     current_after_y = targeted_rows.get(int(next_row_no - 1))
                     next_after_y = targeted_rows.get(int(next_row_no))
+                    if (
+                        management_enter_sent
+                        and current_after_y is None
+                        and next_after_y is None
+                    ):
+                        geometry_y = int(snapshot["last_full_y"])
+                        self.logger.warning(
+                            f"  [MGMT-XY] {next_row_no}행 이동 시 점 단위 UIA가 행번호를 "
+                            "노출하지 않아 관리항목 Enter 이동과 마지막 완전 표시 좌표를 "
+                            f"고정합니다: y={geometry_y}"
+                        )
+                        return _set_calibrated_scroll_anchor(
+                            next_row_no,
+                            geometry_y,
+                            "management-enter-geometry-fallback",
+                            "enter",
+                        )
                     tolerance = max(
                         2,
                         int((snapshot.get("row_pitch") or row_height) * 0.35),
@@ -4969,11 +5025,13 @@ class ERPLoginBot:
                         )
                         live_next_y = targeted_rows.get(int(next_row_no))
                         if live_next_y is None:
-                            _fail_form(
-                                f"관리항목 Enter 뒤 경계 {next_row_no}행 실제 좌표를 "
-                                "UIA로 확인하지 못했습니다."
+                            self.logger.warning(
+                                f"  [MGMT-XY] 관리항목 Enter 뒤 경계 {next_row_no}행을 "
+                                "점 단위 UIA로 읽지 못해 계산된 완전 표시 좌표를 유지합니다: "
+                                f"y={next_y}"
                             )
-                        next_y = int(live_next_y)
+                        else:
+                            next_y = int(live_next_y)
                     row_geometry_state["calibrate_on_focus_row"] = int(next_row_no)
                     self.logger.info(
                         f"  [MGMT-XY] {next_row_no}행은 계산된 마지막 적요 좌표에서 직접 더블클릭 후 "

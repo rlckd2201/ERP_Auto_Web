@@ -1542,6 +1542,57 @@ def test_targeted_uia_row_number_ignores_short_child_viewport_index():
     ) == 230
 
 
+def test_initial_point_uia_unavailable_uses_validated_viewport_geometry():
+    snapshot = {
+        "rows": {
+            row_no: 231 + ((row_no - 1) * 20)
+            for row_no in range(1, 25)
+        },
+        "slot_ys": list(range(231, 692, 20)),
+    }
+    loaded = _load_nested_functions(
+        "_initial_voucher_rows_with_geometry_fallback",
+        namespace={
+            "_targeted_uia_voucher_rows": lambda *_args, **_kwargs: {},
+            "_fail_form": lambda message: (_ for _ in ()).throw(
+                RuntimeError(message)
+            ),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    rows, point_uia_complete = loaded[
+        "_initial_voucher_rows_with_geometry_fallback"
+    ](snapshot, {1, 24})
+
+    assert rows == snapshot["rows"]
+    assert rows[12] == 451
+    assert point_uia_complete is False
+
+
+def test_initial_geometry_fallback_still_stops_without_target_coordinates():
+    loaded = _load_nested_functions(
+        "_initial_voucher_rows_with_geometry_fallback",
+        namespace={
+            "_targeted_uia_voucher_rows": lambda *_args, **_kwargs: {},
+            "_fail_form": lambda message: (_ for _ in ()).throw(
+                RuntimeError(message)
+            ),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    try:
+        loaded["_initial_voucher_rows_with_geometry_fallback"](
+            {"rows": {1: 231}, "slot_ys": [231, 251]},
+            {1, 2},
+        )
+    except RuntimeError as exc:
+        assert "missing=[2]" in str(exc)
+    else:
+        raise AssertionError("missing geometry must still stop before ERP input")
+
+
 def test_targeted_uia_selection_reads_selected_parent_without_descendants():
     parent = _FakeControl(
         "230",
@@ -1956,6 +2007,53 @@ def test_full_runtime_navigation_reaches_dynamic_bank_row_without_gaps():
                     full_row_count - 2
                     if scenario == "enter-observed"
                     else total_rows - 2
+                )
+
+
+def test_gdi_point_uia_unavailable_uses_enter_geometry_through_dynamic_bank_row():
+    for full_row_count in (24, 26):
+        for total_rows in (210, 230, 300):
+            for probe_mode in ("empty", "unrelated-row"):
+                snapshot = _visible_voucher_snapshot(
+                    first_logical_row=1,
+                    full_row_count=full_row_count,
+                )
+                state = _runtime_calibration_state(snapshot)
+                events = []
+                loaded = _load_runtime_navigation(
+                    state,
+                    (
+                        (lambda *_args, **_kwargs: {})
+                        if probe_mode == "empty"
+                        else (
+                            lambda *_args, **_kwargs: {
+                                1: snapshot["first_y"]
+                            }
+                        )
+                    ),
+                    events,
+                )
+
+                current_y = snapshot["first_y"]
+                focused_rows = []
+                for row_no in range(1, total_rows + 1):
+                    current_y = loaded["_focus_grid_row"](row_no, current_y)
+                    focused_rows.append(row_no)
+                    if row_no == total_rows:
+                        break
+                    current_y = loaded["_advance_grid_row"](
+                        current_y,
+                        row_no + 1,
+                        management_enter_sent=True,
+                    )
+
+                assert focused_rows == list(range(1, total_rows + 1))
+                assert current_y == snapshot["last_full_y"]
+                assert state["bottom_scroll_mode"] is True
+                assert state["scroll_anchor_y"] == snapshot["last_full_y"]
+                assert state["scroll_advance_mode"] == "enter"
+                assert sum(event == ("key", "down") for event in events) == (
+                    full_row_count - 2
                 )
 
 

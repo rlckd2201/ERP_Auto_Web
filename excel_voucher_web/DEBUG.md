@@ -235,4 +235,11 @@
 - 경계 직전 거래처 Enter가 이미 화면을 움직인 경우에도 다음 행번호 지점을 다시 읽어 stale 초기 좌표로 다른 행을 더블클릭하지 않는다. 행번호 지점 확인에 실패하면 추정 좌표로 계속하지 않고 즉시 중단한다.
 - 총행은 210으로 고정하지 않고 payload의 `rows_to_fill`을 그대로 사용한다. 24/26 표시행 × 총 230/300행 × Enter/Down 분기에서 1행부터 마지막 행까지 순서가 누락되지 않고, 동적 마지막 보통예금 행에서 기존 계좌번호/금융기관지점 두 값이 입력되는지 검증했다.
 - 첫 행 단일클릭 → F9 → 거래처번호 → Tab/방향키/Enter 순서, 2행 이후 관리항목값 단일클릭 → 거래처번호 → Enter, DS 메뉴 좌표/대기, 마지막 보통예금 fast 좌표는 유지했다.
-- 원본 저장소 전체 테스트 결과: 74 passed. 배포 저장소 전체 테스트 결과: 73 passed. Python AST 구문 검사와 `git diff --check` 통과. 배포 저장소 공식 Graphify 0.9.16의 `graphify update .` 완료(2421 nodes, 6988 edges, 112 communities).
+- 전체 테스트 결과: 74 passed. Python AST 구문 검사와 `git diff --check` 통과. 공식 Graphify 0.9.16의 `graphify update .` 완료(2436 nodes, 6992 edges, 121 communities).
+
+## 2026-07-20 GDI 행번호 point UIA 미노출 사전중단 수정
+- 운영 작업 `3a5f6c5f448b`은 `ERP_PASTE!A1:E210`을 정상 붙여넣었고 원본 209행 뒤 보통예금 210행까지 ERP에 표시됐다. 실패는 은행값 입력이 아니라 관리항목 루프 직전 추가된 행번호 point UIA 검증이었다. 준비 스냅샷은 `slots=24, logical=1..24`를 정상 계산했지만 GDI 화면의 `Desktop.from_point()`가 행번호를 노출하지 않아 `targets=[1,24], rows=[]`가 되었고 기존 hard gate가 즉시 중단했다.
+- 초기 point UIA 결과는 필수 조건이 아닌 보정 기능으로 변경했다. 캐시된 `SS_Row`/관리항목 경계로 검증된 1..24/26 좌표 맵을 보존하고, point UIA 결과가 있으면 병합하며 없으면 geometry 맵으로 계속 진행한다. geometry에도 목표 좌표가 없을 때만 기존처럼 입력 전에 중단한다.
+- 화면 경계에서 point UIA가 계속 비어 있더라도 거래처 관리항목 Enter를 실제로 보낸 경우에는 추가 Down을 보내지 않고 `last_full_y`를 `enter` 고정 좌표로 확정한다. 마지막 표시행 더블클릭 때 먼저 스크롤되든 Enter 때 스크롤되든 다음 행이 같은 마지막 완전 표시 슬롯에 오는 ERP 동작을 이용한다.
+- 화면 표시행은 24/26 등 런타임 경계를 그대로 사용하고 총행은 210으로 고정하지 않는다. 210/230/300행 회귀에서 첫 행부터 동적 마지막 보통예금 행까지 누락 없이 도달하고, 보통예금의 기존 계좌번호/금융기관지점 fast 입력 분기는 변경하지 않았다.
+- 배포 저장소 전체 테스트 결과: 76 passed. Python AST 구문 검사와 `git diff --check` 통과. 공식 Graphify 업데이트 완료(2425 nodes, 7001 edges, 111 communities).
