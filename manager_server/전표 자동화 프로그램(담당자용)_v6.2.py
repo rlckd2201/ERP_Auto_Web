@@ -2673,6 +2673,260 @@ class ERPLoginBot:
 
         management_grid_ready_state = {"snapshot": None}
 
+        def _management_grid_visual_boundary(first_value_abs, fallback_abs):
+            """Find the live voucher-grid bottom from the two painted separator lines."""
+            try:
+                main_rect = _main_rect()
+                row_height = max(
+                    10,
+                    int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"),
+                )
+                scan_step = max(
+                    2,
+                    int(os.getenv("ERP_MGMT_VISUAL_SCAN_STEP", "4") or "4"),
+                )
+                scan_left = main_rect.left + 60
+                scan_right = min(main_rect.right - 180, main_rect.left + 1500)
+                scan_top = max(
+                    main_rect.top + 250,
+                    int(first_value_abs) - max(100, row_height * 7),
+                )
+                scan_bottom = min(
+                    main_rect.bottom - 90,
+                    int(first_value_abs) - max(16, row_height),
+                )
+                if scan_right <= scan_left or scan_bottom - scan_top < 20:
+                    return int(fallback_abs), None
+                image = pyautogui.screenshot(
+                    region=(
+                        scan_left,
+                        scan_top,
+                        scan_right - scan_left,
+                        scan_bottom - scan_top,
+                    )
+                )
+                width, height = image.size
+                sample_count = max(1, len(range(0, width, scan_step)))
+                minimum_line_pixels = max(
+                    20,
+                    int(round(sample_count * 0.30)),
+                )
+                painted_rows = []
+                for y in range(height):
+                    line_pixels = 0
+                    for x in range(0, width, scan_step):
+                        r, g, b = image.getpixel((x, y))[:3]
+                        neutral = abs(r - g) < 10 and abs(g - b) < 10
+                        if neutral and (r < 100 or 125 <= r <= 225):
+                            line_pixels += 1
+                    if line_pixels >= minimum_line_pixels:
+                        painted_rows.append((scan_top + y, line_pixels))
+                clusters = []
+                for abs_y, line_pixels in painted_rows:
+                    if not clusters or abs_y > clusters[-1][-1][0] + 2:
+                        clusters.append([(abs_y, line_pixels)])
+                    else:
+                        clusters[-1].append((abs_y, line_pixels))
+                line_candidates = []
+                for cluster in clusters:
+                    strongest_y, strongest_score = max(
+                        cluster,
+                        key=lambda item: item[1],
+                    )
+                    line_candidates.append((int(strongest_y), int(strongest_score)))
+                pair_gap_max = max(12, int(round(row_height * 0.80)))
+                separator_groups = []
+                current_group = []
+                for upper, lower in zip(line_candidates, line_candidates[1:]):
+                    gap = int(lower[0]) - int(upper[0])
+                    if 4 <= gap <= pair_gap_max:
+                        if not current_group:
+                            current_group = [upper]
+                        current_group.append(lower)
+                    elif current_group:
+                        separator_groups.append(current_group)
+                        current_group = []
+                if current_group:
+                    separator_groups.append(current_group)
+                valid_groups = [
+                    group
+                    for group in separator_groups
+                    if row_height
+                    <= int(first_value_abs) - int(group[-1][0])
+                    <= row_height * 4
+                ]
+                if not valid_groups:
+                    return int(fallback_abs), {
+                        "source": "offset-fallback",
+                        "lines": [item[0] for item in line_candidates[-8:]],
+                    }
+                selected_group = max(valid_groups, key=lambda group: int(group[-1][0]))
+                expected_offset = max(
+                    row_height * 2,
+                    int(round(
+                        row_height
+                        * float(
+                            os.getenv(
+                                "ERP_MGMT_VISUAL_BOUNDARY_OFFSET_ROWS",
+                                "2.4",
+                            )
+                            or "2.4"
+                        )
+                    )),
+                )
+                boundary_abs = int(
+                    min(
+                        selected_group,
+                        key=lambda line: (
+                            abs(
+                                (int(first_value_abs) - int(line[0]))
+                                - expected_offset
+                            ),
+                            -int(line[0]),
+                        ),
+                    )[0]
+                )
+                return int(boundary_abs), {
+                    "source": "painted-separator",
+                    "expected_offset": int(expected_offset),
+                    "gaps": [
+                        int(next_line[0]) - int(line[0])
+                        for line, next_line in zip(selected_group, selected_group[1:])
+                    ],
+                    "lines": [item[0] for item in line_candidates[-8:]],
+                }
+            except Exception as exc:
+                self.logger.debug(
+                    f"  [FORM-VERIFY] voucher painted boundary scan failed: {exc}"
+                )
+                return int(fallback_abs), None
+
+        def _management_grid_visual_snapshot():
+            """Detect the painted GDI management grid without enumerating UIA descendants."""
+            main_rect = _main_rect()
+            visual_ready = False
+            visual_score = 0
+            visual_signature = None
+            visual_band_top = None
+            visual_counts = {"red": 0, "dark": 0, "gray": 0, "red_rows": 0}
+            value_x = int(os.getenv("ERP_MGMT_VALUE_X", "1118") or "1118")
+            first_value_y = None
+            voucher_clip_bottom_abs = None
+            try:
+                scan_left = main_rect.left + 650
+                scan_right = min(main_rect.right - 40, main_rect.left + 1220)
+                label_left = main_rect.left + int(
+                    os.getenv("ERP_MGMT_LABEL_X_MIN", "600") or "600"
+                )
+                label_right = main_rect.left + int(
+                    os.getenv("ERP_MGMT_LABEL_X_MAX", "900") or "900"
+                )
+                max_top = max(331, min(main_rect.bottom - main_rect.top - 110, 900))
+                step = max(2, int(os.getenv("ERP_MGMT_VISUAL_SCAN_STEP", "4") or "4"))
+                row_height = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
+                value_to_grid_bottom = max(
+                    row_height,
+                    int(os.getenv("ERP_MGMT_VISUAL_VALUE_TO_GRID_BOTTOM", "44") or "44"),
+                )
+                for top_rel in (360, 480, 600, 720, 820):
+                    if top_rel >= max_top:
+                        continue
+                    top = main_rect.top + top_rel
+                    bottom = min(main_rect.bottom - 90, top + 120)
+                    if scan_right <= scan_left or bottom <= top:
+                        continue
+                    image = pyautogui.screenshot(
+                        region=(scan_left, top, scan_right - scan_left, bottom - top)
+                    )
+                    width, height = image.size
+                    red_pixels = 0
+                    dark_pixels = 0
+                    gray_lines = 0
+                    red_sample_ys = []
+                    for y in range(0, height, step):
+                        red_on_row = 0
+                        for x in range(0, width, step):
+                            r, g, b = image.getpixel((x, y))[:3]
+                            sample_abs_x = scan_left + x
+                            if (
+                                label_left <= sample_abs_x <= label_right
+                                and r > 150
+                                and g < 95
+                                and b < 95
+                            ):
+                                red_pixels += 1
+                                red_on_row += 1
+                            elif r < 95 and g < 95 and b < 95:
+                                dark_pixels += 1
+                            elif abs(r - g) < 8 and abs(g - b) < 8 and 145 <= r <= 215:
+                                gray_lines += 1
+                        if red_on_row:
+                            red_sample_ys.append(y)
+                    red_row_clusters = []
+                    for sample_y in red_sample_ys:
+                        if (
+                            not red_row_clusters
+                            or sample_y > red_row_clusters[-1][-1] + (step * 2)
+                        ):
+                            red_row_clusters.append([sample_y])
+                        else:
+                            red_row_clusters[-1].append(sample_y)
+                    score = red_pixels * 3 + dark_pixels + gray_lines
+                    if score > visual_score:
+                        visual_score = score
+                        visual_counts = {
+                            "red": red_pixels,
+                            "dark": dark_pixels,
+                            "gray": gray_lines,
+                            "red_rows": len(red_row_clusters),
+                        }
+                    if red_pixels >= 1 and dark_pixels >= 4 and gray_lines >= 8:
+                        first_cluster = red_row_clusters[0]
+                        first_sample_center = int(round(sum(first_cluster) / len(first_cluster)))
+                        first_value_y = top_rel + first_sample_center + (step // 2)
+                        first_value_abs = main_rect.top + first_value_y
+                        fallback_boundary_abs = first_value_abs - value_to_grid_bottom
+                        (
+                            voucher_clip_bottom_abs,
+                            boundary_detail,
+                        ) = _management_grid_visual_boundary(
+                            first_value_abs,
+                            fallback_boundary_abs,
+                        )
+                        if not (
+                            isinstance(boundary_detail, dict)
+                            and boundary_detail.get("source") == "painted-separator"
+                        ):
+                            continue
+                        visual_ready = True
+                        visual_band_top = top_rel
+                        visual_signature = (
+                            int(top_rel),
+                            int(first_value_y),
+                            int(voucher_clip_bottom_abs - main_rect.top),
+                            int(len(red_row_clusters)),
+                        )
+                        visual_counts = {
+                            "red": red_pixels,
+                            "dark": dark_pixels,
+                            "gray": gray_lines,
+                            "red_rows": len(red_row_clusters),
+                        }
+                        visual_counts["boundary"] = boundary_detail
+                        break
+            except Exception as e:
+                self.logger.debug(f"  [FORM-VERIFY] management visual snapshot failed: {e}")
+            return {
+                "visual_ready": visual_ready,
+                "visual_score": visual_score,
+                "visual_signature": visual_signature,
+                "visual_band_top": visual_band_top,
+                "visual_counts": visual_counts,
+                "value_x": value_x,
+                "first_value_y": first_value_y,
+                "voucher_clip_bottom_abs": voucher_clip_bottom_abs,
+            }
+
         def _management_grid_snapshot(include_visual=False):
             main_rect = _main_rect()
             header_label = None
@@ -2905,45 +3159,90 @@ class ERPLoginBot:
                 1.0,
                 float(os.getenv("ERP_GRID_PASTE_READY_SECONDS_PER_ROW", "10") or "10"),
             )
-            timeout = max(20.0, row_count * seconds_per_row)
+            uncapped_timeout = max(20.0, row_count * seconds_per_row)
+            timeout_cap = max(
+                20.0,
+                float(os.getenv("ERP_GRID_PASTE_READY_MAX_SECONDS", "180") or "180"),
+            )
+            timeout = min(uncapped_timeout, timeout_cap)
             poll_seconds = max(
-                1.0,
-                float(os.getenv("ERP_GRID_PASTE_READY_POLL_SECONDS", "20") or "20"),
+                0.5,
+                float(os.getenv("ERP_GRID_PASTE_VISUAL_POLL_SECONDS", "2.0") or "2.0"),
+            )
+            stable_required = max(
+                2,
+                int(os.getenv("ERP_GRID_PASTE_VISUAL_STABLE_COUNT", "2") or "2"),
             )
             end_at = time.time() + timeout
             started = time.time()
             last_snapshot = None
+            last_visual_signature = None
+            stable_visual_count = 0
             while True:
                 elapsed = time.time() - started
                 snapshot_started = time.time()
-                snapshot = _management_grid_snapshot(include_visual=True)
+                snapshot = _management_grid_visual_snapshot()
                 snapshot_seconds = time.time() - snapshot_started
                 last_snapshot = snapshot
-                labels = snapshot.get("label_norms") or set()
-                has_ready_label = (
-                    ready_needles.issubset(labels)
-                    if expected_ready_needles
-                    else bool(labels & ready_needles)
-                )
-                has_value_header = bool(snapshot.get("header_value"))
                 has_visual_ready = bool(snapshot.get("visual_ready"))
-                if has_ready_label:
-                    snapshot["semantic_ready"] = True
+                visual_signature = snapshot.get("visual_signature")
+                if has_visual_ready and visual_signature is not None:
+                    if visual_signature == last_visual_signature:
+                        stable_visual_count += 1
+                    else:
+                        stable_visual_count = 1
+                    last_visual_signature = visual_signature
+                else:
+                    stable_visual_count = 0
+                    last_visual_signature = None
+                if stable_visual_count >= stable_required:
+                    snapshot.update(
+                        {
+                            "header_label": None,
+                            "header_value": None,
+                            "cash_processing_checkbox": None,
+                            "items": [],
+                            "labels": [],
+                            "label_norms": set(),
+                            "voucher_viewport_rect": None,
+                            "management_ready": True,
+                            "ready_source": "gdi-visual-stable",
+                            "stable_gdi_ready": True,
+                            "semantic_ready": False,
+                            "management_value_x": snapshot.get("value_x"),
+                            "management_value_y": snapshot.get("first_value_y"),
+                        }
+                    )
                     snapshot["expected_label_norms"] = set(ready_needles)
+                    vendor_key = _norm_text("거래처")
+                    value_x = snapshot.get("value_x")
+                    first_value_y = snapshot.get("first_value_y")
+                    if (
+                        vendor_key in ready_needles
+                        and value_x is not None
+                        and first_value_y is not None
+                    ):
+                        management_value_xy_cache[vendor_key] = (
+                            int(value_x),
+                            int(first_value_y),
+                        )
                     self.logger.info(
-                        "  [FORM-VERIFY] 하단 관리항목 표시 감지: "
+                        "  [FORM-VERIFY] GDI 하단 관리항목 화면 안정 감지: "
                         f"context={context}, rows={row_count}, elapsed={elapsed:.1f}s, "
-                        f"value_header={has_value_header}, visual_ready={has_visual_ready}, "
+                        f"stable={stable_visual_count}/{stable_required}, "
                         f"visual_score={snapshot.get('visual_score')}, "
-                        f"expected={sorted(ready_needles)}, labels={snapshot.get('labels')}"
+                        f"signature={visual_signature}, counts={snapshot.get('visual_counts')}, "
+                        f"value=({value_x},{first_value_y}), expected={sorted(ready_needles)}"
                     )
                     return snapshot
                 self.logger.info(
-                    "  [FORM-VERIFY] 하단 관리항목 표시 대기 중: "
+                    "  [FORM-VERIFY] GDI 하단 관리항목 화면 대기 중: "
                     f"context={context}, elapsed={elapsed:.1f}s/{timeout:.1f}s, "
                     f"next_check={poll_seconds:.1f}s, snapshot={snapshot_seconds:.1f}s, "
+                    f"stable={stable_visual_count}/{stable_required}, "
                     f"visual_ready={has_visual_ready}, visual_score={snapshot.get('visual_score')}, "
-                    f"expected={sorted(ready_needles)}, labels={snapshot.get('labels')}"
+                    f"signature={visual_signature}, counts={snapshot.get('visual_counts')}, "
+                    f"expected={sorted(ready_needles)}"
                 )
                 if time.time() >= end_at:
                     break
@@ -2952,7 +3251,7 @@ class ERPLoginBot:
                 "하단 관리항목 표시 대기 실패: "
                 f"context={context}, timeout={timeout:.1f}s, "
                 f"expected={sorted(ready_needles)}, "
-                f"last_labels={(last_snapshot or {}).get('labels')}"
+                f"last_visual={(last_snapshot or {}).get('visual_signature')}"
             )
 
         management_value_xy_cache = {}
@@ -2965,15 +3264,29 @@ class ERPLoginBot:
         def _prepare_fast_bank_management_coordinates():
             """Reuse the already captured first management row without a full UIA walk."""
             snapshot = management_grid_ready_state.get("snapshot") or {}
-            if not snapshot.get("semantic_ready"):
+            semantic_ready = bool(snapshot.get("semantic_ready"))
+            stable_gdi_ready = bool(snapshot.get("stable_gdi_ready"))
+            if not (semantic_ready or stable_gdi_ready):
                 self.logger.warning(
-                    "  [MGMT-ANCHOR] 실제 관리항목 라벨로 검증된 첫 행 기준이 없어 "
+                    "  [MGMT-ANCHOR] 검증된 관리항목 화면 기준이 없어 "
                     "보통예금 빠른 좌표를 만들지 않습니다."
                 )
                 return False
             pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
             vendor_key = _norm_text("거래처")
             anchor = management_value_xy_cache.get(vendor_key)
+            if stable_gdi_ready and not finance_vendor_entry_state.get("f9_seeded"):
+                self.logger.warning(
+                    "  [MGMT-ANCHOR] 최초 거래처 F9 성공이 확인되지 않아 "
+                    "보통예금 빠른 좌표를 만들지 않습니다."
+                )
+                return False
+            if stable_gdi_ready and anchor is None:
+                self.logger.warning(
+                    "  [MGMT-ANCHOR] GDI 화면은 준비됐지만 첫 행 F9에 사용한 거래처 좌표가 없어 "
+                    "보통예금 빠른 좌표를 만들지 않습니다."
+                )
+                return False
             if anchor is None:
                 item_rows = snapshot.get("items") or []
                 vendor_row = next(
@@ -3746,10 +4059,6 @@ class ERPLoginBot:
                                 pass
                     except Exception:
                         pass
-                    popup = _find_internal_vendor_popup()
-                    if popup:
-                        _log_vendor_popup_detection(popup)
-                        return popup
                     if same_handle_vendor_win is not None:
                         main_rect = _main_rect()
                         popup = _vendor_popup_context(
@@ -3762,6 +4071,14 @@ class ERPLoginBot:
                             ),
                             "internal-title",
                         )
+                        _log_vendor_popup_detection(popup)
+                        return popup
+                    # 같은 ERP native handle의 제목이 이미 거래처ds로 바뀌었다면
+                    # 이것만으로 MDI 화면이 열린 것이 확인된다. 이 신호를 확인한 뒤
+                    # main_win.descendants()를 먼저 호출하면 GDI 화면에서 수분 동안
+                    # 멈출 수 있으므로, 전체 내부 UIA 탐색은 제목 신호가 없을 때만 한다.
+                    popup = _find_internal_vendor_popup()
+                    if popup:
                         _log_vendor_popup_detection(popup)
                         return popup
                     time.sleep(0.1)

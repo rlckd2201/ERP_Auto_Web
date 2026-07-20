@@ -3,6 +3,8 @@ import re
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 
 MANAGER_SOURCE = (
     Path(__file__).resolve().parents[2]
@@ -264,10 +266,25 @@ def test_internal_vendor_popup_rejects_result_grid_and_returns_mdi_root():
 
 
 def test_same_handle_vendor_title_is_detected_as_internal_mdi_popup():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _find_vendor_popup")
+    helper_end = source.index("def _paste_text_fast", helper_start)
+    helper = source[helper_start:helper_end]
+    same_handle_return = helper.index("if same_handle_vendor_win is not None:")
+    internal_scan = helper.index("popup = _find_internal_vendor_popup()")
+
+    assert same_handle_return < internal_scan
+    assert helper.index('"internal-title"', same_handle_return) < internal_scan
+
     main_rect = _FakeRect(0, 0, 1600, 900)
     main = _FakeControl("분개전표입력 - K-System", "Window", main_rect)
     main_wrapper = _FakeControl("거래처DS - K-System", "Window", main_rect)
     main_wrapper.handle = main.handle
+    descendant_calls = []
+    main.descendants = lambda: descendant_calls.append("main.descendants") or []
+    main_wrapper.descendants = (
+        lambda: descendant_calls.append("same-handle.descendants") or []
+    )
 
     class _FakeDesktop:
         def __init__(self, **_kwargs):
@@ -285,7 +302,9 @@ def test_same_handle_vendor_title_is_detected_as_internal_mdi_popup():
             "_main_rect": lambda: main_rect,
             "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
             "UiaRect": _FakeRect,
-            "_find_internal_vendor_popup": lambda: None,
+            "_find_internal_vendor_popup": (
+                lambda: descendant_calls.append("internal-uia-scan") or None
+            ),
             "_log_vendor_popup_detection": lambda _popup: None,
             "time": SimpleNamespace(time=lambda: 0.0, sleep=lambda _seconds: None),
         },
@@ -297,6 +316,7 @@ def test_same_handle_vendor_title_is_detected_as_internal_mdi_popup():
     assert popup["root"] is main_wrapper
     assert popup["rect"].left == 8
     assert popup["rect"].top == 52
+    assert descendant_calls == []
 
 
 def test_same_handle_normal_erp_title_is_not_misclassified_as_vendor_popup():
@@ -877,6 +897,20 @@ def test_menu_timing_defaults_and_agent_launch_overrides_stay_in_sync():
     assert enter_at < settle_at < ready_at
 
 
+def test_agent_launch_configures_fine_gdi_scan_and_two_sample_stability():
+    manager_source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
+
+    assert 'os.environ["ERP_MGMT_VISUAL_SCAN_STEP"] = "4"' in adapter_source
+    assert 'os.environ["ERP_GRID_PASTE_VISUAL_STABLE_COUNT"] = "2"' in adapter_source
+    assert 'os.environ["ERP_GRID_PASTE_READY_MAX_SECONDS"] = "180"' in adapter_source
+    assert 'os.getenv("ERP_MGMT_VISUAL_SCAN_STEP", "4")' in manager_source
+    assert 'os.getenv("ERP_MGMT_LABEL_X_MIN", "600")' in manager_source
+    assert 'os.getenv("ERP_MGMT_LABEL_X_MAX", "900")' in manager_source
+    assert 'os.getenv("ERP_GRID_PASTE_VISUAL_STABLE_COUNT", "2")' in manager_source
+    assert 'os.getenv("ERP_GRID_PASTE_READY_MAX_SECONDS", "180")' in manager_source
+
+
 def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     events = []
     state = {"f9_seeded": False}
@@ -1032,24 +1066,283 @@ def test_fast_bank_coordinates_reject_visual_only_ready_snapshot():
     assert loaded["_prepare_fast_bank_management_coordinates"]() is False
 
 
-def test_management_ready_wait_ignores_visual_only_until_expected_label():
+def test_fast_bank_coordinates_accept_stable_gdi_snapshot_with_cached_vendor_anchor():
     vendor_norm = re.sub(r"\s+", "", "거래처").lower()
+    management_cache = {vendor_norm: (1118, 797)}
+    bank_cache = {}
+    loaded = _load_nested_functions(
+        "_prepare_fast_bank_management_coordinates",
+        namespace={
+            "management_grid_ready_state": {
+                "snapshot": {
+                    "management_ready": True,
+                    "ready_source": "gdi-visual-stable",
+                    "stable_gdi_ready": True,
+                    "visual_ready": True,
+                }
+            },
+            "management_value_xy_cache": management_cache,
+            "management_bank_value_xy_cache": bank_cache,
+            "finance_vendor_entry_state": {"f9_seeded": True},
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_prepare_fast_bank_management_coordinates"]() is True
+    assert management_cache[vendor_norm] == (1118, 797)
+    assert bank_cache[re.sub(r"\s+", "", "계좌번호").lower()] == (1118, 797)
+    assert bank_cache[re.sub(r"\s+", "", "금융기관지점").lower()] == (1118, 817)
+
+
+def test_fast_bank_coordinates_reject_stable_gdi_snapshot_without_cached_vendor_anchor():
+    vendor_norm = re.sub(r"\s+", "", "거래처").lower()
+    loaded = _load_nested_functions(
+        "_prepare_fast_bank_management_coordinates",
+        namespace={
+            "management_grid_ready_state": {
+                "snapshot": {
+                    "management_ready": True,
+                    "ready_source": "gdi-visual-stable",
+                    "stable_gdi_ready": True,
+                    "visual_ready": True,
+                    # Stable GDI readiness must not derive a bank anchor from
+                    # semantic-only fields when the cached vendor coordinate is absent.
+                    "header_value": {"rel_x": 1118, "rel_y": 777},
+                    "items": [{"norm": vendor_norm, "rel_y": 797}],
+                }
+            },
+            "management_value_xy_cache": {},
+            "management_bank_value_xy_cache": {},
+            "finance_vendor_entry_state": {"f9_seeded": True},
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_prepare_fast_bank_management_coordinates"]() is False
+
+
+def test_fast_bank_coordinates_reject_stable_gdi_before_first_vendor_f9():
+    vendor_norm = re.sub(r"\s+", "", "거래처").lower()
+    bank_cache = {}
+    loaded = _load_nested_functions(
+        "_prepare_fast_bank_management_coordinates",
+        namespace={
+            "management_grid_ready_state": {
+                "snapshot": {
+                    "management_ready": True,
+                    "ready_source": "gdi-visual-stable",
+                    "stable_gdi_ready": True,
+                }
+            },
+            "management_value_xy_cache": {vendor_norm: (1118, 797)},
+            "management_bank_value_xy_cache": bank_cache,
+            "finance_vendor_entry_state": {"f9_seeded": False},
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_prepare_fast_bank_management_coordinates"]() is False
+    assert bank_cache == {}
+
+
+class _SyntheticGdiImage:
+    def __init__(
+        self,
+        width,
+        height,
+        *,
+        red_sample_y=None,
+        red_sample_x=52,
+        separator_rows=(),
+    ):
+        self.size = (width, height)
+        self.red_sample_y = red_sample_y
+        self.red_sample_x = red_sample_x
+        self.separator_rows = set(separator_rows)
+
+    def getpixel(self, point):
+        x, y = point
+        if y in self.separator_rows:
+            return (180, 180, 180)
+        if (
+            self.red_sample_y is not None
+            and x == self.red_sample_x
+            and y == self.red_sample_y
+        ):
+            return (200, 20, 20)
+        if self.red_sample_y is not None and y == 0 and x in {4, 8, 12, 16}:
+            return (20, 20, 20)
+        if self.red_sample_y is not None and y == 0 and x in {
+            20,
+            24,
+            28,
+            32,
+            36,
+            40,
+            44,
+            48,
+        }:
+            return (180, 180, 180)
+        return (255, 255, 255)
+
+
+def _synthetic_gdi_visual_snapshot(visible_rows, *, red_sample_x=52, separators=True):
+    main_rect = _FakeRect(10, 50, 1610, 1050)
+    red_sample_y, first_value_y, separator_lines = {
+        24: (28, 750, (753, 761)),
+        26: (68, 790, (793, 801)),
+    }[visible_rows]
+    screenshot_regions = []
+
+    def _screenshot(*, region):
+        screenshot_regions.append(region)
+        _, top, width, height = region
+        if width > 1000:
+            rows = (
+                [line_abs - top for line_abs in separator_lines]
+                if separators
+                else []
+            )
+            return _SyntheticGdiImage(width, height, separator_rows=rows)
+        active_y = red_sample_y if top == main_rect.top + 720 else None
+        return _SyntheticGdiImage(
+            width,
+            height,
+            red_sample_y=active_y,
+            red_sample_x=red_sample_x,
+        )
+
+    loaded = _load_nested_functions(
+        "_management_grid_visual_boundary",
+        "_management_grid_visual_snapshot",
+        namespace={
+            "_main_rect": lambda: main_rect,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "pyautogui": SimpleNamespace(screenshot=_screenshot),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+    return loaded["_management_grid_visual_snapshot"](), main_rect, screenshot_regions
+
+
+def test_gdi_visual_snapshot_uses_painted_separator_boundary_and_detailed_signature():
+    for visible_rows, first_value_y, boundary_abs, boundary_rel, lines in (
+        (24, 750, 753, 703, [753, 761]),
+        (26, 790, 793, 743, [793, 801]),
+    ):
+        snapshot, _main_rect, screenshot_regions = _synthetic_gdi_visual_snapshot(
+            visible_rows
+        )
+
+        assert snapshot["visual_ready"] is True
+        assert snapshot["visual_band_top"] == 720
+        assert snapshot["first_value_y"] == first_value_y
+        assert snapshot["voucher_clip_bottom_abs"] == boundary_abs
+        assert snapshot["voucher_clip_bottom_abs"] != 50 + first_value_y - 44
+        assert snapshot["visual_signature"] == (
+            720,
+            first_value_y,
+            boundary_rel,
+            1,
+        )
+        assert snapshot["visual_counts"]["boundary"] == {
+            "source": "painted-separator",
+            "expected_offset": 48,
+            "gaps": [8],
+            "lines": lines,
+        }
+        assert len(screenshot_regions) == 5
+
+
+def test_gdi_visual_boundary_keeps_44px_fallback_without_separator_lines():
+    main_rect = _FakeRect(10, 50, 1610, 1050)
+    loaded = _load_nested_functions(
+        "_management_grid_visual_boundary",
+        namespace={
+            "_main_rect": lambda: main_rect,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "pyautogui": SimpleNamespace(
+                screenshot=lambda *, region: _SyntheticGdiImage(region[2], region[3])
+            ),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+    first_value_abs = main_rect.top + 750
+    fallback_abs = first_value_abs - 44
+    boundary_abs, boundary_detail = loaded["_management_grid_visual_boundary"](
+        first_value_abs,
+        fallback_abs,
+    )
+
+    assert boundary_abs == fallback_abs
+    assert boundary_detail == {"source": "offset-fallback", "lines": []}
+
+    snapshot, main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        separators=False,
+    )
+
+    assert snapshot["first_value_y"] == 750
+    assert snapshot["voucher_clip_bottom_abs"] == main_rect.top + 750 - 44
+    assert snapshot["visual_ready"] is False
+    assert snapshot["visual_signature"] is None
+
+
+def test_gdi_visual_snapshot_rejects_red_pixels_outside_label_roi():
+    inside_edge, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        red_sample_x=4,
+    )
+    # scan_left + 300 resolves to x=960, outside the default label ROI x=600..900.
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        red_sample_x=300,
+    )
+
+    assert inside_edge["visual_ready"] is True
+    assert snapshot["visual_ready"] is False
+    assert snapshot["visual_signature"] is None
+    assert snapshot["visual_counts"]["red"] == 0
+
+
+def test_management_ready_wait_accepts_two_matching_gdi_visual_snapshots_without_uia():
+    vendor_norm = re.sub(r"\s+", "", "거래처").lower()
+    initial_signature = (720, 796, 703, 1)
+    signature = (720, 797, 703, 1)
     snapshots = [
         {
-            "label_norms": set(),
-            "labels": [],
-            "header_value": None,
             "visual_ready": True,
             "visual_score": 50,
+            "visual_signature": initial_signature,
+            "value_x": 1118,
+            "first_value_y": 797,
+            "voucher_clip_bottom_abs": 703,
         },
         {
-            "label_norms": {vendor_norm},
-            "labels": ["거래처"],
-            "header_value": {"rel_x": 1118, "rel_y": 777},
             "visual_ready": True,
             "visual_score": 50,
+            "visual_signature": signature,
+            "value_x": 1118,
+            "first_value_y": 797,
+            "voucher_clip_bottom_abs": 703,
+        },
+        {
+            "visual_ready": True,
+            "visual_score": 50,
+            "visual_signature": signature,
+            "value_x": 1118,
+            "first_value_y": 797,
+            "voucher_clip_bottom_abs": 703,
         },
     ]
+    uia_calls = []
+    management_cache = {}
 
     class _Clock:
         def __init__(self):
@@ -1070,7 +1363,11 @@ def test_management_ready_wait_ignores_visual_only_until_expected_label():
             "row_count": 1,
             "os": SimpleNamespace(getenv=lambda _name, default=None: default),
             "time": clock,
-            "_management_grid_snapshot": lambda **_kwargs: snapshots.pop(0),
+            "_management_grid_visual_snapshot": lambda *_args, **_kwargs: snapshots.pop(0),
+            "_management_grid_snapshot": (
+                lambda *_args, **_kwargs: uia_calls.append("uia") or {}
+            ),
+            "management_value_xy_cache": management_cache,
             "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
@@ -1078,9 +1375,82 @@ def test_management_ready_wait_ignores_visual_only_until_expected_label():
 
     result = loaded["_wait_for_management_grid_ready"]("test paste")
 
-    assert result["semantic_ready"] is True
-    assert result["expected_label_norms"] == {vendor_norm}
+    assert result["management_ready"] is True
+    assert result["ready_source"] == "gdi-visual-stable"
+    assert result["stable_gdi_ready"] is True
+    assert result["visual_signature"] == signature
+    assert result["voucher_clip_bottom_abs"] == 703
+    assert management_cache[vendor_norm] == (1118, 797)
     assert snapshots == []
+    assert uia_calls == []
+
+
+def test_management_ready_wait_does_not_accept_a_single_gdi_visual_snapshot():
+    signature = (720, 797, 703, 1)
+    calls = {"visual": 0, "uia": 0}
+
+    class _Clock:
+        def __init__(self):
+            self.now = 0.0
+
+        def time(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.now += float(seconds)
+
+    def _getenv(name, default=None):
+        if name == "ERP_GRID_PASTE_READY_SECONDS_PER_ROW":
+            return "10"
+        if name == "ERP_GRID_PASTE_READY_MAX_SECONDS":
+            return "180"
+        if name == "ERP_GRID_PASTE_VISUAL_POLL_SECONDS":
+            return "20"
+        return default
+
+    def _visual_snapshot(*_args, **_kwargs):
+        calls["visual"] += 1
+        if calls["visual"] == 1:
+            return {
+                "visual_ready": True,
+                "visual_score": 50,
+                "visual_signature": signature,
+                "value_x": 1118,
+                "first_value_y": 797,
+            }
+        return {
+            "visual_ready": False,
+            "visual_score": 0,
+            "visual_signature": None,
+            "value_x": None,
+            "first_value_y": None,
+        }
+
+    clock = _Clock()
+    loaded = _load_nested_functions(
+        "_wait_for_management_grid_ready",
+        namespace={
+            "form_data": {"erp_line_management_items": [{"거래처": "V001"}]},
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "row_count": 210,
+            "os": SimpleNamespace(getenv=_getenv),
+            "time": clock,
+            "_management_grid_visual_snapshot": _visual_snapshot,
+            "_management_grid_snapshot": (
+                lambda *_args, **_kwargs: calls.__setitem__("uia", calls["uia"] + 1) or {}
+            ),
+            "management_value_xy_cache": {},
+            "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="하단 관리항목 표시 대기 실패"):
+        loaded["_wait_for_management_grid_ready"]("test paste")
+
+    assert clock.now == 180.0
+    assert calls["visual"] == 10
+    assert calls["uia"] == 0
 
 
 def test_strict_bank_value_coordinates_do_not_run_a_management_uia_scan():
@@ -2319,6 +2689,8 @@ def _fast_visible_voucher_snapshot(
     include_header: bool = True,
     include_viewport: bool = False,
     viewport_clip_bottom: int | None = None,
+    ready_snapshot_override: dict | None = None,
+    main_rect_override: _FakeRect | None = None,
 ):
     first_y = 231
     pitch = 20
@@ -2331,8 +2703,9 @@ def _fast_visible_voucher_snapshot(
             "rel_y": clip_bottom + 10,
         }
     forbidden_calls = []
-    ready_state = {
-        "snapshot": {
+    ready_snapshot = ready_snapshot_override
+    if ready_snapshot is None:
+        ready_snapshot = {
             "header_label": header,
             "header_value": header,
             "voucher_viewport_rect": (
@@ -2342,16 +2715,17 @@ def _fast_visible_voucher_snapshot(
             ),
             "voucher_clip_bottom_abs": (
                 int(viewport_clip_bottom if viewport_clip_bottom is not None else clip_bottom)
-                if include_viewport
+                if include_viewport or viewport_clip_bottom is not None
                 else None
             ),
         }
-    }
+    ready_state = {"snapshot": ready_snapshot}
+    main_rect = main_rect_override or _FakeRect(0, 0, 1600, 900)
     loaded = _load_nested_functions(
         "_fast_visible_voucher_row_snapshot",
         namespace={
             "management_grid_ready_state": ready_state,
-            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_main_rect": lambda: main_rect,
             "first_row_y": first_y,
             "row_height": pitch,
             "os": SimpleNamespace(getenv=lambda _name, default=None: default),
@@ -2424,6 +2798,29 @@ def test_fast_visible_snapshot_uses_cached_viewport_when_uia_header_text_is_miss
     assert snapshot["geometry_source"] == "ready-viewport-snapshot"
 
 
+def test_fast_visible_snapshot_uses_dynamic_gdi_boundary_for_24_or_26_rows():
+    for full_row_count, boundary, last_full_y in (
+        (24, 703, 691),
+        (26, 743, 731),
+    ):
+        visual_snapshot, main_rect, _regions = _synthetic_gdi_visual_snapshot(
+            full_row_count
+        )
+        assert visual_snapshot["voucher_clip_bottom_abs"] == main_rect.top + boundary
+
+        snapshot = _fast_visible_voucher_snapshot(
+            full_row_count=full_row_count,
+            ready_snapshot_override=visual_snapshot,
+            main_rect_override=main_rect,
+        )
+
+        assert snapshot["slot_ys"] == list(range(231, last_full_y + 1, 20))
+        assert len(snapshot["slot_ys"]) == full_row_count
+        assert snapshot["last_full_y"] == last_full_y
+        assert snapshot["clip_bottom"] == boundary
+        assert snapshot["geometry_source"] == "ready-viewport-snapshot"
+
+
 def test_fast_visible_snapshot_uses_minimum_of_header_and_scrollbar_boundary():
     snapshot = _fast_visible_voucher_snapshot(
         full_row_count=25,
@@ -2460,9 +2857,19 @@ def test_fast_snapshot_helper_and_skip_branch_never_run_full_uia_scan():
     wait_start = source.index("def _wait_for_management_grid_ready")
     wait_end = source.index("management_value_xy_cache =", wait_start)
     wait_helper = source[wait_start:wait_end]
-    assert "if has_ready_label:" in wait_helper
-    assert "if has_ready_label or has_visual_ready:" not in wait_helper
-    assert 'snapshot["semantic_ready"] = True' in wait_helper
+    assert "_management_grid_visual_snapshot()" in wait_helper
+    assert "_management_grid_snapshot(" not in wait_helper
+    assert "stable_visual_count >= stable_required" in wait_helper
+    assert '"management_ready": True' in wait_helper
+    assert '"ready_source": "gdi-visual-stable"' in wait_helper
+    assert '"stable_gdi_ready": True' in wait_helper
+
+    visual_start = source.index("def _management_grid_visual_snapshot")
+    visual_end = source.index("def _management_grid_snapshot", visual_start)
+    visual_helper = source[visual_start:visual_end]
+    assert "_iter_visible" not in visual_helper
+    assert "_management_grid_snapshot(" not in visual_helper
+    assert "pyautogui.screenshot(" in visual_helper
 
     initial_branch_start = helper.index("if skip_visible_row_scan:")
     initial_branch_end = helper.index("row_geometry_state =", initial_branch_start)

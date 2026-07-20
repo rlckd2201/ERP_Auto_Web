@@ -500,7 +500,14 @@ def _run_real_erp_voucher_task(
     os.environ["ERP_FAST_MANAGEMENT"] = "1"
     os.environ["ERP_FAST_MGMT_ANCHOR"] = "1"
     os.environ["ERP_SKIP_VISIBLE_ROW_SCAN"] = "1"
-    os.environ["ERP_MGMT_VISUAL_SCAN_STEP"] = "10"
+    # ERP 하단 관리항목은 GDI로 그려져 UIA 텍스트가 비어 있을 수 있다.
+    # 4px 간격으로 빠르게 화면 구조를 확인하고 동일한 결과가 두 번
+    # 연속일 때만 준비 완료로 판정한다.
+    os.environ["ERP_MGMT_VISUAL_SCAN_STEP"] = "4"
+    os.environ["ERP_GRID_PASTE_VISUAL_POLL_SECONDS"] = "2.0"
+    os.environ["ERP_GRID_PASTE_VISUAL_STABLE_COUNT"] = "2"
+    os.environ["ERP_GRID_PASTE_READY_MAX_SECONDS"] = "180"
+    os.environ["ERP_MGMT_VISUAL_VALUE_TO_GRID_BOTTOM"] = "44"
     os.environ["ERP_MGMT_KEY_WAIT"] = "0.04"
     os.environ["ERP_MGMT_COMMIT_WAIT"] = "0.08"
     os.environ["ERP_MGMT_FOCUS_WAIT"] = "0.05"
