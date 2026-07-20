@@ -1149,6 +1149,58 @@ def test_management_snapshot_caches_cash_processing_checkbox_once():
     assert snapshot["cash_processing_checkbox"] is checkbox
 
 
+def test_management_snapshot_caches_nameless_gdi_check1_by_lower_form_geometry():
+    class _FakeCheckBox(_FakeControl):
+        def get_toggle_state(self):
+            return 1
+
+    viewport = _FakeControl(
+        "",
+        "Custom",
+        _FakeRect(60, 210, 1450, 718),
+        automation_id="SS_Row",
+    )
+    scrollbar = _FakeControl(
+        "",
+        "ScrollBar",
+        _FakeRect(60, 703, 1450, 718),
+    )
+    unrelated_top_check1 = _FakeCheckBox(
+        "",
+        "CheckBox",
+        _FakeRect(260, 120, 430, 150),
+        automation_id="Check1",
+    )
+    cash_checkbox = _FakeCheckBox(
+        "",
+        "CheckBox",
+        _FakeRect(300, 716, 470, 746),
+        automation_id="Check1",
+    )
+    loaded = _load_nested_functions(
+        "_management_grid_snapshot",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_iter_visible": lambda: [
+                unrelated_top_check1,
+                viewport,
+                scrollbar,
+                cash_checkbox,
+            ],
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "pyautogui": SimpleNamespace(screenshot=lambda **_kwargs: None),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    snapshot = loaded["_management_grid_snapshot"]()
+
+    assert snapshot["cash_processing_checkbox"] is cash_checkbox
+    assert snapshot["voucher_clip_bottom_abs"] == 703
+
+
 def test_fast_cash_processing_check_reuses_cached_control_without_descendants():
     for initial_state, expected_clicks in ((0, 0), (1, 1)):
         class _CachedCheckBox:
@@ -1185,6 +1237,42 @@ def test_fast_cash_processing_check_reuses_cached_control_without_descendants():
 
         assert checkbox.click_count == expected_clicks
         assert descendant_calls == []
+
+
+def test_fast_cash_processing_missing_or_stale_cache_continues_without_blind_click():
+    class _StaleCheckBox:
+        def get_toggle_state(self):
+            raise RuntimeError("stale UIA element")
+
+    for cached_checkbox in (None, _StaleCheckBox()):
+        fail_calls = []
+        descendant_calls = []
+        coordinate_clicks = []
+        loaded = _load_nested_functions(
+            "_uncheck_cash_processing",
+            namespace={
+                "skip_visible_row_scan": True,
+                "management_grid_ready_state": {
+                    "snapshot": {"cash_processing_checkbox": cached_checkbox}
+                },
+                "_fail_form": lambda message: fail_calls.append(message),
+                "main_win": SimpleNamespace(
+                    descendants=lambda **_kwargs: descendant_calls.append("descendants")
+                ),
+                "time": SimpleNamespace(sleep=lambda _seconds: None),
+                "ERP_FORM_WAIT": 0.1,
+                "_click_form_xy": lambda *args, **kwargs: coordinate_clicks.append(
+                    (args, kwargs)
+                ),
+                "self": SimpleNamespace(logger=_FakeLogger()),
+            },
+        )
+
+        loaded["_uncheck_cash_processing"](1)
+
+        assert fail_calls == []
+        assert descendant_calls == []
+        assert coordinate_clicks == []
 
 
 def test_management_snapshot_caches_empty_text_voucher_viewport_for_fast_boundary():

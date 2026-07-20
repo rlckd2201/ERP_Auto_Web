@@ -2678,6 +2678,7 @@ class ERPLoginBot:
             header_label = None
             header_value = None
             cash_processing_checkbox = None
+            cash_processing_checkbox_candidates = []
             item_rows = []
             visual_ready = False
             visual_score = 0
@@ -2720,18 +2721,25 @@ class ERPLoginBot:
                         voucher_horizontal_scrollbars.append(rect)
                     text = (_control_text(ctrl) or ctrl.window_text() or "").strip()
                     norm = _norm_text(text)
-                    if (
-                        control_type == "CheckBox"
-                        and automation_id == "Check1"
-                        and _norm_text("출납처리여부") in norm
-                    ):
-                        cash_processing_checkbox = ctrl
-                    if not norm:
-                        continue
                     center_x = (rect.left + rect.right) // 2
                     center_y = (rect.top + rect.bottom) // 2
                     rel_x = center_x - main_rect.left
                     rel_y = center_y - main_rect.top
+                    if control_type == "CheckBox" and automation_id == "Check1":
+                        if _norm_text("출납처리여부") in norm:
+                            cash_processing_checkbox = ctrl
+                        elif (
+                            180 <= rel_x <= 650
+                            and rel_y >= voucher_first_row_y + (voucher_row_height * 4)
+                        ):
+                            # ERP GDI mode can expose the standard Check1 toggle with
+                            # an empty accessible name. Keep its lower-left geometry so
+                            # the ready snapshot can still cache the real Toggle control.
+                            cash_processing_checkbox_candidates.append(
+                                (ctrl, rect, rel_x, rel_y)
+                            )
+                    if not norm:
+                        continue
                     if rel_x < 580 or rel_y < 300:
                         continue
                     row = {
@@ -2770,6 +2778,40 @@ class ERPLoginBot:
                 if voucher_clip_bottom_candidates
                 else None
             )
+            if cash_processing_checkbox is None and cash_processing_checkbox_candidates:
+                if voucher_clip_bottom_abs is not None:
+                    expected_center_y = int(voucher_clip_bottom_abs) + max(
+                        18,
+                        int(round(voucher_row_height * 1.25)),
+                    )
+                    nearby_candidates = [
+                        candidate
+                        for candidate in cash_processing_checkbox_candidates
+                        if int(voucher_clip_bottom_abs) - voucher_row_height
+                        <= candidate[1].top
+                        <= int(voucher_clip_bottom_abs) + (voucher_row_height * 6)
+                    ]
+                    candidates = nearby_candidates or cash_processing_checkbox_candidates
+                    selected_candidate = min(
+                        candidates,
+                        key=lambda candidate: (
+                            abs(((candidate[1].top + candidate[1].bottom) // 2) - expected_center_y),
+                            abs(candidate[2] - 400),
+                        ),
+                    )
+                else:
+                    selected_candidate = min(
+                        cash_processing_checkbox_candidates,
+                        key=lambda candidate: (
+                            abs(candidate[2] - 400),
+                            -candidate[3],
+                        ),
+                    )
+                cash_processing_checkbox = selected_candidate[0]
+                self.logger.info(
+                    "  [FORM-VERIFY] GDI 무명 Check1을 출납처리여부 체크박스로 캐시: "
+                    f"rel=({selected_candidate[2]},{selected_candidate[3]})"
+                )
             if not include_visual:
                 item_rows.sort(key=lambda row: (row["rel_y"], row["rel_x"]))
                 return {
@@ -3250,9 +3292,11 @@ class ERPLoginBot:
                     )
                 )
                 if cached_checkbox is None:
-                    _fail_form(
-                        f"{row_no}행 출납처리여부 체크박스의 최초 UIA 기준을 찾지 못했습니다."
+                    self.logger.warning(
+                        f"  [MGMT-XY] {row_no}행 출납처리여부 체크박스가 GDI UIA에 노출되지 않아 "
+                        "임의 좌표 클릭 없이 현재 기본 해제 상태를 유지합니다."
                     )
+                    return
                 try:
                     state = cached_checkbox.get_toggle_state()
                     self.logger.info(
@@ -3266,9 +3310,11 @@ class ERPLoginBot:
                         )
                     return
                 except Exception as e:
-                    _fail_form(
-                        f"{row_no}행 출납처리여부 최초 UIA 캐시를 재사용하지 못했습니다: {e}"
+                    self.logger.warning(
+                        f"  [MGMT-XY] {row_no}행 출납처리여부 최초 UIA 캐시를 재사용하지 못해 "
+                        f"임의 좌표 클릭 없이 현재 상태를 유지합니다: {e}"
                     )
+                    return
             try:
                 for cb in main_win.descendants(control_type='CheckBox'):
                     try:
