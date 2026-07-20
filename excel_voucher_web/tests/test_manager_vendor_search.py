@@ -992,6 +992,7 @@ def test_fast_bank_coordinates_reuse_the_existing_first_management_row():
         namespace={
             "management_grid_ready_state": {
                 "snapshot": {
+                    "semantic_ready": True,
                     "header_value": {"rel_x": 1118, "rel_y": 777},
                     "items": [{"norm": vendor_norm, "rel_y": 797}],
                 }
@@ -1007,6 +1008,79 @@ def test_fast_bank_coordinates_reuse_the_existing_first_management_row():
     assert loaded["_prepare_fast_bank_management_coordinates"]() is True
     assert bank_cache["계좌번호"] == (1118, 797)
     assert bank_cache["금융기관지점"] == (1118, 817)
+
+
+def test_fast_bank_coordinates_reject_visual_only_ready_snapshot():
+    loaded = _load_nested_functions(
+        "_prepare_fast_bank_management_coordinates",
+        namespace={
+            "management_grid_ready_state": {
+                "snapshot": {
+                    "visual_ready": True,
+                    "label_norms": set(),
+                    "items": [],
+                }
+            },
+            "management_value_xy_cache": {},
+            "management_bank_value_xy_cache": {},
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_prepare_fast_bank_management_coordinates"]() is False
+
+
+def test_management_ready_wait_ignores_visual_only_until_expected_label():
+    vendor_norm = re.sub(r"\s+", "", "거래처").lower()
+    snapshots = [
+        {
+            "label_norms": set(),
+            "labels": [],
+            "header_value": None,
+            "visual_ready": True,
+            "visual_score": 50,
+        },
+        {
+            "label_norms": {vendor_norm},
+            "labels": ["거래처"],
+            "header_value": {"rel_x": 1118, "rel_y": 777},
+            "visual_ready": True,
+            "visual_score": 50,
+        },
+    ]
+
+    class _Clock:
+        def __init__(self):
+            self.now = 0.0
+
+        def time(self):
+            return self.now
+
+        def sleep(self, seconds):
+            self.now += float(seconds)
+
+    clock = _Clock()
+    loaded = _load_nested_functions(
+        "_wait_for_management_grid_ready",
+        namespace={
+            "form_data": {"erp_line_management_items": [{"거래처": "V001"}]},
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "row_count": 1,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "time": clock,
+            "_management_grid_snapshot": lambda **_kwargs: snapshots.pop(0),
+            "_fail_form": lambda message: (_ for _ in ()).throw(RuntimeError(message)),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    result = loaded["_wait_for_management_grid_ready"]("test paste")
+
+    assert result["semantic_ready"] is True
+    assert result["expected_label_norms"] == {vendor_norm}
+    assert snapshots == []
 
 
 def test_strict_bank_value_coordinates_do_not_run_a_management_uia_scan():
@@ -2381,7 +2455,14 @@ def test_fast_snapshot_helper_and_skip_branch_never_run_full_uia_scan():
     assert "_fully_visible_voucher_row_snapshot" not in fast_helper
     assert 'ready_snapshot.get("voucher_clip_bottom_abs")' in fast_helper
     assert "if skip_visible_row_scan:" in helper
-    assert '_wait_for_management_grid_ready("text clipboard paste")' not in source
+    assert '"text clipboard paste"' in source
+
+    wait_start = source.index("def _wait_for_management_grid_ready")
+    wait_end = source.index("management_value_xy_cache =", wait_start)
+    wait_helper = source[wait_start:wait_end]
+    assert "if has_ready_label:" in wait_helper
+    assert "if has_ready_label or has_visual_ready:" not in wait_helper
+    assert 'snapshot["semantic_ready"] = True' in wait_helper
 
     initial_branch_start = helper.index("if skip_visible_row_scan:")
     initial_branch_end = helper.index("row_geometry_state =", initial_branch_start)

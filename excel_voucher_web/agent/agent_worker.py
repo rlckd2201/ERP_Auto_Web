@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import getpass
+import hashlib
 import mimetypes
 import os
 import shutil
@@ -238,7 +239,13 @@ def _update_agent_files(zip_url: str) -> dict[str, Any]:
         temp = Path(temp_name)
         zip_path = temp / "ERP_Auto_Web.zip"
         download_timeout = max(180, int(os.getenv("EXCEL_VOUCHER_AGENT_UPDATE_DOWNLOAD_TIMEOUT_SECONDS", "300") or "300"))
-        response = requests.get(zip_url, timeout=download_timeout)
+        separator = "&" if "?" in zip_url else "?"
+        download_url = f"{zip_url}{separator}cache_bust={int(time.time())}"
+        response = requests.get(
+            download_url,
+            timeout=download_timeout,
+            headers={"Cache-Control": "no-cache"},
+        )
         response.raise_for_status()
         zip_path.write_bytes(response.content)
         with zipfile.ZipFile(zip_path) as archive:
@@ -246,9 +253,27 @@ def _update_agent_files(zip_url: str) -> dict[str, Any]:
         extracted = temp / "ERP_Auto_Web-main"
         if not extracted.exists():
             raise RuntimeError("GitHub ZIP 압축 해제 결과에서 ERP_Auto_Web-main 폴더를 찾지 못했습니다.")
+        manager_sources = list((extracted / "manager_server").glob("*v6.2.py"))
+        if len(manager_sources) != 1:
+            raise RuntimeError("업데이트 ZIP에서 ERP Manager 원본을 하나로 확정하지 못했습니다.")
+        manager_source = manager_sources[0]
+        expected_manager_sha256 = hashlib.sha256(manager_source.read_bytes()).hexdigest().upper()
         shutil.copytree(extracted / "excel_voucher_web", ROOT, dirs_exist_ok=True)
         shutil.copytree(extracted / "manager_server", repo_root / "manager_server", dirs_exist_ok=True)
-    return {"updated_root": str(repo_root), "zip_url": zip_url}
+        manager_target = repo_root / "manager_server" / manager_source.name
+        actual_manager_sha256 = hashlib.sha256(manager_target.read_bytes()).hexdigest().upper()
+        if actual_manager_sha256 != expected_manager_sha256:
+            raise RuntimeError(
+                "ERP Manager 파일 교체 검증 실패: "
+                f"expected={expected_manager_sha256}, actual={actual_manager_sha256}"
+            )
+    return {
+        "updated_root": str(repo_root),
+        "zip_url": zip_url,
+        "download_url": download_url,
+        "manager_path": str(manager_target),
+        "manager_sha256": actual_manager_sha256,
+    }
 
 
 def _execute_admin_command(

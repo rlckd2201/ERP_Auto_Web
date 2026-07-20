@@ -455,7 +455,7 @@ class JobStore:
             ).fetchone()
             if not row:
                 return None
-            conn.execute(
+            updated = conn.execute(
                 """
                 UPDATE agent_admin_commands
                 SET status = 'running', updated_at = ?, claimed_at = ?
@@ -463,6 +463,8 @@ class JobStore:
                 """,
                 (claimed, claimed, row["id"]),
             )
+            if updated.rowcount != 1:
+                return None
         return self.get_agent_command(row["id"])
 
     def complete_agent_command(

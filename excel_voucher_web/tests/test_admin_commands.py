@@ -1,7 +1,12 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from app.models import AgentHeartbeat
 from app.storage import JobStore
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_agent_admin_command_lifecycle(tmp_path):
@@ -80,3 +85,17 @@ def test_agent_admin_command_claim_can_filter_by_command(tmp_path):
     remaining = store.list_agent_commands()
     update_command = next(command for command in remaining if command["command"] == "update-agent")
     assert update_command["status"] == "queued"
+
+
+def test_agent_update_verifies_manager_hash_and_admin_ui_waits_for_completion():
+    worker_source = (ROOT / "agent" / "agent_worker.py").read_text(encoding="utf-8")
+    storage_source = (ROOT / "app" / "storage.py").read_text(encoding="utf-8")
+    app_source = (ROOT / "app" / "static" / "app.js").read_text(encoding="utf-8")
+
+    assert 'headers={"Cache-Control": "no-cache"}' in worker_source
+    assert "expected_manager_sha256" in worker_source
+    assert '"manager_sha256": actual_manager_sha256' in worker_source
+    assert "if updated.rowcount != 1:" in storage_source
+    assert "async function waitForAdminCommand" in app_source
+    assert 'current?.status === "done"' in app_source
+    assert "result.manager_sha256" in app_source

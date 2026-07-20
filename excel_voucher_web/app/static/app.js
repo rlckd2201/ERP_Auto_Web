@@ -393,14 +393,42 @@ async function refreshAdminCommands() {
   renderAdminCommands(data.commands || []);
 }
 
+async function waitForAdminCommand(commandId, notice, timeoutMs = 900000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const data = await fetchJson("/api/admin/agent-commands");
+    const commands = data.commands || [];
+    renderAdminCommands(commands);
+    const current = commands.find((item) => item.id === commandId);
+    if (current?.status === "done") {
+      return current;
+    }
+    if (current?.status === "error") {
+      throw new Error(current.error || "243 최신 적용에 실패했습니다.");
+    }
+    notice.textContent = current?.status === "running"
+      ? "243에서 파일 교체와 검증을 진행 중입니다..."
+      : "243이 최신 적용 명령을 가져가기를 기다리는 중입니다...";
+    await new Promise((resolve) => window.setTimeout(resolve, 1500));
+  }
+  throw new Error("243 최신 적용 완료 확인 시간이 초과됐습니다.");
+}
+
 async function runAdminAgentCommand(command) {
   const notice = document.querySelector("#adminToolNotice");
   notice.className = "notice";
   notice.textContent = "";
   try {
-    await postJson("/api/admin/agent-commands", { command });
-    notice.textContent = `${commandTitle(command)} 요청 완료`;
-    await refreshAdminCommands();
+    const created = await postJson("/api/admin/agent-commands", { command });
+    const commandId = created.command?.id;
+    if (!commandId) {
+      throw new Error("243 명령 번호를 받지 못했습니다.");
+    }
+    notice.textContent = `${commandTitle(command)} 실제 완료를 기다리는 중입니다...`;
+    const completed = await waitForAdminCommand(commandId, notice);
+    const result = completed.result || {};
+    const hash = result.manager_sha256 ? ` / Manager ${result.manager_sha256.slice(0, 12)}` : "";
+    notice.textContent = `${commandTitle(command)} 완료${hash}`;
   } catch (error) {
     notice.className = "notice error";
     notice.textContent = error.message;

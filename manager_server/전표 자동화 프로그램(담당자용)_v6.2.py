@@ -2877,11 +2877,30 @@ class ERPLoginBot:
             }
 
         def _wait_for_management_grid_ready(context="Excel paste"):
-            ready_needles = {
+            default_ready_needles = {
                 _norm_text("계좌번호"),
                 _norm_text("금융기관지점"),
                 _norm_text("거래처"),
             }
+            expected_ready_needles = set()
+            ready_items = (
+                form_data.get('erp_line_management_items')
+                or form_data.get('line_management_items')
+                or []
+            )
+            if isinstance(ready_items, list):
+                for ready_item in ready_items:
+                    if not isinstance(ready_item, dict):
+                        continue
+                    expected_ready_needles = {
+                        _norm_text(item_name)
+                        for item_name, item_value in ready_item.items()
+                        if str(item_name or "").strip()
+                        and str(item_value or "").strip()
+                    }
+                    if expected_ready_needles:
+                        break
+            ready_needles = expected_ready_needles or default_ready_needles
             seconds_per_row = max(
                 1.0,
                 float(os.getenv("ERP_GRID_PASTE_READY_SECONDS_PER_ROW", "10") or "10"),
@@ -2901,15 +2920,22 @@ class ERPLoginBot:
                 snapshot_seconds = time.time() - snapshot_started
                 last_snapshot = snapshot
                 labels = snapshot.get("label_norms") or set()
-                has_ready_label = bool(labels & ready_needles)
+                has_ready_label = (
+                    ready_needles.issubset(labels)
+                    if expected_ready_needles
+                    else bool(labels & ready_needles)
+                )
                 has_value_header = bool(snapshot.get("header_value"))
                 has_visual_ready = bool(snapshot.get("visual_ready"))
-                if has_ready_label or has_visual_ready:
+                if has_ready_label:
+                    snapshot["semantic_ready"] = True
+                    snapshot["expected_label_norms"] = set(ready_needles)
                     self.logger.info(
                         "  [FORM-VERIFY] 하단 관리항목 표시 감지: "
                         f"context={context}, rows={row_count}, elapsed={elapsed:.1f}s, "
                         f"value_header={has_value_header}, visual_ready={has_visual_ready}, "
-                        f"visual_score={snapshot.get('visual_score')}, labels={snapshot.get('labels')}"
+                        f"visual_score={snapshot.get('visual_score')}, "
+                        f"expected={sorted(ready_needles)}, labels={snapshot.get('labels')}"
                     )
                     return snapshot
                 self.logger.info(
@@ -2917,7 +2943,7 @@ class ERPLoginBot:
                     f"context={context}, elapsed={elapsed:.1f}s/{timeout:.1f}s, "
                     f"next_check={poll_seconds:.1f}s, snapshot={snapshot_seconds:.1f}s, "
                     f"visual_ready={has_visual_ready}, visual_score={snapshot.get('visual_score')}, "
-                    f"labels={snapshot.get('labels')}"
+                    f"expected={sorted(ready_needles)}, labels={snapshot.get('labels')}"
                 )
                 if time.time() >= end_at:
                     break
@@ -2925,6 +2951,7 @@ class ERPLoginBot:
             _fail_form(
                 "하단 관리항목 표시 대기 실패: "
                 f"context={context}, timeout={timeout:.1f}s, "
+                f"expected={sorted(ready_needles)}, "
                 f"last_labels={(last_snapshot or {}).get('labels')}"
             )
 
@@ -2938,6 +2965,12 @@ class ERPLoginBot:
         def _prepare_fast_bank_management_coordinates():
             """Reuse the already captured first management row without a full UIA walk."""
             snapshot = management_grid_ready_state.get("snapshot") or {}
+            if not snapshot.get("semantic_ready"):
+                self.logger.warning(
+                    "  [MGMT-ANCHOR] 실제 관리항목 라벨로 검증된 첫 행 기준이 없어 "
+                    "보통예금 빠른 좌표를 만들지 않습니다."
+                )
+                return False
             pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
             vendor_key = _norm_text("거래처")
             anchor = management_value_xy_cache.get(vendor_key)
@@ -6230,11 +6263,8 @@ class ERPLoginBot:
                 else:
                     time.sleep(mgmt_after_grid_paste_wait)
                     _verify_grid_paste_or_fail(first_account_cell_xy)
-                    # Text fallback historically proceeded after a quick first-cell
-                    # verification. Preserve that timing and cache one live geometry
-                    # snapshot instead of adding the row_count*10s Excel wait loop.
-                    management_grid_ready_state["snapshot"] = _management_grid_snapshot(
-                        include_visual=True
+                    management_grid_ready_state["snapshot"] = _wait_for_management_grid_ready(
+                        "text clipboard paste"
                     )
             finally:
                 if excel_copy_used:
