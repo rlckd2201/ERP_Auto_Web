@@ -2671,6 +2671,8 @@ class ERPLoginBot:
                 )
             return matched
 
+        management_grid_ready_state = {"snapshot": None}
+
         def _management_grid_snapshot(include_visual=False):
             main_rect = _main_rect()
             header_label = None
@@ -2678,6 +2680,10 @@ class ERPLoginBot:
             item_rows = []
             visual_ready = False
             visual_score = 0
+            voucher_viewport_candidates = []
+            voucher_horizontal_scrollbars = []
+            voucher_first_row_y = int(os.getenv("ERP_MGMT_FIRST_ROW_Y", "231") or "231")
+            voucher_row_height = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
             item_needles = {
                 _norm_text("계좌번호"),
                 _norm_text("금융기관지점"),
@@ -2690,11 +2696,31 @@ class ERPLoginBot:
             }
             for ctrl in _iter_visible():
                 try:
+                    rect = ctrl.rectangle()
+                    automation_id = str(ctrl.element_info.automation_id or "")
+                    control_type = str(ctrl.element_info.control_type or "")
+                    width = rect.right - rect.left
+                    height = rect.bottom - rect.top
+                    rel_top = rect.top - main_rect.top
+                    rel_bottom = rect.bottom - main_rect.top
+                    if (
+                        automation_id == "SS_Row"
+                        and rect.left - main_rect.left <= 180
+                        and width >= 700
+                        and height >= 120
+                        and rel_top - voucher_row_height <= voucher_first_row_y <= rel_bottom
+                    ):
+                        voucher_viewport_candidates.append((height, -width, rect))
+                    if (
+                        control_type == "ScrollBar"
+                        and width >= max(300, height * 5)
+                        and rel_top > voucher_first_row_y + (voucher_row_height * 3)
+                    ):
+                        voucher_horizontal_scrollbars.append(rect)
                     text = (_control_text(ctrl) or ctrl.window_text() or "").strip()
                     norm = _norm_text(text)
                     if not norm:
                         continue
-                    rect = ctrl.rectangle()
                     center_x = (rect.left + rect.right) // 2
                     center_y = (rect.top + rect.bottom) // 2
                     rel_x = center_x - main_rect.left
@@ -2716,6 +2742,27 @@ class ERPLoginBot:
                         item_rows.append(row)
                 except:
                     pass
+            voucher_viewport_rect = (
+                sorted(voucher_viewport_candidates, key=lambda item: (item[0], item[1]))[0][2]
+                if voucher_viewport_candidates
+                else None
+            )
+            voucher_clip_bottom_candidates = []
+            if voucher_viewport_rect is not None:
+                voucher_clip_bottom_candidates.append(int(voucher_viewport_rect.bottom))
+                for scrollbar_rect in voucher_horizontal_scrollbars:
+                    if (
+                        scrollbar_rect.right <= voucher_viewport_rect.left
+                        or scrollbar_rect.left >= voucher_viewport_rect.right
+                        or scrollbar_rect.top > voucher_viewport_rect.bottom + voucher_row_height
+                    ):
+                        continue
+                    voucher_clip_bottom_candidates.append(int(scrollbar_rect.top))
+            voucher_clip_bottom_abs = (
+                min(voucher_clip_bottom_candidates)
+                if voucher_clip_bottom_candidates
+                else None
+            )
             if not include_visual:
                 item_rows.sort(key=lambda row: (row["rel_y"], row["rel_x"]))
                 return {
@@ -2726,6 +2773,8 @@ class ERPLoginBot:
                     "label_norms": {row["norm"] for row in item_rows},
                     "visual_ready": visual_ready,
                     "visual_score": visual_score,
+                    "voucher_viewport_rect": voucher_viewport_rect,
+                    "voucher_clip_bottom_abs": voucher_clip_bottom_abs,
                 }
             try:
                 # UIA가 ERP 하단 관리항목 글자를 못 읽는 경우가 있어 화면 픽셀도 함께 봅니다.
@@ -2772,6 +2821,8 @@ class ERPLoginBot:
                 "label_norms": {row["norm"] for row in item_rows},
                 "visual_ready": visual_ready,
                 "visual_score": visual_score,
+                "voucher_viewport_rect": voucher_viewport_rect,
+                "voucher_clip_bottom_abs": voucher_clip_bottom_abs,
             }
 
         def _wait_for_management_grid_ready(context="Excel paste"):
@@ -2834,7 +2885,7 @@ class ERPLoginBot:
 
         def _management_value_xy(item_name, fallback_y):
             target = _norm_text(item_name)
-            snapshot = None
+            snapshot = management_grid_ready_state.get("snapshot")
             main_rect = _main_rect()
             fast_anchor = _env_flag("ERP_FAST_MGMT_ANCHOR", "1")
             cache_key = target or str(item_name or "").strip()
@@ -2850,7 +2901,8 @@ class ERPLoginBot:
                 return int(cached_x), int(cached_y)
             attempts = 1 if fast_anchor else 8
             for attempt in range(attempts):
-                snapshot = _management_grid_snapshot()
+                if snapshot is None or attempt > 0:
+                    snapshot = _management_grid_snapshot()
                 value_header = snapshot.get("header_value")
                 for row in snapshot.get("items") or []:
                     row_norm = row.get("norm") or ""
@@ -4051,6 +4103,103 @@ class ERPLoginBot:
                     return ordered[middle]
                 return (ordered[middle - 1] + ordered[middle]) / 2.0
 
+            def _fast_visible_voucher_row_snapshot(expected_row_no=None):
+                """Build live 24/26-row geometry without enumerating the full UIA tree."""
+                try:
+                    main_rect = _main_rect()
+                    boundary_candidates = []
+                    boundary_source = "ready-snapshot"
+                    ready_snapshot = management_grid_ready_state.get("snapshot") or {}
+                    for key in ("header_label", "header_value"):
+                        row = ready_snapshot.get(key)
+                        rect = row.get("rect") if isinstance(row, dict) else None
+                        if rect is not None:
+                            center_x = ((rect.left + rect.right) // 2) - main_rect.left
+                            rel_top = rect.top - main_rect.top
+                            if 500 <= center_x <= 1250 and rel_top > first_row_y + (row_height * 3):
+                                boundary_candidates.append(int(rect.top))
+
+                    header_boundary_found = bool(boundary_candidates)
+                    viewport_boundary = ready_snapshot.get("voucher_clip_bottom_abs")
+                    if viewport_boundary is not None:
+                        viewport_rel_bottom = int(viewport_boundary) - main_rect.top
+                        if viewport_rel_bottom > first_row_y + (row_height * 3):
+                            boundary_candidates.append(int(viewport_boundary))
+                            boundary_source = (
+                                "ready-header-viewport-snapshot"
+                                if header_boundary_found
+                                else "ready-viewport-snapshot"
+                            )
+
+                    # The upload-ready check normally captured both management headers.
+                    # UIA text can be absent even when the pixel verification succeeded,
+                    # so the already captured SS_Row viewport is the only fallback. Never
+                    # run a new full UIA walk here; that recreates the 210-row hang.
+
+                    if not boundary_candidates:
+                        self.logger.warning(
+                            "  [MGMT-XY] 빠른 UIA 경계 탐색에서 관리항목 헤더를 찾지 못했습니다."
+                        )
+                        return None
+
+                    clip_bottom = min(boundary_candidates) - main_rect.top
+                    pitch = max(1, int(row_height))
+                    first_y = int(first_row_y)
+                    guard = max(
+                        1.0,
+                        float(os.getenv("ERP_MGMT_FULL_ROW_BOTTOM_GUARD", "2") or "2"),
+                    )
+                    usable_height = float(clip_bottom) - guard - first_y - (pitch / 2.0)
+                    last_offset = int(usable_height // pitch)
+                    if last_offset < 0:
+                        self.logger.warning(
+                            "  [MGMT-XY] 빠른 UIA 경계가 첫 전표 행보다 위에 있어 사용할 수 없습니다: "
+                            f"clip_bottom={clip_bottom}, first_y={first_y}, pitch={pitch}"
+                        )
+                        return None
+
+                    visible_count = last_offset + 1
+                    max_visible_count = max(
+                        1,
+                        ((main_rect.bottom - main_rect.top) // pitch) + 1,
+                    )
+                    if visible_count > max_visible_count:
+                        self.logger.warning(
+                            "  [MGMT-XY] 빠른 UIA 경계의 표시 행 수가 화면 높이를 초과합니다: "
+                            f"visible_count={visible_count}, max={max_visible_count}"
+                        )
+                        return None
+                    slot_ys = [first_y + (slot * pitch) for slot in range(visible_count)]
+                    logical_first = 1
+                    if expected_row_no is not None:
+                        logical_first = max(1, int(expected_row_no) - visible_count + 1)
+                    named_rows = {
+                        logical_first + slot: relative_y
+                        for slot, relative_y in enumerate(slot_ys)
+                    }
+                    snapshot = {
+                        "rows": named_rows,
+                        "slot_ys": slot_ys,
+                        "first_y": slot_ys[0],
+                        "last_full_y": slot_ys[-1],
+                        "row_pitch": pitch,
+                        "clip_bottom": int(clip_bottom),
+                        "has_exact_row_numbers": False,
+                        "has_logical_row_numbers": False,
+                        "geometry_source": boundary_source,
+                    }
+                    self.logger.info(
+                        "  [MGMT-XY] 빠른 UIA 완전 표시 행 스냅샷: "
+                        f"source={boundary_source}, slots={visible_count}, "
+                        f"first_y={snapshot['first_y']}, last_y={snapshot['last_full_y']}, "
+                        f"clip_bottom={snapshot['clip_bottom']}, logical={logical_first}.."
+                        f"{logical_first + visible_count - 1}"
+                    )
+                    return snapshot
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-XY] 빠른 UIA 완전 표시 행 스냅샷 실패: {exc}")
+                    return None
+
             def _fully_visible_voucher_row_snapshot():
                 """Return actual UIA row centers, excluding the clipped bottom row."""
                 try:
@@ -4311,9 +4460,14 @@ class ERPLoginBot:
                     )
                 return snapshot
 
-            initial_snapshot = _validate_initial_voucher_row_snapshot(
-                _fully_visible_voucher_row_snapshot()
-            )
+            if skip_visible_row_scan:
+                initial_snapshot = _validate_initial_voucher_row_snapshot(
+                    _fast_visible_voucher_row_snapshot()
+                )
+            else:
+                initial_snapshot = _validate_initial_voucher_row_snapshot(
+                    _fully_visible_voucher_row_snapshot()
+                )
             row_geometry_state = {
                 "snapshot": initial_snapshot,
                 "bottom_scroll_mode": False,
@@ -4347,7 +4501,10 @@ class ERPLoginBot:
             def _refresh_voucher_row_snapshot(expected_row_no=None):
                 best = None
                 for attempt in range(3):
-                    snapshot = _fully_visible_voucher_row_snapshot()
+                    if skip_visible_row_scan:
+                        snapshot = _fast_visible_voucher_row_snapshot(expected_row_no)
+                    else:
+                        snapshot = _fully_visible_voucher_row_snapshot()
                     if snapshot and snapshot.get("slot_ys"):
                         best = snapshot
                         if expected_row_no is None or expected_row_no in (snapshot.get("rows") or {}):
@@ -4425,6 +4582,7 @@ class ERPLoginBot:
 
             def _bank_management_visible():
                 snapshot = _management_grid_snapshot()
+                management_grid_ready_state["snapshot"] = snapshot
                 labels = snapshot.get("label_norms") or set()
                 return bank_management_norms.issubset(labels), snapshot
 
@@ -5459,10 +5617,18 @@ class ERPLoginBot:
             self.logger.info("  [FORM-XY] grid paste reflected; waiting for management items")
             try:
                 if excel_copy_used:
-                    _wait_for_management_grid_ready("Excel range paste")
+                    management_grid_ready_state["snapshot"] = _wait_for_management_grid_ready(
+                        "Excel range paste"
+                    )
                 else:
                     time.sleep(mgmt_after_grid_paste_wait)
                     _verify_grid_paste_or_fail(first_account_cell_xy)
+                    # Text fallback historically proceeded after a quick first-cell
+                    # verification. Preserve that timing and cache one live geometry
+                    # snapshot instead of adding the row_count*10s Excel wait loop.
+                    management_grid_ready_state["snapshot"] = _management_grid_snapshot(
+                        include_visual=True
+                    )
             finally:
                 if excel_copy_used:
                     _close_excel_copy_workbook()

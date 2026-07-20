@@ -942,6 +942,80 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     assert all(event[2] == {"enter_count": 1, "clear": True} for event in events)
 
 
+def test_management_value_xy_reuses_ready_snapshot_without_another_uia_scan():
+    snapshot_calls = []
+    vendor_norm = re.sub(r"\s+", "", "거래처").lower()
+    ready_snapshot = {
+        "header_value": {
+            "rel_x": 1118,
+            "rel_y": 777,
+            "rect": _FakeRect(760, 767, 1038, 787),
+        },
+        "items": [
+            {
+                "text": "거래처",
+                "norm": vendor_norm,
+                "rel_x": 690,
+                "rel_y": 797,
+                "rect": _FakeRect(620, 787, 750, 807),
+            }
+        ],
+        "labels": ["거래처"],
+    }
+    loaded = _load_nested_functions(
+        "_management_value_xy",
+        namespace={
+            "management_grid_ready_state": {"snapshot": ready_snapshot},
+            "management_value_xy_cache": {},
+            "management_bank_coordinate_fallback_rows": set(),
+            "management_active_row_context": {"row_no": 1},
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_env_flag": lambda name, default="0": name == "ERP_FAST_MGMT_ANCHOR",
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "_management_grid_snapshot": (
+                lambda: snapshot_calls.append("full-management-snapshot") or {}
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_management_value_xy"]("거래처", 797) == (1118, 797)
+    assert snapshot_calls == []
+
+
+def test_management_snapshot_caches_empty_text_voucher_viewport_for_fast_boundary():
+    viewport = _FakeControl(
+        "",
+        "Custom",
+        _FakeRect(60, 210, 1450, 783),
+        automation_id="SS_Row",
+    )
+    scrollbar = _FakeControl(
+        "",
+        "ScrollBar",
+        _FakeRect(60, 703, 1450, 718),
+    )
+    loaded = _load_nested_functions(
+        "_management_grid_snapshot",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "_iter_visible": lambda: [viewport, scrollbar],
+            "_control_text": lambda ctrl: ctrl.window_text(),
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    snapshot = loaded["_management_grid_snapshot"]()
+
+    assert snapshot["voucher_viewport_rect"] is viewport.rectangle()
+    assert snapshot["voucher_clip_bottom_abs"] == 703
+    assert snapshot["header_label"] is None
+    assert snapshot["header_value"] is None
+
+
 def _visible_voucher_snapshot(
     *,
     first_logical_row: int,
@@ -1290,3 +1364,168 @@ def test_management_navigation_always_builds_dynamic_uia_snapshot():
     assert "ERP_MGMT_GRID_BOTTOM_MARGIN" not in helper
     assert "current_y = max_row_y" not in helper
     assert "row_geometry_state[\"bottom_scroll_mode\"] = True" in helper
+
+
+def _fast_visible_voucher_snapshot(
+    *,
+    full_row_count: int,
+    expected_row_no: int | None = None,
+    include_header: bool = True,
+    include_viewport: bool = False,
+    viewport_clip_bottom: int | None = None,
+):
+    first_y = 231
+    pitch = 20
+    last_full_y = first_y + ((full_row_count - 1) * pitch)
+    clip_bottom = last_full_y + 12
+    header = None
+    if include_header:
+        header = {
+            "rect": _FakeRect(620, clip_bottom, 760, clip_bottom + 20),
+            "rel_y": clip_bottom + 10,
+        }
+    forbidden_calls = []
+    ready_state = {
+        "snapshot": {
+            "header_label": header,
+            "header_value": header,
+            "voucher_viewport_rect": (
+                _FakeRect(60, 210, 1450, clip_bottom)
+                if include_viewport
+                else None
+            ),
+            "voucher_clip_bottom_abs": (
+                int(viewport_clip_bottom if viewport_clip_bottom is not None else clip_bottom)
+                if include_viewport
+                else None
+            ),
+        }
+    }
+    loaded = _load_nested_functions(
+        "_fast_visible_voucher_row_snapshot",
+        namespace={
+            "management_grid_ready_state": ready_state,
+            "_main_rect": lambda: _FakeRect(0, 0, 1600, 900),
+            "first_row_y": first_y,
+            "row_height": pitch,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+            "_iter_visible": lambda *_args, **_kwargs: forbidden_calls.append("iter-visible"),
+            "_fully_visible_voucher_row_snapshot": (
+                lambda *_args, **_kwargs: forbidden_calls.append("full-snapshot")
+            ),
+        },
+    )
+
+    snapshot = loaded["_fast_visible_voucher_row_snapshot"](expected_row_no)
+    assert forbidden_calls == []
+    return snapshot
+
+
+def test_fast_visible_snapshot_uses_cached_header_for_24_or_26_rows():
+    for full_row_count, last_full_y in ((24, 691), (26, 731)):
+        snapshot = _fast_visible_voucher_snapshot(full_row_count=full_row_count)
+
+        assert snapshot["slot_ys"] == list(range(231, last_full_y + 1, 20))
+        assert snapshot["rows"][1] == 231
+        assert snapshot["rows"][full_row_count] == last_full_y
+        assert snapshot["last_full_y"] == last_full_y
+        assert snapshot["clip_bottom"] == last_full_y + 12
+        assert snapshot["row_pitch"] == 20
+
+
+def test_fast_visible_snapshot_maps_scrolled_expected_row_to_bottom_slot():
+    for full_row_count, expected_row_no, last_full_y in (
+        (24, 25, 691),
+        (26, 27, 731),
+    ):
+        snapshot = _fast_visible_voucher_snapshot(
+            full_row_count=full_row_count,
+            expected_row_no=expected_row_no,
+        )
+
+        assert snapshot["rows"][expected_row_no] == last_full_y
+        assert min(snapshot["rows"]) == 2
+        assert max(snapshot["rows"]) == expected_row_no
+        assert len(snapshot["slot_ys"]) == full_row_count
+
+
+def test_fast_visible_snapshot_returns_none_without_cached_management_header():
+    assert (
+        _fast_visible_voucher_snapshot(
+            full_row_count=24,
+            include_header=False,
+        )
+        is None
+    )
+
+
+def test_fast_visible_snapshot_uses_cached_viewport_when_uia_header_text_is_missing():
+    snapshot = _fast_visible_voucher_snapshot(
+        full_row_count=24,
+        include_header=False,
+        include_viewport=True,
+    )
+
+    assert snapshot["last_full_y"] == 691
+    assert snapshot["clip_bottom"] == 703
+    assert snapshot["geometry_source"] == "ready-viewport-snapshot"
+
+
+def test_fast_visible_snapshot_uses_minimum_of_header_and_scrollbar_boundary():
+    snapshot = _fast_visible_voucher_snapshot(
+        full_row_count=25,
+        include_header=True,
+        include_viewport=True,
+        viewport_clip_bottom=703,
+    )
+
+    assert snapshot["last_full_y"] == 691
+    assert len(snapshot["slot_ys"]) == 24
+    assert snapshot["geometry_source"] == "ready-header-viewport-snapshot"
+
+
+def test_fast_snapshot_helper_and_skip_branch_never_run_full_uia_scan():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    assert (
+        'management_grid_ready_state["snapshot"] = _wait_for_management_grid_ready('
+        in source
+    )
+    fill_start = source.index("def _fill_management_items_by_coord")
+    fill_end = source.index("def _wait_process_by_name", fill_start)
+    helper = source[fill_start:fill_end]
+    fast_start = helper.index("def _fast_visible_voucher_row_snapshot")
+    fast_end = helper.index("def _fully_visible_voucher_row_snapshot", fast_start)
+    fast_helper = helper[fast_start:fast_end]
+
+    assert "_iter_visible" not in fast_helper
+    assert ".descendants(" not in fast_helper
+    assert "_fully_visible_voucher_row_snapshot" not in fast_helper
+    assert 'ready_snapshot.get("voucher_clip_bottom_abs")' in fast_helper
+    assert "if skip_visible_row_scan:" in helper
+    assert '_wait_for_management_grid_ready("text clipboard paste")' not in source
+
+    initial_branch_start = helper.index("if skip_visible_row_scan:")
+    initial_branch_end = helper.index("row_geometry_state =", initial_branch_start)
+    initial_branch = helper[initial_branch_start:initial_branch_end]
+    fast_call = initial_branch.index("_fast_visible_voucher_row_snapshot()")
+    slow_else = initial_branch.index("else:", fast_call)
+    full_call = initial_branch.index("_fully_visible_voucher_row_snapshot()", slow_else)
+
+    assert fast_call < slow_else < full_call
+
+    refresh_start = helper.index("def _refresh_voucher_row_snapshot")
+    refresh_end = helper.index("def _focus_grid_row", refresh_start)
+    refresh_helper = helper[refresh_start:refresh_end]
+    refresh_skip = refresh_helper.index("if skip_visible_row_scan:")
+    refresh_fast = refresh_helper.index(
+        "_fast_visible_voucher_row_snapshot(expected_row_no)",
+        refresh_skip,
+    )
+    refresh_else = refresh_helper.index("else:", refresh_fast)
+    refresh_full = refresh_helper.index(
+        "_fully_visible_voucher_row_snapshot()",
+        refresh_else,
+    )
+
+    assert refresh_skip < refresh_fast < refresh_else < refresh_full
