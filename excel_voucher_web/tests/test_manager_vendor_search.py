@@ -1047,7 +1047,9 @@ def test_fast_bank_row_check_bypasses_full_uia_visibility_scan():
             "_ensure_bank_management_row",
             namespace={
                 "skip_visible_row_scan": True,
-                "_current_row_account_matches": lambda *_args: True,
+                "_current_row_account_matches": lambda *_args: (_ for _ in ()).throw(
+                    AssertionError("fast bank path must not use clipboard account verification")
+                ),
                 "_prepare_fast_bank_management_coordinates": lambda: True,
                 "management_bank_coordinate_fallback_rows": fallback_rows,
                 "_bank_management_visible": (

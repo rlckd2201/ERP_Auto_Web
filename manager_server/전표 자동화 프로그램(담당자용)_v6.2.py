@@ -5205,29 +5205,16 @@ class ERPLoginBot:
 
             def _ensure_bank_management_row(row_no, current_y, expected_account):
                 if skip_visible_row_scan:
-                    for attempt in range(3):
-                        if _current_row_account_matches(row_no, current_y, expected_account):
-                            if not _prepare_fast_bank_management_coordinates():
-                                _fail_form(
-                                    f"{row_no}행 보통예금 관리항목의 빠른 입력 좌표를 준비하지 못했습니다."
-                                )
-                            management_bank_coordinate_fallback_rows.add(row_no)
-                            self.logger.info(
-                                f"  [MGMT-XY] {row_no}행 보통예금 계정과목 확인 완료; "
-                                "전체 UIA 탐색 없이 계좌번호/금융기관점 입력을 진행합니다."
-                            )
-                            return current_y
-                        if attempt < 2:
-                            time.sleep(max(0.15, mgmt_commit_wait))
-                            _double_click_form_xy(
-                                summary_x,
-                                int(current_y),
-                                f"{row_no}행 보통예금 재선택",
-                                wait=mgmt_summary_open_wait,
-                            )
-                    _fail_form(
-                        f"{row_no}행 계정과목이 보통예금인지 확인하지 못해 관리항목 입력을 중단합니다."
+                    if not _prepare_fast_bank_management_coordinates():
+                        _fail_form(
+                            f"{row_no}행 보통예금 관리항목의 빠른 입력 좌표를 준비하지 못했습니다."
+                        )
+                    management_bank_coordinate_fallback_rows.add(row_no)
+                    self.logger.info(
+                        f"  [MGMT-XY] {row_no}행은 payload에 계좌번호/금융기관지점이 명시된 "
+                        "마지막 보통예금 행이므로 불안정한 GDI Ctrl+C 검증 없이 입력을 진행합니다."
                     )
+                    return current_y
                 ok, snapshot = _bank_management_visible()
                 if ok:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 보통예금 관리항목 표시 확인")
