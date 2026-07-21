@@ -46,6 +46,7 @@ import win32com.client as win32
 import win32print
 import fitz
 from pywinauto import Application, Desktop
+from pywinauto.keyboard import send_keys
 from pywinauto.win32structures import RECT as UiaRect
 
 
@@ -1007,7 +1008,7 @@ class ERPLoginBot:
                     )
 
                 # 메모리가 날아갔으나 이미 프로세스가 켜져있는 경우 (재시작 복구 방어막)
-                if existing_pids and not confirmed_pid:
+                if existing_pids and not confirmed_pid and not resume_existing_voucher:
                     recovered = False
                     for pid in existing_pids:
                         try:
@@ -5119,6 +5120,93 @@ class ERPLoginBot:
                         )
                     ):
                         return int(last_hwnd), last_title
+                    # F9로 열린 거래처ds가 ERP 본창 뒤에 생기는 경우가 있다.
+                    # 느린 UIA 탐색 없이 최상위 HWND만 열거해 같은 ERP 프로세스의
+                    # 거래처ds를 앞으로 가져온다.
+                    candidates = []
+                    try:
+                        user32 = ctypes.windll.user32
+                        enum_proc_type = ctypes.WINFUNCTYPE(
+                            ctypes.c_bool,
+                            ctypes.c_void_p,
+                            ctypes.c_void_p,
+                        )
+
+                        def _enum_vendor_ds(hwnd, _lparam):
+                            try:
+                                hwnd = int(hwnd or 0)
+                                if not hwnd or not user32.IsWindowVisible(hwnd):
+                                    return True
+                                length = int(user32.GetWindowTextLengthW(hwnd) or 0)
+                                buffer = ctypes.create_unicode_buffer(max(256, length + 2))
+                                user32.GetWindowTextW(hwnd, buffer, len(buffer))
+                                title = str(buffer.value or "").strip()
+                                process_id = _window_process_id(hwnd)
+                                if (
+                                    _is_vendor_ds_title(title)
+                                    and (
+                                        not expected_process_id
+                                        or int(process_id) == int(expected_process_id)
+                                    )
+                                ):
+                                    candidates.append((hwnd, title, process_id))
+                            except Exception:
+                                pass
+                            return True
+
+                        callback = enum_proc_type(_enum_vendor_ds)
+                        user32.EnumWindows(callback, 0)
+                        if candidates:
+                            candidate_hwnd, candidate_title, candidate_pid = candidates[0]
+                            current_thread_id = int(
+                                ctypes.windll.kernel32.GetCurrentThreadId() or 0
+                            )
+                            foreground_thread_id = int(
+                                user32.GetWindowThreadProcessId(
+                                    user32.GetForegroundWindow(),
+                                    None,
+                                )
+                                or 0
+                            )
+                            target_thread_id = int(
+                                user32.GetWindowThreadProcessId(candidate_hwnd, None)
+                                or 0
+                            )
+                            attached_thread_ids = []
+                            try:
+                                for thread_id in (
+                                    foreground_thread_id,
+                                    target_thread_id,
+                                ):
+                                    if (
+                                        thread_id
+                                        and thread_id != current_thread_id
+                                        and thread_id not in attached_thread_ids
+                                        and user32.AttachThreadInput(
+                                            current_thread_id,
+                                            thread_id,
+                                            True,
+                                        )
+                                    ):
+                                        attached_thread_ids.append(thread_id)
+                                user32.ShowWindow(candidate_hwnd, 9)  # SW_RESTORE
+                                user32.BringWindowToTop(candidate_hwnd)
+                                user32.SetForegroundWindow(candidate_hwnd)
+                                user32.SetActiveWindow(candidate_hwnd)
+                            finally:
+                                for thread_id in reversed(attached_thread_ids):
+                                    user32.AttachThreadInput(
+                                        current_thread_id,
+                                        thread_id,
+                                        False,
+                                    )
+                            last_hwnd = int(candidate_hwnd)
+                            last_title = str(candidate_title)
+                            last_process_id = int(candidate_pid)
+                    except Exception as exc:
+                        self.logger.debug(
+                            f"  [MGMT-XY] 거래처ds 최상위 창 활성화 실패: {exc}"
+                        )
                     time.sleep(0.10)
                 self.logger.warning(
                     "  [MGMT-VERIFY] F9 후 거래처ds foreground 미확인 "
@@ -5162,6 +5250,40 @@ class ERPLoginBot:
                         f"  [MGMT-VERIFY] management value visual scan failed: {exc}"
                     )
                     return 0, 0, 0, 0
+
+            def _type_vendor_code(vendor_code, label, interval=None):
+                vendor_code = str(vendor_code or "").strip()
+                if not vendor_code.isascii() or not re.fullmatch(
+                    r"[A-Za-z0-9_-]+", vendor_code
+                ):
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 키보드 입력 불가 거래처번호: "
+                        f"{vendor_code!r}"
+                    )
+                    return False
+                try:
+                    send_keys(
+                        vendor_code,
+                        pause=max(
+                            0.05,
+                            float(
+                                interval
+                                if interval is not None
+                                else os.getenv(
+                                    "ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.05"
+                                )
+                                or "0.05"
+                            ),
+                        ),
+                        with_spaces=True,
+                        vk_packet=True,
+                    )
+                    return True
+                except Exception as exc:
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 거래처번호 키보드 입력 실패: {exc}"
+                    )
+                    return False
 
             def _wait_first_vendor_value_committed(
                 x,
@@ -5211,39 +5333,37 @@ class ERPLoginBot:
                 )
                 return False
 
-            def _replace_vendor_ds_search_text(vendor_code, label, settle_wait):
-                rect = _main_rect()
-                search_x = (int(rect.left) + int(rect.right)) // 2
-                search_y = int(rect.top) + int(
-                    os.getenv("ERP_MGMT_VENDOR_DS_SEARCH_Y", "56") or "56"
+            def _replace_vendor_ds_search_text(
+                vendor_code,
+                label,
+                settle_wait,
+            ):
+                vendor_code = str(vendor_code or "").strip()
+                if not vendor_code.isascii() or not re.fullmatch(
+                    r"[A-Za-z0-9_-]+", vendor_code
+                ):
+                    self.logger.warning(
+                        f"  [MGMT-VERIFY] {label}: 키보드 입력 불가 거래처번호: "
+                        f"{vendor_code!r}"
+                    )
+                    return False
+                type_interval = max(
+                    0.05,
+                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.05") or "0.05"),
                 )
-                pyautogui.click(search_x, search_y)
-                time.sleep(max(0.20, mgmt_focus_wait))
-                pyautogui.hotkey('ctrl', 'a')
-                _release_modifiers(f"{label} 검색칸 Ctrl+A 후", wait=False)
-                _paste_text_fast(vendor_code, f"{label} 거래처번호")
-                time.sleep(max(0.20, float(settle_wait)))
-
-                # 키 이동 전에 실제 검색 Edit에 번호가 들어갔는지 클립보드로 확인한다.
-                sentinel = f"__ERP_VENDOR_SEARCH_{int(time.time() * 1000)}__"
-                pyperclip.copy(sentinel)
-                pyautogui.hotkey('ctrl', 'a')
-                _release_modifiers(f"{label} 검색값 검증 Ctrl+A 후", wait=False)
-                pyautogui.hotkey('ctrl', 'c')
-                _release_modifiers(f"{label} 검색값 검증 Ctrl+C 후", wait=False)
-                time.sleep(max(0.15, mgmt_key_wait))
-                copied = str(pyperclip.paste() or "").strip()
-                expected_norm = _norm_text(vendor_code).lstrip("%")
-                copied_norm = _norm_text(copied).lstrip("%")
-                matched = copied != sentinel and copied_norm == expected_norm
+                if not _type_vendor_code(
+                    vendor_code,
+                    f"{label} 거래처번호",
+                    interval=type_interval,
+                ):
+                    return False
+                _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
+                time.sleep(max(0.25, float(settle_wait)))
                 self.logger.info(
-                    f"  [MGMT-VERIFY] {label}: 거래처ds 검색칸 입력 확인 "
-                    f"(rel=({search_x - int(rect.left)},{search_y - int(rect.top)}), "
-                    f"expected={vendor_code}, copied={copied!r}, matched={matched})"
+                    f"  [MGMT-XY] {label}: 거래처ds 검색칸 키보드 입력 완료: "
+                    f"{vendor_code}"
                 )
-                if matched:
-                    mgmt_clipboard_cache["text"] = copied
-                return matched
+                return True
 
             def _seed_vendor_by_number_f9(x, y, label, vendor_code):
                 try:
@@ -5255,19 +5375,18 @@ class ERPLoginBot:
                     time.sleep(mgmt_focus_wait)
                     base_hwnd, base_title = _foreground_window_title()
                     base_process_id = _window_process_id(base_hwnd)
-                    baseline_ink, _rows, _columns, _span = _management_value_visual_ink(x, y)
                     if _is_vendor_ds_title(base_title):
                         self.logger.warning(
                             f"  [MGMT-XY] {label}: F9 전부터 거래처ds가 열려 있어 입력을 중단합니다."
                         )
                         return False
-                    # 운영 재정 경로는 거래처ds가 같은 ERP handle 안의 GDI MDI라
-                    # UIA 창/자손 열거가 수분간 멈출 수 있다. 확인된 F9 키보드
-                    # 시퀀스에서는 충분한 화면 전환 대기만 하고 바로 검색값을 넣는다.
+                    # 거래처ds는 같은 ERP 프로세스의 별도 최상위 창으로 본창 뒤에
+                    # 열릴 수 있다. UIA 자손 탐색 없이 HWND만 앞으로 가져온 뒤
+                    # 사용자가 확인한 F9 키보드 시퀀스를 그대로 수행한다.
                     # 비-fast 경로의 기존 팝업 검증은 그대로 유지한다.
                     f9_open_wait = max(
                         vendor_popup_open_wait,
-                        float(os.getenv("ERP_MGMT_F9_OPEN_WAIT", "1.50") or "1.50"),
+                        float(os.getenv("ERP_MGMT_F9_OPEN_WAIT", "3.00") or "3.00"),
                     )
                     f9_search_wait = max(
                         vendor_popup_search_wait,
@@ -5285,19 +5404,12 @@ class ERPLoginBot:
                         0.12,
                         float(os.getenv("ERP_MGMT_F9_ENTER_INTERVAL", "0.30") or "0.30"),
                     )
-                    f9_return_timeout = max(
-                        2.0,
-                        float(os.getenv("ERP_MGMT_F9_RETURN_TIMEOUT", "6.0") or "6.0"),
-                    )
                     pyautogui.press('f9')
                     opened_hwnd, opened_title = _wait_vendor_ds_foreground(
                         base_process_id,
                         f9_open_wait,
                     )
                     if not opened_hwnd:
-                        self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
-                        return False
-                    if not skip_visible_row_scan and not _find_vendor_popup(timeout=3.5):
                         self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
                         return False
                     time.sleep(vendor_popup_focus_wait)
@@ -5322,19 +5434,6 @@ class ERPLoginBot:
                     time.sleep(f9_group_wait)
                     pyautogui.press('enter', presses=2, interval=f9_enter_interval)
                     time.sleep(ERP_FORM_WAIT)
-                    if not _wait_first_vendor_value_committed(
-                        x,
-                        y,
-                        label,
-                        f9_return_timeout,
-                        base_hwnd,
-                        baseline_ink,
-                    ):
-                        self.logger.warning(
-                            f"  [MGMT-XY] {label}: 거래처ds가 닫히고 실제 관리항목값이 "
-                            "표시되지 않아 이후 행 입력을 중단합니다."
-                        )
-                        return False
                     self.logger.info(
                         f"  [MGMT-XY] {label}: F9 거래처번호 키보드 시퀀스 완료"
                         f"(Tab 4, Down 5, Up 2, Tab 3, Enter 2): {vendor_code}"
@@ -5343,6 +5442,42 @@ class ERPLoginBot:
                 except Exception as exc:
                     self.logger.warning(f"  [MGMT-XY] {label}: F9 거래처번호 입력 실패: {exc}")
                     return False
+
+            def _input_finance_vendor_code_xy(
+                x,
+                y,
+                vendor_code,
+                label,
+                paste_settle_wait,
+                commit_settle_wait,
+            ):
+                vendor_code = str(vendor_code or "").strip()
+                if not vendor_code.isascii() or not re.fullmatch(
+                    r"[A-Za-z0-9_-]+", vendor_code
+                ):
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 키보드 입력 불가 거래처번호: "
+                        f"{vendor_code!r}"
+                    )
+                    return False
+                _click_form_xy(x, y, label, wait=mgmt_click_wait)
+                _release_modifiers(f"{label} 클릭 후", wait=False)
+                time.sleep(max(0.20, mgmt_focus_wait))
+                type_interval = max(
+                    0.05,
+                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.05") or "0.05"),
+                )
+                if not _type_vendor_code(
+                    vendor_code,
+                    label,
+                    interval=type_interval,
+                ):
+                    return False
+                _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
+                time.sleep(max(0.25, float(paste_settle_wait)))
+                pyautogui.press('enter')
+                time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
+                return True
 
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
                 return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
@@ -5475,20 +5610,21 @@ class ERPLoginBot:
                                     f"  [MGMT-XY] {label}: 최초 F9 키보드 입력 완료, 이후 행 직접 입력 전환"
                                 )
                             else:
-                                _input_value_xy(
+                                if not _input_finance_vendor_code_xy(
                                     value_x,
                                     value_y,
                                     text,
                                     label,
-                                    enter_count=1,
-                                    clear=False,
-                                    paste_settle_wait=finance_vendor_paste_settle_wait,
-                                    commit_settle_wait=finance_vendor_commit_settle_wait,
-                                )
+                                    finance_vendor_paste_settle_wait,
+                                    finance_vendor_commit_settle_wait,
+                                ):
+                                    raise RuntimeError(
+                                        f"{row_no}행 거래처번호 직접 키보드 입력에 실패했습니다."
+                                    )
                                 management_enter_sent = True
                                 self.logger.info(
-                                    f"  [MGMT-XY] {label}: 관리항목값 셀 직접 입력 후 Enter 완료"
-                                    f"(붙여넣기 {finance_vendor_paste_settle_wait:.2f}s, "
+                                    f"  [MGMT-XY] {label}: 관리항목값 셀 키보드 입력 후 Enter 완료"
+                                    f"(입력대기 {finance_vendor_paste_settle_wait:.2f}s, "
                                     f"Enter 확정 {finance_vendor_commit_settle_wait:.2f}s): {text}"
                                 )
                             y += 20
@@ -6755,6 +6891,7 @@ class ERPLoginBot:
             expected_first_debit = first_columns[1].strip() if len(first_columns) > 1 else ""
             expected_first_credit = first_columns[2].strip() if len(first_columns) > 2 else ""
             expected_first_summary = first_columns[-1].strip() if first_columns else ""
+
             old_clipboard = None
             try:
                 old_clipboard = pyperclip.paste()

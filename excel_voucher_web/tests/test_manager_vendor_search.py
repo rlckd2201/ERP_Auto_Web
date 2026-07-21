@@ -109,6 +109,9 @@ class _FakeControl:
 
 
 class _FakeLogger:
+    def debug(self, *_args, **_kwargs):
+        pass
+
     def info(self, *_args, **_kwargs):
         pass
 
@@ -123,7 +126,7 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
     helper_start = source.index("def _seed_vendor_by_number_f9")
-    helper_end = source.index("def _input_vendor_by_number_keyboard", helper_start)
+    helper_end = source.index("def _input_finance_vendor_code_xy", helper_start)
     helper = source[helper_start:helper_end]
     expected_order = [
         "_click_form_xy",
@@ -135,7 +138,6 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
         "pyautogui.press('up', presses=2",
         "pyautogui.press('tab', presses=3",
         "pyautogui.press('enter', presses=2",
-        "_wait_first_vendor_value_committed",
     ]
     positions = [helper.index(token) for token in expected_order]
 
@@ -143,12 +145,15 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     assert "doubleClick" not in helper
     assert "_double_click" not in helper
     assert "_input_vendor_by_popup_keyboard" not in helper
+    assert helper.count("pyautogui.press('f9')") == 1
+    assert "_wait_first_vendor_value_committed(" not in helper
+    assert "_management_value_visual_ink(" not in helper
     assert 'finance_vendor_entry_state = {"f9_seeded": False}' in source
     assert 'if account_key == "미지급금(원화)":' in source
     assert 'if not finance_vendor_entry_state["f9_seeded"]:' in source
     assert 'finance_vendor_entry_state["f9_seeded"] = True' in source
     assert "최초 F9 키보드 입력 완료, 이후 행 직접 입력 전환" in source
-    assert "관리항목값 셀 직접 입력 후 Enter 완료" in source
+    assert "관리항목값 셀 키보드 입력 후 Enter 완료" in source
     assert "거래처번호 팝업 입력 실패, 직접 입력 fallback" in source
 
 
@@ -500,16 +505,12 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_foreground_window_title": lambda: (101, "대승"),
             "_window_process_id": lambda hwnd: 10772 if hwnd == 101 else 0,
-            "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
             "_is_vendor_ds_title": lambda title: "거래처" in title and "ds" in title.lower(),
             "_wait_vendor_ds_foreground": lambda process_id, timeout: (
                 events.append(("vendor-ds", process_id)) or (202, "거래처_ds")
             ),
             "_replace_vendor_ds_search_text": lambda text, label, wait: (
                 events.append(("search", text)) or True
-            ),
-            "_wait_first_vendor_value_committed": lambda *args: (
-                events.append(("committed", args[4])) or True
             ),
             "_find_vendor_popup": lambda timeout=0: (_ for _ in ()).throw(
                 AssertionError("fast F9 sequence must not probe UIA")
@@ -542,7 +543,6 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
         ("key", "up", 2),
         ("key", "tab", 3),
         ("key", "enter", 2),
-        ("committed", 101),
     ]
 
 
@@ -561,13 +561,11 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_foreground_window_title": lambda: (101, "대승"),
             "_window_process_id": lambda hwnd: 10772 if hwnd == 101 else 0,
-            "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
             "_is_vendor_ds_title": lambda title: False,
             "_wait_vendor_ds_foreground": lambda process_id, timeout: (
                 events.append(("vendor-ds", process_id)) or (0, "")
             ),
             "_replace_vendor_ds_search_text": lambda *_args: events.append(("search",)),
-            "_wait_first_vendor_value_committed": lambda *_args: events.append(("committed",)),
             "_find_vendor_popup": lambda timeout=0: events.append(("popup-check", timeout)),
             "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(sleep=lambda _seconds: None),
@@ -594,16 +592,7 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
     ]
 
 
-@pytest.mark.parametrize(
-    ("foreground_process_id", "expected"),
-    [
-        (10772, (202, "거래처_ds")),
-        (9900, (0, "")),
-    ],
-)
-def test_vendor_ds_foreground_accepts_separate_window_only_in_same_erp_process(
-    foreground_process_id, expected
-):
+def test_vendor_ds_foreground_accepts_active_window_in_same_erp_process():
     class _FakeClock:
         now = 0.0
 
@@ -620,84 +609,28 @@ def test_vendor_ds_foreground_accepts_separate_window_only_in_same_erp_process(
         namespace={
             "time": _FakeClock,
             "_foreground_window_title": lambda: (202, "거래처_ds"),
-            "_window_process_id": lambda hwnd: foreground_process_id if hwnd == 202 else 0,
+            "_window_process_id": lambda hwnd: 10772 if hwnd == 202 else 0,
             "_is_vendor_ds_title": lambda title: title == "거래처_ds",
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
 
-    assert loaded["_wait_vendor_ds_foreground"](10772, 0.5) == expected
-
-
-def test_finance_first_vendor_refocuses_search_edit_and_replaces_stale_text():
-    events = []
-    state = {
-        "clipboard": "",
-        "field": "%신한 수원금융센터",
-        "focus": "grid",
-    }
-
-    class _FakePyAutoGui:
-        @staticmethod
-        def click(x, y):
-            state["focus"] = "search"
-            events.append(("click", x, y))
-
-        @staticmethod
-        def hotkey(*keys):
-            events.append(("hotkey", *keys))
-            if keys == ("ctrl", "c") and state["focus"] == "search":
-                state["clipboard"] = state["field"]
-
-    def _paste(text, _label):
-        events.append(("paste", text))
-        state["field"] = text
-        state["clipboard"] = text
-
-    loaded = _load_nested_functions(
-        "_replace_vendor_ds_search_text",
-        namespace={
-            "_main_rect": lambda: _FakeRect(0, 0, 1920, 1080),
-            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
-            "pyautogui": _FakePyAutoGui,
-            "_release_modifiers": lambda *_args, **_kwargs: None,
-            "_paste_text_fast": _paste,
-            "pyperclip": SimpleNamespace(
-                copy=lambda text: state.update(clipboard=text),
-                paste=lambda: state["clipboard"],
-            ),
-            "time": SimpleNamespace(time=lambda: 1.0, sleep=lambda _seconds: None),
-            "mgmt_focus_wait": 0.0,
-            "mgmt_key_wait": 0.0,
-            "mgmt_clipboard_cache": {"text": None},
-            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
-            "self": SimpleNamespace(logger=_FakeLogger()),
-        },
+    assert loaded["_wait_vendor_ds_foreground"](10772, 0.5) == (
+        202,
+        "거래처_ds",
     )
 
-    assert loaded["_replace_vendor_ds_search_text"]("PT032", "1행 거래처", 0) is True
-    assert state["field"] == "PT032"
-    assert events == [
-        ("click", 960, 56),
-        ("hotkey", "ctrl", "a"),
-        ("paste", "PT032"),
-        ("hotkey", "ctrl", "a"),
-        ("hotkey", "ctrl", "c"),
-    ]
 
+def test_vendor_ds_foreground_activates_background_same_pid_window_with_win32():
+    events = []
+    state = {"active": False}
+    titles = {
+        202: "거래처_ds",
+        301: "거래처_ds",
+        302: "다른화면",
+    }
+    process_ids = {101: 10772, 202: 10772, 301: 9900, 302: 10772}
 
-@pytest.mark.parametrize(
-    ("hwnd", "title", "ink", "expected"),
-    [
-        (101, "대승", (20, 5, 8, 18), True),
-        (202, "대승", (20, 5, 8, 18), False),
-        (101, "거래처_ds", (20, 5, 8, 18), False),
-        (101, "대승", (0, 0, 0, 0), False),
-    ],
-)
-def test_first_vendor_commit_requires_original_erp_window_and_visible_value(
-    hwnd, title, ink, expected
-):
     class _FakeClock:
         now = 0.0
 
@@ -709,21 +642,250 @@ def test_first_vendor_commit_requires_original_erp_window_and_visible_value(
         def sleep(cls, seconds):
             cls.now += max(0.01, float(seconds))
 
+    class _Buffer:
+        value = ""
+
+        def __len__(self):
+            return 256
+
+        def __len__(self):
+            return 256
+
+    class _FakeUser32:
+        @staticmethod
+        def EnumWindows(callback, _lparam):
+            for hwnd in (301, 302, 202):
+                callback(hwnd, 0)
+            return True
+
+        @staticmethod
+        def IsWindowVisible(_hwnd):
+            return True
+
+        @staticmethod
+        def GetWindowTextLengthW(hwnd):
+            return len(titles.get(int(hwnd), ""))
+
+        @staticmethod
+        def GetWindowTextW(hwnd, buffer, _size):
+            buffer.value = titles.get(int(hwnd), "")
+            return len(buffer.value)
+
+        @staticmethod
+        def GetForegroundWindow():
+            return 101
+
+        @staticmethod
+        def GetWindowThreadProcessId(hwnd, _process_id):
+            return {101: 11, 202: 22}.get(int(hwnd), 0)
+
+        @staticmethod
+        def AttachThreadInput(current, target, attach):
+            events.append(("attach", int(current), int(target), bool(attach)))
+            return True
+
+        @staticmethod
+        def ShowWindow(hwnd, command):
+            events.append(("show", int(hwnd), int(command)))
+            return True
+
+        @staticmethod
+        def BringWindowToTop(hwnd):
+            events.append(("bring", int(hwnd)))
+            return True
+
+        @staticmethod
+        def SetForegroundWindow(hwnd):
+            events.append(("foreground", int(hwnd)))
+            state["active"] = True
+            return True
+
+        @staticmethod
+        def SetActiveWindow(hwnd):
+            events.append(("active", int(hwnd)))
+            return True
+
+        @staticmethod
+        def SetFocus(hwnd):
+            events.append(("focus", int(hwnd)))
+            return True
+
+    class _FakeKernel32:
+        @staticmethod
+        def GetCurrentThreadId():
+            return 33
+
+    fake_ctypes = SimpleNamespace(
+        c_bool=bool,
+        c_void_p=object,
+        WINFUNCTYPE=lambda *_args: (lambda callback: callback),
+        create_unicode_buffer=lambda _size: _Buffer(),
+        windll=SimpleNamespace(user32=_FakeUser32(), kernel32=_FakeKernel32()),
+    )
+
     loaded = _load_nested_functions(
-        "_wait_first_vendor_value_committed",
+        "_wait_vendor_ds_foreground",
         namespace={
+            "ctypes": fake_ctypes,
             "time": _FakeClock,
-            "_foreground_window_title": lambda: (hwnd, title),
-            "_management_value_visual_ink": lambda *_args: ink,
-            "_is_vendor_ds_title": lambda value: "거래처" in value and "ds" in value.lower(),
+            "_foreground_window_title": lambda: (
+                (202, "거래처_ds") if state["active"] else (101, "대승")
+            ),
+            "_window_process_id": lambda hwnd: process_ids.get(int(hwnd), 0),
+            "_is_vendor_ds_title": lambda title: title == "거래처_ds",
+            "self": SimpleNamespace(
+                logger=SimpleNamespace(
+                    debug=lambda *args, **_kwargs: events.append(("debug", args)),
+                    warning=lambda *args, **_kwargs: events.append(("warning", args)),
+                    info=lambda *_args, **_kwargs: None,
+                )
+            ),
+        },
+    )
+
+    result = loaded["_wait_vendor_ds_foreground"](10772, 0.5)
+    assert result == (
+        202,
+        "거래처_ds",
+    ), events
+    assert ("show", 202, 9) in events
+    assert ("bring", 202) in events
+    assert ("foreground", 202) in events
+    assert not any(event[0] == "show" and event[1] == 301 for event in events)
+
+
+def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_visual():
+    events = []
+
+    def _type_vendor_code(text, label, interval=None):
+        events.append(("type", text, label, interval))
+        return True
+
+    loaded = _load_nested_functions(
+        "_replace_vendor_ds_search_text",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_release_modifiers": lambda label, wait=False: events.append(
+                ("release", label)
+            ),
+            "_type_vendor_code": _type_vendor_code,
+            "time": SimpleNamespace(
+                sleep=lambda seconds: events.append(("sleep", seconds))
+            ),
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
 
-    result = loaded["_wait_first_vendor_value_committed"](
-        1118, 797, "1행 거래처", 1.0, 101, 0
+    assert loaded["_replace_vendor_ds_search_text"]("PT032", "1행 거래처", 0.40) is True
+    assert events == [
+        ("type", "PT032", "1행 거래처 거래처번호", 0.05),
+        ("release", "1행 거래처 거래처번호 키보드 입력 후"),
+        ("sleep", 0.40),
+    ]
+
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _replace_vendor_ds_search_text")
+    helper_end = source.index("def _seed_vendor_by_number_f9", helper_start)
+    helper = source[helper_start:helper_end]
+    assert "pyperclip" not in helper
+    assert "_paste_text_fast" not in helper
+    assert "_vendor_ds_search_visual_ink" not in helper
+
+
+def test_vendor_code_keyboard_input_uses_vk_packet_and_rejects_non_ascii():
+    calls = []
+
+    def _send_keys(text, **kwargs):
+        calls.append((text, kwargs))
+
+    loaded = _load_nested_functions(
+        "_type_vendor_code",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "send_keys": _send_keys,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
     )
-    assert result is expected
+
+    assert loaded["_type_vendor_code"]("PT032", "1행 거래처", interval=0.01) is True
+    assert calls == [
+        (
+            "PT032",
+            {
+                "pause": 0.05,
+                "with_spaces": True,
+                "vk_packet": True,
+            },
+        )
+    ]
+
+    assert loaded["_type_vendor_code"]("거래처1", "2행 거래처") is False
+    assert loaded["_type_vendor_code"]("PT 032", "2행 거래처") is False
+    assert len(calls) == 1
+
+
+@pytest.mark.parametrize("type_result", [True, False])
+def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
+    type_result,
+):
+    events = []
+
+    class _FakePyAutoGui:
+        @staticmethod
+        def press(key, presses=1, interval=0):
+            events.append(("key", key, presses))
+
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda x, y, label, wait=0: events.append(
+                ("click", x, y, label)
+            ),
+            "_release_modifiers": lambda label, wait=False: events.append(
+                ("release", label)
+            ),
+            "_type_vendor_code": lambda text, label, interval=None: (
+                events.append(("type", text, label, interval)) or type_result
+            ),
+            "pyautogui": _FakePyAutoGui,
+            "time": SimpleNamespace(
+                sleep=lambda seconds: events.append(("sleep", seconds))
+            ),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.10,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    result = loaded["_input_finance_vendor_code_xy"](
+        1118, 797, "A001", "2행 거래처", 0.30, 0.40
+    )
+
+    assert result is type_result
+    if type_result:
+        typed_at = next(index for index, event in enumerate(events) if event[0] == "type")
+        settle_at = events.index(("sleep", 0.30))
+        enter_at = events.index(("key", "enter", 1))
+        commit_at = events.index(("sleep", 0.40))
+        assert typed_at < settle_at < enter_at < commit_at
+        assert [event for event in events if event[:2] == ("key", "enter")] == [
+            ("key", "enter", 1)
+        ]
+    else:
+        assert not any(event[:2] == ("key", "enter") for event in events)
+
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _input_finance_vendor_code_xy")
+    helper_end = source.index("def _input_vendor_by_number_keyboard", helper_start)
+    helper = source[helper_start:helper_end]
+    assert "pyperclip" not in helper
+    assert "_paste_text_fast" not in helper
+    assert "_management_value_visual_ink" not in helper
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
@@ -1121,6 +1283,9 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
             "_seed_vendor_by_number_f9": lambda x, y, label, text: (
                 events.append(("seed", x, y, label, text)) or True
             ),
+            "_input_finance_vendor_code_xy": lambda *args: (
+                events.append(("finance-input", args)) or True
+            ),
             "_input_vendor_by_number_keyboard": lambda *_args, **_kwargs: events.append(("popup",)),
             "_input_value_xy": lambda *args, **kwargs: events.append(("input", args, kwargs)),
             "re": re,
@@ -1139,15 +1304,10 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     loaded["row_no"] = 2
     loaded["explicit_management"] = {"거래처": "B002"}
     assert fill() is True
-    assert [event[0] for event in events] == ["seed", "input"]
-    _, direct_args, direct_kwargs = events[-1]
+    assert [event[0] for event in events] == ["seed", "finance-input"]
+    _, direct_args = events[-1]
     assert direct_args[2] == "B002"
-    assert direct_kwargs == {
-        "enter_count": 1,
-        "clear": False,
-        "paste_settle_wait": 0.10,
-        "commit_settle_wait": 0.16,
-    }
+    assert direct_args[4:] == (0.10, 0.16)
 
     events.clear()
     loaded["row_no"] = 3
@@ -3644,6 +3804,16 @@ def test_recovery_preflight_uses_top_level_windows_and_skips_generic_popup_loop(
     assert "while not resume_existing_voucher and time.time() < login_wait_deadline:" in run_helper
     assert "if not main_win and not resume_existing_voucher:" in run_helper
     assert "if not resume_existing_voucher and _is_password_change_blocker(main_win):" in run_helper
+
+    slow_guard = (
+        "if existing_pids and not confirmed_pid and not resume_existing_voucher:"
+    )
+    recovery_attach = "if resume_existing_voucher and not confirmed_pid:"
+    slow_start = run_helper.index(slow_guard)
+    recovery_start = run_helper.index(recovery_attach, slow_start)
+    slow_branch = run_helper[slow_start:recovery_start]
+    assert "temp_app.windows(title_re=" in slow_branch
+    assert "not resume_existing_voucher" in slow_branch.splitlines()[0]
 
 
 def test_recovery_process_name_miss_uses_large_top_level_erp_window_without_tree_scan():
