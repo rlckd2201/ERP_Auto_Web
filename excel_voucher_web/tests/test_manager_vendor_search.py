@@ -115,6 +115,9 @@ class _FakeLogger:
     def warning(self, *_args, **_kwargs):
         pass
 
+    def error(self, *_args, **_kwargs):
+        pass
+
 
 def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
@@ -3296,10 +3299,10 @@ def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():
     run_helper = source[run_start:setup_start]
 
     no_process_guard = run_helper.index(
-        "if resume_print_only and not existing_pids:"
+        "if resume_existing_voucher and not existing_pids:"
     )
     fresh_launch = run_helper.index("os.startfile(exe_path)")
-    resume_branch = run_helper.index("if resume_print_only:", fresh_launch)
+    resume_branch = run_helper.index("if resume_existing_voucher:", fresh_launch)
     resume_verify = run_helper.index("self._resume_slip_form_ready(main_win)", resume_branch)
     resume_setup = run_helper.index("self._setup_slip_form(main_win)", resume_branch)
     menu_start = run_helper.index("내비게이션 시작", resume_setup)
@@ -3328,7 +3331,7 @@ def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():
 
     coord_call = source.index("\n            _setup_by_coordinates_only()", coord_start)
     pre_coord = source[coord_start:coord_call]
-    resume_print = pre_coord.rindex("if resume_print_only:")
+    resume_print = pre_coord.rindex("if resume_print_only_requested:")
     assert pre_coord.index("_save_and_open_print_dialog()", resume_print) < coord_call - coord_start
 
 
@@ -3367,7 +3370,7 @@ def test_resume_print_guard_structurally_prevents_new_button_click():
         node
         for node in setup.body
         if isinstance(node, ast.Assign)
-        and any(isinstance(target, ast.Name) and target.id == "resume_print_only" for target in node.targets)
+        and any(isinstance(target, ast.Name) and target.id == "resume_existing_voucher" for target in node.targets)
     )
     def has_call(node, *, owner=None, name):
         for child in ast.walk(node):
@@ -3393,7 +3396,7 @@ def test_resume_print_guard_structurally_prevents_new_button_click():
         and isinstance(node.test, ast.UnaryOp)
         and isinstance(node.test.op, ast.Not)
         and isinstance(node.test.operand, ast.Name)
-        and node.test.operand.id == "resume_print_only"
+        and node.test.operand.id == "resume_existing_voucher"
         and has_call(node, owner="btn_new", name="click_input")
     )
     resume_output = next(
@@ -3401,12 +3404,112 @@ def test_resume_print_guard_structurally_prevents_new_button_click():
         for node in setup.body
         if isinstance(node, ast.If)
         and isinstance(node.test, ast.Name)
-        and node.test.id == "resume_print_only"
+        and node.test.id == "resume_print_only_requested"
         and has_call(node, name="_save_and_open_print_dialog")
     )
 
     assert resume_assignment.lineno < guarded_new.lineno < resume_output.lineno
     assert not has_call(resume_output, owner="btn_new", name="click_input")
+
+
+def test_resume_management_reuses_existing_grid_and_runs_normal_management_loop():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    setup_start = source.index("def _setup_slip_form")
+    setup_end = source.index("def _all_edits", setup_start)
+    setup_helper = source[setup_start:setup_end]
+
+    recovery_start = setup_helper.rindex("if resume_management_save_print:")
+    recovery_end = setup_helper.index("if resume_print_only_requested:", recovery_start)
+    recovery_branch = setup_helper[recovery_start:recovery_end]
+    prepare_call = recovery_branch.index("_prepare_management_recovery_from_first_row()")
+    management_call = recovery_branch.index("_fill_management_items_by_coord()")
+    save_call = recovery_branch.index("_save_and_open_print_dialog()")
+
+    assert prepare_call < management_call < save_call
+    assert "_setup_by_coordinates_only()" not in recovery_branch
+    assert "_paste_grid_until_reflected()" not in recovery_branch
+    assert "pyautogui.hotkey('ctrl', 'v')" not in recovery_branch
+
+
+def test_resume_management_prepares_first_row_with_gdi_snapshot_not_full_uia_walk():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    prepare_start = source.index("def _prepare_management_recovery_from_first_row")
+    prepare_end = source.index("def _wait_process_by_name", prepare_start)
+    prepare_helper = source[prepare_start:prepare_end]
+
+    assert "pyautogui.hotkey('ctrl', 'home')" in prepare_helper
+    assert "expected_first_summary" in prepare_helper
+    assert "_management_grid_visual_snapshot()" in prepare_helper
+    assert 'ready_snapshot["stable_gdi_ready"]' not in prepare_helper
+    assert '"stable_gdi_ready": True' in prepare_helper
+    assert 'management_value_xy_cache[vendor_key]' in prepare_helper
+    assert 'finance_vendor_entry_state["f9_seeded"] = False' in prepare_helper
+    assert "main_win.descendants" not in prepare_helper
+    assert "_management_grid_snapshot()" not in prepare_helper
+
+
+def test_recovery_preflight_uses_top_level_windows_and_skips_generic_popup_loop():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    run_start = source.index("def _run_unlocked")
+    setup_start = source.index("def _setup_slip_form", run_start)
+    run_helper = source[run_start:setup_start]
+    fast_start = run_helper.index("def _fast_recovery_main_window")
+    fast_end = run_helper.index("main_win = None", fast_start)
+    fast_helper = run_helper[fast_start:fast_end]
+
+    assert "self.app.windows(visible=True)" in fast_helper
+    assert 'auto_id.lower() == "mainwindow"' in fast_helper
+    assert "width < 640 or height < 400" in fast_helper
+    assert "max(" in fast_helper
+    assert ".descendants(" not in fast_helper
+    assert "pyautogui.press" not in fast_helper
+
+    assert "if resume_existing_voucher:\n                main_win = _fast_recovery_main_window()" in run_helper
+    assert "while not resume_existing_voucher and time.time() < login_wait_deadline:" in run_helper
+    assert "if not main_win and not resume_existing_voucher:" in run_helper
+    assert "if not resume_existing_voucher and _is_password_change_blocker(main_win):" in run_helper
+
+
+def test_management_recovery_defers_form_validation_to_exact_first_row_check():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    run_start = source.index("def _run_unlocked")
+    setup_start = source.index("def _setup_slip_form", run_start)
+    run_helper = source[run_start:setup_start]
+    recovery_dispatch = run_helper.index("if resume_existing_voucher:", run_helper.index("메뉴 진입 전 ERP 메인 창"))
+    dispatch_end = run_helper.index("time.sleep(menu_step_wait)", recovery_dispatch)
+    dispatch = run_helper[recovery_dispatch:dispatch_end]
+
+    assert "resume_print_only_requested" in dispatch
+    assert "self._resume_slip_form_ready(main_win)" in dispatch
+    assert dispatch.index("resume_print_only_requested") < dispatch.index("self._resume_slip_form_ready(main_win)")
+    assert "resume_management_save_print\n                            and not self._resume_slip_form_ready" not in dispatch
+
+    setup_end = source.index("def _all_edits", setup_start)
+    setup_helper = source[setup_start:setup_end]
+    management_start = setup_helper.rindex("if resume_management_save_print:")
+    management_end = setup_helper.index("if resume_print_only_requested:", management_start)
+    management_branch = setup_helper[management_start:management_end]
+    assert "_prepare_management_recovery_from_first_row()" in management_branch
+    assert "_resume_slip_form_ready" not in management_branch
+
+
+def test_management_recovery_only_dismisses_verified_stale_save_required_message():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    setup_start = source.index("def _setup_slip_form")
+    setup_end = source.index("def _all_edits", setup_start)
+    setup_helper = source[setup_start:setup_end]
+    management_start = setup_helper.rindex("if resume_management_save_print:")
+    management_end = setup_helper.index("if resume_print_only_requested:", management_start)
+    management_branch = setup_helper[management_start:management_end]
+
+    find_message = management_branch.index("_find_erp_message_snapshot()")
+    verify_phrase = management_branch.index("save_required_phrase not in stale_compact", find_message)
+    unknown_failure = management_branch.index("알 수 없는 ERP Message", verify_phrase)
+    dismiss = management_branch.index("_dismiss_verified_erp_message(", unknown_failure)
+    first_row = management_branch.index("_prepare_management_recovery_from_first_row()", dismiss)
+    assert find_message < verify_phrase < unknown_failure < dismiss < first_row
+    assert "pyautogui.press(\"n\")" not in management_branch
+    assert "pyautogui.press(\"escape\")" not in management_branch
 
 
 def test_resume_print_only_is_admin_only_and_cleared_for_normal_jobs():
@@ -3424,3 +3527,315 @@ def test_resume_print_only_is_admin_only_and_cleared_for_normal_jobs():
         'os.environ["ERP_RESUME_PRINT_ONLY"] = "1" if resume_print_only else "0"'
         in adapter_source
     )
+
+
+def test_erp_message_snapshot_uses_only_same_process_message_window():
+    class FakeText:
+        def __init__(self, text):
+            self._text = text
+            self.element_info = SimpleNamespace(name=text, control_type="Text")
+
+        def window_text(self):
+            return self._text
+
+        def texts(self):
+            return [self._text]
+
+    class FakeWindow(FakeText):
+        def __init__(self, pid, title, body):
+            super().__init__(title)
+            self._pid = pid
+            self._children = [FakeText(body)]
+            self.element_info.process_id = pid
+
+        def process_id(self):
+            return self._pid
+
+        def descendants(self):
+            return list(self._children)
+
+    unrelated = FakeWindow(999, "Message", "저장 후 출력해 주십시오.")
+    erp_message = FakeWindow(243, "Message", "저장되었습니다.")
+
+    def fake_desktop(*, backend):
+        return SimpleNamespace(windows=lambda: [unrelated, erp_message] if backend == "win32" else [])
+
+    bot = SimpleNamespace(erp_process_pid=243, logger=_FakeLogger())
+    find_message = _load_nested_functions(
+        "_find_erp_message_snapshot",
+        namespace={"Desktop": fake_desktop, "re": re, "self": bot},
+    )["_find_erp_message_snapshot"]
+
+    snapshot = find_message()
+
+    assert snapshot["window"] is erp_message
+    assert snapshot["pid"] == 243
+    assert "저장되었습니다." in snapshot["text"]
+    assert "저장 후 출력해 주십시오." not in snapshot["text"]
+
+
+def test_verified_erp_message_dismissal_never_enters_unknown_dialog():
+    pressed = []
+    bot = SimpleNamespace(logger=_FakeLogger())
+    compact_and_dismiss = _load_nested_functions(
+        "_erp_message_compact",
+        "_dismiss_verified_erp_message",
+        namespace={
+            "re": re,
+            "pyautogui": SimpleNamespace(press=lambda key: pressed.append(key)),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "ERP_SETTLE_WAIT": 0,
+            "self": bot,
+        },
+    )
+    dismiss = compact_and_dismiss["_dismiss_verified_erp_message"]
+    snapshot = {
+        "title": "Message",
+        "text": "알 수 없는 오류",
+        "window": SimpleNamespace(descendants=lambda **_kwargs: []),
+    }
+
+    with pytest.raises(RuntimeError, match="검증되지 않은 ERP Message"):
+        dismiss(snapshot, ("저장되었습니다",))
+
+    assert pressed == []
+
+
+def test_save_toolbar_click_is_coordinate_first_without_default_uia_scan(monkeypatch):
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    save_click_start = source.index("def _click_save_button")
+    save_click_end = source.index("def _save_current_voucher_via_toolbar", save_click_start)
+    assert 'ERP_SAVE_BUTTON_XY", "250,80"' in source[save_click_start:save_click_end]
+
+    monkeypatch.setenv("ERP_SAVE_BUTTON_XY", "222,77")
+    clicked = []
+    bot = SimpleNamespace(logger=_FakeLogger())
+    click_save = _load_nested_functions(
+        "_click_save_button",
+        namespace={
+            "os": __import__("os"),
+            "re": re,
+            "_click_form_xy": lambda x, y, label, wait=None: clicked.append((x, y, label, wait)),
+            "_env_flag": lambda *_args: False,
+            "ERP_SETTLE_WAIT": 0.18,
+            "self": bot,
+        },
+    )["_click_save_button"]
+
+    assert click_save() is True
+    assert clicked == [(222, 77, "ERP 상단 '저장' 툴바 버튼", 0.18)]
+
+
+def test_management_save_allows_no_message_then_uses_print_stage_verification(monkeypatch):
+    monkeypatch.setenv("ERP_SAVE_CONFIRM_TIMEOUT_SECONDS", "1")
+    clicked = []
+    bot = SimpleNamespace(logger=_FakeLogger())
+    save_current = _load_nested_functions(
+        "_save_current_voucher_via_toolbar",
+        namespace={
+            "os": __import__("os"),
+            "re": re,
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "ERP_SETTLE_WAIT": 0,
+            "main_win": SimpleNamespace(is_minimized=lambda: False, set_focus=lambda: None),
+            "_find_erp_message_snapshot": lambda: None,
+            "_click_save_button": lambda: clicked.append("save"),
+            "_wait_erp_message": lambda _timeout: None,
+            "_erp_message_compact": lambda snapshot: "" if not snapshot else snapshot["text"],
+            "_dismiss_verified_erp_message": lambda *_args, **_kwargs: True,
+            "self": bot,
+        },
+    )["_save_current_voucher_via_toolbar"]
+
+    assert save_current() is True
+    assert clicked == ["save"]
+
+
+def test_rd_wait_fails_immediately_on_save_required_message():
+    bot = SimpleNamespace(logger=_FakeLogger())
+    helpers = _load_nested_functions(
+        "_erp_message_compact",
+        "_wait_rd_viewer_ready",
+        namespace={
+            "re": re,
+            "time": SimpleNamespace(time=lambda: 0.0, sleep=lambda _seconds: None),
+            "_find_erp_message_snapshot": lambda: {
+                "title": "Message",
+                "text": "저장 후 출력해 주십시오.",
+            },
+            "_find_rd_viewer_window": lambda: (_ for _ in ()).throw(
+                AssertionError("RD lookup must not run")
+            ),
+            "_find_rd_viewer_process": lambda: (None, ""),
+            "ERP_CLICK_WAIT": 0.08,
+            "self": bot,
+        },
+    )
+    wait_ready = helpers["_wait_rd_viewer_ready"]
+
+    with pytest.raises(RuntimeError, match="저장 후 출력해 주십시오"):
+        wait_ready(timeout_sec=45, phase="Ctrl+P")
+
+
+def test_management_save_precedes_print_and_rd_timeout_scales_with_row_count():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    start = source.index("def _save_and_open_print_dialog")
+    end = source.index("def _setup_by_coordinates_only", start)
+    helper = source[start:end]
+
+    management_flag = helper.index('ERP_RESUME_MANAGEMENT_SAVE_PRINT')
+    safe_save = helper.index("_save_current_voucher_via_toolbar()", management_flag)
+    print_hotkey = helper.index("pyautogui.hotkey('ctrl', 'p')", safe_save)
+    assert management_flag < safe_save < print_hotkey
+    assert 'ERP_PRINT_VIEWER_SECONDS_PER_ROW", "0.8"' in helper
+    assert 'ERP_PRINT_VIEWER_INITIAL_SECONDS_PER_ROW", "0.5"' in helper
+    assert "effective_row_count * max(0.0, viewer_seconds_per_row)" in helper
+    assert "viewer_cap = min(300.0" in helper
+
+
+def test_fresh_rd_window_rejects_stale_baseline_identity():
+    class FakeWindow:
+        def __init__(self, *, pid, handle, title, rect):
+            self._pid = pid
+            self.handle = handle
+            self._title = title
+            self._rect = rect
+            self.element_info = SimpleNamespace(process_id=pid, class_name="RDFrame")
+
+        def is_visible(self):
+            return True
+
+        def process_id(self):
+            return self._pid
+
+        def window_text(self):
+            return self._title
+
+        def class_name(self):
+            return "RDFrame"
+
+        def rectangle(self):
+            return self._rect
+
+    rect = _FakeRect(10, 20, 900, 700)
+    stale = FakeWindow(
+        pid=501,
+        handle=1001,
+        title="Report Designer Viewer - old",
+        rect=rect,
+    )
+    windows = [stale]
+
+    def fake_desktop(*, backend):
+        return SimpleNamespace(windows=lambda: windows if backend == "win32" else [])
+
+    find_fresh = _load_nested_functions(
+        "_find_fresh_rd_viewer_window",
+        namespace={"Desktop": fake_desktop, "re": re},
+    )["_find_fresh_rd_viewer_window"]
+    baseline = {
+        "processes": {501: "rdviewer_u.exe"},
+        "windows": [
+            {
+                "pid": 501,
+                "handle": 1001,
+                "title": "Report Designer Viewer - old",
+                "class": "RDFrame",
+                "rect": "10,20,900,700",
+            }
+        ],
+    }
+
+    assert find_fresh(baseline, preferred_pids=set()) == (None, "", "", {})
+
+    replacement = FakeWindow(
+        pid=501,
+        handle=1002,
+        title="Report Designer Viewer - old",
+        rect=rect,
+    )
+    windows[:] = [replacement]
+    found, backend, title, meta = find_fresh(baseline, preferred_pids=set())
+    assert found is replacement
+    assert backend == "win32"
+    assert title == "Report Designer Viewer - old"
+    assert meta["handle"] == 1002
+
+
+def test_rd_wait_does_not_return_process_before_visible_new_window():
+    process = SimpleNamespace(pid=777)
+    viewer = SimpleNamespace()
+    calls = []
+
+    def find_fresh(_baseline, preferred_pids):
+        calls.append(set(preferred_pids))
+        if len(calls) == 1:
+            return None, "", "", {}
+        return (
+            viewer,
+            "win32",
+            "Report Designer Viewer",
+            {
+                "pid": 777,
+                "identity": (777, 88, "Report Designer Viewer", "RDFrame", "0,0,800,600"),
+            },
+        )
+
+    clock_value = {"value": 0.0}
+
+    def clock():
+        value = clock_value["value"]
+        clock_value["value"] += 0.1
+        return value
+
+    bot = SimpleNamespace(logger=_FakeLogger())
+    helpers = _load_nested_functions(
+        "_erp_message_compact",
+        "_wait_rd_viewer_ready",
+        namespace={
+            "re": re,
+            "time": SimpleNamespace(time=clock, sleep=lambda _seconds: None),
+            "_find_erp_message_snapshot": lambda: None,
+            "_new_rd_viewer_processes": lambda _baseline: [(process, "rdviewer_u.exe")],
+            "_find_fresh_rd_viewer_window": find_fresh,
+            "ERP_CLICK_WAIT": 0.08,
+            "self": bot,
+        },
+    )
+    baseline = {"processes": {501: "rdviewer_u.exe"}, "windows": []}
+
+    ready = helpers["_wait_rd_viewer_ready"](
+        timeout_sec=1,
+        phase="Ctrl+P",
+        baseline=baseline,
+    )
+
+    assert len(calls) == 2
+    assert ready["window"] is viewer
+    assert ready["pid"] == 777
+    assert ready["baseline"] is baseline
+
+
+def test_print_wait_uses_baseline_and_skips_duplicate_click_for_pending_new_process():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    start = source.index("def _save_and_open_print_dialog")
+    end = source.index("def _setup_by_coordinates_only", start)
+    helper = source[start:end]
+
+    assert helper.count("baseline=print_runtime_baseline") == 2
+    pending_guard = helper.index("if pending_new_processes:")
+    fallback_click = helper.index("_click_print_button()", pending_guard)
+    remaining_wait = helper.index("remaining_viewer_timeout =", fallback_click)
+    pending_block = helper[pending_guard:remaining_wait]
+    assert pending_block.index("else:") < pending_block.index("_click_print_button()")
+    assert "중복 출력 클릭을 생략" in pending_block
+
+    focus_start = source.index("def _focus_rd_viewer_window")
+    focus_end = source.index("def _close_rd_viewer", focus_start)
+    focus_helper = source[focus_start:focus_end]
+    strict_guard = focus_helper.index("if strict_baseline is not None:")
+    assert focus_helper.index("_find_fresh_rd_viewer_window(", strict_guard) < focus_helper.index(
+        "_find_rd_viewer_process()",
+        strict_guard,
+    )
+    assert "Never replace the verified fresh window with a stale Viewer" in focus_helper

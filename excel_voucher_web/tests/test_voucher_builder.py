@@ -8,6 +8,7 @@ from app.accounts import AccountStore, protect_secret, unprotect_secret
 from app.agent_adapter import (
     _apply_company_erp_credentials,
     _legacy_form_data,
+    _resume_management_save_print_requested,
     _resume_print_only_requested,
 )
 from app.settings import manager_profile, manager_profiles
@@ -258,3 +259,39 @@ def test_resume_print_only_compatibility_signal_uses_default_admin(monkeypatch) 
             "source_filename": "__resume_print_only__6월 대승 수시결제.xlsx",
         }
     ) is True
+
+
+def test_resume_management_save_print_accepts_explicit_safe_flags(monkeypatch) -> None:
+    monkeypatch.delenv("EXCEL_VOUCHER_PRINT_RECOVERY_ADMIN_IDS", raising=False)
+
+    assert _resume_management_save_print_requested(
+        {"resume_management_save_print": True}
+    ) is True
+    assert _resume_management_save_print_requested(
+        {"resume_management_save_print": "yes"}
+    ) is True
+    assert _resume_management_save_print_requested(
+        {"resume_management_save_print": "0"}
+    ) is False
+    assert _resume_management_save_print_requested(
+        {"resume_management_save_print": "false"}
+    ) is False
+
+
+def test_resume_management_save_print_compatibility_signal_is_admin_only(monkeypatch) -> None:
+    monkeypatch.setenv(
+        "EXCEL_VOUCHER_PRINT_RECOVERY_ADMIN_IDS",
+        "finance-admin, second-admin",
+    )
+    payload = {
+        "requester_id": "FINANCE-ADMIN",
+        "source_filename": "__resume_management_save_print__voucher.xlsx",
+    }
+
+    assert _resume_management_save_print_requested(payload) is True
+    assert _resume_management_save_print_requested(
+        {**payload, "requester_id": "ordinary-user"}
+    ) is False
+    assert _resume_management_save_print_requested(
+        {**payload, "source_filename": "voucher.xlsx"}
+    ) is False

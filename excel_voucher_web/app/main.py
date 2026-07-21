@@ -494,6 +494,7 @@ def api_upload_voucher(
     use_saved_erp_credentials: str = Form(default="0"),
     remember_erp_credentials: str = Form(default="1"),
     resume_print_only: str = Form(default="0"),
+    resume_management_save_print: str = Form(default="0"),
 ) -> dict[str, Any]:
     user = _current_user(request)
     if settings.auth_required and not user:
@@ -506,8 +507,13 @@ def api_upload_voucher(
     elif user:
         requester = user.name or user.user_id
     resume_print_only_enabled = _form_bool(resume_print_only)
+    resume_management_save_print_enabled = _form_bool(resume_management_save_print)
+    if resume_print_only_enabled and resume_management_save_print_enabled:
+        raise HTTPException(status_code=400, detail="출력 전용 복구와 관리항목·저장·출력 복구를 동시에 실행할 수 없습니다.")
     if resume_print_only_enabled and not (user and user.is_admin):
         raise HTTPException(status_code=403, detail="출력 전용 복구는 관리자만 실행할 수 있습니다.")
+    if resume_management_save_print_enabled and not (user and user.is_admin):
+        raise HTTPException(status_code=403, detail="관리항목·저장·출력 복구는 관리자만 실행할 수 있습니다.")
     manager = manager_profile(company_key)
     if not manager.enabled:
         raise HTTPException(
@@ -542,6 +548,7 @@ def api_upload_voucher(
             update={
                 "erp_credentials": erp_credentials,
                 "resume_print_only": resume_print_only_enabled,
+                "resume_management_save_print": resume_management_save_print_enabled,
             }
         )
         if user:

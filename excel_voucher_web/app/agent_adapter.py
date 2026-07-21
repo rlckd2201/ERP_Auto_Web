@@ -13,6 +13,7 @@ from typing import Any
 
 
 PRINT_RECOVERY_FILENAME_PREFIX = "__resume_print_only__"
+MANAGEMENT_SAVE_PRINT_RECOVERY_FILENAME_PREFIX = "__resume_management_save_print__"
 _DEFAULT_PRINT_RECOVERY_ADMIN_IDS = "rlckd9646"
 
 
@@ -50,6 +51,36 @@ def _resume_print_only_requested(payload: dict[str, Any]) -> bool:
     return (
         requester_id in allowed_admin_ids
         and source_filename.startswith(PRINT_RECOVERY_FILENAME_PREFIX)
+    )
+
+
+def _resume_management_save_print_requested(payload: dict[str, Any]) -> bool:
+    """Return whether the open voucher needs management input, save, and print.
+
+    This is deliberately separate from print-only recovery.  The compatibility
+    filename signal lets an already-running older web server enqueue the
+    recovery, while the requester allow-list prevents normal uploads from
+    turning into an attach-to-current-ERP operation.
+    """
+    if _parse_bool_flag(payload.get("resume_management_save_print")):
+        return True
+
+    allowed_admin_ids = {
+        value.casefold()
+        for value in re.split(
+            r"[,;\s]+",
+            os.getenv(
+                "EXCEL_VOUCHER_PRINT_RECOVERY_ADMIN_IDS",
+                _DEFAULT_PRINT_RECOVERY_ADMIN_IDS,
+            ),
+        )
+        if value
+    }
+    requester_id = str(payload.get("requester_id") or "").strip().casefold()
+    source_filename = str(payload.get("source_filename") or "").strip()
+    return (
+        requester_id in allowed_admin_ids
+        and source_filename.startswith(MANAGEMENT_SAVE_PRINT_RECOVERY_FILENAME_PREFIX)
     )
 
 
@@ -529,9 +560,13 @@ def _run_real_erp_voucher_task(
     os.environ.setdefault("ERP_OUTPUT_DIR", str(output_dir / "erp_outputs"))
     os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print To PDF")
     resume_print_only = _resume_print_only_requested(payload)
+    resume_management_save_print = _resume_management_save_print_requested(payload)
+    if resume_print_only and resume_management_save_print:
+        raise RuntimeError("출력 전용 복구와 관리항목·저장·출력 복구를 동시에 실행할 수 없습니다.")
     # This flag is assigned for every job so a recovery run cannot leak into the
     # next normal voucher handled by the long-lived Agent process.
     os.environ["ERP_RESUME_PRINT_ONLY"] = "1" if resume_print_only else "0"
+    os.environ["ERP_RESUME_MANAGEMENT_SAVE_PRINT"] = "1" if resume_management_save_print else "0"
     os.environ["ERP_CLOSE_AFTER_SUCCESS"] = "1"
     os.environ["ERP_GRID_COORD_FIRST"] = "1"
     os.environ["ERP_GRID_COPY_VIA_EXCEL"] = "1"
@@ -641,6 +676,7 @@ def _run_real_erp_voucher_task(
             "debit_total": int(payload.get("debit_total") or 0),
             "erp_saved": True,
             "resume_print_only": resume_print_only,
+            "resume_management_save_print": resume_management_save_print,
             "voucher_no": voucher_no,
             "erp_pdf_path": str(saved_pdf),
             "erp_log_path": str(log_path),

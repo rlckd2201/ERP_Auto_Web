@@ -842,15 +842,27 @@ class ERPLoginBot:
         try:
             process_exe = self.install_info["process_name"].lower().replace('.exe', '')
             confirmed_pid = 0
-            resume_print_only = (
+            resume_print_only_requested = (
                 str(os.getenv("ERP_RESUME_PRINT_ONLY", "0"))
                 .strip()
                 .lower()
                 in {"1", "true", "yes", "y", "on"}
             )
+            resume_management_save_print = (
+                str(os.getenv("ERP_RESUME_MANAGEMENT_SAVE_PRINT", "0"))
+                .strip()
+                .lower()
+                in {"1", "true", "yes", "y", "on"}
+            )
+            if resume_print_only_requested and resume_management_save_print:
+                return "출력 전용 복구와 관리항목·저장·출력 복구를 동시에 실행할 수 없습니다."
+            # Both recovery modes must attach to the voucher that is already open.
+            # The management recovery is distinguished later inside the form so it can
+            # rerun only management-item input before saving and printing.
+            resume_existing_voucher = resume_print_only_requested or resume_management_save_print
 
             fresh_start = os.getenv("ERP_AGENT_FRESH_START", "0").strip().lower() in {"1", "true", "yes", "y"}
-            if resume_print_only:
+            if resume_existing_voucher:
                 # A recovery run must attach to the voucher that is already open.
                 # Starting a fresh ERP process could print or save the wrong form.
                 fresh_start = False
@@ -900,8 +912,8 @@ class ERPLoginBot:
                     if proc.info.get("name") and process_exe in proc.info.get("name").lower():
                         existing_pids.add(proc.info.get("pid"))
 
-                if resume_print_only and not existing_pids:
-                    return "출력 전용 복구 실패: 현재 실행 중인 ERP 화면을 찾지 못했습니다."
+                if resume_existing_voucher and not existing_pids:
+                    return "ERP 전표 복구 실패: 현재 실행 중인 ERP 화면을 찾지 못했습니다."
 
                 candidates = [
                     self.install_info.get("splash_name", "FrmMainSplash"),
@@ -909,7 +921,7 @@ class ERPLoginBot:
                     self.install_info.get("main_window_title", ""),
                     "FrmMainSplash", "K-System", "대승", "일강", "제이엠", "더원"
                 ]
-                if resume_print_only:
+                if resume_existing_voucher:
                     self.logger.info(
                         "  [PRINT-RESUME] 기존 ERP 재연결 탐색: "
                         f"pids={sorted(existing_pids)}, titles={[title for title in candidates if title]}"
@@ -938,8 +950,8 @@ class ERPLoginBot:
                         except: pass
                         if recovered: break
 
-                if resume_print_only and not confirmed_pid:
-                    return "출력 전용 복구 실패: 현재 열린 ERP 전표 화면에 연결하지 못했습니다."
+                if resume_existing_voucher and not confirmed_pid:
+                    return "ERP 전표 복구 실패: 현재 열린 ERP 전표 화면에 연결하지 못했습니다."
 
                 if not confirmed_pid:
                     # 3. 켜져있는 프로세스가 아예 없다면 새로 실행
@@ -1111,10 +1123,72 @@ class ERPLoginBot:
                     word.lower() in compact for word in fail_words
                 )
 
+            def _fast_recovery_main_window():
+                """Pick the existing ERP frame from top-level windows only.
+
+                A populated GDI voucher can make ``descendants()`` block for minutes.
+                Recovery therefore accepts only a large, visible top-level ERP frame
+                whose own title/automation id identifies the ERP application.
+                """
+                main_keywords = [
+                    self.corp_info.get("name", ""),
+                    self.install_info.get("main_window_title", ""),
+                    "K-System",
+                    "대승",
+                    "일강",
+                    "제이엠",
+                    "더원",
+                ]
+                candidates = []
+                try:
+                    windows = self.app.windows(visible=True)
+                except Exception as exc:
+                    self.logger.warning(
+                        f"  [RECOVERY-PREFLIGHT] ERP 최상위 창 열거 실패: {exc}"
+                    )
+                    return None
+                for win in windows:
+                    try:
+                        title = str(win.window_text() or "").strip()
+                        auto_id = str(win.element_info.automation_id or "").strip()
+                        if not win.is_visible():
+                            continue
+                        identity_match = auto_id.lower() == "mainwindow" or any(
+                            keyword and keyword in title for keyword in main_keywords
+                        )
+                        if not identity_match:
+                            continue
+                        rect = win.rectangle()
+                        width = max(0, int(rect.right) - int(rect.left))
+                        height = max(0, int(rect.bottom) - int(rect.top))
+                        if width < 640 or height < 400:
+                            continue
+                        candidates.append((width * height, width, height, win, title, auto_id))
+                    except Exception:
+                        continue
+                if not candidates:
+                    return None
+                _, width, height, win, title, auto_id = max(
+                    candidates,
+                    key=lambda item: (item[0], item[1], item[2]),
+                )
+                self.logger.info(
+                    "  [RECOVERY-PREFLIGHT] descendants 없이 ERP 최상위 메인 창 선택: "
+                    f"title={title!r}, auto_id={auto_id!r}, size={width}x{height}, "
+                    f"candidates={len(candidates)}"
+                )
+                try:
+                    win.set_focus()
+                except Exception:
+                    pass
+                return win
+
             main_win = None
+            if resume_existing_voucher:
+                main_win = _fast_recovery_main_window()
             try:
                 login_wait_deadline = time.time() + float(os.getenv("ERP_LOGIN_MAIN_WAIT_SECONDS", "10") or "10")
-                while time.time() < login_wait_deadline:
+                while not resume_existing_voucher and time.time() < login_wait_deadline:
                     try:
                         # 무조건 최상단 창을 가져와서 메인 ERP인지 먼저 판별합니다.
                         top = self.app.top_window()
@@ -1187,7 +1261,7 @@ class ERPLoginBot:
             except Exception as e:
                 self.logger.warning(f"메인 창 탐색 에러: {e}")
 
-            if not main_win:
+            if not main_win and not resume_existing_voucher:
                 try:
                     top = self.app.top_window()
                     if _is_password_change_blocker(top):
@@ -1224,7 +1298,7 @@ class ERPLoginBot:
                     self.erp_process_pid = int(confirmed_pid or getattr(main_win.element_info, "process_id", 0) or 0)
                 except Exception:
                     self.erp_process_pid = int(confirmed_pid or 0)
-                if _is_password_change_blocker(main_win):
+                if not resume_existing_voucher and _is_password_change_blocker(main_win):
                     msg = (
                         "ERP 로그인 실패: 비밀번호 변경 또는 만료 창이 표시되었습니다. "
                         "대승 ERP 계정 비밀번호를 변경한 뒤 243 Agent의 ERP 비밀번호 설정을 갱신하세요."
@@ -1254,15 +1328,23 @@ class ERPLoginBot:
                         )
                     )
                     self._force_erp_window_maximized(main_win, "메뉴 진입 전 ERP 메인 창")
-                    if resume_print_only:
-                        if not self._resume_slip_form_ready(main_win):
+                    if resume_existing_voucher:
+                        if (
+                            resume_print_only_requested
+                            and not self._resume_slip_form_ready(main_win)
+                        ):
                             raise RuntimeError(
-                                "출력 전용 복구를 중단했습니다. 현재 ERP 화면이 "
+                                "ERP 전표 복구를 중단했습니다. 현재 ERP 화면이 "
                                 "분개전표입력 전표 화면인지 확인되지 않습니다."
                             )
-                        self.logger.info(
-                            "  [PRINT-RESUME] 현재 열린 저장 전표에서 출력 단계만 재개합니다."
-                        )
+                        if resume_management_save_print:
+                            self.logger.info(
+                                "  [MGMT-RECOVERY] 현재 열린 전표에서 관리항목 입력·저장·출력을 재개합니다."
+                            )
+                        else:
+                            self.logger.info(
+                                "  [PRINT-RESUME] 현재 열린 저장 전표에서 출력 단계만 재개합니다."
+                            )
                         self._setup_slip_form(main_win)
                         self._close_erp_after_success(main_win)
                         return True
@@ -1772,22 +1854,32 @@ class ERPLoginBot:
         """
         분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
         """
-        resume_print_only = (
+        resume_print_only_requested = (
             str(os.getenv("ERP_RESUME_PRINT_ONLY", "0"))
             .strip()
             .lower()
             in {"1", "true", "yes", "y", "on"}
         )
+        resume_management_save_print = (
+            str(os.getenv("ERP_RESUME_MANAGEMENT_SAVE_PRINT", "0"))
+            .strip()
+            .lower()
+            in {"1", "true", "yes", "y", "on"}
+        )
+        if resume_print_only_requested and resume_management_save_print:
+            raise RuntimeError("출력 전용 복구와 관리항목·저장·출력 복구를 동시에 실행할 수 없습니다.")
+        # Keep all existing no-new/no-paste guards effective for either recovery.
+        resume_existing_voucher = resume_print_only_requested or resume_management_save_print
         original_clipboard = pyperclip.paste()
         form_data = getattr(self.manager.main_app, 'data', {})
         form_clipboard_rows = form_data.get('erp_clipboard_rows') or []
-        if not resume_print_only and isinstance(form_clipboard_rows, list) and form_clipboard_rows:
+        if not resume_existing_voucher and isinstance(form_clipboard_rows, list) and form_clipboard_rows:
             original_clipboard = "\r\n".join(str(row) for row in form_clipboard_rows)
             pyperclip.copy(original_clipboard)
             self.logger.info(f"[폼세팅] form_data ERP clipboard rows restored: {len(form_clipboard_rows)}")
         site_name    = form_data.get('site_name', '')
         invoice_date = form_data.get('invoice_date', '')
-        if not invoice_date and not resume_print_only:
+        if not invoice_date and not resume_existing_voucher:
             tax_path = getattr(self.manager.main_app, 'tax_path', '')
             try:
                 invoice_date = self.manager.main_app._extract_issue_date_from_pdf(tax_path)
@@ -1898,8 +1990,8 @@ class ERPLoginBot:
             except Exception as e:
                 self.logger.warning(f"  [진단] 덤프 실패: {e}")
 
-        # [신규] 버튼. 출력 전용 복구에서는 현재 저장 전표를 보존해야 하므로 절대 누르지 않습니다.
-        if not resume_print_only:
+        # [신규] 버튼. 두 복구 모드에서는 현재 붙여넣은 전표를 보존해야 하므로 절대 누르지 않습니다.
+        if not resume_existing_voucher:
             try:
                 btn_new = None
                 for b in main_win.descendants(control_type='Button'):
@@ -6232,6 +6324,185 @@ class ERPLoginBot:
 
             self.logger.info("  [MGMT-XY] 행별 적요/관리항목 좌표 입력 완료")
 
+        def _prepare_management_recovery_from_first_row():
+            """Reset the existing voucher to row 1 and rebuild fast GDI anchors.
+
+            The recovery job is intentionally limited to the already-pasted voucher:
+            it neither opens a new form nor pastes voucher rows again.  It validates
+            the first summary through the grid clipboard, captures the currently
+            painted management pane without a full UIA descendant walk, and then lets
+            the normal management loop run unchanged.
+            """
+            erp_rows = form_data.get('erp_clipboard_rows') or []
+            line_management_items = (
+                form_data.get('erp_line_management_items')
+                or form_data.get('line_management_items')
+                or []
+            )
+            rows_to_fill = max(
+                0,
+                int(form_data.get('erp_row_count') or len(erp_rows) or row_count),
+            )
+            if not erp_rows or rows_to_fill <= 0:
+                _fail_form("관리항목 복구 payload에 ERP 전표 행이 없습니다.")
+            if len(erp_rows) < rows_to_fill:
+                _fail_form(
+                    "관리항목 복구 payload의 ERP 전표 행 수가 부족합니다: "
+                    f"expected={rows_to_fill}, actual={len(erp_rows)}"
+                )
+            if not isinstance(line_management_items, list) or len(line_management_items) < rows_to_fill:
+                _fail_form(
+                    "관리항목 복구 payload의 행별 관리항목 수가 부족합니다: "
+                    f"expected={rows_to_fill}, actual="
+                    f"{len(line_management_items) if isinstance(line_management_items, list) else 0}"
+                )
+
+            last_account = str(erp_rows[rows_to_fill - 1] or "").split('\t')[0].strip()
+            last_management = line_management_items[rows_to_fill - 1]
+            last_management_norm = {
+                _norm_text(key): str(value or "").strip()
+                for key, value in (last_management.items() if isinstance(last_management, dict) else [])
+            }
+            required_bank_values = {
+                _norm_text("계좌번호"): last_management_norm.get(_norm_text("계좌번호"), ""),
+                _norm_text("금융기관지점"): last_management_norm.get(_norm_text("금융기관지점"), ""),
+            }
+            if _norm_text("보통예금") not in _norm_text(last_account):
+                _fail_form(
+                    "관리항목 복구의 마지막 ERP 행이 보통예금이 아닙니다: "
+                    f"row={rows_to_fill}, account={last_account}"
+                )
+            missing_bank_values = [
+                name for name, value in required_bank_values.items() if not value
+            ]
+            if missing_bank_values:
+                _fail_form(
+                    "관리항목 복구 payload의 마지막 보통예금 필수값이 비어 있습니다: "
+                    f"missing={missing_bank_values}"
+                )
+
+            summary_x = int(os.getenv("ERP_MGMT_SUMMARY_X", "970") or "970")
+            first_row_y = int(os.getenv("ERP_MGMT_FIRST_ROW_Y", "231") or "231")
+            try:
+                main_win.set_focus()
+            except Exception:
+                pass
+            _click_form_xy(
+                summary_x,
+                first_row_y,
+                "관리항목 복구 전표 그리드 포커스",
+                wait=mgmt_click_wait,
+            )
+            _release_modifiers("관리항목 복구 Ctrl+Home 직전", wait=False)
+            pyautogui.hotkey('ctrl', 'home')
+            _release_modifiers("관리항목 복구 Ctrl+Home 직후", wait=False)
+            time.sleep(max(mgmt_commit_wait, 0.35))
+            _double_click_form_xy(
+                summary_x,
+                first_row_y,
+                "관리항목 복구 1행 적요",
+                wait=mgmt_summary_open_wait,
+            )
+            if mgmt_after_summary_open_wait:
+                time.sleep(mgmt_after_summary_open_wait)
+
+            first_columns = str(erp_rows[0] or "").split('\t')
+            expected_first_summary = first_columns[-1].strip() if first_columns else ""
+            expected_first_summary_norm = _norm_text(expected_first_summary)
+            old_clipboard = None
+            try:
+                old_clipboard = pyperclip.paste()
+            except Exception:
+                old_clipboard = None
+            copied_first_summary = ""
+            try:
+                sentinel = "__ERP_MGMT_RECOVERY_FIRST_ROW__"
+                pyperclip.copy(sentinel)
+                pyautogui.hotkey('ctrl', 'c')
+                time.sleep(max(0.10, mgmt_key_wait))
+                copied_first_summary = str(pyperclip.paste() or "").strip()
+            finally:
+                if old_clipboard is not None:
+                    try:
+                        pyperclip.copy(old_clipboard)
+                    except Exception:
+                        pass
+            copied_first_summary_norm = _norm_text(copied_first_summary)
+            first_row_confirmed = bool(
+                expected_first_summary_norm
+                and copied_first_summary != "__ERP_MGMT_RECOVERY_FIRST_ROW__"
+                and copied_first_summary_norm == expected_first_summary_norm
+            )
+            self.logger.info(
+                "  [MGMT-RECOVERY] 1행 적요 검증: "
+                f"expected={expected_first_summary}, copied={copied_first_summary}, "
+                f"ok={first_row_confirmed}"
+            )
+            if not first_row_confirmed:
+                _fail_form(
+                    "현재 열린 전표를 1행으로 이동했는지 확인하지 못해 관리항목 복구를 중단합니다: "
+                    f"expected_summary={expected_first_summary}, copied={copied_first_summary}"
+                )
+
+            stable_required = max(
+                1,
+                int(os.getenv("ERP_GRID_PASTE_VISUAL_STABLE_COUNT", "2") or "2"),
+            )
+            stable_count = 0
+            previous_signature = None
+            ready_snapshot = None
+            visual_attempts = max(3, stable_required + 1)
+            for attempt in range(1, visual_attempts + 1):
+                snapshot = _management_grid_visual_snapshot()
+                signature = snapshot.get("visual_signature")
+                if snapshot.get("visual_ready") and signature is not None:
+                    stable_count = stable_count + 1 if signature == previous_signature else 1
+                    previous_signature = signature
+                    ready_snapshot = snapshot
+                    if stable_count >= stable_required:
+                        break
+                else:
+                    stable_count = 0
+                    previous_signature = None
+                self.logger.info(
+                    "  [MGMT-RECOVERY] 1행 관리항목 GDI 기준 대기: "
+                    f"attempt={attempt}/{visual_attempts}, ready={snapshot.get('visual_ready')}, "
+                    f"signature={signature}, stable={stable_count}/{stable_required}"
+                )
+                time.sleep(max(0.20, mgmt_key_wait))
+            if (
+                ready_snapshot is None
+                or stable_count < stable_required
+                or ready_snapshot.get("first_value_y") is None
+                or ready_snapshot.get("voucher_clip_bottom_abs") is None
+            ):
+                _fail_form(
+                    "현재 열린 전표 1행의 하단 관리항목 좌표를 GDI 화면에서 확인하지 못했습니다."
+                )
+
+            ready_snapshot.update(
+                {
+                    "stable_gdi_ready": True,
+                    "semantic_ready": False,
+                    "expected_label_norms": {_norm_text("거래처")},
+                    "items": [],
+                }
+            )
+            management_grid_ready_state["snapshot"] = ready_snapshot
+            vendor_key = _norm_text("거래처")
+            management_value_xy_cache[vendor_key] = (
+                int(ready_snapshot["value_x"]),
+                int(ready_snapshot["first_value_y"]),
+            )
+            finance_vendor_entry_state["f9_seeded"] = False
+            self.logger.info(
+                "  [MGMT-RECOVERY] 신규/재붙여넣기 없이 기존 전표 전체 관리항목 복구 준비 완료: "
+                f"rows={rows_to_fill}, first_value="
+                f"({ready_snapshot['value_x']},{ready_snapshot['first_value_y']}), "
+                f"signature={ready_snapshot.get('visual_signature')}"
+            )
+            return ready_snapshot
+
         def _wait_process_by_name(process_name, timeout_sec=10):
             target = str(process_name or "").lower()
             end_at = time.time() + timeout_sec
@@ -6269,6 +6540,101 @@ class ERPLoginBot:
                 except Exception:
                     pass
             return None, "", ""
+
+        def _new_rd_viewer_processes(baseline=None):
+            baseline_pids = {
+                int(pid)
+                for pid in dict((baseline or {}).get("processes") or {}).keys()
+                if str(pid).isdigit()
+            }
+            found = []
+            try:
+                for proc in psutil.process_iter(["pid", "name"]):
+                    pid = int(proc.info.get("pid") or 0)
+                    name = str(proc.info.get("name") or "").strip().lower()
+                    if pid and name.startswith("rdviewer") and pid not in baseline_pids:
+                        found.append((proc, name))
+            except Exception:
+                pass
+            return found
+
+        def _find_fresh_rd_viewer_window(baseline=None, preferred_pids=None):
+            """Find a visible Viewer window that did not exist before this print attempt."""
+            title_re = r"(Report\s*Designer\s*Viewer|RD\s*Viewer|Designer\s*Viewer)"
+            preferred = {int(pid) for pid in (preferred_pids or set()) if int(pid or 0)}
+            baseline_windows = {
+                (
+                    int(item.get("pid") or 0),
+                    int(item.get("handle") or 0),
+                    str(item.get("title") or ""),
+                    str(item.get("class") or ""),
+                    str(item.get("rect") or ""),
+                )
+                for item in list((baseline or {}).get("windows") or [])
+            }
+            candidates = []
+            seen = set()
+            for backend in ("win32", "uia"):
+                try:
+                    windows = Desktop(backend=backend).windows()
+                except Exception:
+                    continue
+                for win in windows:
+                    try:
+                        if hasattr(win, "is_visible") and not win.is_visible():
+                            continue
+                    except Exception:
+                        continue
+                    try:
+                        pid = int(win.process_id() or 0)
+                    except Exception:
+                        pid = int(
+                            getattr(getattr(win, "element_info", None), "process_id", 0) or 0
+                        )
+                    try:
+                        title = str(win.window_text() or "").strip()
+                    except Exception:
+                        title = ""
+                    title_matches = bool(re.search(title_re, title, re.I))
+                    # For a newly-created rdviewer PID, any visible top-level window is
+                    # eligible even while its localized/final title is still changing.
+                    if pid not in preferred and not title_matches:
+                        continue
+                    try:
+                        class_name = str(win.class_name() or "").strip()
+                    except Exception:
+                        class_name = str(
+                            getattr(getattr(win, "element_info", None), "class_name", "") or ""
+                        ).strip()
+                    try:
+                        rect = win.rectangle()
+                        rect_text = f"{rect.left},{rect.top},{rect.right},{rect.bottom}"
+                    except Exception:
+                        rect_text = ""
+                    try:
+                        handle = int(getattr(win, "handle", 0) or 0)
+                    except Exception:
+                        handle = 0
+                    identity = (pid, handle, title, class_name, rect_text)
+                    if identity in seen or identity in baseline_windows:
+                        continue
+                    seen.add(identity)
+                    meta = {
+                        "pid": pid,
+                        "handle": handle,
+                        "title": title,
+                        "class": class_name,
+                        "rect": rect_text,
+                        "identity": identity,
+                    }
+                    # A window linked to the new rdviewer PID wins over a title-only
+                    # window from an older process.
+                    candidates.append((0 if pid in preferred else 1, win, backend, title, meta))
+            if not candidates:
+                return None, "", "", {}
+            candidates.sort(key=lambda item: item[0])
+            _rank, win, backend, title, meta = candidates[0]
+            return win, backend, title, meta
 
         def _capture_print_runtime():
             processes = {}
@@ -6311,7 +6677,11 @@ class ERPLoginBot:
                             rect_text = f"{rect.left},{rect.top},{rect.right},{rect.bottom}"
                         except Exception:
                             rect_text = ""
-                        key = (pid, title, class_name, rect_text)
+                        try:
+                            handle = int(getattr(win, "handle", 0) or 0)
+                        except Exception:
+                            handle = 0
+                        key = (pid, handle, title, class_name, rect_text)
                         if key in seen:
                             continue
                         seen.add(key)
@@ -6319,6 +6689,7 @@ class ERPLoginBot:
                             {
                                 "backend": backend,
                                 "pid": pid,
+                                "handle": handle,
                                 "process": processes.get(pid, ""),
                                 "title": title,
                                 "class": class_name,
@@ -6338,13 +6709,25 @@ class ERPLoginBot:
                 if pid not in baseline_processes
             ]
             baseline_windows = {
-                (item.get("pid"), item.get("title"), item.get("class"), item.get("rect"))
+                (
+                    item.get("pid"),
+                    item.get("handle"),
+                    item.get("title"),
+                    item.get("class"),
+                    item.get("rect"),
+                )
                 for item in list((baseline or {}).get("windows") or [])
             }
             new_windows = [
                 item
                 for item in current["windows"]
-                if (item.get("pid"), item.get("title"), item.get("class"), item.get("rect"))
+                if (
+                    item.get("pid"),
+                    item.get("handle"),
+                    item.get("title"),
+                    item.get("class"),
+                    item.get("rect"),
+                )
                 not in baseline_windows
             ]
             visible_windows = [
@@ -6381,33 +6764,414 @@ class ERPLoginBot:
                 self.logger.warning(f"  [PRINT-DIAG] timeout screenshot 저장 실패: {e}")
                 return ""
 
-        def _wait_rd_viewer_ready(timeout_sec=10, phase=""):
+        def _erp_message_compact(snapshot):
+            if not snapshot:
+                return ""
+            return re.sub(
+                r"\s+",
+                "",
+                f"{snapshot.get('title', '')}\n{snapshot.get('text', '')}",
+            ).lower()
+
+        def _find_erp_message_snapshot():
+            """Return only a Message dialog owned by the currently attached ERP process."""
+            try:
+                target_pid = int(self.erp_process_pid or 0)
+            except Exception:
+                target_pid = 0
+            if not target_pid:
+                try:
+                    target_pid = int(
+                        getattr(getattr(main_win, "element_info", None), "process_id", 0) or 0
+                    )
+                except Exception:
+                    target_pid = 0
+            if not target_pid:
+                self.logger.warning("  [ERP-MESSAGE] ERP PID가 없어 Message 창 탐색을 중단합니다.")
+                return None
+
+            title_markers = ("message", "메시지", "알림", "확인")
+
+            def _window_pid(win):
+                try:
+                    return int(win.process_id() or 0)
+                except Exception:
+                    try:
+                        return int(
+                            getattr(getattr(win, "element_info", None), "process_id", 0) or 0
+                        )
+                    except Exception:
+                        return 0
+
+            def _control_texts(control):
+                values = []
+                for getter in (
+                    lambda: control.window_text(),
+                    lambda: getattr(getattr(control, "element_info", None), "name", ""),
+                ):
+                    try:
+                        value = str(getter() or "").strip()
+                    except Exception:
+                        value = ""
+                    if value and value not in values:
+                        values.append(value)
+                try:
+                    for value in control.texts() or []:
+                        value = str(value or "").strip()
+                        if value and value not in values:
+                            values.append(value)
+                except Exception:
+                    pass
+                return values
+
+            for backend in ("win32", "uia"):
+                try:
+                    windows = Desktop(backend=backend).windows()
+                except Exception:
+                    continue
+                for win in windows:
+                    if _window_pid(win) != target_pid:
+                        continue
+                    title_values = _control_texts(win)
+                    title = title_values[0] if title_values else ""
+                    compact_title = re.sub(r"\s+", "", title).lower()
+                    if not any(marker in compact_title for marker in title_markers):
+                        continue
+
+                    values = list(title_values)
+                    try:
+                        descendants = win.descendants()
+                    except Exception:
+                        descendants = []
+                    for child in descendants:
+                        for value in _control_texts(child):
+                            if value not in values:
+                                values.append(value)
+                    text = "\n".join(values)
+                    snapshot = {
+                        "window": win,
+                        "backend": backend,
+                        "pid": target_pid,
+                        "title": title,
+                        "text": text,
+                    }
+                    self.logger.info(
+                        "  [ERP-MESSAGE] same-process Message 감지: "
+                        f"backend={backend}, pid={target_pid}, title={title!r}, "
+                        f"text={text[:500]!r}"
+                    )
+                    return snapshot
+            return None
+
+        def _wait_erp_message(timeout_sec=10):
             end_at = time.time() + max(0.0, float(timeout_sec or 0.0))
             while True:
-                win, backend, title = _find_rd_viewer_window()
+                snapshot = _find_erp_message_snapshot()
+                if snapshot:
+                    return snapshot
+                if time.time() >= end_at:
+                    return None
+                time.sleep(max(ERP_CLICK_WAIT, ERP_POLL_WAIT))
+
+        def _dismiss_verified_erp_message(
+            snapshot,
+            accepted_phrases,
+            button_labels=("확인", "ok"),
+            allow_enter_fallback=True,
+        ):
+            accepted = [
+                re.sub(r"\s+", "", str(value or "")).lower()
+                for value in accepted_phrases
+                if str(value or "").strip()
+            ]
+            compact = _erp_message_compact(snapshot)
+            if not snapshot or not accepted or not any(value in compact for value in accepted):
+                raise RuntimeError(
+                    "검증되지 않은 ERP Message에는 확인/Enter를 전송할 수 없습니다."
+                )
+
+            win = snapshot.get("window")
+            accepted_buttons = {
+                re.sub(r"\s+", "", str(value or "")).lower()
+                for value in button_labels
+                if str(value or "").strip()
+            }
+            try:
+                descendants = win.descendants(control_type="Button")
+            except TypeError:
+                try:
+                    descendants = win.descendants()
+                except Exception:
+                    descendants = []
+            except Exception:
+                descendants = []
+
+            for button in descendants:
+                try:
+                    control_type = str(
+                        getattr(getattr(button, "element_info", None), "control_type", "") or ""
+                    )
+                    label = re.sub(r"\s+", "", str(button.window_text() or "")).lower()
+                    if label not in accepted_buttons:
+                        continue
+                    if control_type and control_type.lower() not in {"button", "버튼"}:
+                        continue
+                    button.click_input()
+                    self.logger.info(f"  [ERP-MESSAGE] 검증된 Message {label!r} 버튼 클릭 완료")
+                    time.sleep(ERP_SETTLE_WAIT)
+                    return True
+                except Exception:
+                    continue
+
+            if not allow_enter_fallback:
+                raise RuntimeError(
+                    "검증된 ERP 저장 질문에서 명시적인 승인 버튼을 찾지 못했습니다."
+                )
+            try:
+                win.set_focus()
+            except Exception:
+                pass
+            pyautogui.press("enter")
+            self.logger.info("  [ERP-MESSAGE] 검증된 Message에만 Enter fallback 전송 완료")
+            time.sleep(ERP_SETTLE_WAIT)
+            return True
+
+        def _click_save_button():
+            save_xy = str(os.getenv("ERP_SAVE_BUTTON_XY", "250,80") or "250,80").strip()
+            try:
+                x_text, y_text = re.split(r"[,xX ]+", save_xy, maxsplit=1)
+                x, y = int(float(x_text)), int(float(y_text))
+                _click_form_xy(x, y, "ERP 상단 '저장' 툴바 버튼", wait=ERP_SETTLE_WAIT)
+                self.logger.info(
+                    f"  [SAVE] 저장 툴바 운영 좌표 우선 클릭 완료: rel=({x},{y})"
+                )
+                return True
+            except Exception as exc:
+                self.logger.warning(f"  [SAVE] ERP_SAVE_BUTTON_XY 클릭 실패: {exc}")
+
+            if not _env_flag("ERP_SAVE_BUTTON_UIA_FALLBACK", "0"):
+                raise RuntimeError(
+                    "ERP 저장 툴바 좌표를 클릭하지 못했고, 대량 행 정지를 막기 위해 "
+                    "UIA 전체 탐색 fallback은 기본 비활성화되어 있습니다."
+                )
+
+            def _control_texts(control):
+                values = []
+                for getter in (
+                    lambda: control.window_text(),
+                    lambda: getattr(getattr(control, "element_info", None), "name", ""),
+                ):
+                    try:
+                        value = re.sub(r"\s+", "", str(getter() or ""))
+                    except Exception:
+                        value = ""
+                    if value and value not in values:
+                        values.append(value)
+                return values
+
+            def _click_in_scope(scope, label):
+                main_r = _main_rect()
+                try:
+                    controls = scope.descendants()
+                except Exception:
+                    controls = []
+                for control in controls:
+                    try:
+                        # Exact match deliberately excludes 복사하여저장 and other toolbar actions.
+                        if "저장" not in _control_texts(control):
+                            continue
+                        rect = control.rectangle()
+                        if not (main_r.top + 35 <= rect.top <= main_r.top + 135):
+                            continue
+                        if rect.left > main_r.left + 760:
+                            continue
+                        if hasattr(control, "is_visible") and not control.is_visible():
+                            continue
+                        if hasattr(control, "is_enabled") and not control.is_enabled():
+                            continue
+                        pyautogui.click(
+                            rect.left + rect.width() // 2,
+                            rect.top + rect.height() // 2,
+                        )
+                        self.logger.info(
+                            f"  [SAVE] {label} 정확한 '저장' 툴바 버튼 클릭: "
+                            f"rect=({rect.left},{rect.top})-({rect.right},{rect.bottom})"
+                        )
+                        time.sleep(ERP_SETTLE_WAIT)
+                        return True
+                    except Exception as exc:
+                        self.logger.warning(f"  [SAVE] {label} 저장 후보 처리 실패: {exc}")
+                return False
+
+            try:
+                if _click_in_scope(main_win, "main_win"):
+                    return True
+            except Exception as exc:
+                self.logger.warning(f"  [SAVE] main_win 저장 툴바 탐색 실패: {exc}")
+
+            try:
+                handle = int(getattr(main_win, "handle", 0) or 0)
+            except Exception:
+                handle = 0
+            if handle:
+                for backend in ("uia", "win32"):
+                    try:
+                        fresh_win = Application(backend=backend).connect(handle=handle).window(handle=handle)
+                        if _click_in_scope(fresh_win, f"fresh-{backend}"):
+                            return True
+                    except Exception as exc:
+                        self.logger.warning(f"  [SAVE] fresh-{backend} 저장 툴바 탐색 실패: {exc}")
+
+            raise RuntimeError(
+                "ERP 상단 툴바에서 정확한 '저장' 버튼을 찾지 못했습니다. "
+                "복사하여저장은 대체 클릭하지 않습니다."
+            )
+
+        def _save_current_voucher_via_toolbar():
+            save_required = "저장 후 출력해 주십시오."
+            save_question_phrases = (
+                "저장하시겠습니까",
+                "저장 하시겠습니까",
+                "저장할까요",
+            )
+            save_success_phrases = (
+                "저장되었습니다",
+                "저장이 완료되었습니다",
+                "저장완료",
+                "정상적으로 저장",
+            )
+
+            stale_message = _find_erp_message_snapshot()
+            if stale_message:
+                if re.sub(r"\s+", "", save_required).lower() in _erp_message_compact(stale_message):
+                    self.logger.warning(
+                        "  [SAVE] 이전 출력 시도의 '저장 후 출력' Message를 검증하고 닫습니다."
+                    )
+                    _dismiss_verified_erp_message(stale_message, (save_required,))
+                else:
+                    raise RuntimeError(
+                        "저장 전 알 수 없는 ERP Message가 열려 있어 저장/출력을 중단합니다: "
+                        f"{stale_message.get('text', '')[:500]}"
+                    )
+
+            try:
+                if main_win.is_minimized():
+                    main_win.restore()
+            except Exception:
+                pass
+            try:
+                main_win.set_focus()
+            except Exception as exc:
+                self.logger.warning(f"  [SAVE] 저장 전 ERP 메인 창 활성화 실패: {exc}")
+            time.sleep(ERP_SETTLE_WAIT)
+
+            _click_save_button()
+            try:
+                confirmation_timeout = float(
+                    os.getenv("ERP_SAVE_CONFIRM_TIMEOUT_SECONDS", "3") or "3"
+                )
+            except ValueError:
+                confirmation_timeout = 3.0
+            confirmation = _wait_erp_message(max(1.0, confirmation_timeout))
+            if not confirmation:
+                self.logger.info(
+                    "  [SAVE] 저장 후 별도 Message가 없어 출력 단계로 이동합니다. "
+                    "출력 시 '저장 후 출력' Message를 즉시 감지해 최종 검증합니다."
+                )
+                return True
+
+            compact = _erp_message_compact(confirmation)
+            if re.sub(r"\s+", "", save_required).lower() in compact:
+                raise RuntimeError(
+                    "ERP 저장 클릭 후에도 '저장 후 출력해 주십시오.' Message가 "
+                    "표시되어 출력을 중단합니다."
+                )
+            if any(
+                re.sub(r"\s+", "", phrase).lower() in compact
+                for phrase in save_question_phrases
+            ):
+                _dismiss_verified_erp_message(
+                    confirmation,
+                    save_question_phrases,
+                    button_labels=("예", "yes", "확인", "저장"),
+                    allow_enter_fallback=False,
+                )
+                followup = _wait_erp_message(max(1.0, confirmation_timeout))
+                if not followup:
+                    self.logger.info(
+                        "  [SAVE] 저장 질문의 승인 버튼을 클릭했고 후속 Message는 없습니다. "
+                        "출력 단계의 '저장 후 출력' 즉시 감지로 최종 검증합니다."
+                    )
+                    return True
+                confirmation = followup
+                compact = _erp_message_compact(confirmation)
+                if re.sub(r"\s+", "", save_required).lower() in compact:
+                    raise RuntimeError(
+                        "ERP 저장 질문 승인 후에도 '저장 후 출력해 주십시오.' "
+                        "Message가 표시되어 출력을 중단합니다."
+                    )
+            if not any(
+                re.sub(r"\s+", "", phrase).lower() in compact
+                for phrase in save_success_phrases
+            ):
+                raise RuntimeError(
+                    "ERP 저장 후 알 수 없는 Message가 표시되어 출력을 중단합니다: "
+                    f"{confirmation.get('text', '')[:500]}"
+                )
+
+            _dismiss_verified_erp_message(confirmation, save_success_phrases)
+            self.logger.info("  [SAVE] ERP 저장 완료 Message 검증 완료; 이제 출력을 허용합니다.")
+            return True
+
+        def _wait_rd_viewer_ready(timeout_sec=10, phase="", baseline=None):
+            end_at = time.time() + max(0.0, float(timeout_sec or 0.0))
+            last_pending_pids = None
+            while True:
+                erp_message = _find_erp_message_snapshot()
+                if "저장후출력해주십시오." in _erp_message_compact(erp_message):
+                    self.logger.error(
+                        "  [PRINT] ERP Message '저장 후 출력해 주십시오.'를 즉시 감지했습니다."
+                    )
+                    raise RuntimeError(
+                        "ERP 전표가 저장되지 않아 출력할 수 없습니다: "
+                        "저장 후 출력해 주십시오."
+                    )
+                new_processes = _new_rd_viewer_processes(baseline)
+                new_pids = {int(proc.pid) for proc, _name in new_processes}
+                win, backend, title, window_meta = _find_fresh_rd_viewer_window(
+                    baseline,
+                    preferred_pids=new_pids,
+                )
                 if win is not None:
                     self.logger.info(
-                        f"  [PRINT] RD Viewer 창 감지 완료: phase={phase}, "
-                        f"backend={backend}, title={title}"
+                        f"  [PRINT] 신규 RD Viewer 창 감지 완료: phase={phase}, "
+                        f"backend={backend}, pid={window_meta.get('pid')}, title={title}"
                     )
                     return {
                         "source": "title",
                         "window": win,
                         "backend": backend,
                         "title": title,
+                        "pid": int(window_meta.get("pid") or 0),
+                        "process_name": next(
+                            (
+                                name
+                                for proc, name in new_processes
+                                if int(proc.pid) == int(window_meta.get("pid") or 0)
+                            ),
+                            "",
+                        ),
+                        "window_identity": window_meta.get("identity"),
+                        "baseline": baseline or {"processes": {}, "windows": []},
                     }
 
-                proc, process_name = _find_rd_viewer_process()
-                if proc is not None:
+                pending_pids = tuple(sorted(new_pids))
+                if pending_pids and pending_pids != last_pending_pids:
                     self.logger.info(
-                        f"  [PRINT] RD Viewer 프로세스 감지 완료: phase={phase}, "
-                        f"name={process_name}, pid={proc.pid}"
+                        "  [PRINT] 신규 RD Viewer 프로세스는 시작됐지만 "
+                        f"표시 가능한 새 창을 대기합니다: phase={phase}, pids={list(pending_pids)}"
                     )
-                    return {
-                        "source": "process",
-                        "pid": int(proc.pid),
-                        "process_name": process_name,
-                    }
+                last_pending_pids = pending_pids
 
                 if time.time() >= end_at:
                     break
@@ -6659,16 +7423,35 @@ class ERPLoginBot:
                 except Exception:
                     pass
 
+            strict_baseline = (ready_hint or {}).get("baseline")
+            hinted_pid = int((ready_hint or {}).get("pid") or 0)
             end_at = time.time() + timeout_sec
             while time.time() < end_at:
-                win, backend, title = _find_rd_viewer_window()
+                if strict_baseline is not None:
+                    preferred_pids = {hinted_pid} if hinted_pid else set()
+                    win, backend, title, _meta = _find_fresh_rd_viewer_window(
+                        strict_baseline,
+                        preferred_pids=preferred_pids,
+                    )
+                else:
+                    win, backend, title = _find_rd_viewer_window()
                 if win is not None:
                     try:
-                        return _focus_window(win, backend, title, "title")
+                        return _focus_window(
+                            win,
+                            backend,
+                            title,
+                            "fresh-title" if strict_baseline is not None else "title",
+                        )
                     except Exception:
                         pass
 
-                hinted_pid = (ready_hint or {}).get("pid")
+                if strict_baseline is not None:
+                    # Never replace the verified fresh window with a stale Viewer
+                    # merely because the old process is still alive.
+                    time.sleep(ERP_CLICK_WAIT)
+                    continue
+
                 proc, process_name = _find_rd_viewer_process()
                 pid = hinted_pid or (int(proc.pid) if proc is not None else None)
                 if pid:
@@ -7226,6 +8009,11 @@ class ERPLoginBot:
                     except Exception:
                         pass
                     time.sleep(ERP_SETTLE_WAIT)
+                elif _env_flag("ERP_RESUME_MANAGEMENT_SAVE_PRINT", "0"):
+                    self.logger.info(
+                        "  [MANAGEMENT-RECOVERY] 관리항목 복구 후 실제 '저장' 툴바 버튼으로 저장합니다."
+                    )
+                    _save_current_voucher_via_toolbar()
                 else:
                     self.logger.info("  [SAVE] Ctrl+S 저장 시작")
                     pyautogui.hotkey('ctrl', 's')
@@ -7240,54 +8028,114 @@ class ERPLoginBot:
                 time.sleep(ERP_SETTLE_WAIT)
 
                 try:
-                    viewer_timeout = float(os.getenv("ERP_PRINT_VIEWER_DETECT_TIMEOUT_SECONDS", "45") or "45")
+                    viewer_base_timeout = float(
+                        os.getenv("ERP_PRINT_VIEWER_DETECT_TIMEOUT_SECONDS", "45") or "45"
+                    )
                 except ValueError:
-                    viewer_timeout = 45.0
-                viewer_timeout = max(1.0, viewer_timeout)
+                    viewer_base_timeout = 45.0
                 try:
-                    initial_viewer_timeout = float(
+                    viewer_seconds_per_row = float(
+                        os.getenv("ERP_PRINT_VIEWER_SECONDS_PER_ROW", "0.8") or "0.8"
+                    )
+                except ValueError:
+                    viewer_seconds_per_row = 0.8
+                try:
+                    configured_viewer_cap = float(
+                        os.getenv("ERP_PRINT_VIEWER_TIMEOUT_CAP_SECONDS", "300") or "300"
+                    )
+                except ValueError:
+                    configured_viewer_cap = 300.0
+                viewer_cap = min(300.0, max(45.0, configured_viewer_cap))
+                effective_row_count = max(1, int(row_count or 1))
+                viewer_timeout = min(
+                    viewer_cap,
+                    max(
+                        1.0,
+                        viewer_base_timeout,
+                        effective_row_count * max(0.0, viewer_seconds_per_row),
+                    ),
+                )
+
+                try:
+                    initial_base_timeout = float(
                         os.getenv("ERP_PRINT_VIEWER_INITIAL_DETECT_TIMEOUT_SECONDS", "8") or "8"
                     )
                 except ValueError:
-                    initial_viewer_timeout = 8.0
+                    initial_base_timeout = 8.0
+                try:
+                    initial_seconds_per_row = float(
+                        os.getenv("ERP_PRINT_VIEWER_INITIAL_SECONDS_PER_ROW", "0.5") or "0.5"
+                    )
+                except ValueError:
+                    initial_seconds_per_row = 0.5
+                try:
+                    initial_cap = float(
+                        os.getenv("ERP_PRINT_VIEWER_INITIAL_TIMEOUT_CAP_SECONDS", "120") or "120"
+                    )
+                except ValueError:
+                    initial_cap = 120.0
                 initial_viewer_timeout = min(
                     viewer_timeout,
-                    max(0.5, initial_viewer_timeout),
+                    max(
+                        0.5,
+                        initial_base_timeout,
+                        min(
+                            max(0.5, initial_cap),
+                            effective_row_count * max(0.0, initial_seconds_per_row),
+                        ),
+                    ),
+                )
+                self.logger.info(
+                    "  [PRINT] RD Viewer 행 수 기반 동적 대기: "
+                    f"rows={effective_row_count}, initial={initial_viewer_timeout:.1f}s, "
+                    f"total={viewer_timeout:.1f}s, cap={viewer_cap:.1f}s"
                 )
 
                 viewer_ready = _wait_rd_viewer_ready(
                     timeout_sec=initial_viewer_timeout,
                     phase="Ctrl+P",
+                    baseline=print_runtime_baseline,
                 )
                 if not viewer_ready:
                     _log_print_runtime_delta("Ctrl+P timeout", print_runtime_baseline)
-                    self.logger.warning(
-                        "  [PRINT] Ctrl+P로 RD Viewer가 열리지 않아 "
-                        "기존 전표출력 버튼을 1회 재시도합니다."
-                    )
-                    try:
-                        if main_win.is_minimized():
-                            main_win.restore()
-                    except Exception:
-                        pass
-                    try:
-                        main_win.set_focus()
-                        self.logger.info("  [PRINT] 출력 버튼 fallback 전 ERP 메인 창 활성화 완료")
-                    except Exception as e:
-                        self.logger.warning(f"  [PRINT] 출력 버튼 fallback 전 ERP 메인 창 활성화 실패: {e}")
-                    time.sleep(ERP_SETTLE_WAIT)
-                    _click_print_button()
-                    _log_print_runtime_delta(
-                        "전표출력 버튼 클릭 직후",
-                        print_runtime_baseline,
-                    )
+                    pending_new_processes = _new_rd_viewer_processes(print_runtime_baseline)
+                    if pending_new_processes:
+                        pending_pids = [int(proc.pid) for proc, _name in pending_new_processes]
+                        retry_phase = "신규 RD Viewer 창 렌더링 대기"
+                        self.logger.warning(
+                            "  [PRINT] Ctrl+P 후 신규 RD Viewer 프로세스가 렌더링 중이므로 "
+                            f"중복 출력 클릭을 생략하고 새 창을 계속 대기합니다: pids={pending_pids}"
+                        )
+                    else:
+                        retry_phase = "전표출력 버튼 fallback"
+                        self.logger.warning(
+                            "  [PRINT] Ctrl+P로 신규 RD Viewer 프로세스/창이 생성되지 않아 "
+                            "기존 전표출력 버튼을 1회 재시도합니다."
+                        )
+                        try:
+                            if main_win.is_minimized():
+                                main_win.restore()
+                        except Exception:
+                            pass
+                        try:
+                            main_win.set_focus()
+                            self.logger.info("  [PRINT] 출력 버튼 fallback 전 ERP 메인 창 활성화 완료")
+                        except Exception as e:
+                            self.logger.warning(f"  [PRINT] 출력 버튼 fallback 전 ERP 메인 창 활성화 실패: {e}")
+                        time.sleep(ERP_SETTLE_WAIT)
+                        _click_print_button()
+                        _log_print_runtime_delta(
+                            "전표출력 버튼 클릭 직후",
+                            print_runtime_baseline,
+                        )
                     remaining_viewer_timeout = max(
                         0.5,
                         viewer_timeout - initial_viewer_timeout,
                     )
                     viewer_ready = _wait_rd_viewer_ready(
                         timeout_sec=remaining_viewer_timeout,
-                        phase="전표출력 버튼 fallback",
+                        phase=retry_phase,
+                        baseline=print_runtime_baseline,
                     )
 
                 if not viewer_ready:
@@ -7443,7 +8291,33 @@ class ERPLoginBot:
 
             self.logger.info("🏁 좌표 전용 폼 자동 세팅 완료")
 
-        if resume_print_only:
+        if resume_management_save_print:
+            self.logger.info(
+                "  [MGMT-RECOVERY] 신규/전표 재붙여넣기를 건너뛰고 현재 열린 전표의 "
+                "전체 관리항목 입력을 1행부터 다시 실행합니다."
+            )
+            stale_message = _find_erp_message_snapshot()
+            if stale_message:
+                stale_compact = _erp_message_compact(stale_message)
+                save_required_phrase = re.sub(r"\s+", "", "저장 후 출력해 주십시오.").lower()
+                if save_required_phrase not in stale_compact:
+                    raise RuntimeError(
+                        "관리항목 복구 시작 전 알 수 없는 ERP Message가 표시되어 중단합니다: "
+                        f"{stale_message.get('text', '')[:500]}"
+                    )
+                _dismiss_verified_erp_message(
+                    stale_message,
+                    ("저장 후 출력해 주십시오.",),
+                )
+                self.logger.info(
+                    "  [MGMT-RECOVERY] 이전 출력 시도의 '저장 후 출력' Message만 확인 후 닫았습니다."
+                )
+            _prepare_management_recovery_from_first_row()
+            _fill_management_items_by_coord()
+            _save_and_open_print_dialog()
+            return
+
+        if resume_print_only_requested:
             self.logger.info(
                 "  [PRINT-RESUME] 폼 입력과 저장을 건너뛰고 현재 열린 전표의 출력만 실행합니다."
             )

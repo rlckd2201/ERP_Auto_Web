@@ -56,6 +56,7 @@ class VoucherPayload(BaseModel):
     lines: list[VoucherLine]
     cash_processing_enabled: bool = False
     resume_print_only: bool = False
+    resume_management_save_print: bool = False
     erp_line_management_items: list[dict[str, str]] = Field(default_factory=list)
     erp_credentials: dict[str, str] = Field(default_factory=dict)
     bank_transfers: list[BankTransfer] = Field(default_factory=list)
