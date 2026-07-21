@@ -12,6 +12,47 @@ from pathlib import Path
 from typing import Any
 
 
+PRINT_RECOVERY_FILENAME_PREFIX = "__resume_print_only__"
+_DEFAULT_PRINT_RECOVERY_ADMIN_IDS = "rlckd9646"
+
+
+def _parse_bool_flag(value: Any) -> bool:
+    """Parse a payload flag without treating strings such as ``"0"`` as true."""
+    if isinstance(value, bool):
+        return value
+    if value is None:
+        return False
+    if isinstance(value, (int, float)):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().casefold() in {"1", "true", "yes", "y", "on"}
+    return False
+
+
+def _resume_print_only_requested(payload: dict[str, Any]) -> bool:
+    """Return whether this job is an explicitly authorized print-only recovery."""
+    if _parse_bool_flag(payload.get("resume_print_only")):
+        return True
+
+    allowed_admin_ids = {
+        value.casefold()
+        for value in re.split(
+            r"[,;\s]+",
+            os.getenv(
+                "EXCEL_VOUCHER_PRINT_RECOVERY_ADMIN_IDS",
+                _DEFAULT_PRINT_RECOVERY_ADMIN_IDS,
+            ),
+        )
+        if value
+    }
+    requester_id = str(payload.get("requester_id") or "").strip().casefold()
+    source_filename = str(payload.get("source_filename") or "").strip()
+    return (
+        requester_id in allowed_admin_ids
+        and source_filename.startswith(PRINT_RECOVERY_FILENAME_PREFIX)
+    )
+
+
 def _file_uri(path: Path) -> str:
     return path.resolve().as_uri()
 
@@ -487,6 +528,10 @@ def _run_real_erp_voucher_task(
 
     os.environ.setdefault("ERP_OUTPUT_DIR", str(output_dir / "erp_outputs"))
     os.environ.setdefault("ERP_PRINT_TARGET", "Microsoft Print To PDF")
+    resume_print_only = _resume_print_only_requested(payload)
+    # This flag is assigned for every job so a recovery run cannot leak into the
+    # next normal voucher handled by the long-lived Agent process.
+    os.environ["ERP_RESUME_PRINT_ONLY"] = "1" if resume_print_only else "0"
     os.environ["ERP_CLOSE_AFTER_SUCCESS"] = "1"
     os.environ["ERP_GRID_COORD_FIRST"] = "1"
     os.environ["ERP_GRID_COPY_VIA_EXCEL"] = "1"
@@ -595,6 +640,7 @@ def _run_real_erp_voucher_task(
             "line_count": int(payload.get("line_count") or len(rows)),
             "debit_total": int(payload.get("debit_total") or 0),
             "erp_saved": True,
+            "resume_print_only": resume_print_only,
             "voucher_no": voucher_no,
             "erp_pdf_path": str(saved_pdf),
             "erp_log_path": str(log_path),

@@ -5,7 +5,11 @@ from pathlib import Path
 from openpyxl import Workbook
 
 from app.accounts import AccountStore, protect_secret, unprotect_secret
-from app.agent_adapter import _apply_company_erp_credentials, _legacy_form_data
+from app.agent_adapter import (
+    _apply_company_erp_credentials,
+    _legacy_form_data,
+    _resume_print_only_requested,
+)
 from app.settings import manager_profile, manager_profiles
 from app.voucher_builder import build_voucher_payload
 
@@ -222,3 +226,35 @@ def test_secret_protection_roundtrip() -> None:
 
     assert "secret-pass" not in blob
     assert unprotect_secret(blob) == "secret-pass"
+
+
+def test_resume_print_only_accepts_explicit_boolean_and_safe_string_flags(monkeypatch) -> None:
+    monkeypatch.delenv("EXCEL_VOUCHER_PRINT_RECOVERY_ADMIN_IDS", raising=False)
+
+    assert _resume_print_only_requested({"resume_print_only": True}) is True
+    assert _resume_print_only_requested({"resume_print_only": "yes"}) is True
+    assert _resume_print_only_requested({"resume_print_only": "0"}) is False
+    assert _resume_print_only_requested({"resume_print_only": "false"}) is False
+
+
+def test_resume_print_only_compatibility_signal_requires_admin_and_prefix(monkeypatch) -> None:
+    monkeypatch.setenv("EXCEL_VOUCHER_PRINT_RECOVERY_ADMIN_IDS", "finance-admin, second-admin")
+    payload = {
+        "requester_id": "FINANCE-ADMIN",
+        "source_filename": "__resume_print_only__voucher.xlsx",
+    }
+
+    assert _resume_print_only_requested(payload) is True
+    assert _resume_print_only_requested({**payload, "requester_id": "ordinary-user"}) is False
+    assert _resume_print_only_requested({**payload, "source_filename": "voucher.xlsx"}) is False
+
+
+def test_resume_print_only_compatibility_signal_uses_default_admin(monkeypatch) -> None:
+    monkeypatch.delenv("EXCEL_VOUCHER_PRINT_RECOVERY_ADMIN_IDS", raising=False)
+
+    assert _resume_print_only_requested(
+        {
+            "requester_id": "rlckd9646",
+            "source_filename": "__resume_print_only__6월 대승 수시결제.xlsx",
+        }
+    ) is True

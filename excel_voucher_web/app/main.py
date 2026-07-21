@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import shutil
 import sqlite3
 import tempfile
@@ -40,7 +41,10 @@ app = FastAPI(title="Excel Voucher Web")
 store = JobStore(settings.db_path)
 account_store = AccountStore(settings.db_path, initial_password=settings.initial_password)
 STATIC_DIR = BASE_DIR / "app" / "static"
-DEFAULT_REPO_ZIP_URL = "https://github.com/rlckd2201/ERP_Auto_Web/archive/refs/heads/main.zip"
+DEFAULT_REPO_ZIP_URL = os.getenv(
+    "EXCEL_VOUCHER_REPO_ZIP_URL",
+    "https://github.com/rlckd2201/ERP_Auto_Web/archive/refs/heads/main.zip",
+)
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
@@ -84,15 +88,22 @@ def _update_server_files(zip_url: str = DEFAULT_REPO_ZIP_URL) -> dict[str, Any]:
     repo_root = BASE_DIR.parent
     with tempfile.TemporaryDirectory(prefix="excel_voucher_server_update_") as temp_name:
         temp = Path(temp_name)
-        zip_path = temp / "ERP_Auto_Web.zip"
+        zip_path = temp / "ERP_Auto_Finance.zip"
         response = requests.get(zip_url, timeout=300)
         response.raise_for_status()
         zip_path.write_bytes(response.content)
         with zipfile.ZipFile(zip_path) as archive:
             archive.extractall(temp)
-        extracted = temp / "ERP_Auto_Web-main"
-        if not extracted.exists():
-            raise RuntimeError("GitHub ZIP 압축 해제 결과에서 ERP_Auto_Web-main 폴더를 찾지 못했습니다.")
+        candidates = [
+            path
+            for path in temp.iterdir()
+            if path.is_dir()
+            and (path / "excel_voucher_web").is_dir()
+            and (path / "manager_server").is_dir()
+        ]
+        if len(candidates) != 1:
+            raise RuntimeError("GitHub ZIP 압축 해제 결과에서 재정 자동화 저장소 루트를 찾지 못했습니다.")
+        extracted = candidates[0]
         shutil.copytree(extracted / "excel_voucher_web", BASE_DIR, dirs_exist_ok=True)
         manager_source = extracted / "manager_server"
         if manager_source.exists():
@@ -482,6 +493,7 @@ def api_upload_voucher(
     erp_password: str = Form(default=""),
     use_saved_erp_credentials: str = Form(default="0"),
     remember_erp_credentials: str = Form(default="1"),
+    resume_print_only: str = Form(default="0"),
 ) -> dict[str, Any]:
     user = _current_user(request)
     if settings.auth_required and not user:
@@ -493,6 +505,9 @@ def api_upload_voucher(
         requester = user.name or user.user_id
     elif user:
         requester = user.name or user.user_id
+    resume_print_only_enabled = _form_bool(resume_print_only)
+    if resume_print_only_enabled and not (user and user.is_admin):
+        raise HTTPException(status_code=403, detail="출력 전용 복구는 관리자만 실행할 수 있습니다.")
     manager = manager_profile(company_key)
     if not manager.enabled:
         raise HTTPException(
@@ -523,7 +538,12 @@ def api_upload_voucher(
             source_filename=filename,
             manager=manager,
         )
-        payload = payload.model_copy(update={"erp_credentials": erp_credentials})
+        payload = payload.model_copy(
+            update={
+                "erp_credentials": erp_credentials,
+                "resume_print_only": resume_print_only_enabled,
+            }
+        )
         if user:
             payload = payload.model_copy(
                 update={

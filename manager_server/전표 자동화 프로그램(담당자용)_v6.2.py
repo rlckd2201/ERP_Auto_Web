@@ -841,8 +841,18 @@ class ERPLoginBot:
         try:
             process_exe = self.install_info["process_name"].lower().replace('.exe', '')
             confirmed_pid = 0
+            resume_print_only = (
+                str(os.getenv("ERP_RESUME_PRINT_ONLY", "0"))
+                .strip()
+                .lower()
+                in {"1", "true", "yes", "y", "on"}
+            )
 
             fresh_start = os.getenv("ERP_AGENT_FRESH_START", "0").strip().lower() in {"1", "true", "yes", "y"}
+            if resume_print_only:
+                # A recovery run must attach to the voucher that is already open.
+                # Starting a fresh ERP process could print or save the wrong form.
+                fresh_start = False
             if fresh_start:
                 closed_pids = []
                 alive = []
@@ -889,6 +899,9 @@ class ERPLoginBot:
                     if proc.info.get("name") and process_exe in proc.info.get("name").lower():
                         existing_pids.add(proc.info.get("pid"))
 
+                if resume_print_only and not existing_pids:
+                    return "출력 전용 복구 실패: 현재 실행 중인 ERP 화면을 찾지 못했습니다."
+
                 candidates = [
                     self.install_info.get("splash_name", "FrmMainSplash"),
                     self.install_info.get("login_window_title", ""),
@@ -917,6 +930,9 @@ class ERPLoginBot:
                                 if recovered: break
                         except: pass
                         if recovered: break
+
+                if resume_print_only and not confirmed_pid:
+                    return "출력 전용 복구 실패: 현재 열린 ERP 전표 화면에 연결하지 못했습니다."
 
                 if not confirmed_pid:
                     # 3. 켜져있는 프로세스가 아예 없다면 새로 실행
@@ -1231,6 +1247,18 @@ class ERPLoginBot:
                         )
                     )
                     self._force_erp_window_maximized(main_win, "메뉴 진입 전 ERP 메인 창")
+                    if resume_print_only:
+                        if not self._resume_slip_form_ready(main_win):
+                            raise RuntimeError(
+                                "출력 전용 복구를 중단했습니다. 현재 ERP 화면이 "
+                                "분개전표입력 전표 화면인지 확인되지 않습니다."
+                            )
+                        self.logger.info(
+                            "  [PRINT-RESUME] 현재 열린 저장 전표에서 출력 단계만 재개합니다."
+                        )
+                        self._setup_slip_form(main_win)
+                        self._close_erp_after_success(main_win)
+                        return True
                     time.sleep(menu_step_wait)
                     self.logger.info("메인 창을 최대화/활성화했습니다. 내비게이션 시작...")
                     self.logger.info(
@@ -1674,20 +1702,85 @@ class ERPLoginBot:
         except Exception as e: 
             return f"알 수 없는 에러:\n{e}"
 
+    def _resume_slip_form_ready(self, main_win):
+        """출력 복구가 현재 열린 분개전표 화면에만 붙도록 강하게 검증합니다."""
+        identity_hits = set()
+        structure_hits = set()
+
+        controls = [main_win]
+        try:
+            controls.extend(main_win.descendants())
+        except Exception as e:
+            self.logger.warning(f"  [PRINT-RESUME] 현재 전표 화면 UIA 조회 실패: {e}")
+
+        for ctrl in controls:
+            try:
+                if ctrl is not main_win and hasattr(ctrl, "is_visible") and not ctrl.is_visible():
+                    continue
+            except Exception:
+                continue
+
+            try:
+                text = str(ctrl.window_text() or "").strip()
+            except Exception:
+                text = ""
+            try:
+                auto_id = str(getattr(ctrl.element_info, "automation_id", "") or "").strip()
+            except Exception:
+                auto_id = ""
+            try:
+                class_name = str(getattr(ctrl.element_info, "class_name", "") or "").strip()
+            except Exception:
+                class_name = ""
+
+            compact_text = re.sub(r"\s+", "", text).lower()
+            technical_id = f"{auto_id} {class_name}".lower()
+            if "분개전표입력" in compact_text:
+                identity_hits.add("분개전표입력")
+            if "frmacslip" in technical_id or "frmacslip" in compact_text:
+                identity_hits.add("FrmAcSlip")
+
+            if auto_id.lower() == "new" or compact_text == "신규":
+                structure_hits.add("신규")
+            if "전표출력" in compact_text:
+                structure_hits.add("전표출력")
+            if "전표관리단위" in compact_text:
+                structure_hits.add("전표관리단위")
+            if "전표분개유형" in compact_text:
+                structure_hits.add("전표분개유형")
+            if compact_text == "회계일" or compact_text.startswith("회계일"):
+                structure_hits.add("회계일")
+            if compact_text == "계정과목" or compact_text.startswith("계정과목"):
+                structure_hits.add("계정과목")
+
+        ready = bool(identity_hits) and len(structure_hits) >= 2
+        self.logger.info(
+            "  [PRINT-RESUME] 현재 전표 화면 검증: "
+            f"ready={ready}, identity={sorted(identity_hits)}, "
+            f"structure={sorted(structure_hits)}"
+        )
+        return ready
+
     def _setup_slip_form(self, main_win):
         """
         분개전표입력 화면 자동 세팅 (v6.1 - Clipboard & UI ID Independence)
         """
+        resume_print_only = (
+            str(os.getenv("ERP_RESUME_PRINT_ONLY", "0"))
+            .strip()
+            .lower()
+            in {"1", "true", "yes", "y", "on"}
+        )
         original_clipboard = pyperclip.paste()
         form_data = getattr(self.manager.main_app, 'data', {})
         form_clipboard_rows = form_data.get('erp_clipboard_rows') or []
-        if isinstance(form_clipboard_rows, list) and form_clipboard_rows:
+        if not resume_print_only and isinstance(form_clipboard_rows, list) and form_clipboard_rows:
             original_clipboard = "\r\n".join(str(row) for row in form_clipboard_rows)
             pyperclip.copy(original_clipboard)
             self.logger.info(f"[폼세팅] form_data ERP clipboard rows restored: {len(form_clipboard_rows)}")
         site_name    = form_data.get('site_name', '')
         invoice_date = form_data.get('invoice_date', '')
-        if not invoice_date:
+        if not invoice_date and not resume_print_only:
             tax_path = getattr(self.manager.main_app, 'tax_path', '')
             try:
                 invoice_date = self.manager.main_app._extract_issue_date_from_pdf(tax_path)
@@ -1798,31 +1891,32 @@ class ERPLoginBot:
             except Exception as e:
                 self.logger.warning(f"  [진단] 덤프 실패: {e}")
 
-        # [신규] 버튼
-        try:
-            btn_new = None
-            for b in main_win.descendants(control_type='Button'):
-                try:
-                    aid = b.element_info.automation_id or ''
-                    nm  = b.window_text() or ''
-                    nm_norm = _norm_text(nm)
-                    if "복사" in nm_norm or "저장" in nm_norm:
-                        continue
-                    if aid == 'New' or nm_norm == _norm_text('신규'):
-                        btn_new = b; break
-                except: pass
-            if btn_new and btn_new.is_visible():
-                try:
-                    new_click_count = int(str(os.getenv("ERP_NEW_CLICK_COUNT", "1") or "1").strip())
-                except:
-                    new_click_count = 1
-                new_click_count = max(1, min(2, new_click_count))
-                for idx in range(new_click_count):
-                    btn_new.click_input()
-                    self.logger.info(f"  ✅ [신규] 클릭 ({idx + 1}/{new_click_count})")
-                    time.sleep(max(0.03, float(os.getenv("ERP_NEW_FORM_WAIT", "0.12") or "0.12")))
-        except Exception as e:
-            self.logger.warning(f"  [신규] 클릭 실패: {e}")
+        # [신규] 버튼. 출력 전용 복구에서는 현재 저장 전표를 보존해야 하므로 절대 누르지 않습니다.
+        if not resume_print_only:
+            try:
+                btn_new = None
+                for b in main_win.descendants(control_type='Button'):
+                    try:
+                        aid = b.element_info.automation_id or ''
+                        nm  = b.window_text() or ''
+                        nm_norm = _norm_text(nm)
+                        if "복사" in nm_norm or "저장" in nm_norm:
+                            continue
+                        if aid == 'New' or nm_norm == _norm_text('신규'):
+                            btn_new = b; break
+                    except: pass
+                if btn_new and btn_new.is_visible():
+                    try:
+                        new_click_count = int(str(os.getenv("ERP_NEW_CLICK_COUNT", "1") or "1").strip())
+                    except:
+                        new_click_count = 1
+                    new_click_count = max(1, min(2, new_click_count))
+                    for idx in range(new_click_count):
+                        btn_new.click_input()
+                        self.logger.info(f"  ✅ [신규] 클릭 ({idx + 1}/{new_click_count})")
+                        time.sleep(max(0.03, float(os.getenv("ERP_NEW_FORM_WAIT", "0.12") or "0.12")))
+            except Exception as e:
+                self.logger.warning(f"  [신규] 클릭 실패: {e}")
 
         def _safe_paste(text):
             pyperclip.copy(text)
@@ -6147,6 +6241,66 @@ class ERPLoginBot:
             self.logger.warning(f"  [PRINT] 프로세스 감지 시간초과: {process_name}")
             return False
 
+        def _find_rd_viewer_process():
+            try:
+                for proc in psutil.process_iter(["pid", "name"]):
+                    name = (proc.info.get("name") or "").strip().lower()
+                    if name.startswith("rdviewer"):
+                        return proc, name
+            except Exception:
+                pass
+            return None, ""
+
+        def _find_rd_viewer_window():
+            title_re = r"(Report\s*Designer\s*Viewer|RD\s*Viewer|Designer\s*Viewer)"
+            for backend in ("win32", "uia"):
+                try:
+                    for win in Desktop(backend=backend).windows():
+                        title = (win.window_text() or "").strip()
+                        if re.search(title_re, title, re.I):
+                            return win, backend, title
+                except Exception:
+                    pass
+            return None, "", ""
+
+        def _wait_rd_viewer_ready(timeout_sec=10, phase=""):
+            end_at = time.time() + max(0.0, float(timeout_sec or 0.0))
+            while True:
+                win, backend, title = _find_rd_viewer_window()
+                if win is not None:
+                    self.logger.info(
+                        f"  [PRINT] RD Viewer 창 감지 완료: phase={phase}, "
+                        f"backend={backend}, title={title}"
+                    )
+                    return {
+                        "source": "title",
+                        "window": win,
+                        "backend": backend,
+                        "title": title,
+                    }
+
+                proc, process_name = _find_rd_viewer_process()
+                if proc is not None:
+                    self.logger.info(
+                        f"  [PRINT] RD Viewer 프로세스 감지 완료: phase={phase}, "
+                        f"name={process_name}, pid={proc.pid}"
+                    )
+                    return {
+                        "source": "process",
+                        "pid": int(proc.pid),
+                        "process_name": process_name,
+                    }
+
+                if time.time() >= end_at:
+                    break
+                time.sleep(ERP_CLICK_WAIT)
+
+            self.logger.warning(
+                f"  [PRINT] RD Viewer 준비 감지 시간초과: phase={phase}, "
+                f"timeout={float(timeout_sec or 0.0):.1f}s"
+            )
+            return None
+
         def _click_print_button():
             def _ui_text(el):
                 values = []
@@ -6354,33 +6508,74 @@ class ERPLoginBot:
             self.logger.warning("  [PRINT] PDF 저장창 감지 시간초과")
             return None
 
-        def _focus_rd_viewer_window(timeout_sec=8):
-            title_re = r".*(Report Designer Viewer|RD Viewer|Designer Viewer).*"
+        def _focus_rd_viewer_window(timeout_sec=8, ready_hint=None):
+            def _focus_window(win, backend, title, source):
+                try:
+                    win.restore()
+                except Exception:
+                    pass
+                try:
+                    win.set_focus()
+                except Exception:
+                    pass
+                try:
+                    r = win.rectangle()
+                    pyautogui.click(r.left + 40, r.top + 15)
+                except Exception:
+                    pass
+                self.logger.info(
+                    f"  [PRINT] RD Viewer 포커스 완료: source={source}, "
+                    f"backend={backend}, title={title}"
+                )
+                return win
+
+            hinted_window = (ready_hint or {}).get("window")
+            if hinted_window is not None:
+                try:
+                    return _focus_window(
+                        hinted_window,
+                        (ready_hint or {}).get("backend", "ready-hint"),
+                        (ready_hint or {}).get("title", ""),
+                        "ready-title",
+                    )
+                except Exception:
+                    pass
+
             end_at = time.time() + timeout_sec
             while time.time() < end_at:
-                for backend in ("win32", "uia"):
+                win, backend, title = _find_rd_viewer_window()
+                if win is not None:
                     try:
-                        for win in Desktop(backend=backend).windows():
-                            title = (win.window_text() or "").strip()
-                            if not re.search(title_re, title, re.I):
-                                continue
-                            try:
-                                win.restore()
-                            except Exception:
-                                pass
-                            try:
-                                win.set_focus()
-                            except Exception:
-                                pass
-                            try:
-                                r = win.rectangle()
-                                pyautogui.click(r.left + 40, r.top + 15)
-                            except Exception:
-                                pass
-                            self.logger.info(f"  [PRINT] RD Viewer 포커스 완료: backend={backend}, title={title}")
-                            return win
+                        return _focus_window(win, backend, title, "title")
                     except Exception:
                         pass
+
+                hinted_pid = (ready_hint or {}).get("pid")
+                proc, process_name = _find_rd_viewer_process()
+                pid = hinted_pid or (int(proc.pid) if proc is not None else None)
+                if pid:
+                    for process_backend in ("win32", "uia"):
+                        try:
+                            app = Application(backend=process_backend).connect(process=int(pid))
+                            for process_win in app.windows():
+                                try:
+                                    if not process_win.is_visible():
+                                        continue
+                                except Exception:
+                                    pass
+                                try:
+                                    process_title = (process_win.window_text() or "").strip()
+                                except Exception:
+                                    process_title = ""
+                                return _focus_window(
+                                    process_win,
+                                    process_backend,
+                                    process_title,
+                                    f"pid={pid},name={process_name or (ready_hint or {}).get('process_name', '')}",
+                                )
+                        except Exception:
+                            pass
+
                 time.sleep(ERP_CLICK_WAIT)
             self.logger.warning("  [PRINT] RD Viewer 창 포커스 시간초과")
             return None
@@ -6904,12 +7099,22 @@ class ERPLoginBot:
             if _env_flag("ERP_VERIFY_GRID_PASTE", "0") and not grid_paste_state.get("verified"):
                 self.logger.warning("  [SAVE] 그리드 붙여넣기 검증 미완료 상태지만 저장/전표출력을 계속 진행합니다.")
             try:
-                self.logger.info("  [SAVE] Ctrl+S 저장 시작")
-                pyautogui.hotkey('ctrl', 's')
-                time.sleep(ERP_PRINT_SAVE_WAIT)
-                pyautogui.press('enter')
-                self.logger.info("  [SAVE] 저장 알림 닫기용 Enter 전송 완료")
-                time.sleep(ERP_SETTLE_WAIT)
+                if _env_flag("ERP_RESUME_PRINT_ONLY", "0"):
+                    self.logger.info(
+                        "  [PRINT-RESUME] 이미 저장된 현재 전표를 유지하고 Ctrl+S를 생략합니다."
+                    )
+                    try:
+                        main_win.set_focus()
+                    except Exception:
+                        pass
+                    time.sleep(ERP_SETTLE_WAIT)
+                else:
+                    self.logger.info("  [SAVE] Ctrl+S 저장 시작")
+                    pyautogui.hotkey('ctrl', 's')
+                    time.sleep(ERP_PRINT_SAVE_WAIT)
+                    pyautogui.press('enter')
+                    self.logger.info("  [SAVE] 저장 알림 닫기용 Enter 전송 완료")
+                    time.sleep(ERP_SETTLE_WAIT)
 
                 self.logger.info("  [PRINT] ERP 전표출력 Ctrl+P 전송")
                 pyautogui.hotkey('ctrl', 'p')
@@ -6919,12 +7124,53 @@ class ERPLoginBot:
                     viewer_timeout = float(os.getenv("ERP_PRINT_VIEWER_DETECT_TIMEOUT_SECONDS", "45") or "45")
                 except ValueError:
                     viewer_timeout = 45.0
-                if _wait_process_by_name("rdviewer_u.exe", timeout_sec=viewer_timeout):
-                    if not _focus_rd_viewer_window(timeout_sec=10):
-                        raise RuntimeError("RD Viewer 프로세스는 감지됐지만 창 포커스를 잡지 못했습니다.")
-                    time.sleep(ERP_PRINT_VIEWER_WAIT)
-                else:
+                viewer_timeout = max(1.0, viewer_timeout)
+                try:
+                    initial_viewer_timeout = float(
+                        os.getenv("ERP_PRINT_VIEWER_INITIAL_DETECT_TIMEOUT_SECONDS", "8") or "8"
+                    )
+                except ValueError:
+                    initial_viewer_timeout = 8.0
+                initial_viewer_timeout = min(
+                    viewer_timeout,
+                    max(0.5, initial_viewer_timeout),
+                )
+
+                viewer_ready = _wait_rd_viewer_ready(
+                    timeout_sec=initial_viewer_timeout,
+                    phase="Ctrl+P",
+                )
+                if not viewer_ready:
+                    self.logger.warning(
+                        "  [PRINT] Ctrl+P로 RD Viewer가 열리지 않아 "
+                        "기존 전표출력 버튼을 1회 재시도합니다."
+                    )
+                    try:
+                        if main_win.is_minimized():
+                            main_win.restore()
+                    except Exception:
+                        pass
+                    try:
+                        main_win.set_focus()
+                        self.logger.info("  [PRINT] 출력 버튼 fallback 전 ERP 메인 창 활성화 완료")
+                    except Exception as e:
+                        self.logger.warning(f"  [PRINT] 출력 버튼 fallback 전 ERP 메인 창 활성화 실패: {e}")
+                    time.sleep(ERP_SETTLE_WAIT)
+                    _click_print_button()
+                    remaining_viewer_timeout = max(
+                        0.5,
+                        viewer_timeout - initial_viewer_timeout,
+                    )
+                    viewer_ready = _wait_rd_viewer_ready(
+                        timeout_sec=remaining_viewer_timeout,
+                        phase="전표출력 버튼 fallback",
+                    )
+
+                if not viewer_ready:
                     raise RuntimeError("전표출력 후 RD Viewer가 감지되지 않아 인쇄를 중단합니다.")
+                if not _focus_rd_viewer_window(timeout_sec=10, ready_hint=viewer_ready):
+                    raise RuntimeError("RD Viewer 준비는 감지됐지만 창 포커스를 잡지 못했습니다.")
+                time.sleep(ERP_PRINT_VIEWER_WAIT)
 
                 choice = _ask_print_target()
                 if not choice:
@@ -6932,7 +7178,7 @@ class ERPLoginBot:
                     return
 
                 self.logger.info("  [PRINT] RD Viewer Ctrl+P 전송")
-                if not _focus_rd_viewer_window(timeout_sec=8):
+                if not _focus_rd_viewer_window(timeout_sec=8, ready_hint=viewer_ready):
                     raise RuntimeError("RD Viewer 창을 찾지 못해 Ctrl+P를 전송하지 못했습니다.")
                 pyautogui.hotkey('ctrl', 'p')
                 time.sleep(ERP_BLOCK_WAIT)
@@ -7067,6 +7313,13 @@ class ERPLoginBot:
             _save_and_open_print_dialog()
 
             self.logger.info("🏁 좌표 전용 폼 자동 세팅 완료")
+
+        if resume_print_only:
+            self.logger.info(
+                "  [PRINT-RESUME] 폼 입력과 저장을 건너뛰고 현재 열린 전표의 출력만 실행합니다."
+            )
+            _save_and_open_print_dialog()
+            return
 
         # UIA 탐색으로 시간 끌지 않고, 신규 이후는 화면 좌표 기준으로 즉시 진행합니다.
         try:

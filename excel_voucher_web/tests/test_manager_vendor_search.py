@@ -12,6 +12,7 @@ MANAGER_SOURCE = (
     / "전표 자동화 프로그램(담당자용)_v6.2.py"
 )
 AGENT_ADAPTER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "agent_adapter.py"
+WEB_MAIN_SOURCE = Path(__file__).resolve().parents[1] / "app" / "main.py"
 
 
 def _load_nested_functions(*names: str, namespace: dict | None = None) -> dict:
@@ -3191,3 +3192,198 @@ def test_fast_snapshot_helper_and_skip_branch_never_run_full_uia_scan():
     assert "def _refresh_voucher_row_snapshot" not in helper
     assert "for idx in range(rows_to_fill):" in helper
     assert "range(2, 211)" not in helper
+
+
+def test_rd_viewer_detection_accepts_process_prefix_or_window_title():
+    process = SimpleNamespace(
+        pid=4321,
+        info={"pid": 4321, "name": "RDViewer_64.exe"},
+    )
+    process_helpers = _load_nested_functions(
+        "_find_rd_viewer_process",
+        namespace={
+            "psutil": SimpleNamespace(process_iter=lambda _attrs: [process]),
+        },
+    )
+
+    found_process, found_name = process_helpers["_find_rd_viewer_process"]()
+
+    assert found_process is process
+    assert found_name == "rdviewer_64.exe"
+
+    viewer_window = SimpleNamespace(
+        window_text=lambda: "Report Designer Viewer - 전표",
+    )
+
+    def fake_desktop(*, backend):
+        windows = [viewer_window] if backend == "win32" else []
+        return SimpleNamespace(windows=lambda: windows)
+
+    window_helpers = _load_nested_functions(
+        "_find_rd_viewer_window",
+        namespace={"Desktop": fake_desktop, "re": re},
+    )
+
+    found_window, backend, title = window_helpers["_find_rd_viewer_window"]()
+
+    assert found_window is viewer_window
+    assert backend == "win32"
+    assert title == "Report Designer Viewer - 전표"
+
+
+def test_erp_print_retries_existing_button_once_after_short_hotkey_probe():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    start = source.index("def _save_and_open_print_dialog")
+    end = source.index("def _setup_by_coordinates_only", start)
+    helper = source[start:end]
+
+    hotkey_pos = helper.index("pyautogui.hotkey('ctrl', 'p')")
+    first_wait_pos = helper.index("_wait_rd_viewer_ready(", hotkey_pos)
+    focus_main_pos = helper.index("main_win.set_focus()", first_wait_pos)
+    fallback_pos = helper.index("_click_print_button()", focus_main_pos)
+    second_wait_pos = helper.index("_wait_rd_viewer_ready(", fallback_pos)
+    viewer_focus_pos = helper.index("_focus_rd_viewer_window(", second_wait_pos)
+
+    assert hotkey_pos < first_wait_pos < focus_main_pos < fallback_pos
+    assert fallback_pos < second_wait_pos < viewer_focus_pos
+    assert helper.count("_click_print_button()") == 1
+    assert 'ERP_PRINT_VIEWER_INITIAL_DETECT_TIMEOUT_SECONDS", "8"' in helper
+    assert "viewer_timeout - initial_viewer_timeout" in helper
+    assert "ready_hint=viewer_ready" in helper
+
+    process_start = source.index("def _find_rd_viewer_process")
+    process_end = source.index("def _find_rd_viewer_window", process_start)
+    assert 'name.startswith("rdviewer")' in source[process_start:process_end]
+
+    focus_start = source.index("def _focus_rd_viewer_window")
+    focus_end = source.index("def _close_rd_viewer", focus_start)
+    focus_helper = source[focus_start:focus_end]
+    assert "_find_rd_viewer_window()" in focus_helper
+    assert "Application(backend=process_backend).connect(process=int(pid))" in focus_helper
+
+
+def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    run_start = source.index("def _run_unlocked")
+    setup_start = source.index("def _setup_slip_form", run_start)
+    run_helper = source[run_start:setup_start]
+
+    no_process_guard = run_helper.index(
+        "if resume_print_only and not existing_pids:"
+    )
+    fresh_launch = run_helper.index("os.startfile(exe_path)")
+    resume_branch = run_helper.index("if resume_print_only:", fresh_launch)
+    resume_verify = run_helper.index("self._resume_slip_form_ready(main_win)", resume_branch)
+    resume_setup = run_helper.index("self._setup_slip_form(main_win)", resume_branch)
+    menu_start = run_helper.index("내비게이션 시작", resume_setup)
+
+    assert no_process_guard < fresh_launch < resume_branch < resume_verify < resume_setup < menu_start
+    assert "fresh_start = False" in run_helper
+
+    save_start = source.index("def _save_and_open_print_dialog", setup_start)
+    coord_start = source.index("def _setup_by_coordinates_only", save_start)
+    save_helper = source[save_start:coord_start]
+    assert 'if _env_flag("ERP_RESUME_PRINT_ONLY", "0"):' in save_helper
+    assert "이미 저장된 현재 전표를 유지하고 Ctrl+S를 생략합니다." in save_helper
+    assert save_helper.index("ERP_RESUME_PRINT_ONLY") < save_helper.index(
+        "pyautogui.hotkey('ctrl', 's')"
+    )
+
+    coord_call = source.index("\n            _setup_by_coordinates_only()", coord_start)
+    pre_coord = source[coord_start:coord_call]
+    resume_print = pre_coord.rindex("if resume_print_only:")
+    assert pre_coord.index("_save_and_open_print_dialog()", resume_print) < coord_call - coord_start
+
+
+def test_resume_print_verifier_requires_slip_identity_and_form_structure():
+    verifier = _load_nested_functions(
+        "_resume_slip_form_ready",
+        namespace={"re": re},
+    )["_resume_slip_form_ready"]
+    bot = SimpleNamespace(logger=_FakeLogger())
+    rect = _FakeRect(0, 0, 1600, 900)
+
+    ready_form = _FakeControl("대승", "Window", rect)
+    ready_form.add(_FakeControl("분개전표입력", "Text", rect))
+    ready_form.add(_FakeControl("신규", "Button", rect, automation_id="New"))
+    ready_form.add(_FakeControl("전표출력", "Button", rect))
+    assert verifier(bot, ready_form) is True
+
+    home = _FakeControl("대승 Home", "Window", rect)
+    home.add(_FakeControl("신규", "Button", rect, automation_id="New"))
+    home.add(_FakeControl("전표출력", "Button", rect))
+    assert verifier(bot, home) is False
+
+    identity_only = _FakeControl("FrmAcSlip_GAAP", "Window", rect)
+    assert verifier(bot, identity_only) is False
+
+
+def test_resume_print_guard_structurally_prevents_new_button_click():
+    tree = ast.parse(MANAGER_SOURCE.read_text(encoding="utf-8"))
+    setup = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "_setup_slip_form"
+    )
+
+    resume_assignment = next(
+        node
+        for node in setup.body
+        if isinstance(node, ast.Assign)
+        and any(isinstance(target, ast.Name) and target.id == "resume_print_only" for target in node.targets)
+    )
+    def has_call(node, *, owner=None, name):
+        for child in ast.walk(node):
+            if not isinstance(child, ast.Call):
+                continue
+            func = child.func
+            if owner is None and isinstance(func, ast.Name) and func.id == name:
+                return True
+            if (
+                owner is not None
+                and isinstance(func, ast.Attribute)
+                and func.attr == name
+                and isinstance(func.value, ast.Name)
+                and func.value.id == owner
+            ):
+                return True
+        return False
+
+    guarded_new = next(
+        node
+        for node in setup.body
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.UnaryOp)
+        and isinstance(node.test.op, ast.Not)
+        and isinstance(node.test.operand, ast.Name)
+        and node.test.operand.id == "resume_print_only"
+        and has_call(node, owner="btn_new", name="click_input")
+    )
+    resume_output = next(
+        node
+        for node in setup.body
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Name)
+        and node.test.id == "resume_print_only"
+        and has_call(node, name="_save_and_open_print_dialog")
+    )
+
+    assert resume_assignment.lineno < guarded_new.lineno < resume_output.lineno
+    assert not has_call(resume_output, owner="btn_new", name="click_input")
+
+
+def test_resume_print_only_is_admin_only_and_cleared_for_normal_jobs():
+    web_source = WEB_MAIN_SOURCE.read_text(encoding="utf-8")
+    upload_start = web_source.index("def api_upload_voucher")
+    upload_end = web_source.index('@app.get("/api/jobs")', upload_start)
+    upload_helper = web_source[upload_start:upload_end]
+    assert "resume_print_only: str = Form(default=\"0\")" in upload_helper
+    assert "resume_print_only_enabled and not (user and user.is_admin)" in upload_helper
+    assert '"resume_print_only": resume_print_only_enabled' in upload_helper
+
+    adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
+    assert "resume_print_only = _resume_print_only_requested(payload)" in adapter_source
+    assert (
+        'os.environ["ERP_RESUME_PRINT_ONLY"] = "1" if resume_print_only else "0"'
+        in adapter_source
+    )
