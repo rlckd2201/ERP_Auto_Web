@@ -6397,6 +6397,90 @@ class ERPLoginBot:
             pyautogui.hotkey('ctrl', 'home')
             _release_modifiers("관리항목 복구 Ctrl+Home 직후", wait=False)
             time.sleep(max(mgmt_commit_wait, 0.35))
+            first_columns = str(erp_rows[0] or "").split('\t')
+            expected_first_account = first_columns[0].strip() if first_columns else ""
+            expected_first_debit = first_columns[1].strip() if len(first_columns) > 1 else ""
+            expected_first_credit = first_columns[2].strip() if len(first_columns) > 2 else ""
+            expected_first_summary = first_columns[-1].strip() if first_columns else ""
+            old_clipboard = None
+            try:
+                old_clipboard = pyperclip.paste()
+            except Exception:
+                old_clipboard = None
+
+            def _copy_first_row_cell(relative_x, label):
+                sentinel = f"__ERP_MGMT_RECOVERY_{label}__"
+                pyperclip.copy(sentinel)
+                _click_form_xy(
+                    int(relative_x),
+                    first_row_y,
+                    f"관리항목 복구 1행 {label} 검증",
+                    wait=mgmt_key_wait,
+                )
+                pyautogui.hotkey('ctrl', 'c')
+                _release_modifiers(f"관리항목 복구 1행 {label} Ctrl+C 직후", wait=False)
+                time.sleep(max(0.10, mgmt_key_wait))
+                copied = str(pyperclip.paste() or "").strip()
+                if copied == sentinel:
+                    return ""
+                return copied
+
+            copied_first = {}
+            try:
+                copied_first = {
+                    "account": _copy_first_row_cell(
+                        int(os.getenv("ERP_MGMT_ACCOUNT_X", "229") or "229"),
+                        "계정과목",
+                    ),
+                    "debit": _copy_first_row_cell(
+                        int(os.getenv("ERP_MGMT_DEBIT_X", "390") or "390"),
+                        "차변금액",
+                    ),
+                    "credit": _copy_first_row_cell(
+                        int(os.getenv("ERP_MGMT_CREDIT_X", "500") or "500"),
+                        "대변금액",
+                    ),
+                    "summary": _copy_first_row_cell(summary_x, "적요"),
+                }
+            finally:
+                if old_clipboard is not None:
+                    try:
+                        pyperclip.copy(old_clipboard)
+                    except Exception:
+                        pass
+
+            def _amount_digits(value):
+                compact = re.sub(r"[^0-9-]", "", str(value or ""))
+                try:
+                    return int(compact)
+                except (TypeError, ValueError):
+                    return None
+
+            first_row_confirmed = bool(
+                _norm_text(expected_first_account)
+                and _norm_text(copied_first.get("account")) == _norm_text(expected_first_account)
+                and _amount_digits(copied_first.get("debit")) == _amount_digits(expected_first_debit)
+                and _amount_digits(copied_first.get("credit")) == _amount_digits(expected_first_credit)
+                and _norm_text(expected_first_summary)
+                and _norm_text(copied_first.get("summary")) == _norm_text(expected_first_summary)
+            )
+            self.logger.info(
+                "  [MGMT-RECOVERY] 1행 전표 식별값 검증: "
+                f"expected={{'account': {expected_first_account!r}, "
+                f"'debit': {expected_first_debit!r}, 'credit': {expected_first_credit!r}, "
+                f"'summary': {expected_first_summary!r}}}, copied={copied_first}, "
+                f"ok={first_row_confirmed}"
+            )
+            if not first_row_confirmed:
+                _fail_form(
+                    "현재 열린 전표의 1행 계정과목/차변/대변/적요가 복구 원본과 "
+                    "일치하지 않아 관리항목 복구를 중단합니다: "
+                    f"expected_account={expected_first_account}, "
+                    f"expected_debit={expected_first_debit}, "
+                    f"expected_credit={expected_first_credit}, "
+                    f"expected_summary={expected_first_summary}, copied={copied_first}"
+                )
+
             _double_click_form_xy(
                 summary_x,
                 first_row_y,
@@ -6405,44 +6489,6 @@ class ERPLoginBot:
             )
             if mgmt_after_summary_open_wait:
                 time.sleep(mgmt_after_summary_open_wait)
-
-            first_columns = str(erp_rows[0] or "").split('\t')
-            expected_first_summary = first_columns[-1].strip() if first_columns else ""
-            expected_first_summary_norm = _norm_text(expected_first_summary)
-            old_clipboard = None
-            try:
-                old_clipboard = pyperclip.paste()
-            except Exception:
-                old_clipboard = None
-            copied_first_summary = ""
-            try:
-                sentinel = "__ERP_MGMT_RECOVERY_FIRST_ROW__"
-                pyperclip.copy(sentinel)
-                pyautogui.hotkey('ctrl', 'c')
-                time.sleep(max(0.10, mgmt_key_wait))
-                copied_first_summary = str(pyperclip.paste() or "").strip()
-            finally:
-                if old_clipboard is not None:
-                    try:
-                        pyperclip.copy(old_clipboard)
-                    except Exception:
-                        pass
-            copied_first_summary_norm = _norm_text(copied_first_summary)
-            first_row_confirmed = bool(
-                expected_first_summary_norm
-                and copied_first_summary != "__ERP_MGMT_RECOVERY_FIRST_ROW__"
-                and copied_first_summary_norm == expected_first_summary_norm
-            )
-            self.logger.info(
-                "  [MGMT-RECOVERY] 1행 적요 검증: "
-                f"expected={expected_first_summary}, copied={copied_first_summary}, "
-                f"ok={first_row_confirmed}"
-            )
-            if not first_row_confirmed:
-                _fail_form(
-                    "현재 열린 전표를 1행으로 이동했는지 확인하지 못해 관리항목 복구를 중단합니다: "
-                    f"expected_summary={expected_first_summary}, copied={copied_first_summary}"
-                )
 
             stable_required = max(
                 1,
@@ -6938,21 +6984,90 @@ class ERPLoginBot:
 
         def _click_save_button():
             save_xy = str(os.getenv("ERP_SAVE_BUTTON_XY", "250,80") or "250,80").strip()
+            coordinate_error = None
+
+            def _verify_exact_save_control_at_point(relative_x, relative_y):
+                """Verify the configured save coordinate without walking the GDI tree."""
+                main_r = _main_rect()
+                absolute_x = int(main_r.left) + int(relative_x)
+                absolute_y = int(main_r.top) + int(relative_y)
+                control = Desktop(backend="uia").from_point(absolute_x, absolute_y)
+                observed = []
+                seen = set()
+                for _depth in range(6):
+                    if control is None:
+                        break
+                    try:
+                        identity = (
+                            int(getattr(control, "handle", 0) or 0),
+                            str(getattr(getattr(control, "element_info", None), "runtime_id", "") or ""),
+                        )
+                    except Exception:
+                        identity = (id(control), "")
+                    if identity in seen:
+                        break
+                    seen.add(identity)
+
+                    values = []
+                    for getter in (
+                        lambda: control.window_text(),
+                        lambda: getattr(getattr(control, "element_info", None), "name", ""),
+                    ):
+                        try:
+                            value = str(getter() or "").strip()
+                        except Exception:
+                            value = ""
+                        if value and value not in values:
+                            values.append(value)
+                    observed.extend(value for value in values if value not in observed)
+                    for value in values:
+                        compact = re.sub(r"\s+", "", value).lower()
+                        if compact == "저장" or re.fullmatch(
+                            r"저장(?:\([^)]*\)|\[[^]]*\])",
+                            compact,
+                        ):
+                            try:
+                                if hasattr(control, "is_visible") and not control.is_visible():
+                                    continue
+                                if hasattr(control, "is_enabled") and not control.is_enabled():
+                                    raise RuntimeError("저장 버튼이 비활성화되어 있습니다.")
+                            except RuntimeError:
+                                raise
+                            except Exception:
+                                pass
+                            self.logger.info(
+                                "  [SAVE] 좌표 지점 UIA 정확 검증 완료: "
+                                f"rel=({relative_x},{relative_y}), abs=({absolute_x},{absolute_y}), "
+                                f"name={value!r}"
+                            )
+                            return True
+                    try:
+                        control = control.parent()
+                    except Exception:
+                        control = None
+                raise RuntimeError(
+                    "설정된 저장 좌표에서 정확한 '저장' UI 요소를 확인하지 못했습니다: "
+                    f"rel=({relative_x},{relative_y}), observed={observed[:12]}"
+                )
+
             try:
                 x_text, y_text = re.split(r"[,xX ]+", save_xy, maxsplit=1)
                 x, y = int(float(x_text)), int(float(y_text))
+                _verify_exact_save_control_at_point(x, y)
                 _click_form_xy(x, y, "ERP 상단 '저장' 툴바 버튼", wait=ERP_SETTLE_WAIT)
                 self.logger.info(
-                    f"  [SAVE] 저장 툴바 운영 좌표 우선 클릭 완료: rel=({x},{y})"
+                    f"  [SAVE] 정확 검증된 저장 툴바 좌표 클릭 완료: rel=({x},{y})"
                 )
                 return True
             except Exception as exc:
+                coordinate_error = exc
                 self.logger.warning(f"  [SAVE] ERP_SAVE_BUTTON_XY 클릭 실패: {exc}")
 
             if not _env_flag("ERP_SAVE_BUTTON_UIA_FALLBACK", "0"):
                 raise RuntimeError(
-                    "ERP 저장 툴바 좌표를 클릭하지 못했고, 대량 행 정지를 막기 위해 "
-                    "UIA 전체 탐색 fallback은 기본 비활성화되어 있습니다."
+                    "ERP 저장 툴바 좌표를 정확한 '저장' UI 요소로 검증하지 못해 클릭하지 않았고, "
+                    "대량 행 정지를 막기 위해 UIA 전체 탐색 fallback은 기본 비활성화되어 있습니다: "
+                    f"{coordinate_error}"
                 )
 
             def _control_texts(control):

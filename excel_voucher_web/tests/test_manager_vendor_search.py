@@ -3438,7 +3438,11 @@ def test_resume_management_prepares_first_row_with_gdi_snapshot_not_full_uia_wal
     prepare_helper = source[prepare_start:prepare_end]
 
     assert "pyautogui.hotkey('ctrl', 'home')" in prepare_helper
+    assert "expected_first_account" in prepare_helper
+    assert "expected_first_debit" in prepare_helper
+    assert "expected_first_credit" in prepare_helper
     assert "expected_first_summary" in prepare_helper
+    assert "1행 전표 식별값 검증" in prepare_helper
     assert "_management_grid_visual_snapshot()" in prepare_helper
     assert 'ready_snapshot["stable_gdi_ready"]' not in prepare_helper
     assert '"stable_gdi_ready": True' in prepare_helper
@@ -3601,7 +3605,7 @@ def test_verified_erp_message_dismissal_never_enters_unknown_dialog():
     assert pressed == []
 
 
-def test_save_toolbar_click_is_coordinate_first_without_default_uia_scan(monkeypatch):
+def test_save_toolbar_click_verifies_exact_point_control_without_tree_scan(monkeypatch):
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
     save_click_start = source.index("def _click_save_button")
     save_click_end = source.index("def _save_current_voucher_via_toolbar", save_click_start)
@@ -3610,11 +3614,23 @@ def test_save_toolbar_click_is_coordinate_first_without_default_uia_scan(monkeyp
     monkeypatch.setenv("ERP_SAVE_BUTTON_XY", "222,77")
     clicked = []
     bot = SimpleNamespace(logger=_FakeLogger())
+    save_control = SimpleNamespace(
+        handle=101,
+        element_info=SimpleNamespace(name="저장", runtime_id=(1, 2, 3)),
+        window_text=lambda: "저장",
+        is_visible=lambda: True,
+        is_enabled=lambda: True,
+        parent=lambda: None,
+    )
     click_save = _load_nested_functions(
         "_click_save_button",
         namespace={
             "os": __import__("os"),
             "re": re,
+            "Desktop": lambda **_kwargs: SimpleNamespace(
+                from_point=lambda x, y: save_control
+            ),
+            "_main_rect": lambda: SimpleNamespace(left=10, top=20),
             "_click_form_xy": lambda x, y, label, wait=None: clicked.append((x, y, label, wait)),
             "_env_flag": lambda *_args: False,
             "ERP_SETTLE_WAIT": 0.18,
@@ -3624,6 +3640,40 @@ def test_save_toolbar_click_is_coordinate_first_without_default_uia_scan(monkeyp
 
     assert click_save() is True
     assert clicked == [(222, 77, "ERP 상단 '저장' 툴바 버튼", 0.18)]
+
+
+def test_save_toolbar_never_clicks_when_point_is_not_exact_save(monkeypatch):
+    monkeypatch.setenv("ERP_SAVE_BUTTON_XY", "222,77")
+    clicked = []
+    bot = SimpleNamespace(logger=_FakeLogger())
+    wrong_control = SimpleNamespace(
+        handle=102,
+        element_info=SimpleNamespace(name="복사하여저장", runtime_id=(4, 5, 6)),
+        window_text=lambda: "복사하여저장",
+        is_visible=lambda: True,
+        is_enabled=lambda: True,
+        parent=lambda: None,
+    )
+    click_save = _load_nested_functions(
+        "_click_save_button",
+        namespace={
+            "os": __import__("os"),
+            "re": re,
+            "Desktop": lambda **_kwargs: SimpleNamespace(
+                from_point=lambda _x, _y: wrong_control
+            ),
+            "_main_rect": lambda: SimpleNamespace(left=0, top=0),
+            "_click_form_xy": lambda *args, **kwargs: clicked.append((args, kwargs)),
+            "_env_flag": lambda *_args: False,
+            "ERP_SETTLE_WAIT": 0.18,
+            "self": bot,
+        },
+    )["_click_save_button"]
+
+    with pytest.raises(RuntimeError, match="정확한 '저장' UI 요소"):
+        click_save()
+
+    assert clicked == []
 
 
 def test_management_save_allows_no_message_then_uses_print_stage_verification(monkeypatch):
