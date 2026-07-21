@@ -1176,6 +1176,8 @@ class _SyntheticGdiImage:
         ink_sample_x=100,
         ink_color=(200, 20, 20),
         include_ink=True,
+        include_upper_separator=True,
+        include_lower_separator=True,
         include_left_border=True,
         include_divider=True,
         include_right_border=True,
@@ -1186,6 +1188,8 @@ class _SyntheticGdiImage:
         self.ink_sample_x = ink_sample_x
         self.ink_color = ink_color
         self.include_ink = include_ink
+        self.include_upper_separator = include_upper_separator
+        self.include_lower_separator = include_lower_separator
         self.include_left_border = include_left_border
         self.include_divider = include_divider
         self.include_right_border = include_right_border
@@ -1198,7 +1202,10 @@ class _SyntheticGdiImage:
         if self.row_center_y is not None:
             upper = self.row_center_y - 8
             lower = self.row_center_y + 12
-            if y in {upper, lower}:
+            if (
+                (self.include_upper_separator and y == upper)
+                or (self.include_lower_separator and y == lower)
+            ):
                 return (180, 180, 180)
             if self.include_left_border and x == 80 and upper <= y <= lower:
                 return (180, 180, 180)
@@ -1237,6 +1244,8 @@ def _synthetic_gdi_visual_snapshot(
     red_sample_x=100,
     ink_color=(200, 20, 20),
     include_ink=True,
+    include_upper_separator=True,
+    include_lower_separator=True,
     include_left_border=True,
     include_divider=True,
     include_right_border=True,
@@ -1268,6 +1277,8 @@ def _synthetic_gdi_visual_snapshot(
             ink_sample_x=red_sample_x,
             ink_color=ink_color,
             include_ink=include_ink,
+            include_upper_separator=include_upper_separator,
+            include_lower_separator=include_lower_separator,
             include_left_border=include_left_border,
             include_divider=include_divider,
             include_right_border=include_right_border,
@@ -1386,6 +1397,52 @@ def test_gdi_visual_snapshot_accepts_black_management_label_without_red_pixels()
     )
     assert accepted_band["structure"]["ink_pixels"] >= 2
     assert accepted_band["structure"]["right_border_x"] == 494
+
+
+def test_gdi_visual_snapshot_infers_first_row_from_single_lower_separator():
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        include_upper_separator=False,
+    )
+
+    assert snapshot["visual_ready"] is True
+    assert snapshot["first_value_y"] == 750
+    active_band = next(
+        band
+        for band in snapshot["visual_counts"]["bands"]
+        if band["top"] == 720
+    )
+    assert active_band["horizontal_lines"] == [40]
+    assert active_band["structure"]["source"] == "inferred-single-line"
+    assert active_band["structure"]["upper"] == 20
+    assert active_band["structure"]["lower"] == 40
+
+
+def test_gdi_single_separator_fallback_still_requires_triad_and_label_ink():
+    for options in (
+        {"include_right_border": False},
+        {"include_ink": False},
+    ):
+        snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+            24,
+            include_upper_separator=False,
+            **options,
+        )
+
+        assert snapshot["visual_ready"] is False
+        assert snapshot["visual_signature"] is None
+        active_band = next(
+            band
+            for band in snapshot["visual_counts"]["bands"]
+            if band["top"] == 720
+        )
+        inferred_checks = [
+            check
+            for check in active_band["candidate_checks"]
+            if check.get("source") == "inferred-single-line"
+        ]
+        assert inferred_checks
+        assert not any(check["accepted"] for check in inferred_checks)
 
 
 def test_gdi_visual_snapshot_rejects_row_geometry_without_management_right_border():

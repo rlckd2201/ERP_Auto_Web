@@ -3117,6 +3117,163 @@ class ERPLoginBot:
                         }
                         break
 
+                    # In some GDI states only one horizontal separator of the
+                    # first management row is painted strongly enough to survive
+                    # capture.  Infer the row on either side of that line, but keep
+                    # the same strict three-border + in-cell-ink requirements.  The
+                    # normal adjacent-line path above always has priority.
+                    if structural_candidate is None and horizontal_lines:
+                        adjacent_intervals = {
+                            (int(upper[0]), int(lower[0]))
+                            for upper, lower in zip(
+                                horizontal_lines,
+                                horizontal_lines[1:],
+                            )
+                            if row_gap_min
+                            <= int(lower[0]) - int(upper[0])
+                            <= row_gap_max
+                        }
+                        inferred_intervals = []
+                        seen_intervals = set()
+                        for line, _line_score in horizontal_lines:
+                            line_y = int(line)
+                            for interval in (
+                                (line_y - row_height, line_y),
+                                (line_y, line_y + row_height),
+                            ):
+                                upper_y, lower_y = interval
+                                if (
+                                    upper_y < 0
+                                    or lower_y >= height
+                                    or interval in adjacent_intervals
+                                    or interval in seen_intervals
+                                ):
+                                    continue
+                                seen_intervals.add(interval)
+                                inferred_intervals.append(interval)
+
+                        def _best_painted_vertical(
+                            search_from,
+                            search_to,
+                            upper_y,
+                            lower_y,
+                        ):
+                            best_x = None
+                            best_score = 0
+                            for x in range(search_from, search_to + 1):
+                                vertical_pixels = 0
+                                for y in range(upper_y, lower_y + 1):
+                                    r, g, b = image.getpixel((x, y))[:3]
+                                    if max(r, g, b) <= 245 and min(r, g, b) <= 230:
+                                        vertical_pixels += 1
+                                if vertical_pixels > best_score:
+                                    best_score = int(vertical_pixels)
+                                    best_x = int(x)
+                            return best_x, best_score
+
+                        for upper_y, lower_y in inferred_intervals:
+                            row_gap = int(lower_y - upper_y)
+                            border_minimum = max(
+                                6,
+                                int(round((row_gap + 1) * 0.72)),
+                            )
+                            divider_x, divider_score = _best_painted_vertical(
+                                divider_search_left,
+                                divider_search_right,
+                                upper_y,
+                                lower_y,
+                            )
+                            divider_ok = (
+                                divider_x is not None
+                                and divider_score >= border_minimum
+                            )
+
+                            left_border_x = None
+                            left_border_score = 0
+                            if divider_ok:
+                                left_search_from = max(0, int(divider_x - 200))
+                                left_search_to = max(
+                                    left_search_from,
+                                    int(divider_x - 70),
+                                )
+                                (
+                                    left_border_x,
+                                    left_border_score,
+                                ) = _best_painted_vertical(
+                                    left_search_from,
+                                    left_search_to,
+                                    upper_y,
+                                    lower_y,
+                                )
+                            left_ok = (
+                                left_border_x is not None
+                                and left_border_score >= border_minimum
+                            )
+
+                            right_border_x = None
+                            right_border_score = 0
+                            if divider_ok and left_ok:
+                                (
+                                    right_border_x,
+                                    right_border_score,
+                                ) = _best_painted_vertical(
+                                    right_border_search_left,
+                                    right_border_search_right,
+                                    upper_y,
+                                    lower_y,
+                                )
+                            right_ok = (
+                                right_border_x is not None
+                                and right_border_score >= border_minimum
+                                and right_border_x - divider_x
+                                >= max(80, row_height * 4)
+                            )
+
+                            ink_rows = set()
+                            ink_pixels = 0
+                            if divider_ok and left_ok and right_ok:
+                                ink_left = max(0, int(left_border_x + 3))
+                                ink_right = min(width - 1, int(divider_x - 3))
+                                for y in range(upper_y + 2, lower_y, step):
+                                    for x in range(ink_left, ink_right + 1, step):
+                                        r, g, b = image.getpixel((x, y))[:3]
+                                        is_ink = max(r, g, b) < 120 or (
+                                            max(r, g, b) - min(r, g, b) >= 35
+                                            and min(r, g, b) < 135
+                                        )
+                                        if is_ink:
+                                            ink_pixels += 1
+                                            ink_rows.add(int(y))
+                            accepted = ink_pixels >= 2 and len(ink_rows) >= 1
+                            candidate_checks.append(
+                                {
+                                    "source": "inferred-single-line",
+                                    "upper": int(upper_y),
+                                    "lower": int(lower_y),
+                                    "left_border_score": int(left_border_score),
+                                    "divider_score": int(divider_score),
+                                    "right_border_score": int(right_border_score),
+                                    "ink_pixels": int(ink_pixels),
+                                    "accepted": bool(accepted),
+                                }
+                            )
+                            if not accepted:
+                                continue
+                            structural_candidate = {
+                                "source": "inferred-single-line",
+                                "upper": int(upper_y),
+                                "lower": int(lower_y),
+                                "left_border_x": left_border_x,
+                                "left_border_score": left_border_score,
+                                "divider_x": divider_x,
+                                "divider_score": divider_score,
+                                "right_border_x": right_border_x,
+                                "right_border_score": right_border_score,
+                                "ink_rows": sorted(ink_rows),
+                                "ink_pixels": int(ink_pixels),
+                            }
+                            break
+
                     score = red_pixels * 3 + dark_pixels + gray_lines
                     if score > visual_score:
                         visual_score = score
