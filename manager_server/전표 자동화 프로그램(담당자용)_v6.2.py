@@ -1211,15 +1211,15 @@ class ERPLoginBot:
                 try:
                     menu_step_wait = max(
                         ERP_BLOCK_WAIT,
-                        float(os.getenv("ERP_MENU_STEP_WAIT", "0.60") or "0.60"),
+                        float(os.getenv("ERP_MENU_STEP_WAIT", "0.75") or "0.75"),
                     )
                     menu_tree_wait = max(
                         ERP_CLICK_WAIT,
-                        float(os.getenv("ERP_MENU_TREE_WAIT", "0.25") or "0.25"),
+                        float(os.getenv("ERP_MENU_TREE_WAIT", "0.35") or "0.35"),
                     )
                     menu_entry_settle_wait = max(
                         ERP_SETTLE_WAIT,
-                        float(os.getenv("ERP_MENU_ENTRY_SETTLE_WAIT", "0.40") or "0.40"),
+                        float(os.getenv("ERP_MENU_ENTRY_SETTLE_WAIT", "0.60") or "0.60"),
                     )
                     ds_coordinate_menu = (
                         self.corp_code == "DS"
@@ -2893,11 +2893,15 @@ class ERPLoginBot:
                             first_value_abs,
                             fallback_boundary_abs,
                         )
-                        if not (
-                            isinstance(boundary_detail, dict)
-                            and boundary_detail.get("source") == "painted-separator"
-                        ):
-                            continue
+                        # GDI/원격 화면 배율에 따라 얇은 구분선이 캡처에서 빠질 수
+                        # 있다. 관리항목의 붉은 라벨과 표 구조가 이미 검출됐으므로
+                        # 이 경우에는 실제 첫 값 행에서 계산한 44px 경계를 사용한다.
+                        # 동일 signature 2회 확인은 바깥 ready wait에서 계속 수행된다.
+                        if not isinstance(boundary_detail, dict):
+                            boundary_detail = {
+                                "source": "offset-fallback",
+                                "lines": [],
+                            }
                         visual_ready = True
                         visual_band_top = top_rel
                         visual_signature = (
@@ -4344,8 +4348,12 @@ class ERPLoginBot:
                     _release_modifiers(f"{label} F9 직전", wait=False)
                     time.sleep(mgmt_focus_wait)
                     pyautogui.press('f9')
-                    time.sleep(vendor_popup_open_wait)
-                    if not _find_vendor_popup(timeout=3.5):
+                    # 운영 재정 경로는 거래처ds가 같은 ERP handle 안의 GDI MDI라
+                    # UIA 창/자손 열거가 수분간 멈출 수 있다. 확인된 F9 키보드
+                    # 시퀀스에서는 충분한 화면 전환 대기만 하고 바로 검색값을 넣는다.
+                    # 비-fast 경로의 기존 팝업 검증은 그대로 유지한다.
+                    time.sleep(max(vendor_popup_open_wait, 1.0))
+                    if not skip_visible_row_scan and not _find_vendor_popup(timeout=3.5):
                         self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
                         return False
                     time.sleep(vendor_popup_focus_wait)
@@ -5153,21 +5161,30 @@ class ERPLoginBot:
                 initial_snapshot = _validate_initial_voucher_row_snapshot(
                     _fast_visible_voucher_row_snapshot()
                 )
+                # The fast path is intentionally geometry-only.  Point UIA on this
+                # GDI grid can block for minutes even though the rows are already
+                # painted, so keep the logical row map produced from the cached
+                # viewport boundary and do not probe row labels before row 1.
+                initial_row_map = {
+                    int(row_no): int(relative_y)
+                    for row_no, relative_y in (initial_snapshot.get("rows") or {}).items()
+                }
+                initial_point_uia_complete = False
             else:
                 initial_snapshot = _validate_initial_voucher_row_snapshot(
                     _fully_visible_voucher_row_snapshot()
+                )
+                initial_probe_targets = {1, min(max(1, rows_to_fill), len(initial_snapshot["slot_ys"]))}
+                initial_row_map, initial_point_uia_complete = (
+                    _initial_voucher_rows_with_geometry_fallback(
+                        initial_snapshot,
+                        initial_probe_targets,
+                    )
                 )
             first_row_y = int(initial_snapshot["rows"].get(1, initial_snapshot["first_y"]))
             row_height = int(initial_snapshot["row_pitch"])
             visible_rows = len(initial_snapshot["slot_ys"])
             max_row_y = int(initial_snapshot["last_full_y"])
-            initial_probe_targets = {1, min(max(1, rows_to_fill), visible_rows)}
-            initial_row_map, initial_point_uia_complete = (
-                _initial_voucher_rows_with_geometry_fallback(
-                    initial_snapshot,
-                    initial_probe_targets,
-                )
-            )
             initial_snapshot["rows"] = dict(initial_row_map)
             initial_snapshot["has_exact_row_numbers"] = bool(initial_point_uia_complete)
             initial_snapshot["has_logical_row_numbers"] = True
@@ -5180,7 +5197,7 @@ class ERPLoginBot:
                 ),
                 default=1,
             )
-            calibration_row_no = int(last_initial_row_no)
+            calibration_row_no = None if skip_visible_row_scan else int(last_initial_row_no)
             row_geometry_state = {
                 "snapshot": initial_snapshot,
                 "bottom_scroll_mode": False,
@@ -5190,6 +5207,9 @@ class ERPLoginBot:
                 "calibration_focus_y": None,
                 "calibration_focus_next_y": None,
                 "calibration_row_no": calibration_row_no,
+                "fixed_boundary_row_no": (
+                    int(last_initial_row_no) if skip_visible_row_scan else None
+                ),
                 "scroll_advance_mode": None,
             }
             self.logger.info(
@@ -5326,6 +5346,39 @@ class ERPLoginBot:
                     pyautogui.press('down')
                     time.sleep(mgmt_commit_wait)
                     return anchor_y
+
+                if skip_visible_row_scan:
+                    boundary_row_no = row_geometry_state.get("fixed_boundary_row_no")
+                    if (
+                        boundary_row_no is not None
+                        and int(next_row_no) > int(boundary_row_no)
+                    ):
+                        # From the first row beyond the painted viewport onward,
+                        # the fully visible bottom slot is the fixed coordinate.
+                        # A direct management-value Enter already advances the ERP
+                        # row; rows without that Enter are advanced once with Down.
+                        anchor_y = int(snapshot["last_full_y"])
+                        if management_enter_sent:
+                            return _set_calibrated_scroll_anchor(
+                                next_row_no,
+                                anchor_y,
+                                "fast-management-enter-geometry",
+                                "enter",
+                            )
+                        _click_form_xy(
+                            summary_x,
+                            int(current_y),
+                            f"{next_row_no - 1}행 선택 복귀",
+                            wait=mgmt_key_wait,
+                        )
+                        pyautogui.press('down')
+                        time.sleep(mgmt_commit_wait)
+                        return _set_calibrated_scroll_anchor(
+                            next_row_no,
+                            anchor_y,
+                            "fast-management-down-geometry",
+                            "down",
+                        )
 
                 if row_geometry_state.get("calibrate_after_commit"):
                     before_y = int(

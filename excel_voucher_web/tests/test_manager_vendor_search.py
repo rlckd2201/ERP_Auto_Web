@@ -453,7 +453,7 @@ def test_vendor_popup_close_wait_ignores_single_transient_detection_miss():
     assert len(calls) == 4
 
 
-def test_finance_first_vendor_executes_exact_f9_key_order():
+def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe():
     events = []
 
     class _FakePyAutoGui:
@@ -466,9 +466,8 @@ def test_finance_first_vendor_executes_exact_f9_key_order():
         namespace={
             "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
-            "_find_vendor_popup": (
-                lambda timeout=0: events.append(("popup-check", timeout))
-                or {"source": "internal-title"}
+            "_find_vendor_popup": lambda timeout=0: (_ for _ in ()).throw(
+                AssertionError("fast F9 sequence must not probe UIA")
             ),
             "_paste_text_fast": lambda text, label: events.append(("paste", text)),
             "pyautogui": _FakePyAutoGui,
@@ -480,6 +479,7 @@ def test_finance_first_vendor_executes_exact_f9_key_order():
             "vendor_popup_search_wait": 0.0,
             "mgmt_key_wait": 0.0,
             "ERP_FORM_WAIT": 0.0,
+            "skip_visible_row_scan": True,
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
@@ -490,7 +490,6 @@ def test_finance_first_vendor_executes_exact_f9_key_order():
     assert events == [
         ("click", 1118, 797),
         ("key", "f9", 1),
-        ("popup-check", 3.5),
         ("paste", "A001"),
         ("key", "tab", 4),
         ("key", "down", 5),
@@ -524,6 +523,7 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
             "vendor_popup_search_wait": 0.0,
             "mgmt_key_wait": 0.0,
             "ERP_FORM_WAIT": 0.0,
+            "skip_visible_row_scan": False,
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
@@ -865,9 +865,9 @@ def test_menu_timing_defaults_and_agent_launch_overrides_stay_in_sync():
     manager_source = MANAGER_SOURCE.read_text(encoding="utf-8")
     adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
     expected = {
-        "ERP_MENU_STEP_WAIT": "0.60",
-        "ERP_MENU_TREE_WAIT": "0.25",
-        "ERP_MENU_ENTRY_SETTLE_WAIT": "0.40",
+        "ERP_MENU_STEP_WAIT": "0.75",
+        "ERP_MENU_TREE_WAIT": "0.35",
+        "ERP_MENU_ENTRY_SETTLE_WAIT": "0.60",
     }
 
     for env_name, default in expected.items():
@@ -901,7 +901,7 @@ def test_agent_launch_configures_fine_gdi_scan_and_two_sample_stability():
     manager_source = MANAGER_SOURCE.read_text(encoding="utf-8")
     adapter_source = AGENT_ADAPTER_SOURCE.read_text(encoding="utf-8")
 
-    assert 'os.environ["ERP_MGMT_VISUAL_SCAN_STEP"] = "4"' in adapter_source
+    assert 'os.environ["ERP_MGMT_VISUAL_SCAN_STEP"] = "2"' in adapter_source
     assert 'os.environ["ERP_GRID_PASTE_VISUAL_STABLE_COUNT"] = "2"' in adapter_source
     assert 'os.environ["ERP_GRID_PASTE_READY_MAX_SECONDS"] = "180"' in adapter_source
     assert 'os.getenv("ERP_MGMT_VISUAL_SCAN_STEP", "4")' in manager_source
@@ -1290,8 +1290,12 @@ def test_gdi_visual_boundary_keeps_44px_fallback_without_separator_lines():
 
     assert snapshot["first_value_y"] == 750
     assert snapshot["voucher_clip_bottom_abs"] == main_rect.top + 750 - 44
-    assert snapshot["visual_ready"] is False
-    assert snapshot["visual_signature"] is None
+    assert snapshot["visual_ready"] is True
+    assert snapshot["visual_signature"] == (720, 750, 706, 1)
+    assert snapshot["visual_counts"]["boundary"] == {
+        "source": "offset-fallback",
+        "lines": [],
+    }
 
 
 def test_gdi_visual_snapshot_rejects_red_pixels_outside_label_roi():
@@ -2241,7 +2245,14 @@ def _runtime_calibration_state(snapshot):
     }
 
 
-def _load_runtime_navigation(state, targeted_rows, events, selected_at_y=None):
+def _load_runtime_navigation(
+    state,
+    targeted_rows,
+    events,
+    selected_at_y=None,
+    *,
+    fast_mode=False,
+):
     return _load_nested_functions(
         "_next_visible_voucher_row_y",
         "_set_calibrated_scroll_anchor",
@@ -2252,6 +2263,7 @@ def _load_runtime_navigation(state, targeted_rows, events, selected_at_y=None):
             "row_geometry_state": state,
             "row_height": 20,
             "sequential_nav": True,
+            "skip_visible_row_scan": fast_mode,
             "_targeted_uia_voucher_rows": targeted_rows,
             "_uia_voucher_row_selected_at_y": (
                 selected_at_y or (lambda _desktop, _y: False)
@@ -2531,6 +2543,92 @@ def test_fixed_anchor_reuses_enter_or_down_mode_through_dynamic_total():
                     assert sum(
                         event == ("key", "down") for event in events
                     ) == move_count
+
+
+def test_fast_geometry_navigation_never_probes_uia_through_dynamic_bank_row():
+    for full_row_count in (24, 26):
+        for total_rows in (230, 300):
+            snapshot = _visible_voucher_snapshot(
+                first_logical_row=1,
+                full_row_count=full_row_count,
+            )
+            state = _runtime_calibration_state(snapshot)
+            state.update(
+                {
+                    "calibration_row_no": None,
+                    "fixed_boundary_row_no": full_row_count,
+                }
+            )
+            events = []
+
+            def _forbidden_targeted_uia(*_args, **_kwargs):
+                raise AssertionError("fast geometry navigation must not probe UIA")
+
+            loaded = _load_runtime_navigation(
+                state,
+                _forbidden_targeted_uia,
+                events,
+                fast_mode=True,
+            )
+
+            current_y = snapshot["first_y"]
+            focused_rows = []
+            for row_no in range(1, total_rows + 1):
+                current_y = loaded["_focus_grid_row"](row_no, current_y)
+                focused_rows.append(row_no)
+                if row_no == total_rows:
+                    break
+                current_y = loaded["_advance_grid_row"](
+                    current_y,
+                    row_no + 1,
+                    management_enter_sent=True,
+                )
+
+            assert focused_rows == list(range(1, total_rows + 1))
+            assert current_y == snapshot["last_full_y"]
+            assert state["bottom_scroll_mode"] is True
+            assert state["scroll_anchor_y"] == snapshot["last_full_y"]
+            assert state["scroll_advance_mode"] == "enter"
+            assert sum(event == ("key", "down") for event in events) == (
+                full_row_count - 1
+            )
+
+
+def test_fast_geometry_boundary_uses_one_down_when_management_enter_was_not_sent():
+    for full_row_count in (24, 26):
+        snapshot = _visible_voucher_snapshot(
+            first_logical_row=1,
+            full_row_count=full_row_count,
+        )
+        state = _runtime_calibration_state(snapshot)
+        state.update(
+            {
+                "calibration_row_no": None,
+                "fixed_boundary_row_no": full_row_count,
+            }
+        )
+        events = []
+
+        loaded = _load_runtime_navigation(
+            state,
+            lambda *_args, **_kwargs: (_ for _ in ()).throw(
+                AssertionError("fast geometry boundary must not probe UIA")
+            ),
+            events,
+            fast_mode=True,
+        )
+
+        assert loaded["_advance_grid_row"](
+            snapshot["last_full_y"],
+            full_row_count + 1,
+            management_enter_sent=False,
+        ) == snapshot["last_full_y"]
+
+        assert [event[0] for event in events] == ["click", "key", "sleep"]
+        assert events[0][1:4] == (970, snapshot["last_full_y"], 0.05)
+        assert events[1] == ("key", "down")
+        assert state["bottom_scroll_mode"] is True
+        assert state["scroll_advance_mode"] == "down"
 
 
 def test_full_runtime_navigation_reaches_dynamic_bank_row_without_gaps():
@@ -2879,6 +2977,11 @@ def test_fast_snapshot_helper_and_skip_branch_never_run_full_uia_scan():
     full_call = initial_branch.index("_fully_visible_voucher_row_snapshot()", slow_else)
 
     assert fast_call < slow_else < full_call
+    fast_initialization = initial_branch[fast_call:slow_else]
+    assert "_targeted_uia_voucher_rows" not in fast_initialization
+    assert "_initial_voucher_rows_with_geometry_fallback" not in fast_initialization
+    assert 'initial_snapshot.get("rows")' in fast_initialization
+    assert '"fixed_boundary_row_no"' in helper
 
     point_start = helper.index("def _uia_voucher_row_number_at_y")
     point_end = helper.index("if skip_visible_row_scan:", point_start)
