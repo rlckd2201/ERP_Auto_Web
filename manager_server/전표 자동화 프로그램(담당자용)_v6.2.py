@@ -5373,18 +5373,21 @@ class ERPLoginBot:
                     _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
                     _release_modifiers(f"{label} F9 직전", wait=False)
                     time.sleep(mgmt_focus_wait)
-                    base_hwnd, base_title = _foreground_window_title()
-                    base_process_id = _window_process_id(base_hwnd)
-                    if _is_vendor_ds_title(base_title):
-                        self.logger.warning(
-                            f"  [MGMT-XY] {label}: F9 전부터 거래처ds가 열려 있어 입력을 중단합니다."
-                        )
-                        return False
+                    base_process_id = 0
+                    if not skip_visible_row_scan:
+                        base_hwnd, base_title = _foreground_window_title()
+                        base_process_id = _window_process_id(base_hwnd)
+                        if _is_vendor_ds_title(base_title):
+                            self.logger.warning(
+                                f"  [MGMT-XY] {label}: F9 전부터 거래처ds가 열려 있어 입력을 중단합니다."
+                            )
+                            return False
                     # 거래처ds는 같은 ERP 프로세스의 별도 최상위 창으로 본창 뒤에
                     # 열릴 수 있다. UIA 자손 탐색 없이 HWND만 앞으로 가져온 뒤
                     # 사용자가 확인한 F9 키보드 시퀀스를 그대로 수행한다.
                     # 비-fast 경로의 기존 팝업 검증은 그대로 유지한다.
                     f9_open_wait = max(
+                        1.0,
                         vendor_popup_open_wait,
                         float(os.getenv("ERP_MGMT_F9_OPEN_WAIT", "3.00") or "3.00"),
                     )
@@ -5405,14 +5408,19 @@ class ERPLoginBot:
                         float(os.getenv("ERP_MGMT_F9_ENTER_INTERVAL", "0.30") or "0.30"),
                     )
                     pyautogui.press('f9')
-                    opened_hwnd, opened_title = _wait_vendor_ds_foreground(
-                        base_process_id,
-                        f9_open_wait,
-                    )
-                    if not opened_hwnd:
-                        self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
-                        return False
-                    time.sleep(vendor_popup_focus_wait)
+                    if skip_visible_row_scan:
+                        # 운영 fast 경로는 F9 뒤 창 제목/UIA 판정을 하지 않는다.
+                        # ERP에서 확인된 고정 대기 뒤 사용자가 지정한 키 순서를 그대로 보낸다.
+                        time.sleep(f9_open_wait)
+                    else:
+                        opened_hwnd, _opened_title = _wait_vendor_ds_foreground(
+                            base_process_id,
+                            f9_open_wait,
+                        )
+                        if not opened_hwnd:
+                            self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
+                            return False
+                        time.sleep(vendor_popup_focus_wait)
                     if not _replace_vendor_ds_search_text(
                         vendor_code,
                         label,

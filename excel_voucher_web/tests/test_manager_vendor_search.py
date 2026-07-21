@@ -131,7 +131,6 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     expected_order = [
         "_click_form_xy",
         "pyautogui.press('f9')",
-        "_wait_vendor_ds_foreground",
         "_replace_vendor_ds_search_text",
         "pyautogui.press('tab', presses=4",
         "pyautogui.press('down', presses=5",
@@ -146,6 +145,11 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     assert "_double_click" not in helper
     assert "_input_vendor_by_popup_keyboard" not in helper
     assert helper.count("pyautogui.press('f9')") == 1
+    assert "if skip_visible_row_scan:" in helper
+    assert "if not skip_visible_row_scan:" in helper
+    assert helper.index("if skip_visible_row_scan:") < helper.index(
+        "_wait_vendor_ds_foreground"
+    )
     assert "_wait_first_vendor_value_committed(" not in helper
     assert "_management_value_visual_ink(" not in helper
     assert 'finance_vendor_entry_state = {"f9_seeded": False}' in source
@@ -506,8 +510,8 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
             "_foreground_window_title": lambda: (101, "대승"),
             "_window_process_id": lambda hwnd: 10772 if hwnd == 101 else 0,
             "_is_vendor_ds_title": lambda title: "거래처" in title and "ds" in title.lower(),
-            "_wait_vendor_ds_foreground": lambda process_id, timeout: (
-                events.append(("vendor-ds", process_id)) or (202, "거래처_ds")
+            "_wait_vendor_ds_foreground": lambda *_args: (_ for _ in ()).throw(
+                AssertionError("fast F9 sequence must not inspect the vendor window")
             ),
             "_replace_vendor_ds_search_text": lambda text, label, wait: (
                 events.append(("search", text)) or True
@@ -536,7 +540,6 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
     assert events == [
         ("click", 1118, 797),
         ("key", "f9", 1),
-        ("vendor-ds", 10772),
         ("search", "A001"),
         ("key", "tab", 4),
         ("key", "down", 5),
