@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from email.utils import getaddresses
 from types import SimpleNamespace
 
 from app import notifications
@@ -18,7 +19,8 @@ def _fake_settings(tmp_path, outbox):
         smtp_port=25,
         smtp_starttls=False,
         smtp_password="",
-        admin_email="admin@example.com",
+        admin_name="관리자",
+        admin_email="ds1501@dae-seung.co.kr; another@example.com",
         support_email="ds1501@dae-seung.co.kr",
         smtp_from_name="재정전표자동화 시스템",
     )
@@ -46,7 +48,7 @@ def test_send_mail_outbox_records_pdf_attachment(tmp_path, monkeypatch):
     assert payload["attachments"] == [{"filename": "voucher.pdf", "content_type": "application/pdf"}]
 
 
-def test_failure_notification_sends_only_to_requester_and_attaches_debug_files(tmp_path, monkeypatch):
+def test_failure_notification_sends_only_to_admin_and_attaches_debug_files(tmp_path, monkeypatch):
     outbox = tmp_path / "outbox"
     source = tmp_path / "upload.xlsx"
     source.write_bytes(b"xlsx")
@@ -104,7 +106,10 @@ def test_failure_notification_sends_only_to_requester_and_attaches_debug_files(t
     payload = json.loads(outbox_files[0].read_text(encoding="utf-8"))
     assert payload["cc"] == ""
     assert "재정전표자동화 시스템" in payload["from"]
-    assert "requester@example.com" in payload["to"]
+    assert [address for _name, address in getaddresses([payload["to"]])] == [
+        "rlckd9646@dae-seung.co.kr"
+    ]
+    assert "requester@example.com" not in payload["to"]
     assert "ds1501@dae-seung.co.kr" not in payload["to"]
     assert "ds1501@dae-seung.co.kr" not in payload["cc"]
     attachment_names = {item["filename"] for item in payload["attachments"]}
@@ -148,6 +153,8 @@ def test_failure_notification_falls_back_to_admin_without_support_cc(tmp_path, m
 
     assert result["queued"] is True
     payload = json.loads(next(outbox.glob("*.json")).read_text(encoding="utf-8"))
-    assert payload["to"] == "admin@example.com"
+    assert [address for _name, address in getaddresses([payload["to"]])] == [
+        "rlckd9646@dae-seung.co.kr"
+    ]
     assert payload["cc"] == ""
     assert "ds1501@dae-seung.co.kr" not in payload["to"]

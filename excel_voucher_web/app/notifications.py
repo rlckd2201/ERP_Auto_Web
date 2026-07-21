@@ -16,6 +16,7 @@ from .settings import settings
 
 
 STEP_LABELS = ("작업시작", "업로드완료", "ERP 입력시작", "저장완료", "출력완료")
+FAILURE_RECIPIENT_EMAIL = "rlckd9646@dae-seung.co.kr"
 
 
 def _recipients(value: str | Iterable[str] | None) -> list[str]:
@@ -186,6 +187,10 @@ def _support_email() -> str:
         getattr(settings, "support_email", "")
         or "rlckd9646@dae-seung.co.kr"
     ).strip()
+
+
+def _failure_recipient() -> str:
+    return FAILURE_RECIPIENT_EMAIL
 
 
 def _money(value: Any) -> str:
@@ -448,10 +453,9 @@ def notify_job_completed(job: JobRecord, events: Iterable[JobEvent] | None = Non
 
 def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) -> str:
     payload = job.payload or {}
-    requester = _job_recipient_name(job) or "담당자"
     return "\n".join(
         [
-            f"{requester}님",
+            "관리자님",
             "",
             "엑셀 수시결제 전표 처리 중 오류가 발생했습니다.",
             "원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.",
@@ -463,16 +467,15 @@ def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) 
             f"- 회계일: {job.accounting_date}",
             f"- 오류: {_job_error(job)}",
             "",
-            "오류 알림은 요청자에게만 전송했습니다.",
+            "오류 알림은 재정 자동화 관리자에게만 전송했습니다.",
         ]
     )
 
 
 def failure_mail_html(job: JobRecord, events: Iterable[JobEvent] | None = None) -> str:
     payload = job.payload or {}
-    requester = _job_recipient_name(job) or "담당자"
     body = f"""
-      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">{html.escape(requester)}님, 처리 중 오류가 발생했습니다. 원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.</p>
+      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">관리자님, 처리 중 오류가 발생했습니다. 원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.</p>
       {_steps_html(job, events)}
       <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:12px 14px;margin:12px 0 18px;">
         <div style="font-weight:700;color:#991b1b;margin-bottom:4px;">오류 내용</div>
@@ -490,8 +493,10 @@ def notify_job_failed(
     events: Iterable[JobEvent] | None = None,
     source_path: Path | None = None,
 ) -> dict[str, Any]:
-    recipient = _job_recipient(job)
-    recipient_name = _job_recipient_name(job)
+    # Failure diagnostics are temporarily restricted to the finance automation
+    # administrator.  Do not mail the requester or the support distribution list.
+    recipient = _failure_recipient()
+    recipient_name = str(getattr(settings, "admin_name", "") or "").strip()
     subject = f"[엑셀 전표 처리 오류] {job.title}"
     result = job.result or {}
     diagnostic = _diagnostic_attachment(job, events, source_path)
