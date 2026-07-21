@@ -167,6 +167,17 @@ def test_fast_main_rect_uses_cached_geometry_before_uia_rectangle_call():
     )
 
 
+def test_recovery_window_enumeration_filters_visibility_after_supported_call():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _fast_recovery_main_window")
+    helper_end = source.index("main_win = None", helper_start)
+    helper = source[helper_start:helper_end]
+
+    assert "windows = self.app.windows()" in helper
+    assert "win.is_visible()" in helper
+    assert ".windows(visible=True)" not in source
+
+
 def test_vendor_popup_detects_internal_erp_page_and_filters_visible_controls():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
@@ -3584,7 +3595,8 @@ def test_recovery_preflight_uses_top_level_windows_and_skips_generic_popup_loop(
     fast_end = run_helper.index("main_win = None", fast_start)
     fast_helper = run_helper[fast_start:fast_end]
 
-    assert "self.app.windows(visible=True)" in fast_helper
+    assert "self.app.windows()" in fast_helper
+    assert "win.is_visible()" in fast_helper
     assert 'auto_id.lower() == "mainwindow"' in fast_helper
     assert "width < 640 or height < 400" in fast_helper
     assert "max(" in fast_helper

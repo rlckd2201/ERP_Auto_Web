@@ -1259,7 +1259,9 @@ class ERPLoginBot:
                 ]
                 candidates = []
                 try:
-                    windows = self.app.windows(visible=True)
+                    # Application.windows()는 ``visible`` 키워드를 지원하지 않는다.
+                    # 아래 루프의 win.is_visible() 필터로 가시성을 판정한다.
+                    windows = self.app.windows()
                 except Exception as exc:
                     self.logger.warning(
                         f"  [RECOVERY-PREFLIGHT] ERP 최상위 창 열거 실패: {exc}"
@@ -1362,7 +1364,7 @@ class ERPLoginBot:
                             except: pass
                             
                         # 추가로 전체 윈도우 중 '아니요' 버튼이 있는 창을 찾아서 직접 클릭 시도 (더블 체크)
-                        for w in self.app.windows(visible=True):
+                        for w in self.app.windows():
                             try:
                                 if w == main_win: continue
                                 for btn in w.descendants(control_type="Button"):
