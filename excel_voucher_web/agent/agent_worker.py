@@ -156,12 +156,26 @@ def _top_level_window_diagnostics() -> dict[str, Any]:
         "backends": {},
     }
     try:
+        import ctypes
         import psutil
         from pywinauto import Desktop
     except Exception as exc:
         snapshot["error"] = f"diagnostic imports failed: {exc}"
         return snapshot
 
+    def _session_id(process_id: int) -> int | None:
+        try:
+            session_id = ctypes.c_uint(0)
+            if ctypes.windll.kernel32.ProcessIdToSessionId(
+                int(process_id), ctypes.byref(session_id)
+            ):
+                return int(session_id.value)
+        except Exception:
+            pass
+        return None
+
+    agent_session_id = _session_id(os.getpid())
+    snapshot["agent_session_id"] = agent_session_id
     process_names: dict[int, str] = {}
     for backend in ("uia", "win32"):
         records: list[dict[str, Any]] = []
@@ -233,6 +247,45 @@ def _top_level_window_diagnostics() -> dict[str, Any]:
             "count": len(records),
             "windows": records[:80],
         }
+
+    process_records: list[dict[str, Any]] = []
+    likely_tokens = ("angkor", "ylw", "mainwin", "k-system", "ksystem")
+    for proc in psutil.process_iter(["pid", "name", "username"]):
+        try:
+            process_id = int(proc.info.get("pid") or 0)
+            process_name = str(proc.info.get("name") or "")
+            username = str(proc.info.get("username") or "")
+            session_id = _session_id(process_id)
+            likely_erp = any(token in process_name.lower() for token in likely_tokens)
+            other_interactive_session = (
+                session_id is not None
+                and agent_session_id is not None
+                and session_id != agent_session_id
+                and username
+                and not username.upper().endswith(("SYSTEM", "LOCAL SERVICE", "NETWORK SERVICE"))
+            )
+            if not likely_erp and not other_interactive_session:
+                continue
+            process_records.append(
+                {
+                    "process_id": process_id,
+                    "process_name": process_name,
+                    "username": username,
+                    "session_id": session_id,
+                    "likely_erp": likely_erp,
+                }
+            )
+        except Exception:
+            continue
+    process_records.sort(
+        key=lambda item: (
+            not bool(item.get("likely_erp")),
+            int(item.get("session_id") or -1),
+            str(item.get("process_name") or "").lower(),
+            int(item.get("process_id") or 0),
+        )
+    )
+    snapshot["processes"] = process_records[:250]
     return snapshot
 
 

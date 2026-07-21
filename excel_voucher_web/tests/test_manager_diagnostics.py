@@ -38,6 +38,8 @@ def test_agent_tail_log_can_include_read_only_top_level_window_diagnostics():
     assert 'Desktop(backend=backend).windows()' in helper
     assert '.descendants(' not in helper
     assert 'for backend in ("uia", "win32")' in helper
+    assert 'ProcessIdToSessionId' in helper
+    assert 'snapshot["processes"] = process_records[:250]' in helper
     assert 'payload.get("inspect_erp_windows") is True' in command
     assert 'result["top_level_windows"] = _top_level_window_diagnostics()' in command
 
