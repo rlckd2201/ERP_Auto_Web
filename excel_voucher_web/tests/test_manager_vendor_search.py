@@ -3280,6 +3280,16 @@ def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():
     assert no_process_guard < fresh_launch < resume_branch < resume_verify < resume_setup < menu_start
     assert "fresh_start = False" in run_helper
 
+    reconnect_start = run_helper.index("candidates = [")
+    reconnect_end = run_helper.index("# 메모리가 날아갔으나", reconnect_start)
+    reconnect_helper = run_helper[reconnect_start:reconnect_end]
+    assert 'self.install_info.get("main_window_title", "")' in reconnect_helper
+    for expected_title in ("대승", "일강", "제이엠", "더원"):
+        assert f'"{expected_title}"' in reconnect_helper
+    install_info_start = source.index("def get_install_info")
+    install_info_end = source.index("def get_corp_info", install_info_start)
+    assert '"main_window_title"' in source[install_info_start:install_info_end]
+
     save_start = source.index("def _save_and_open_print_dialog", setup_start)
     coord_start = source.index("def _setup_by_coordinates_only", save_start)
     save_helper = source[save_start:coord_start]

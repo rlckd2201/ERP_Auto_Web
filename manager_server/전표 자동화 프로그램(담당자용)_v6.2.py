@@ -471,7 +471,8 @@ class ERPConfig:
             "process_name": self.config.get(section, "process_name", fallback="Angkor.Ylw.Main.MainWin45.exe").strip(), 
             "startup_wait_sec": self.config.get(section, "startup_wait_sec", fallback="3").strip(), 
             "login_window_title": self.config.get(section, "login_window_title", fallback="FrmMainSplash").strip(),
-            "splash_name": self.config.get(section, "splash_name", fallback="FrmMainSplash").strip()
+            "splash_name": self.config.get(section, "splash_name", fallback="FrmMainSplash").strip(),
+            "main_window_title": self.config.get(section, "main_window_title", fallback="").strip(),
         }
     def get_corp_info(self, corp_code: str):
         section = f"CORP_{corp_code.upper()}"
@@ -905,8 +906,14 @@ class ERPLoginBot:
                 candidates = [
                     self.install_info.get("splash_name", "FrmMainSplash"),
                     self.install_info.get("login_window_title", ""),
-                    "FrmMainSplash", "K-System"
+                    self.install_info.get("main_window_title", ""),
+                    "FrmMainSplash", "K-System", "대승", "일강", "제이엠", "더원"
                 ]
+                if resume_print_only:
+                    self.logger.info(
+                        "  [PRINT-RESUME] 기존 ERP 재연결 탐색: "
+                        f"pids={sorted(existing_pids)}, titles={[title for title in candidates if title]}"
+                    )
 
                 # 메모리가 날아갔으나 이미 프로세스가 켜져있는 경우 (재시작 복구 방어막)
                 if existing_pids:
