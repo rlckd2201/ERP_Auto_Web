@@ -1172,28 +1172,52 @@ class _SyntheticGdiImage:
         width,
         height,
         *,
-        red_sample_y=None,
-        red_sample_x=52,
+        row_center_y=None,
+        ink_sample_x=100,
+        ink_color=(200, 20, 20),
+        include_ink=True,
+        include_left_border=True,
+        include_divider=True,
+        include_right_border=True,
         separator_rows=(),
     ):
         self.size = (width, height)
-        self.red_sample_y = red_sample_y
-        self.red_sample_x = red_sample_x
+        self.row_center_y = row_center_y
+        self.ink_sample_x = ink_sample_x
+        self.ink_color = ink_color
+        self.include_ink = include_ink
+        self.include_left_border = include_left_border
+        self.include_divider = include_divider
+        self.include_right_border = include_right_border
         self.separator_rows = set(separator_rows)
 
     def getpixel(self, point):
         x, y = point
         if y in self.separator_rows:
             return (180, 180, 180)
+        if self.row_center_y is not None:
+            upper = self.row_center_y - 8
+            lower = self.row_center_y + 12
+            if y in {upper, lower}:
+                return (180, 180, 180)
+            if self.include_left_border and x == 80 and upper <= y <= lower:
+                return (180, 180, 180)
+            if self.include_divider and x == 200 and upper <= y <= lower:
+                return (180, 180, 180)
+            # scan_left=main.left+650 and value_x=1118, so x=494 is
+            # exactly the management table's painted border at value_x+26.
+            if self.include_right_border and x == 494 and upper <= y <= lower:
+                return (180, 180, 180)
         if (
-            self.red_sample_y is not None
-            and x == self.red_sample_x
-            and y == self.red_sample_y
+            self.row_center_y is not None
+            and self.include_ink
+            and self.ink_sample_x - 6 <= x <= self.ink_sample_x + 6
+            and self.row_center_y - 3 <= y <= self.row_center_y + 7
         ):
-            return (200, 20, 20)
-        if self.red_sample_y is not None and y == 0 and x in {4, 8, 12, 16}:
+            return self.ink_color
+        if self.row_center_y is not None and y == 0 and x in {4, 8, 12, 16}:
             return (20, 20, 20)
-        if self.red_sample_y is not None and y == 0 and x in {
+        if self.row_center_y is not None and y == 0 and x in {
             20,
             24,
             28,
@@ -1207,7 +1231,18 @@ class _SyntheticGdiImage:
         return (255, 255, 255)
 
 
-def _synthetic_gdi_visual_snapshot(visible_rows, *, red_sample_x=52, separators=True):
+def _synthetic_gdi_visual_snapshot(
+    visible_rows,
+    *,
+    red_sample_x=100,
+    ink_color=(200, 20, 20),
+    include_ink=True,
+    include_left_border=True,
+    include_divider=True,
+    include_right_border=True,
+    structure_band_top=720,
+    separators=True,
+):
     main_rect = _FakeRect(10, 50, 1610, 1050)
     red_sample_y, first_value_y, separator_lines = {
         24: (28, 750, (753, 761)),
@@ -1225,12 +1260,17 @@ def _synthetic_gdi_visual_snapshot(visible_rows, *, red_sample_x=52, separators=
                 else []
             )
             return _SyntheticGdiImage(width, height, separator_rows=rows)
-        active_y = red_sample_y if top == main_rect.top + 720 else None
+        active_y = red_sample_y if top == main_rect.top + structure_band_top else None
         return _SyntheticGdiImage(
             width,
             height,
-            red_sample_y=active_y,
-            red_sample_x=red_sample_x,
+            row_center_y=active_y,
+            ink_sample_x=red_sample_x,
+            ink_color=ink_color,
+            include_ink=include_ink,
+            include_left_border=include_left_border,
+            include_divider=include_divider,
+            include_right_border=include_right_border,
         )
 
     loaded = _load_nested_functions(
@@ -1316,7 +1356,7 @@ def test_gdi_visual_boundary_keeps_44px_fallback_without_separator_lines():
 def test_gdi_visual_snapshot_rejects_red_pixels_outside_label_roi():
     inside_edge, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
         24,
-        red_sample_x=4,
+        red_sample_x=100,
     )
     # scan_left + 300 resolves to x=960, outside the default label ROI x=600..900.
     snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
@@ -1328,6 +1368,90 @@ def test_gdi_visual_snapshot_rejects_red_pixels_outside_label_roi():
     assert snapshot["visual_ready"] is False
     assert snapshot["visual_signature"] is None
     assert snapshot["visual_counts"]["red"] == 0
+
+
+def test_gdi_visual_snapshot_accepts_black_management_label_without_red_pixels():
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        ink_color=(20, 20, 20),
+    )
+
+    assert snapshot["visual_ready"] is True
+    assert snapshot["first_value_y"] == 750
+    assert snapshot["visual_counts"]["red"] == 0
+    accepted_band = next(
+        band
+        for band in snapshot["visual_counts"]["bands"]
+        if band["top"] == 720
+    )
+    assert accepted_band["structure"]["ink_pixels"] >= 2
+    assert accepted_band["structure"]["right_border_x"] == 494
+
+
+def test_gdi_visual_snapshot_rejects_row_geometry_without_management_right_border():
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        include_right_border=False,
+    )
+
+    assert snapshot["visual_ready"] is False
+    assert snapshot["visual_signature"] is None
+    active_band = next(
+        band
+        for band in snapshot["visual_counts"]["bands"]
+        if band["top"] == 720
+    )
+    assert active_band["structure"] is None
+    assert active_band["candidate_checks"]
+    assert active_band["candidate_checks"][0]["right_border_score"] == 2
+
+
+def test_gdi_visual_snapshot_rejects_text_left_of_management_label_cell():
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        red_sample_x=52,
+    )
+
+    assert snapshot["visual_ready"] is False
+    active_band = next(
+        band
+        for band in snapshot["visual_counts"]["bands"]
+        if band["top"] == 720
+    )
+    assert active_band["candidate_checks"][0]["ink_pixels"] == 0
+
+
+def test_gdi_visual_snapshot_rejects_upper_voucher_grid_structure_alone():
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        structure_band_top=360,
+        include_right_border=False,
+    )
+
+    assert snapshot["visual_ready"] is False
+    assert snapshot["visual_signature"] is None
+    upper_band = next(
+        band
+        for band in snapshot["visual_counts"]["bands"]
+        if band["top"] == 360
+    )
+    assert upper_band["horizontal_lines"] == [20, 40]
+    assert upper_band["structure"] is None
+
+
+def test_gdi_visual_snapshot_requires_ink_inside_first_management_label_cell():
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        include_ink=False,
+    )
+
+    assert snapshot["visual_ready"] is False
+    active_band = next(
+        band
+        for band in snapshot["visual_counts"]["bands"]
+        if band["top"] == 720
+    )
+    assert active_band["candidate_checks"][0]["ink_pixels"] == 0
 
 
 def test_management_ready_wait_accepts_two_matching_gdi_visual_snapshots_without_uia():

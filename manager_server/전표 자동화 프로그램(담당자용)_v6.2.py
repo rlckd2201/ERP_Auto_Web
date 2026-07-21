@@ -2149,6 +2149,14 @@ class ERPLoginBot:
                 job_id = str(getattr(self.manager.main_app, "erp_job_id", "job") or "job")
                 invoice_id = str(getattr(self.manager.main_app, "erp_invoice_id", "invoice") or "invoice")
                 stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                png_path = debug_dir / f"erp_form_fail_{job_id}_{invoice_id}_{stamp}.png"
+                screenshot_saved = False
+                try:
+                    pyautogui.screenshot(str(png_path))
+                    screenshot_saved = True
+                    self.logger.warning(f"  [DIAGNOSTIC] failure screenshot saved: {png_path}")
+                except Exception as e:
+                    self.logger.warning(f"  [DIAGNOSTIC] failure screenshot save failed: {e}")
                 dump_path = os.path.join(BASE_EXE_DIR, "erp_ui_dump.txt")
                 lines = [
                     f"reason={reason}",
@@ -2172,7 +2180,8 @@ class ERPLoginBot:
                     f.write("\n".join(lines))
                 self.logger.warning(f"  [진단] UI 덤프 저장됨 → {dump_path}")
                 try:
-                    png_path = debug_dir / f"erp_form_fail_{job_id}_{invoice_id}_{stamp}.png"
+                    if screenshot_saved:
+                        return
                     pyautogui.screenshot(str(png_path))
                     self.logger.warning(f"  [진단] 실패 스크린샷 저장됨 → {png_path}")
                 except Exception as e:
@@ -2815,6 +2824,7 @@ class ERPLoginBot:
             visual_signature = None
             visual_band_top = None
             visual_counts = {"red": 0, "dark": 0, "gray": 0, "red_rows": 0}
+            band_diagnostics = []
             value_x = int(os.getenv("ERP_MGMT_VALUE_X", "1118") or "1118")
             first_value_y = None
             voucher_clip_bottom_abs = None
@@ -2849,13 +2859,25 @@ class ERPLoginBot:
                     dark_pixels = 0
                     gray_lines = 0
                     red_sample_ys = []
+                    label_ink_rows = []
                     for y in range(0, height, step):
                         red_on_row = 0
+                        label_ink_on_row = 0
                         for x in range(0, width, step):
                             r, g, b = image.getpixel((x, y))[:3]
                             sample_abs_x = scan_left + x
+                            in_label_roi = label_left <= sample_abs_x <= label_right
+                            is_label_ink = in_label_roi and (
+                                max(r, g, b) < 120
+                                or (
+                                    max(r, g, b) - min(r, g, b) >= 35
+                                    and min(r, g, b) < 135
+                                )
+                            )
+                            if is_label_ink:
+                                label_ink_on_row += 1
                             if (
-                                label_left <= sample_abs_x <= label_right
+                                in_label_roi
                                 and r > 150
                                 and g < 95
                                 and b < 95
@@ -2868,6 +2890,8 @@ class ERPLoginBot:
                                 gray_lines += 1
                         if red_on_row:
                             red_sample_ys.append(y)
+                        if label_ink_on_row:
+                            label_ink_rows.append(y)
                     red_row_clusters = []
                     for sample_y in red_sample_ys:
                         if (
@@ -2877,6 +2901,222 @@ class ERPLoginBot:
                             red_row_clusters.append([sample_y])
                         else:
                             red_row_clusters[-1].append(sample_y)
+
+                    # The ERP paints management labels in either red or black depending
+                    # on the active account/required state.  Readiness therefore comes
+                    # from the table itself: two painted row boundaries, a continuous
+                    # label/value divider and actual ink inside the first value row.
+                    sample_count = max(1, len(range(0, width, step)))
+                    # Some ERP themes paint the same management separator with a
+                    # shorter neutral segment (notably the vendor-only first row).
+                    # The three required vertical borders below carry the strong
+                    # structural discrimination, so 25% is sufficient here.
+                    minimum_line_pixels = max(20, int(round(sample_count * 0.25)))
+                    painted_rows = []
+                    for y in range(height):
+                        line_pixels = 0
+                        for x in range(0, width, step):
+                            r, g, b = image.getpixel((x, y))[:3]
+                            # Required/selected bank rows can tint the horizontal
+                            # separator beige or blue.  Exclude white and the very
+                            # light-blue cell interior, but do not require neutrality.
+                            if max(r, g, b) <= 245 and min(r, g, b) <= 230:
+                                line_pixels += 1
+                        if line_pixels >= minimum_line_pixels:
+                            painted_rows.append((int(y), int(line_pixels)))
+                    painted_clusters = []
+                    for row_y, line_pixels in painted_rows:
+                        if not painted_clusters or row_y > painted_clusters[-1][-1][0] + 2:
+                            painted_clusters.append([(row_y, line_pixels)])
+                        else:
+                            painted_clusters[-1].append((row_y, line_pixels))
+                    horizontal_lines = [
+                        max(cluster, key=lambda item: item[1])
+                        for cluster in painted_clusters
+                    ]
+
+                    divider_search_left = max(
+                        0,
+                        int(main_rect.left + value_x - 360 - scan_left),
+                    )
+                    divider_search_right = min(
+                        width - 1,
+                        int(main_rect.left + value_x - 160 - scan_left),
+                    )
+                    # The management value cell ends only a few pixels to the right
+                    # of the configured click anchor.  Requiring that painted right
+                    # border prevents an ordinary voucher-grid row (which has the
+                    # same horizontal pitch and plenty of text) from being accepted.
+                    right_border_search_left = max(
+                        0,
+                        int(main_rect.left + value_x + 12 - scan_left),
+                    )
+                    right_border_search_right = min(
+                        width - 1,
+                        int(main_rect.left + value_x + 60 - scan_left),
+                    )
+                    structural_candidate = None
+                    candidate_checks = []
+                    row_gap_min = max(10, int(round(row_height * 0.60)))
+                    row_gap_max = max(row_gap_min + 2, int(round(row_height * 1.20)))
+                    for upper, lower in zip(horizontal_lines, horizontal_lines[1:]):
+                        upper_y = int(upper[0])
+                        lower_y = int(lower[0])
+                        row_gap = lower_y - upper_y
+                        if not (row_gap_min <= row_gap <= row_gap_max):
+                            continue
+                        ink_start = upper_y + 2
+                        ink_end = lower_y - 1
+                        if ink_end <= ink_start:
+                            continue
+                        divider_x = None
+                        divider_score = 0
+                        divider_minimum = max(6, int(round((row_gap + 1) * 0.72)))
+                        for x in range(divider_search_left, divider_search_right + 1):
+                            vertical_pixels = 0
+                            for y in range(upper_y, lower_y + 1):
+                                r, g, b = image.getpixel((x, y))[:3]
+                                if max(r, g, b) <= 245 and min(r, g, b) <= 230:
+                                    vertical_pixels += 1
+                            if vertical_pixels > divider_score:
+                                divider_score = int(vertical_pixels)
+                                divider_x = int(x)
+                        if divider_x is None or divider_score < divider_minimum:
+                            candidate_checks.append(
+                                {
+                                    "upper": upper_y,
+                                    "lower": lower_y,
+                                    "left_border_score": 0,
+                                    "divider_score": int(divider_score),
+                                    "right_border_score": 0,
+                                    "ink_pixels": 0,
+                                    "accepted": False,
+                                }
+                            )
+                            continue
+
+                        left_border_x = None
+                        left_border_score = 0
+                        left_border_minimum = max(
+                            6,
+                            int(round((row_gap + 1) * 0.72)),
+                        )
+                        left_border_search_left = max(0, int(divider_x - 200))
+                        left_border_search_right = max(
+                            left_border_search_left,
+                            int(divider_x - 70),
+                        )
+                        for x in range(
+                            left_border_search_left,
+                            left_border_search_right + 1,
+                        ):
+                            vertical_pixels = 0
+                            for y in range(upper_y, lower_y + 1):
+                                r, g, b = image.getpixel((x, y))[:3]
+                                if max(r, g, b) <= 245 and min(r, g, b) <= 230:
+                                    vertical_pixels += 1
+                            if vertical_pixels > left_border_score:
+                                left_border_score = int(vertical_pixels)
+                                left_border_x = int(x)
+                        if (
+                            left_border_x is None
+                            or left_border_score < left_border_minimum
+                        ):
+                            candidate_checks.append(
+                                {
+                                    "upper": upper_y,
+                                    "lower": lower_y,
+                                    "left_border_score": int(left_border_score),
+                                    "divider_score": int(divider_score),
+                                    "right_border_score": 0,
+                                    "ink_pixels": 0,
+                                    "accepted": False,
+                                }
+                            )
+                            continue
+
+                        right_border_x = None
+                        right_border_score = 0
+                        right_border_minimum = max(
+                            6,
+                            int(round((row_gap + 1) * 0.72)),
+                        )
+                        for x in range(
+                            right_border_search_left,
+                            right_border_search_right + 1,
+                        ):
+                            vertical_pixels = 0
+                            for y in range(upper_y, lower_y + 1):
+                                r, g, b = image.getpixel((x, y))[:3]
+                                if max(r, g, b) <= 245 and min(r, g, b) <= 230:
+                                    vertical_pixels += 1
+                            if vertical_pixels > right_border_score:
+                                right_border_score = int(vertical_pixels)
+                                right_border_x = int(x)
+                        if (
+                            right_border_x is None
+                            or right_border_score < right_border_minimum
+                            or right_border_x - divider_x < max(80, row_height * 4)
+                        ):
+                            candidate_checks.append(
+                                {
+                                    "upper": upper_y,
+                                    "lower": lower_y,
+                                    "left_border_score": int(left_border_score),
+                                    "divider_score": int(divider_score),
+                                    "right_border_score": int(right_border_score),
+                                    "ink_pixels": 0,
+                                    "accepted": False,
+                                }
+                            )
+                            continue
+
+                        # Count ink only inside this candidate's first label cell.
+                        # Border pixels and text in the value cell must not satisfy
+                        # the readiness gate.
+                        ink_left = max(0, int(left_border_x + 3))
+                        ink_right = min(width - 1, int(divider_x - 3))
+                        ink_rows = set()
+                        ink_pixels = 0
+                        if ink_right > ink_left:
+                            for y in range(ink_start, ink_end + 1, step):
+                                for x in range(ink_left, ink_right + 1, step):
+                                    r, g, b = image.getpixel((x, y))[:3]
+                                    is_ink = max(r, g, b) < 120 or (
+                                        max(r, g, b) - min(r, g, b) >= 35
+                                        and min(r, g, b) < 135
+                                    )
+                                    if is_ink:
+                                        ink_pixels += 1
+                                        ink_rows.add(int(y))
+                        accepted = ink_pixels >= 2 and len(ink_rows) >= 1
+                        candidate_checks.append(
+                            {
+                                "upper": upper_y,
+                                "lower": lower_y,
+                                "left_border_score": int(left_border_score),
+                                "divider_score": int(divider_score),
+                                "right_border_score": int(right_border_score),
+                                "ink_pixels": int(ink_pixels),
+                                "accepted": bool(accepted),
+                            }
+                        )
+                        if not accepted:
+                            continue
+                        structural_candidate = {
+                            "upper": upper_y,
+                            "lower": lower_y,
+                            "left_border_x": left_border_x,
+                            "left_border_score": left_border_score,
+                            "divider_x": divider_x,
+                            "divider_score": divider_score,
+                            "right_border_x": right_border_x,
+                            "right_border_score": right_border_score,
+                            "ink_rows": sorted(ink_rows),
+                            "ink_pixels": int(ink_pixels),
+                        }
+                        break
+
                     score = red_pixels * 3 + dark_pixels + gray_lines
                     if score > visual_score:
                         visual_score = score
@@ -2886,10 +3126,27 @@ class ERPLoginBot:
                             "gray": gray_lines,
                             "red_rows": len(red_row_clusters),
                         }
-                    if red_pixels >= 1 and dark_pixels >= 4 and gray_lines >= 8:
-                        first_cluster = red_row_clusters[0]
-                        first_sample_center = int(round(sum(first_cluster) / len(first_cluster)))
-                        first_value_y = top_rel + first_sample_center + (step // 2)
+                    band_diagnostics.append(
+                        {
+                            "top": int(top_rel),
+                            "red": int(red_pixels),
+                            "dark": int(dark_pixels),
+                            "gray": int(gray_lines),
+                            "ink_rows": len(label_ink_rows),
+                            "horizontal_lines": [int(item[0]) for item in horizontal_lines],
+                            "candidate_checks": candidate_checks,
+                            "structure": structural_candidate,
+                        }
+                    )
+                    if structural_candidate is not None:
+                        first_sample_center = int(round(
+                            (
+                                int(structural_candidate["upper"])
+                                + int(structural_candidate["lower"])
+                            )
+                            / 2.0
+                        ))
+                        first_value_y = top_rel + first_sample_center
                         first_value_abs = main_rect.top + first_value_y
                         fallback_boundary_abs = first_value_abs - value_to_grid_bottom
                         (
@@ -2914,7 +3171,7 @@ class ERPLoginBot:
                             int(top_rel),
                             int(first_value_y),
                             int(voucher_clip_bottom_abs - main_rect.top),
-                            int(len(red_row_clusters)),
+                            1,
                         )
                         visual_counts = {
                             "red": red_pixels,
@@ -2931,7 +3188,7 @@ class ERPLoginBot:
                 "visual_score": visual_score,
                 "visual_signature": visual_signature,
                 "visual_band_top": visual_band_top,
-                "visual_counts": visual_counts,
+                "visual_counts": {**visual_counts, "bands": band_diagnostics},
                 "value_x": value_x,
                 "first_value_y": first_value_y,
                 "voucher_clip_bottom_abs": voucher_clip_bottom_abs,
