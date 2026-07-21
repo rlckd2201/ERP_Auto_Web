@@ -9,6 +9,7 @@ from types import SimpleNamespace
 
 ROOT = Path(__file__).resolve().parents[2]
 MANAGER_SOURCE = next((ROOT / "manager_server").glob("*v6.2.py"))
+AGENT_WORKER_SOURCE = ROOT / "excel_voucher_web" / "agent" / "agent_worker.py"
 
 
 def _load_nested_function(name: str, namespace: dict):
@@ -23,6 +24,22 @@ def _load_nested_function(name: str, namespace: dict):
     loaded = dict(namespace)
     exec(compile(module, str(MANAGER_SOURCE), "exec"), loaded)
     return loaded[name]
+
+
+def test_agent_tail_log_can_include_read_only_top_level_window_diagnostics():
+    source = AGENT_WORKER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _top_level_window_diagnostics")
+    helper_end = source.index("def _popen_hidden", helper_start)
+    helper = source[helper_start:helper_end]
+    command_start = source.index("def _execute_admin_command")
+    command_end = source.index("def main", command_start)
+    command = source[command_start:command_end]
+
+    assert 'Desktop(backend=backend).windows()' in helper
+    assert '.descendants(' not in helper
+    assert 'for backend in ("uia", "win32")' in helper
+    assert 'payload.get("inspect_erp_windows") is True' in command
+    assert 'result["top_level_windows"] = _top_level_window_diagnostics()' in command
 
 
 def test_form_diagnostics_captures_png_before_uia_dump(tmp_path):

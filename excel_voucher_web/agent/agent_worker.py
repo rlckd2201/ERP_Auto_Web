@@ -148,6 +148,94 @@ def _latest_agent_log(output_dir: Path) -> dict[str, Any]:
     }
 
 
+def _top_level_window_diagnostics() -> dict[str, Any]:
+    """Return read-only top-level window metadata for ERP connection diagnosis."""
+    snapshot: dict[str, Any] = {
+        "agent_pid": os.getpid(),
+        "user": getpass.getuser(),
+        "backends": {},
+    }
+    try:
+        import psutil
+        from pywinauto import Desktop
+    except Exception as exc:
+        snapshot["error"] = f"diagnostic imports failed: {exc}"
+        return snapshot
+
+    process_names: dict[int, str] = {}
+    for backend in ("uia", "win32"):
+        records: list[dict[str, Any]] = []
+        try:
+            windows = Desktop(backend=backend).windows()
+        except Exception as exc:
+            snapshot["backends"][backend] = {
+                "error": f"top-level enumeration failed: {exc}",
+                "windows": [],
+            }
+            continue
+        for win in windows:
+            try:
+                visible = bool(win.is_visible())
+                title = str(win.window_text() or "").strip()
+                rect = win.rectangle()
+                width = max(0, int(rect.right) - int(rect.left))
+                height = max(0, int(rect.bottom) - int(rect.top))
+                try:
+                    process_id = int(win.process_id() or 0)
+                except Exception:
+                    process_id = int(
+                        getattr(getattr(win, "element_info", None), "process_id", 0)
+                        or 0
+                    )
+                if process_id not in process_names:
+                    try:
+                        process_names[process_id] = psutil.Process(process_id).name()
+                    except Exception:
+                        process_names[process_id] = ""
+                try:
+                    auto_id = str(
+                        getattr(win.element_info, "automation_id", "") or ""
+                    ).strip()
+                except Exception:
+                    auto_id = ""
+                try:
+                    class_name = str(win.class_name() or "").strip()
+                except Exception:
+                    class_name = ""
+                records.append(
+                    {
+                        "title": title,
+                        "automation_id": auto_id,
+                        "class_name": class_name,
+                        "process_id": process_id,
+                        "process_name": process_names.get(process_id, ""),
+                        "visible": visible,
+                        "rect": [
+                            int(rect.left),
+                            int(rect.top),
+                            int(rect.right),
+                            int(rect.bottom),
+                        ],
+                        "width": width,
+                        "height": height,
+                    }
+                )
+            except Exception as exc:
+                records.append({"error": str(exc)})
+        records.sort(
+            key=lambda item: (
+                bool(item.get("visible")),
+                int(item.get("width", 0)) * int(item.get("height", 0)),
+            ),
+            reverse=True,
+        )
+        snapshot["backends"][backend] = {
+            "count": len(records),
+            "windows": records[:80],
+        }
+    return snapshot
+
+
 def _popen_hidden(args: list[str]) -> subprocess.Popen:
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     return subprocess.Popen(args, creationflags=creationflags)
@@ -302,7 +390,10 @@ def _execute_admin_command(
     command_type = str(command.get("command") or "")
     payload = command.get("payload") if isinstance(command.get("payload"), dict) else {}
     if command_type == "tail-log":
-        return _latest_agent_log(output_dir)
+        result = _latest_agent_log(output_dir)
+        if payload.get("inspect_erp_windows") is True:
+            result["top_level_windows"] = _top_level_window_diagnostics()
+        return result
     if command_type == "restart-agent":
         script = _schedule_agent_restart(output_dir)
         return {"message": "Agent 재시작을 예약했습니다.", "restart_script": str(script)}
