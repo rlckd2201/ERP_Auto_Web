@@ -4821,10 +4821,11 @@ class ERPLoginBot:
 
             def _paste_text_fast(text, label):
                 try:
-                    if mgmt_clipboard_cache.get("text") != text:
-                        pyperclip.copy(text)
-                        mgmt_clipboard_cache["text"] = text
-                        time.sleep(mgmt_clipboard_wait)
+                    # 거래처ds 검색칸은 직전 검증/Excel 복사로 시스템 클립보드가
+                    # 바뀔 수 있으므로 캐시를 신뢰하지 않고 매번 목표값을 복사한다.
+                    pyperclip.copy(text)
+                    mgmt_clipboard_cache["text"] = text
+                    time.sleep(mgmt_clipboard_wait)
                     pyautogui.hotkey('ctrl', 'v')
                     _release_modifiers(f"{label} 붙여넣기 직후", wait=False)
                     time.sleep(mgmt_key_wait)
@@ -5070,6 +5071,162 @@ class ERPLoginBot:
             def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
                 return _input_vendor_by_popup_keyboard(x, y, label, target_biz_no, "사업자번호", 1)
 
+            def _foreground_window_title():
+                """Read the active top-level title without a slow UIA descendant scan."""
+                try:
+                    user32 = ctypes.windll.user32
+                    hwnd = int(user32.GetForegroundWindow() or 0)
+                    length = int(user32.GetWindowTextLengthW(hwnd) or 0)
+                    buffer = ctypes.create_unicode_buffer(max(256, length + 2))
+                    user32.GetWindowTextW(hwnd, buffer, len(buffer))
+                    return hwnd, str(buffer.value or "").strip()
+                except Exception as exc:
+                    self.logger.debug(
+                        f"  [MGMT-VERIFY] foreground title read failed: {exc}"
+                    )
+                    return 0, ""
+
+            def _is_vendor_ds_title(title):
+                compact = re.sub(r"[\s_]+", "", str(title or "")).lower()
+                return "거래처ds" in compact
+
+            def _wait_vendor_ds_foreground(expected_hwnd, timeout):
+                deadline = time.time() + max(0.5, float(timeout))
+                last_hwnd = 0
+                last_title = ""
+                while time.time() < deadline:
+                    last_hwnd, last_title = _foreground_window_title()
+                    if (
+                        _is_vendor_ds_title(last_title)
+                        and (not expected_hwnd or int(last_hwnd) == int(expected_hwnd))
+                    ):
+                        return int(last_hwnd), last_title
+                    time.sleep(0.10)
+                self.logger.warning(
+                    "  [MGMT-VERIFY] F9 후 거래처ds foreground 미확인 "
+                    f"(expected_hwnd={expected_hwnd}, last_hwnd={last_hwnd}, "
+                    f"last_title={last_title!r})"
+                )
+                return 0, ""
+
+            def _management_value_visual_ink(x, y):
+                """Count painted text inside the value cell, excluding its borders."""
+                try:
+                    rect = _main_rect()
+                    right = rect.left + int(x) - 10
+                    left = max(rect.left, right - 250)
+                    top = rect.top + int(y) - 8
+                    bottom = rect.top + int(y) + 8
+                    image = pyautogui.screenshot(
+                        region=(left, top, max(1, right - left), max(1, bottom - top))
+                    )
+                    ink_pixels = 0
+                    ink_rows = set()
+                    ink_columns = set()
+                    width, height = image.size
+                    for sample_y in range(1, max(1, height - 1)):
+                        for sample_x in range(0, width, 2):
+                            r, g, b = image.getpixel((sample_x, sample_y))[:3]
+                            # 선택 셀의 하늘색 배경/테두리는 제외하고 어두운 글자만 센다.
+                            is_ink = max(r, g, b) < 125
+                            if is_ink:
+                                ink_pixels += 1
+                                ink_rows.add(sample_y)
+                                ink_columns.add(sample_x)
+                    ink_span = (
+                        max(ink_columns) - min(ink_columns)
+                        if len(ink_columns) >= 2
+                        else 0
+                    )
+                    return int(ink_pixels), len(ink_rows), len(ink_columns), int(ink_span)
+                except Exception as exc:
+                    self.logger.debug(
+                        f"  [MGMT-VERIFY] management value visual scan failed: {exc}"
+                    )
+                    return 0, 0, 0, 0
+
+            def _wait_first_vendor_value_committed(
+                x,
+                y,
+                label,
+                timeout,
+                expected_hwnd,
+                baseline_ink,
+            ):
+                deadline = time.time() + max(1.0, float(timeout))
+                last_hwnd = 0
+                last_title = ""
+                last_ink = 0
+                last_ink_rows = 0
+                last_ink_columns = 0
+                last_ink_span = 0
+                while time.time() < deadline:
+                    last_hwnd, last_title = _foreground_window_title()
+                    (
+                        last_ink,
+                        last_ink_rows,
+                        last_ink_columns,
+                        last_ink_span,
+                    ) = _management_value_visual_ink(x, y)
+                    if (
+                        (not expected_hwnd or int(last_hwnd) == int(expected_hwnd))
+                        and not _is_vendor_ds_title(last_title)
+                        and last_ink >= max(10, int(baseline_ink) + 4)
+                        and last_ink_rows >= 3
+                        and last_ink_columns >= 3
+                        and last_ink_span >= 6
+                    ):
+                        self.logger.info(
+                            f"  [MGMT-VERIFY] {label}: F9 복귀 및 관리항목값 표시 확인 "
+                            f"(hwnd={last_hwnd}, foreground={last_title!r}, ink={last_ink}, "
+                            f"rows={last_ink_rows}, columns={last_ink_columns}, "
+                            f"span={last_ink_span})"
+                        )
+                        return True
+                    time.sleep(0.25)
+                self.logger.warning(
+                    f"  [MGMT-VERIFY] {label}: F9 결과 미확인 "
+                    f"(expected_hwnd={expected_hwnd}, last_hwnd={last_hwnd}, "
+                    f"foreground={last_title!r}, vendor_ds={_is_vendor_ds_title(last_title)}, "
+                    f"ink={last_ink}, baseline={baseline_ink}, rows={last_ink_rows}, "
+                    f"columns={last_ink_columns}, span={last_ink_span})"
+                )
+                return False
+
+            def _replace_vendor_ds_search_text(vendor_code, label, settle_wait):
+                rect = _main_rect()
+                search_x = (int(rect.left) + int(rect.right)) // 2
+                search_y = int(rect.top) + int(
+                    os.getenv("ERP_MGMT_VENDOR_DS_SEARCH_Y", "56") or "56"
+                )
+                pyautogui.click(search_x, search_y)
+                time.sleep(max(0.20, mgmt_focus_wait))
+                pyautogui.hotkey('ctrl', 'a')
+                _release_modifiers(f"{label} 검색칸 Ctrl+A 후", wait=False)
+                _paste_text_fast(vendor_code, f"{label} 거래처번호")
+                time.sleep(max(0.20, float(settle_wait)))
+
+                # 키 이동 전에 실제 검색 Edit에 번호가 들어갔는지 클립보드로 확인한다.
+                sentinel = f"__ERP_VENDOR_SEARCH_{int(time.time() * 1000)}__"
+                pyperclip.copy(sentinel)
+                pyautogui.hotkey('ctrl', 'a')
+                _release_modifiers(f"{label} 검색값 검증 Ctrl+A 후", wait=False)
+                pyautogui.hotkey('ctrl', 'c')
+                _release_modifiers(f"{label} 검색값 검증 Ctrl+C 후", wait=False)
+                time.sleep(max(0.15, mgmt_key_wait))
+                copied = str(pyperclip.paste() or "").strip()
+                expected_norm = _norm_text(vendor_code).lstrip("%")
+                copied_norm = _norm_text(copied).lstrip("%")
+                matched = copied != sentinel and copied_norm == expected_norm
+                self.logger.info(
+                    f"  [MGMT-VERIFY] {label}: 거래처ds 검색칸 입력 확인 "
+                    f"(rel=({search_x - int(rect.left)},{search_y - int(rect.top)}), "
+                    f"expected={vendor_code}, copied={copied!r}, matched={matched})"
+                )
+                if matched:
+                    mgmt_clipboard_cache["text"] = copied
+                return matched
+
             def _seed_vendor_by_number_f9(x, y, label, vendor_code):
                 try:
                     # 재정 미지급금 첫 행은 ERP에서 확인한 키보드 흐름만 사용한다.
@@ -5078,28 +5235,87 @@ class ERPLoginBot:
                     _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
                     _release_modifiers(f"{label} F9 직전", wait=False)
                     time.sleep(mgmt_focus_wait)
-                    pyautogui.press('f9')
+                    base_hwnd, base_title = _foreground_window_title()
+                    baseline_ink, _rows, _columns, _span = _management_value_visual_ink(x, y)
+                    if _is_vendor_ds_title(base_title):
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: F9 전부터 거래처ds가 열려 있어 입력을 중단합니다."
+                        )
+                        return False
                     # 운영 재정 경로는 거래처ds가 같은 ERP handle 안의 GDI MDI라
                     # UIA 창/자손 열거가 수분간 멈출 수 있다. 확인된 F9 키보드
                     # 시퀀스에서는 충분한 화면 전환 대기만 하고 바로 검색값을 넣는다.
                     # 비-fast 경로의 기존 팝업 검증은 그대로 유지한다.
-                    time.sleep(max(vendor_popup_open_wait, 1.0))
+                    f9_open_wait = max(
+                        vendor_popup_open_wait,
+                        float(os.getenv("ERP_MGMT_F9_OPEN_WAIT", "1.50") or "1.50"),
+                    )
+                    f9_search_wait = max(
+                        vendor_popup_search_wait,
+                        float(os.getenv("ERP_MGMT_F9_SEARCH_WAIT", "1.50") or "1.50"),
+                    )
+                    f9_key_interval = max(
+                        0.08,
+                        float(os.getenv("ERP_MGMT_F9_KEY_INTERVAL", "0.12") or "0.12"),
+                    )
+                    f9_group_wait = max(
+                        mgmt_key_wait,
+                        float(os.getenv("ERP_MGMT_F9_GROUP_WAIT", "0.20") or "0.20"),
+                    )
+                    f9_enter_interval = max(
+                        0.12,
+                        float(os.getenv("ERP_MGMT_F9_ENTER_INTERVAL", "0.30") or "0.30"),
+                    )
+                    f9_return_timeout = max(
+                        2.0,
+                        float(os.getenv("ERP_MGMT_F9_RETURN_TIMEOUT", "6.0") or "6.0"),
+                    )
+                    pyautogui.press('f9')
+                    opened_hwnd, opened_title = _wait_vendor_ds_foreground(
+                        base_hwnd,
+                        f9_open_wait,
+                    )
+                    if not opened_hwnd:
+                        self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
+                        return False
                     if not skip_visible_row_scan and not _find_vendor_popup(timeout=3.5):
                         self.logger.warning(f"  [MGMT-XY] {label}: F9 후 거래처ds 화면 미검출")
                         return False
                     time.sleep(vendor_popup_focus_wait)
-                    _paste_text_fast(vendor_code, f"{label} 거래처번호")
-                    time.sleep(max(1.0, vendor_popup_search_wait))
-                    pyautogui.press('tab', presses=4, interval=0.08)
-                    time.sleep(mgmt_key_wait)
-                    pyautogui.press('down', presses=5, interval=0.08)
-                    time.sleep(mgmt_key_wait)
-                    pyautogui.press('up', presses=2, interval=0.08)
-                    time.sleep(mgmt_key_wait)
-                    pyautogui.press('tab', presses=3, interval=0.08)
-                    time.sleep(mgmt_key_wait)
-                    pyautogui.press('enter', presses=2, interval=0.12)
+                    if not _replace_vendor_ds_search_text(
+                        vendor_code,
+                        label,
+                        min(f9_search_wait, 0.50),
+                    ):
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: 거래처ds 검색칸에 거래처번호가 "
+                            "입력되지 않아 키 이동 전에 중단합니다."
+                        )
+                        return False
+                    time.sleep(f9_search_wait)
+                    pyautogui.press('tab', presses=4, interval=f9_key_interval)
+                    time.sleep(f9_group_wait)
+                    pyautogui.press('down', presses=5, interval=f9_key_interval)
+                    time.sleep(f9_group_wait)
+                    pyautogui.press('up', presses=2, interval=f9_key_interval)
+                    time.sleep(f9_group_wait)
+                    pyautogui.press('tab', presses=3, interval=f9_key_interval)
+                    time.sleep(f9_group_wait)
+                    pyautogui.press('enter', presses=2, interval=f9_enter_interval)
                     time.sleep(ERP_FORM_WAIT)
+                    if not _wait_first_vendor_value_committed(
+                        x,
+                        y,
+                        label,
+                        f9_return_timeout,
+                        base_hwnd,
+                        baseline_ink,
+                    ):
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: 거래처ds가 닫히고 실제 관리항목값이 "
+                            "표시되지 않아 이후 행 입력을 중단합니다."
+                        )
+                        return False
                     self.logger.info(
                         f"  [MGMT-XY] {label}: F9 거래처번호 키보드 시퀀스 완료"
                         f"(Tab 4, Down 5, Up 2, Tab 3, Enter 2): {vendor_code}"

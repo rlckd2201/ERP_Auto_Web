@@ -128,13 +128,14 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     expected_order = [
         "_click_form_xy",
         "pyautogui.press('f9')",
-        "_find_vendor_popup",
-        "_paste_text_fast",
+        "_wait_vendor_ds_foreground",
+        "_replace_vendor_ds_search_text",
         "pyautogui.press('tab', presses=4",
         "pyautogui.press('down', presses=5",
         "pyautogui.press('up', presses=2",
         "pyautogui.press('tab', presses=3",
         "pyautogui.press('enter', presses=2",
+        "_wait_first_vendor_value_committed",
     ]
     positions = [helper.index(token) for token in expected_order]
 
@@ -486,12 +487,24 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
         namespace={
             "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_foreground_window_title": lambda: (101, "대승"),
+            "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
+            "_is_vendor_ds_title": lambda title: "거래처" in title and "ds" in title.lower(),
+            "_wait_vendor_ds_foreground": lambda hwnd, timeout: (
+                events.append(("vendor-ds", hwnd)) or (101, "거래처_ds")
+            ),
+            "_replace_vendor_ds_search_text": lambda text, label, wait: (
+                events.append(("search", text)) or True
+            ),
+            "_wait_first_vendor_value_committed": lambda *args: (
+                events.append(("committed", args[4])) or True
+            ),
             "_find_vendor_popup": lambda timeout=0: (_ for _ in ()).throw(
                 AssertionError("fast F9 sequence must not probe UIA")
             ),
-            "_paste_text_fast": lambda text, label: events.append(("paste", text)),
             "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
             "mgmt_click_wait": 0.0,
             "mgmt_focus_wait": 0.0,
             "vendor_popup_open_wait": 0.0,
@@ -510,12 +523,14 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
     assert events == [
         ("click", 1118, 797),
         ("key", "f9", 1),
-        ("paste", "A001"),
+        ("vendor-ds", 101),
+        ("search", "A001"),
         ("key", "tab", 4),
         ("key", "down", 5),
         ("key", "up", 2),
         ("key", "tab", 3),
         ("key", "enter", 2),
+        ("committed", 101),
     ]
 
 
@@ -532,10 +547,18 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
         namespace={
             "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_foreground_window_title": lambda: (101, "대승"),
+            "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
+            "_is_vendor_ds_title": lambda title: False,
+            "_wait_vendor_ds_foreground": lambda hwnd, timeout: (
+                events.append(("vendor-ds", hwnd)) or (0, "")
+            ),
+            "_replace_vendor_ds_search_text": lambda *_args: events.append(("search",)),
+            "_wait_first_vendor_value_committed": lambda *_args: events.append(("committed",)),
             "_find_vendor_popup": lambda timeout=0: events.append(("popup-check", timeout)),
-            "_paste_text_fast": lambda text, label: events.append(("paste", text)),
             "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
             "mgmt_click_wait": 0.0,
             "mgmt_focus_wait": 0.0,
             "vendor_popup_open_wait": 0.0,
@@ -554,8 +577,105 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
     assert events == [
         ("click", 1118, 797),
         ("key", "f9", 1),
-        ("popup-check", 3.5),
+        ("vendor-ds", 101),
     ]
+
+
+def test_finance_first_vendor_refocuses_search_edit_and_replaces_stale_text():
+    events = []
+    state = {
+        "clipboard": "",
+        "field": "%신한 수원금융센터",
+        "focus": "grid",
+    }
+
+    class _FakePyAutoGui:
+        @staticmethod
+        def click(x, y):
+            state["focus"] = "search"
+            events.append(("click", x, y))
+
+        @staticmethod
+        def hotkey(*keys):
+            events.append(("hotkey", *keys))
+            if keys == ("ctrl", "c") and state["focus"] == "search":
+                state["clipboard"] = state["field"]
+
+    def _paste(text, _label):
+        events.append(("paste", text))
+        state["field"] = text
+        state["clipboard"] = text
+
+    loaded = _load_nested_functions(
+        "_replace_vendor_ds_search_text",
+        namespace={
+            "_main_rect": lambda: _FakeRect(0, 0, 1920, 1080),
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "pyautogui": _FakePyAutoGui,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_paste_text_fast": _paste,
+            "pyperclip": SimpleNamespace(
+                copy=lambda text: state.update(clipboard=text),
+                paste=lambda: state["clipboard"],
+            ),
+            "time": SimpleNamespace(time=lambda: 1.0, sleep=lambda _seconds: None),
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "mgmt_clipboard_cache": {"text": None},
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_replace_vendor_ds_search_text"]("PT032", "1행 거래처", 0) is True
+    assert state["field"] == "PT032"
+    assert events == [
+        ("click", 960, 56),
+        ("hotkey", "ctrl", "a"),
+        ("paste", "PT032"),
+        ("hotkey", "ctrl", "a"),
+        ("hotkey", "ctrl", "c"),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("hwnd", "title", "ink", "expected"),
+    [
+        (101, "대승", (20, 5, 8, 18), True),
+        (202, "대승", (20, 5, 8, 18), False),
+        (101, "거래처_ds", (20, 5, 8, 18), False),
+        (101, "대승", (0, 0, 0, 0), False),
+    ],
+)
+def test_first_vendor_commit_requires_original_erp_window_and_visible_value(
+    hwnd, title, ink, expected
+):
+    class _FakeClock:
+        now = 0.0
+
+        @classmethod
+        def time(cls):
+            return cls.now
+
+        @classmethod
+        def sleep(cls, seconds):
+            cls.now += max(0.01, float(seconds))
+
+    loaded = _load_nested_functions(
+        "_wait_first_vendor_value_committed",
+        namespace={
+            "time": _FakeClock,
+            "_foreground_window_title": lambda: (hwnd, title),
+            "_management_value_visual_ink": lambda *_args: ink,
+            "_is_vendor_ds_title": lambda value: "거래처" in value and "ds" in value.lower(),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    result = loaded["_wait_first_vendor_value_committed"](
+        1118, 797, "1행 거래처", 1.0, 101, 0
+    )
+    assert result is expected
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
