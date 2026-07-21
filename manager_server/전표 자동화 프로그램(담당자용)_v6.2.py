@@ -5092,22 +5092,38 @@ class ERPLoginBot:
                 compact = re.sub(r"[\s_]+", "", str(title or "")).lower()
                 return "거래처ds" in compact
 
-            def _wait_vendor_ds_foreground(expected_hwnd, timeout):
+            def _window_process_id(hwnd):
+                try:
+                    process_id = ctypes.c_ulong(0)
+                    ctypes.windll.user32.GetWindowThreadProcessId(
+                        int(hwnd or 0),
+                        ctypes.byref(process_id),
+                    )
+                    return int(process_id.value or 0)
+                except Exception:
+                    return 0
+
+            def _wait_vendor_ds_foreground(expected_process_id, timeout):
                 deadline = time.time() + max(0.5, float(timeout))
                 last_hwnd = 0
                 last_title = ""
+                last_process_id = 0
                 while time.time() < deadline:
                     last_hwnd, last_title = _foreground_window_title()
+                    last_process_id = _window_process_id(last_hwnd)
                     if (
                         _is_vendor_ds_title(last_title)
-                        and (not expected_hwnd or int(last_hwnd) == int(expected_hwnd))
+                        and (
+                            not expected_process_id
+                            or int(last_process_id) == int(expected_process_id)
+                        )
                     ):
                         return int(last_hwnd), last_title
                     time.sleep(0.10)
                 self.logger.warning(
                     "  [MGMT-VERIFY] F9 후 거래처ds foreground 미확인 "
-                    f"(expected_hwnd={expected_hwnd}, last_hwnd={last_hwnd}, "
-                    f"last_title={last_title!r})"
+                    f"(expected_pid={expected_process_id}, last_pid={last_process_id}, "
+                    f"last_hwnd={last_hwnd}, last_title={last_title!r})"
                 )
                 return 0, ""
 
@@ -5238,6 +5254,7 @@ class ERPLoginBot:
                     _release_modifiers(f"{label} F9 직전", wait=False)
                     time.sleep(mgmt_focus_wait)
                     base_hwnd, base_title = _foreground_window_title()
+                    base_process_id = _window_process_id(base_hwnd)
                     baseline_ink, _rows, _columns, _span = _management_value_visual_ink(x, y)
                     if _is_vendor_ds_title(base_title):
                         self.logger.warning(
@@ -5274,7 +5291,7 @@ class ERPLoginBot:
                     )
                     pyautogui.press('f9')
                     opened_hwnd, opened_title = _wait_vendor_ds_foreground(
-                        base_hwnd,
+                        base_process_id,
                         f9_open_wait,
                     )
                     if not opened_hwnd:

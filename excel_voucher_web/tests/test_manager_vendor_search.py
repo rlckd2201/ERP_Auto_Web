@@ -499,10 +499,11 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
             "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_foreground_window_title": lambda: (101, "대승"),
+            "_window_process_id": lambda hwnd: 10772 if hwnd == 101 else 0,
             "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
             "_is_vendor_ds_title": lambda title: "거래처" in title and "ds" in title.lower(),
-            "_wait_vendor_ds_foreground": lambda hwnd, timeout: (
-                events.append(("vendor-ds", hwnd)) or (101, "거래처_ds")
+            "_wait_vendor_ds_foreground": lambda process_id, timeout: (
+                events.append(("vendor-ds", process_id)) or (202, "거래처_ds")
             ),
             "_replace_vendor_ds_search_text": lambda text, label, wait: (
                 events.append(("search", text)) or True
@@ -534,7 +535,7 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
     assert events == [
         ("click", 1118, 797),
         ("key", "f9", 1),
-        ("vendor-ds", 101),
+        ("vendor-ds", 10772),
         ("search", "A001"),
         ("key", "tab", 4),
         ("key", "down", 5),
@@ -559,10 +560,11 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
             "_click_form_xy": lambda x, y, label, wait=0: events.append(("click", x, y)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_foreground_window_title": lambda: (101, "대승"),
+            "_window_process_id": lambda hwnd: 10772 if hwnd == 101 else 0,
             "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
             "_is_vendor_ds_title": lambda title: False,
-            "_wait_vendor_ds_foreground": lambda hwnd, timeout: (
-                events.append(("vendor-ds", hwnd)) or (0, "")
+            "_wait_vendor_ds_foreground": lambda process_id, timeout: (
+                events.append(("vendor-ds", process_id)) or (0, "")
             ),
             "_replace_vendor_ds_search_text": lambda *_args: events.append(("search",)),
             "_wait_first_vendor_value_committed": lambda *_args: events.append(("committed",)),
@@ -588,8 +590,43 @@ def test_finance_first_vendor_stops_if_f9_does_not_open_vendor_screen():
     assert events == [
         ("click", 1118, 797),
         ("key", "f9", 1),
-        ("vendor-ds", 101),
+        ("vendor-ds", 10772),
     ]
+
+
+@pytest.mark.parametrize(
+    ("foreground_process_id", "expected"),
+    [
+        (10772, (202, "거래처_ds")),
+        (9900, (0, "")),
+    ],
+)
+def test_vendor_ds_foreground_accepts_separate_window_only_in_same_erp_process(
+    foreground_process_id, expected
+):
+    class _FakeClock:
+        now = 0.0
+
+        @classmethod
+        def time(cls):
+            return cls.now
+
+        @classmethod
+        def sleep(cls, seconds):
+            cls.now += max(0.01, float(seconds))
+
+    loaded = _load_nested_functions(
+        "_wait_vendor_ds_foreground",
+        namespace={
+            "time": _FakeClock,
+            "_foreground_window_title": lambda: (202, "거래처_ds"),
+            "_window_process_id": lambda hwnd: foreground_process_id if hwnd == 202 else 0,
+            "_is_vendor_ds_title": lambda title: title == "거래처_ds",
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_wait_vendor_ds_foreground"](10772, 0.5) == expected
 
 
 def test_finance_first_vendor_refocuses_search_edit_and_replaces_stale_text():
