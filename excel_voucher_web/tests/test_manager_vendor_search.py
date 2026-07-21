@@ -12,6 +12,7 @@ MANAGER_SOURCE = (
     / "전표 자동화 프로그램(담당자용)_v6.2.py"
 )
 AGENT_ADAPTER_SOURCE = Path(__file__).resolve().parents[1] / "app" / "agent_adapter.py"
+AGENT_WORKER_SOURCE = Path(__file__).resolve().parents[1] / "agent" / "agent_worker.py"
 WEB_MAIN_SOURCE = Path(__file__).resolve().parents[1] / "app" / "main.py"
 
 
@@ -3260,6 +3261,32 @@ def test_erp_print_retries_existing_button_once_after_short_hotkey_probe():
     focus_helper = source[focus_start:focus_end]
     assert "_find_rd_viewer_window()" in focus_helper
     assert "Application(backend=process_backend).connect(process=int(pid))" in focus_helper
+
+
+def test_rd_timeout_uploads_runtime_diagnostics_and_screenshot():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    save_start = source.index("def _save_and_open_print_dialog")
+    save_end = source.index("def _setup_by_coordinates_only", save_start)
+    save_helper = source[save_start:save_end]
+    final_timeout = save_helper.index('if not viewer_ready:', save_helper.index("_click_print_button()"))
+    immediate_diag = save_helper.index(
+        '"전표출력 버튼 클릭 직후"',
+        save_helper.index("_click_print_button()"),
+    )
+    runtime_diag = save_helper.index(
+        '_log_print_runtime_delta(\n                        "전표출력 버튼 fallback timeout"',
+        final_timeout,
+    )
+    screenshot = save_helper.index("_save_print_timeout_screenshot()", runtime_diag)
+    failure = save_helper.index("전표출력 후 RD Viewer가 감지되지 않아 인쇄를 중단합니다.", screenshot)
+    assert immediate_diag < final_timeout < runtime_diag < screenshot < failure
+
+    worker_source = AGENT_WORKER_SOURCE.read_text(encoding="utf-8")
+    error_start = worker_source.index("except Exception as exc:")
+    error_helper = worker_source[error_start:]
+    assert 'f"{job_id}_print_timeout.png"' in error_helper
+    assert '"print_screenshot"' in error_helper
+    assert "_upload_job_artifact(" in error_helper
 
 
 def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():

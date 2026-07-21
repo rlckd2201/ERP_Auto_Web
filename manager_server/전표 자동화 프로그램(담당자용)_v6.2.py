@@ -6270,6 +6270,117 @@ class ERPLoginBot:
                     pass
             return None, "", ""
 
+        def _capture_print_runtime():
+            processes = {}
+            try:
+                for proc in psutil.process_iter(["pid", "name"]):
+                    pid = int(proc.info.get("pid") or 0)
+                    if pid:
+                        processes[pid] = str(proc.info.get("name") or "")
+            except Exception:
+                pass
+
+            windows = []
+            seen = set()
+            for backend in ("win32", "uia"):
+                try:
+                    for win in Desktop(backend=backend).windows():
+                        try:
+                            if hasattr(win, "is_visible") and not win.is_visible():
+                                continue
+                        except Exception:
+                            continue
+                        try:
+                            title = str(win.window_text() or "").strip()
+                        except Exception:
+                            title = ""
+                        try:
+                            class_name = str(win.class_name() or "").strip()
+                        except Exception:
+                            class_name = str(
+                                getattr(getattr(win, "element_info", None), "class_name", "") or ""
+                            ).strip()
+                        try:
+                            pid = int(win.process_id() or 0)
+                        except Exception:
+                            pid = int(
+                                getattr(getattr(win, "element_info", None), "process_id", 0) or 0
+                            )
+                        try:
+                            rect = win.rectangle()
+                            rect_text = f"{rect.left},{rect.top},{rect.right},{rect.bottom}"
+                        except Exception:
+                            rect_text = ""
+                        key = (pid, title, class_name, rect_text)
+                        if key in seen:
+                            continue
+                        seen.add(key)
+                        windows.append(
+                            {
+                                "backend": backend,
+                                "pid": pid,
+                                "process": processes.get(pid, ""),
+                                "title": title,
+                                "class": class_name,
+                                "rect": rect_text,
+                            }
+                        )
+                except Exception:
+                    pass
+            return {"processes": processes, "windows": windows}
+
+        def _log_print_runtime_delta(label, baseline):
+            current = _capture_print_runtime()
+            baseline_processes = dict((baseline or {}).get("processes") or {})
+            new_processes = [
+                {"pid": pid, "name": name}
+                for pid, name in current["processes"].items()
+                if pid not in baseline_processes
+            ]
+            baseline_windows = {
+                (item.get("pid"), item.get("title"), item.get("class"), item.get("rect"))
+                for item in list((baseline or {}).get("windows") or [])
+            }
+            new_windows = [
+                item
+                for item in current["windows"]
+                if (item.get("pid"), item.get("title"), item.get("class"), item.get("rect"))
+                not in baseline_windows
+            ]
+            visible_windows = [
+                item for item in current["windows"] if item.get("title") or item.get("class")
+            ]
+            related_processes = [
+                {"pid": pid, "name": name}
+                for pid, name in current["processes"].items()
+                if re.search(r"(rd|viewer|report|print|rpt|ubi|rexpert|clip)", name, re.I)
+            ]
+            self.logger.warning(
+                f"  [PRINT-DIAG] {label}: new_processes="
+                f"{json.dumps(new_processes[:80], ensure_ascii=False)}, new_windows="
+                f"{json.dumps(new_windows[:80], ensure_ascii=False)}, visible_windows="
+                f"{json.dumps(visible_windows[:120], ensure_ascii=False)}, related_processes="
+                f"{json.dumps(related_processes[:80], ensure_ascii=False)}"
+            )
+
+        def _save_print_timeout_screenshot():
+            try:
+                job_id = str(getattr(self.manager.main_app, "erp_job_id", "") or "unknown")
+                safe_job_id = re.sub(r"[^0-9A-Za-z_.-]+", "_", job_id)
+                output_dir = Path(
+                    str(os.getenv("ERP_OUTPUT_DIR", "") or tempfile.gettempdir())
+                )
+                output_dir.mkdir(parents=True, exist_ok=True)
+                screenshot_path = output_dir / f"{safe_job_id}_print_timeout.png"
+                pyautogui.screenshot(str(screenshot_path))
+                self.logger.warning(
+                    f"  [PRINT-DIAG] RD Viewer timeout screenshot saved: {screenshot_path}"
+                )
+                return str(screenshot_path)
+            except Exception as e:
+                self.logger.warning(f"  [PRINT-DIAG] timeout screenshot 저장 실패: {e}")
+                return ""
+
         def _wait_rd_viewer_ready(timeout_sec=10, phase=""):
             end_at = time.time() + max(0.0, float(timeout_sec or 0.0))
             while True:
@@ -7123,6 +7234,7 @@ class ERPLoginBot:
                     self.logger.info("  [SAVE] 저장 알림 닫기용 Enter 전송 완료")
                     time.sleep(ERP_SETTLE_WAIT)
 
+                print_runtime_baseline = _capture_print_runtime()
                 self.logger.info("  [PRINT] ERP 전표출력 Ctrl+P 전송")
                 pyautogui.hotkey('ctrl', 'p')
                 time.sleep(ERP_SETTLE_WAIT)
@@ -7148,6 +7260,7 @@ class ERPLoginBot:
                     phase="Ctrl+P",
                 )
                 if not viewer_ready:
+                    _log_print_runtime_delta("Ctrl+P timeout", print_runtime_baseline)
                     self.logger.warning(
                         "  [PRINT] Ctrl+P로 RD Viewer가 열리지 않아 "
                         "기존 전표출력 버튼을 1회 재시도합니다."
@@ -7164,6 +7277,10 @@ class ERPLoginBot:
                         self.logger.warning(f"  [PRINT] 출력 버튼 fallback 전 ERP 메인 창 활성화 실패: {e}")
                     time.sleep(ERP_SETTLE_WAIT)
                     _click_print_button()
+                    _log_print_runtime_delta(
+                        "전표출력 버튼 클릭 직후",
+                        print_runtime_baseline,
+                    )
                     remaining_viewer_timeout = max(
                         0.5,
                         viewer_timeout - initial_viewer_timeout,
@@ -7174,6 +7291,11 @@ class ERPLoginBot:
                     )
 
                 if not viewer_ready:
+                    _log_print_runtime_delta(
+                        "전표출력 버튼 fallback timeout",
+                        print_runtime_baseline,
+                    )
+                    _save_print_timeout_screenshot()
                     raise RuntimeError("전표출력 후 RD Viewer가 감지되지 않아 인쇄를 중단합니다.")
                 if not _focus_rd_viewer_window(timeout_sec=10, ready_hint=viewer_ready):
                     raise RuntimeError("RD Viewer 준비는 감지됐지만 창 포커스를 잡지 못했습니다.")

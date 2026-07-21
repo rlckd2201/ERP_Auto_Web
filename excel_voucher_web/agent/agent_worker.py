@@ -26,7 +26,10 @@ if str(ROOT) not in sys.path:
 from app.agent_adapter import run_erp_voucher_task
 
 
-DEFAULT_REPO_ZIP_URL = "https://github.com/rlckd2201/ERP_Auto_Web/archive/refs/heads/main.zip"
+DEFAULT_REPO_ZIP_URL = os.getenv(
+    "EXCEL_VOUCHER_REPO_ZIP_URL",
+    "https://github.com/rlckd2201/ERP_Auto_Web/archive/refs/heads/main.zip",
+)
 DEFAULT_PRINTER_NAME = "재정 프린터 (172.16.10.173)"
 TEST_PRINTER_NAMES = {"김제 프린터 (172.17.30.162)", "172.17.30.162"}
 
@@ -237,7 +240,7 @@ def _update_agent_files(zip_url: str) -> dict[str, Any]:
     repo_root = ROOT.parent
     with tempfile.TemporaryDirectory(prefix="excel_voucher_update_") as temp_name:
         temp = Path(temp_name)
-        zip_path = temp / "ERP_Auto_Web.zip"
+        zip_path = temp / "ERP_Auto_Finance.zip"
         download_timeout = max(180, int(os.getenv("EXCEL_VOUCHER_AGENT_UPDATE_DOWNLOAD_TIMEOUT_SECONDS", "300") or "300"))
         separator = "&" if "?" in zip_url else "?"
         download_url = f"{zip_url}{separator}cache_bust={int(time.time())}"
@@ -250,9 +253,16 @@ def _update_agent_files(zip_url: str) -> dict[str, Any]:
         zip_path.write_bytes(response.content)
         with zipfile.ZipFile(zip_path) as archive:
             archive.extractall(temp)
-        extracted = temp / "ERP_Auto_Web-main"
-        if not extracted.exists():
-            raise RuntimeError("GitHub ZIP 압축 해제 결과에서 ERP_Auto_Web-main 폴더를 찾지 못했습니다.")
+        candidates = [
+            path
+            for path in temp.iterdir()
+            if path.is_dir()
+            and (path / "excel_voucher_web").is_dir()
+            and (path / "manager_server").is_dir()
+        ]
+        if len(candidates) != 1:
+            raise RuntimeError("GitHub ZIP 압축 해제 결과에서 재정 자동화 저장소 루트를 찾지 못했습니다.")
+        extracted = candidates[0]
         manager_sources = list((extracted / "manager_server").glob("*v6.2.py"))
         if len(manager_sources) != 1:
             raise RuntimeError("업데이트 ZIP에서 ERP Manager 원본을 하나로 확정하지 못했습니다.")
@@ -622,6 +632,34 @@ def run_loop(
                     )
                 except Exception as log_exc:
                     error_result["agent_log_upload_error"] = str(log_exc)
+            print_screenshot_path = output_dir / "erp_outputs" / f"{job_id}_print_timeout.png"
+            if print_screenshot_path.is_file():
+                error_result["print_screenshot_path"] = str(print_screenshot_path)
+                try:
+                    screenshot_response = _upload_job_artifact(
+                        session,
+                        server,
+                        job_id,
+                        agent_id,
+                        print_screenshot_path,
+                        "print_screenshot",
+                        verify_tls=verify_tls,
+                    )
+                    artifact = (
+                        screenshot_response.get("artifact")
+                        if isinstance(screenshot_response, dict)
+                        else {}
+                    )
+                    if isinstance(artifact, dict):
+                        error_result.update(
+                            {
+                                "print_screenshot_server_path": artifact.get("path") or "",
+                                "print_screenshot_filename": artifact.get("filename") or "",
+                                "print_screenshot_download_url": artifact.get("download_url") or "",
+                            }
+                        )
+                except Exception as screenshot_exc:
+                    error_result["print_screenshot_upload_error"] = str(screenshot_exc)
             try:
                 _post(
                     session,
