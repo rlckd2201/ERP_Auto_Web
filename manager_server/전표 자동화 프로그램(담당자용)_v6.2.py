@@ -651,6 +651,88 @@ def _window_center_in_monitor(win, monitor):
     except Exception:
         return False
 
+
+def _find_existing_erp_top_level_window(
+    main_keywords,
+    excluded_keywords=(),
+    logger=None,
+):
+    """Find an already-open ERP frame without walking its GDI/UIA descendants.
+
+    Recovery can run after the Agent has restarted and lost its in-memory PID.  The
+    configured executable name is not a reliable identity on every ERP install, so
+    inspect current-desktop *top-level* windows and return only a large, visible
+    frame whose own MainWindow id and current-corporation title identify ERP.
+    """
+    keywords = [str(value or "").strip() for value in main_keywords]
+    keywords = [value for value in keywords if value]
+    exclusions = [str(value or "").strip() for value in excluded_keywords]
+    exclusions = [value for value in exclusions if value]
+    matches = []
+    try:
+        windows = Desktop(backend="uia").windows()
+    except Exception as exc:
+        if logger:
+            logger.warning(
+                f"  [RECOVERY-PREFLIGHT] 전체 데스크톱 최상위 창 열거 실패: {exc}"
+            )
+        return None
+
+    for win in windows:
+        try:
+            if not win.is_visible():
+                continue
+            title = str(win.window_text() or "").strip()
+            auto_id = str(win.element_info.automation_id or "").strip()
+            # Global Desktop enumeration is broader than ``self.app.windows``.
+            # Require both ERP's own MainWindow id and the *current corporation*
+            # title.  A generic MainWindow (browser/mail) or another corporation's
+            # ERP must never be selected for save/print recovery.
+            if auto_id.lower() != "mainwindow":
+                continue
+            if not keywords or not any(keyword in title for keyword in keywords):
+                continue
+            if any(keyword in title for keyword in exclusions):
+                continue
+            rect = win.rectangle()
+            width = max(0, int(rect.right) - int(rect.left))
+            height = max(0, int(rect.bottom) - int(rect.top))
+            if width < 640 or height < 400:
+                continue
+            try:
+                process_id = int(win.process_id() or 0)
+            except Exception:
+                process_id = int(getattr(win.element_info, "process_id", 0) or 0)
+            if process_id <= 0:
+                continue
+            matches.append(
+                (width * height, width, height, process_id, win, title, auto_id)
+            )
+        except Exception:
+            continue
+
+    if not matches:
+        return None
+    _, width, height, process_id, win, title, auto_id = max(
+        matches,
+        key=lambda item: (item[0], item[1], item[2]),
+    )
+    if logger:
+        logger.info(
+            "  [RECOVERY-PREFLIGHT] 설정 프로세스명 대신 ERP 최상위 창 발견: "
+            f"pid={process_id}, title={title!r}, auto_id={auto_id!r}, "
+            f"size={width}x{height}, candidates={len(matches)}"
+        )
+    return {
+        "pid": process_id,
+        "window": win,
+        "title": title,
+        "automation_id": auto_id,
+        "width": width,
+        "height": height,
+    }
+
+
 class ERPLoginBot:
     def __init__(self, install_info: dict, corp_info: dict, corp_code: str, manager, logger: logging.Logger):
         self.install_info = install_info
@@ -912,9 +994,6 @@ class ERPLoginBot:
                     if proc.info.get("name") and process_exe in proc.info.get("name").lower():
                         existing_pids.add(proc.info.get("pid"))
 
-                if resume_existing_voucher and not existing_pids:
-                    return "ERP 전표 복구 실패: 현재 실행 중인 ERP 화면을 찾지 못했습니다."
-
                 candidates = [
                     self.install_info.get("splash_name", "FrmMainSplash"),
                     self.install_info.get("login_window_title", ""),
@@ -928,7 +1007,7 @@ class ERPLoginBot:
                     )
 
                 # 메모리가 날아갔으나 이미 프로세스가 켜져있는 경우 (재시작 복구 방어막)
-                if existing_pids:
+                if existing_pids and not confirmed_pid:
                     recovered = False
                     for pid in existing_pids:
                         try:
@@ -949,6 +1028,45 @@ class ERPLoginBot:
                                 if recovered: break
                         except: pass
                         if recovered: break
+
+                if resume_existing_voucher and not confirmed_pid:
+                    recovery_company_titles = {
+                        "DS": ("대승",),
+                        "DSJM": ("대승정밀",),
+                        "ILGANG": ("일강",),
+                        "JM": ("제이엠",),
+                        "TO": ("더원",),
+                    }.get(str(self.corp_code or "").upper(), ())
+                    recovery_title_exclusions = {
+                        # "대승" is a substring of "대승정밀"; never attach the
+                        # DAESEUNG recovery job to the DSJM ERP frame.
+                        "DS": ("대승정밀",),
+                    }.get(str(self.corp_code or "").upper(), ())
+                    top_level_match = _find_existing_erp_top_level_window(
+                        recovery_company_titles,
+                        excluded_keywords=recovery_title_exclusions,
+                        logger=self.logger,
+                    )
+                    if top_level_match:
+                        fallback_pid = int(top_level_match["pid"])
+                        try:
+                            fallback_app = Application(backend="uia").connect(
+                                process=fallback_pid
+                            )
+                        except Exception as exc:
+                            self.logger.warning(
+                                "  [RECOVERY-PREFLIGHT] 발견한 ERP 최상위 창 PID 연결 실패: "
+                                f"pid={fallback_pid}, error={exc}"
+                            )
+                        else:
+                            confirmed_pid = fallback_pid
+                            existing_pids.add(fallback_pid)
+                            self.app = fallback_app
+                            self.manager.erp_pids[self.corp_code] = fallback_pid
+                            self.logger.info(
+                                f"[{self.corp_code}] ERP 최상위 창 PID:{fallback_pid}로 "
+                                "메모리 매핑을 복구했습니다."
+                            )
 
                 if resume_existing_voucher and not confirmed_pid:
                     return "ERP 전표 복구 실패: 현재 열린 ERP 전표 화면에 연결하지 못했습니다."

@@ -3298,8 +3298,10 @@ def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():
     setup_start = source.index("def _setup_slip_form", run_start)
     run_helper = source[run_start:setup_start]
 
-    no_process_guard = run_helper.index(
-        "if resume_existing_voucher and not existing_pids:"
+    top_level_fallback = run_helper.index("_find_existing_erp_top_level_window(")
+    recovery_guard = run_helper.index(
+        "if resume_existing_voucher and not confirmed_pid:",
+        top_level_fallback,
     )
     fresh_launch = run_helper.index("os.startfile(exe_path)")
     resume_branch = run_helper.index("if resume_existing_voucher:", fresh_launch)
@@ -3307,7 +3309,8 @@ def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():
     resume_setup = run_helper.index("self._setup_slip_form(main_win)", resume_branch)
     menu_start = run_helper.index("내비게이션 시작", resume_setup)
 
-    assert no_process_guard < fresh_launch < resume_branch < resume_verify < resume_setup < menu_start
+    assert top_level_fallback < recovery_guard < fresh_launch < resume_branch < resume_verify < resume_setup < menu_start
+    assert "if resume_existing_voucher and not existing_pids:" not in run_helper
     assert "fresh_start = False" in run_helper
 
     reconnect_start = run_helper.index("candidates = [")
@@ -3472,6 +3475,98 @@ def test_recovery_preflight_uses_top_level_windows_and_skips_generic_popup_loop(
     assert "while not resume_existing_voucher and time.time() < login_wait_deadline:" in run_helper
     assert "if not main_win and not resume_existing_voucher:" in run_helper
     assert "if not resume_existing_voucher and _is_password_change_blocker(main_win):" in run_helper
+
+
+def test_recovery_process_name_miss_uses_large_top_level_erp_window_without_tree_scan():
+    descendant_calls = []
+
+    class FakeWindow:
+        def __init__(self, title, auto_id, rect, pid, visible=True):
+            self._title = title
+            self._rect = rect
+            self._visible = visible
+            self._pid = pid
+            self.element_info = SimpleNamespace(
+                automation_id=auto_id,
+                process_id=pid,
+            )
+
+        def is_visible(self):
+            return self._visible
+
+        def window_text(self):
+            return self._title
+
+        def rectangle(self):
+            return self._rect
+
+        def process_id(self):
+            return self._pid
+
+        def descendants(self, *_args, **_kwargs):
+            descendant_calls.append(self._title)
+            raise AssertionError("top-level recovery must not enumerate descendants")
+
+    unrelated = FakeWindow(
+        "메일 - Daou Office",
+        "mainwindow",
+        _FakeRect(0, 0, 2560, 1440),
+        91,
+    )
+    wrong_corporation = FakeWindow(
+        "대승정밀 - 분개전표입력",
+        "mainwindow",
+        _FakeRect(0, 0, 2560, 1440),
+        92,
+    )
+    erp = FakeWindow(
+        "대승 - 분개전표입력",
+        "mainwindow",
+        _FakeRect(0, 0, 1920, 1080),
+        243,
+    )
+    fake_desktop = lambda **_kwargs: SimpleNamespace(
+        windows=lambda: [unrelated, wrong_corporation, erp]
+    )
+    finder = _load_nested_functions(
+        "_find_existing_erp_top_level_window",
+        namespace={"Desktop": fake_desktop},
+    )["_find_existing_erp_top_level_window"]
+
+    match = finder(
+        ["대승"],
+        excluded_keywords=["대승정밀"],
+        logger=_FakeLogger(),
+    )
+
+    assert match["pid"] == 243
+    assert match["window"] is erp
+    assert match["width"] == 1920
+    assert match["height"] == 1080
+    assert descendant_calls == []
+
+
+def test_recovery_process_name_fallback_runs_before_failure_and_never_launches_new_erp():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    run_start = source.index("def _run_unlocked")
+    setup_start = source.index("def _setup_slip_form", run_start)
+    run_helper = source[run_start:setup_start]
+
+    fallback = run_helper.index("top_level_match = _find_existing_erp_top_level_window(")
+    final_guard = run_helper.index(
+        "if resume_existing_voucher and not confirmed_pid:",
+        fallback,
+    )
+    fresh_launch = run_helper.index("os.startfile(exe_path)")
+
+    assert fallback < final_guard < fresh_launch
+    assert "if resume_existing_voucher and not existing_pids:" not in run_helper
+    assert "if not confirmed_pid:" in run_helper[final_guard:fresh_launch]
+    fallback_branch = run_helper[fallback:final_guard]
+    assert "confirmed_pid = fallback_pid" in fallback_branch
+    assert "existing_pids.add(fallback_pid)" in fallback_branch
+    assert "self.app = fallback_app" in fallback_branch
+    assert "self.manager.erp_pids[self.corp_code] = fallback_pid" in fallback_branch
 
 
 def test_management_recovery_defers_form_validation_to_exact_first_row_check():
