@@ -1958,6 +1958,12 @@ class ERPLoginBot:
 
         def _main_rect():
             nonlocal main_rect_cache
+            # 운영 fast 경로에서 GDI 화면을 2초마다 확인할 때마다
+            # main_win.rectangle()을 다시 호출하면 UIA provider가 60~300초씩
+            # 멈출 수 있다. 폼 세팅/붙여넣기 클릭에서 한 번 확인한 좌표를
+            # 이후 화면 감지와 관리항목 입력 전체에서 즉시 재사용한다.
+            if skip_visible_row_scan and main_rect_cache is not None:
+                return main_rect_cache
             try:
                 main_rect_cache = main_win.rectangle()
                 return main_rect_cache

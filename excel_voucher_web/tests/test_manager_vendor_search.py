@@ -146,6 +146,21 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     assert "거래처번호 팝업 입력 실패, 직접 입력 fallback" in source
 
 
+def test_fast_main_rect_uses_cached_geometry_before_uia_rectangle_call():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _main_rect():")
+    helper_end = source.index("def _click_form_xy", helper_start)
+    helper = source[helper_start:helper_end]
+
+    cache_guard = "if skip_visible_row_scan and main_rect_cache is not None:"
+    assert cache_guard in helper
+    rectangle_call = "main_rect_cache = main_win.rectangle()"
+    assert helper.index(cache_guard) < helper.index(rectangle_call)
+    assert helper.index("return main_rect_cache", helper.index(cache_guard)) < helper.index(
+        rectangle_call
+    )
+
+
 def test_vendor_popup_detects_internal_erp_page_and_filters_visible_controls():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
