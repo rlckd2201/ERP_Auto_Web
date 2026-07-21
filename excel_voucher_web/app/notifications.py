@@ -182,7 +182,10 @@ def _job_recipient_name(job: JobRecord) -> str:
 
 
 def _support_email() -> str:
-    return str(getattr(settings, "support_email", "") or "ds1501@dae-seung.co.kr").strip()
+    return str(
+        getattr(settings, "support_email", "")
+        or "rlckd9646@dae-seung.co.kr"
+    ).strip()
 
 
 def _money(value: Any) -> str:
@@ -451,7 +454,7 @@ def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) 
             f"{requester}님",
             "",
             "엑셀 수시결제 전표 처리 중 오류가 발생했습니다.",
-            "전산팀에 원본 엑셀, 진단 로그, 오류 내용을 함께 전달했습니다.",
+            "원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.",
             "",
             _steps_text(job, events),
             "",
@@ -460,7 +463,7 @@ def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) 
             f"- 회계일: {job.accounting_date}",
             f"- 오류: {_job_error(job)}",
             "",
-            f"전산팀({_support_email()})에 오류 내용과 진단 로그를 함께 전달했습니다.",
+            "오류 알림은 요청자에게만 전송했습니다.",
         ]
     )
 
@@ -469,7 +472,7 @@ def failure_mail_html(job: JobRecord, events: Iterable[JobEvent] | None = None) 
     payload = job.payload or {}
     requester = _job_recipient_name(job) or "담당자"
     body = f"""
-      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">{html.escape(requester)}님, 처리 중 오류가 발생했습니다. 전산팀에서 바로 확인할 수 있도록 원본 엑셀, 진단 로그, 오류 내용을 함께 전달했습니다.</p>
+      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">{html.escape(requester)}님, 처리 중 오류가 발생했습니다. 원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.</p>
       {_steps_html(job, events)}
       <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:12px 14px;margin:12px 0 18px;">
         <div style="font-weight:700;color:#991b1b;margin-bottom:4px;">오류 내용</div>
@@ -489,7 +492,6 @@ def notify_job_failed(
 ) -> dict[str, Any]:
     recipient = _job_recipient(job)
     recipient_name = _job_recipient_name(job)
-    support_email = _support_email()
     subject = f"[엑셀 전표 처리 오류] {job.title}"
     result = job.result or {}
     diagnostic = _diagnostic_attachment(job, events, source_path)
@@ -507,9 +509,7 @@ def notify_job_failed(
         failure_mail_body(job, events),
         html_body=failure_mail_html(job, events),
         attachments=attachments,
-        cc_addr=support_email,
         to_name=recipient_name,
-        cc_name="전산팀",
     )
 
 

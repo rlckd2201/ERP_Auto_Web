@@ -68,7 +68,7 @@ class Settings:
     admin_name: str = _env("EXCEL_VOUCHER_ADMIN_NAME", "김기창")
     admin_password: str = _env("EXCEL_VOUCHER_ADMIN_PASSWORD", "eotmd12!@")
     admin_email: str = _env("EXCEL_VOUCHER_ADMIN_EMAIL", "rlckd9646@dae-seung.co.kr")
-    support_email: str = _env("EXCEL_VOUCHER_SUPPORT_EMAIL", "ds1501@dae-seung.co.kr")
+    support_email: str = _env("EXCEL_VOUCHER_SUPPORT_EMAIL", "rlckd9646@dae-seung.co.kr")
     legacy_auth_db_path: Path = Path(_env("EXCEL_VOUCHER_LEGACY_AUTH_DB_PATH", r"C:\ERP_DB\learned_data.db"))
 
     groupware_db_host: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_HOST", "172.16.19.33")

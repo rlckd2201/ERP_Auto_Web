@@ -46,7 +46,7 @@ def test_send_mail_outbox_records_pdf_attachment(tmp_path, monkeypatch):
     assert payload["attachments"] == [{"filename": "voucher.pdf", "content_type": "application/pdf"}]
 
 
-def test_failure_notification_ccs_support_and_attaches_debug_files(tmp_path, monkeypatch):
+def test_failure_notification_sends_only_to_requester_and_attaches_debug_files(tmp_path, monkeypatch):
     outbox = tmp_path / "outbox"
     source = tmp_path / "upload.xlsx"
     source.write_bytes(b"xlsx")
@@ -102,9 +102,11 @@ def test_failure_notification_ccs_support_and_attaches_debug_files(tmp_path, mon
     outbox_files = list(outbox.glob("*.json"))
     assert len(outbox_files) == 1
     payload = json.loads(outbox_files[0].read_text(encoding="utf-8"))
-    assert payload["cc"] == "전산팀 <ds1501@dae-seung.co.kr>"
+    assert payload["cc"] == ""
     assert "재정전표자동화 시스템" in payload["from"]
     assert "requester@example.com" in payload["to"]
+    assert "ds1501@dae-seung.co.kr" not in payload["to"]
+    assert "ds1501@dae-seung.co.kr" not in payload["cc"]
     attachment_names = {item["filename"] for item in payload["attachments"]}
     assert "upload.xlsx" in attachment_names
     assert "agent.log" in attachment_names
@@ -117,3 +119,35 @@ def test_failure_notification_ccs_support_and_attaches_debug_files(tmp_path, mon
     diagnostic_text = diagnostic.read_text(encoding="utf-8")
     assert "As4908524!" not in diagnostic_text
     assert "secret-blob" not in diagnostic_text
+
+
+def test_failure_notification_falls_back_to_admin_without_support_cc(tmp_path, monkeypatch):
+    outbox = tmp_path / "outbox"
+    monkeypatch.setattr(notifications, "settings", _fake_settings(tmp_path, outbox))
+    now = datetime(2026, 7, 21, 15, 0, 0)
+    job = JobRecord(
+        id="admin-only-error",
+        title="대승 전표 오류",
+        requester="",
+        company_key="daeseung",
+        accounting_date="2026-07-21",
+        source_filename="upload.xlsx",
+        status="error",
+        progress=95,
+        message="ERP 오류",
+        target_agent_id="finance-agent-172-17-30-243",
+        target_client_ip="172.17.30.243",
+        created_at=now,
+        updated_at=now,
+        payload={"requester_email": ""},
+        result={"error": "ERP 오류"},
+        error="ERP 오류",
+    )
+
+    result = notifications.notify_job_failed(job)
+
+    assert result["queued"] is True
+    payload = json.loads(next(outbox.glob("*.json")).read_text(encoding="utf-8"))
+    assert payload["to"] == "admin@example.com"
+    assert payload["cc"] == ""
+    assert "ds1501@dae-seung.co.kr" not in payload["to"]
