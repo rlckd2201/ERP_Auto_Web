@@ -1290,6 +1290,9 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
                 events.append(("finance-input", args)) or True
             ),
             "_input_vendor_by_number_keyboard": lambda *_args, **_kwargs: events.append(("popup",)),
+            "_input_bank_account_by_popup": lambda *args, **kwargs: (
+                events.append(("bank-select", args, kwargs)) or True
+            ),
             "_input_value_xy": lambda *args, **kwargs: events.append(("input", args, kwargs)),
             "re": re,
             "self": SimpleNamespace(logger=_FakeLogger()),
@@ -1322,9 +1325,14 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     }
     assert fill() is False
 
-    assert [event[0] for event in events] == ["input", "input"]
-    assert [event[1][2] for event in events] == ["140-000-948562", "신한 수원금융센터"]
-    assert all(event[2] == {"enter_count": 1, "clear": True} for event in events)
+    assert [event[0] for event in events] == ["bank-select"]
+    assert events[0][1] == (
+        1118,
+        797,
+        "140-000-948562",
+        "신한 수원금융센터",
+        "3행 계좌번호",
+    )
 
 
 def test_management_value_xy_reuses_ready_snapshot_without_another_uia_scan():
@@ -2160,7 +2168,7 @@ def test_bank_account_verification_accepts_only_the_expected_row_summary():
         assert clipboard["value"] == "original clipboard"
 
 
-def test_fast_bank_fill_skips_second_uia_scan_and_inputs_two_values():
+def test_fast_bank_fill_skips_second_uia_scan_and_selects_account_once():
     for total_rows in (230, 300):
         events = []
         active_context = {"row_no": None}
@@ -2184,6 +2192,9 @@ def test_fast_bank_fill_skips_second_uia_scan_and_inputs_two_values():
                 "finance_vendor_commit_settle_wait": 0.16,
                 "_seed_vendor_by_number_f9": lambda *_args, **_kwargs: True,
                 "_input_vendor_by_number_keyboard": lambda *_args, **_kwargs: True,
+                "_input_bank_account_by_popup": lambda *args, **kwargs: (
+                    events.append(("bank-select", args, kwargs)) or True
+                ),
                 "_input_value_xy": lambda *args, **kwargs: events.append(("input", args, kwargs)),
                 "re": re,
                 "self": SimpleNamespace(logger=_FakeLogger()),
@@ -2200,12 +2211,139 @@ def test_fast_bank_fill_skips_second_uia_scan_and_inputs_two_values():
         loaded["_fill_explicit_management_items"]()
 
         assert active_context["row_no"] == total_rows
-        assert [event[0] for event in events] == ["input", "input"]
-        assert [event[1][0:3] for event in events] == [
-            (1118, 797, "140-000-948562"),
-            (1118, 817, "신한 수원금융센터"),
-        ]
-        assert all(event[2] == {"enter_count": 1, "clear": True} for event in events)
+        assert [event[0] for event in events] == ["bank-select"]
+        assert events[0][1] == (
+            1118,
+            797,
+            "140-000-948562",
+            "신한 수원금융센터",
+            f"{total_rows}행 계좌번호",
+        )
+
+
+def test_bank_fill_forces_account_selection_before_auto_filled_branch():
+    events = []
+    loaded = _load_nested_functions(
+        "_fill_explicit_management_items",
+        namespace={
+            "management_active_row_context": {"row_no": None},
+            "form_data": {"cash_processing_enabled": True},
+            "_uncheck_cash_processing": lambda *_args, **_kwargs: None,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "_management_grid_snapshot": lambda: {
+                "label_norms": {"계좌번호", "금융기관지점"},
+                "labels": ["계좌번호", "금융기관지점"],
+            },
+            "management_bank_coordinate_fallback_rows": set(),
+            "_management_value_xy": lambda item_name, fallback_y: (1118, 797),
+            "finance_vendor_entry_state": {"f9_seeded": True},
+            "finance_vendor_paste_settle_wait": 0.10,
+            "finance_vendor_commit_settle_wait": 0.16,
+            "_seed_vendor_by_number_f9": lambda *_args, **_kwargs: True,
+            "_input_finance_vendor_code_xy": lambda *_args, **_kwargs: True,
+            "_input_vendor_by_number_keyboard": lambda *_args, **_kwargs: True,
+            "_input_bank_account_by_popup": lambda *args, **kwargs: (
+                events.append(("bank-select", args, kwargs)) or True
+            ),
+            "_input_value_xy": lambda *args, **kwargs: events.append(
+                ("forbidden-direct-input", args, kwargs)
+            ),
+            "re": re,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+            "row_no": 210,
+            "account_key": "보통예금",
+            # Deliberately reverse the payload order.  The account selector must
+            # still run first and the branch must never be entered directly.
+            "explicit_management": {
+                "금융기관지점": "신한 수원금융센터",
+                "계좌번호": "140-000-948562",
+                "거래처": "",
+            },
+        },
+    )
+
+    loaded["_fill_explicit_management_items"]()
+
+    assert [event[0] for event in events] == ["bank-select"]
+    assert events[0][1][2:4] == (
+        "140-000-948562",
+        "신한 수원금융센터",
+    )
+
+
+def test_bank_fill_rejects_branch_without_account_number():
+    loaded = _load_nested_functions(
+        "_fill_explicit_management_items",
+        namespace={
+            "management_active_row_context": {"row_no": None},
+            "form_data": {"cash_processing_enabled": True},
+            "_uncheck_cash_processing": lambda *_args, **_kwargs: None,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "_management_grid_snapshot": lambda: {
+                "label_norms": {"계좌번호", "금융기관지점"},
+                "labels": ["계좌번호", "금융기관지점"],
+            },
+            "management_bank_coordinate_fallback_rows": set(),
+            "_management_value_xy": lambda *_args, **_kwargs: (1118, 797),
+            "finance_vendor_entry_state": {"f9_seeded": True},
+            "finance_vendor_paste_settle_wait": 0.10,
+            "finance_vendor_commit_settle_wait": 0.16,
+            "_seed_vendor_by_number_f9": lambda *_args, **_kwargs: True,
+            "_input_finance_vendor_code_xy": lambda *_args, **_kwargs: True,
+            "_input_vendor_by_number_keyboard": lambda *_args, **_kwargs: True,
+            "_input_bank_account_by_popup": lambda *_args, **_kwargs: True,
+            "_input_value_xy": lambda *_args, **_kwargs: None,
+            "re": re,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+            "row_no": 210,
+            "account_key": "보통예금",
+            "explicit_management": {"금융기관지점": "신한 수원금융센터"},
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="보통예금 계좌번호가 없어"):
+        loaded["_fill_explicit_management_items"]()
+
+
+def test_bank_account_result_matches_account_and_branch_on_same_row():
+    class WhiteImage:
+        size = (600, 30)
+
+        @staticmethod
+        def getpixel(_point):
+            return (255, 255, 255)
+
+    popup_rect = _FakeRect(843, 540, 1743, 1040)
+    account = _FakeControl(
+        "140-000-948562",
+        "Text",
+        _FakeRect(900, 724, 1073, 744),
+    )
+    branch = _FakeControl(
+        "신한 수원금융센터",
+        "Text",
+        _FakeRect(1242, 724, 1413, 744),
+    )
+    loaded = _load_nested_functions(
+        "_bank_account_result_target",
+        namespace={
+            "_vendor_popup_rect": lambda _popup: popup_rect,
+            "_visible_vendor_popup_controls": lambda _popup: [account, branch],
+            "_direct_vendor_popup_text": lambda ctrl: [ctrl.window_text()],
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "pyautogui": SimpleNamespace(screenshot=lambda **_kwargs: WhiteImage()),
+            "re": re,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+    target = loaded["_bank_account_result_target"]
+
+    assert target({}, "140-000-948562", "신한 수원금융센터") == (
+        986,
+        734,
+        "exact-uia",
+    )
+    assert target({}, "140-000-948562", "다른 금융기관지점") is None
 
 
 def test_management_snapshot_caches_cash_processing_checkbox_once():
@@ -4080,6 +4218,65 @@ def test_verified_erp_message_dismissal_never_enters_unknown_dialog():
     assert pressed == []
 
 
+def test_save_and_print_guard_rejects_open_account_lookup_popup():
+    class FakePopup:
+        def __init__(self, title, pid, rect):
+            self._title = title
+            self._pid = pid
+            self._rect = rect
+            self.element_info = SimpleNamespace(process_id=pid)
+
+        def window_text(self):
+            return self._title
+
+        def process_id(self):
+            return self._pid
+
+        def is_visible(self):
+            return True
+
+        def rectangle(self):
+            return self._rect
+
+    account_popup = FakePopup("계좌", 243, _FakeRect(843, 540, 1743, 1040))
+    unrelated_popup = FakePopup("계좌", 999, _FakeRect(200, 200, 1000, 800))
+    main_window = FakePopup("대승", 243, _FakeRect(0, 0, 1920, 1040))
+
+    loaded = _load_nested_functions(
+        "_visible_erp_management_lookup_popups",
+        "_assert_no_erp_management_lookup_popup",
+        namespace={
+            "Desktop": lambda **_kwargs: SimpleNamespace(
+                windows=lambda: [main_window, unrelated_popup, account_popup]
+            ),
+            "re": re,
+            "self": SimpleNamespace(erp_process_pid=243, logger=_FakeLogger()),
+        },
+    )
+
+    blockers = loaded["_visible_erp_management_lookup_popups"]()
+    assert len(blockers) == 1
+    assert blockers[0][0:2] == ("계좌", 243)
+    with pytest.raises(RuntimeError, match="계좌/거래처 선택 팝업이 닫히지 않아"):
+        loaded["_assert_no_erp_management_lookup_popup"]("저장 전")
+
+
+def test_save_and_print_paths_call_lookup_popup_guard_before_actions():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    save_start = source.index("def _save_current_voucher_via_toolbar")
+    save_end = source.index("def _wait_rd_viewer_ready", save_start)
+    save_helper = source[save_start:save_end]
+    assert '_assert_no_erp_management_lookup_popup("저장 전")' in save_helper
+    assert save_helper.index('_assert_no_erp_management_lookup_popup("저장 전")') < save_helper.index(
+        "_click_save_button()"
+    )
+
+    print_start = source.index("def _save_and_open_print_dialog")
+    print_end = source.index("pyautogui.hotkey('ctrl', 'p')", print_start)
+    print_helper = source[print_start:print_end]
+    assert '_assert_no_erp_management_lookup_popup("출력 전")' in print_helper
+
+
 def test_save_toolbar_click_verifies_exact_point_control_without_tree_scan(monkeypatch):
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
     save_click_start = source.index("def _click_save_button")
@@ -4162,8 +4359,9 @@ def test_management_save_allows_no_message_then_uses_print_stage_verification(mo
             "re": re,
             "time": SimpleNamespace(sleep=lambda _seconds: None),
             "ERP_SETTLE_WAIT": 0,
-            "main_win": SimpleNamespace(is_minimized=lambda: False, set_focus=lambda: None),
-            "_find_erp_message_snapshot": lambda: None,
+                "main_win": SimpleNamespace(is_minimized=lambda: False, set_focus=lambda: None),
+                "_assert_no_erp_management_lookup_popup": lambda _context: None,
+                "_find_erp_message_snapshot": lambda: None,
             "_click_save_button": lambda: clicked.append("save"),
             "_wait_erp_message": lambda _timeout: None,
             "_erp_message_compact": lambda snapshot: "" if not snapshot else snapshot["text"],
