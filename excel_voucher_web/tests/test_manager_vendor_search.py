@@ -1585,14 +1585,22 @@ def _synthetic_gdi_visual_snapshot(
     include_left_border=True,
     include_divider=True,
     include_right_border=True,
-    structure_band_top=720,
+    structure_band_top=None,
+    structure_row_center_y=None,
     separators=True,
 ):
     main_rect = _FakeRect(10, 50, 1610, 1050)
-    red_sample_y, first_value_y, separator_lines = {
-        24: (28, 750, (753, 761)),
-        26: (68, 790, (793, 801)),
+    detected_band_top, red_sample_y, first_value_y, separator_lines = {
+        # A splitter persisted high by the ERP user account leaves only ten
+        # voucher rows; the production scanner must find the management pane
+        # in its earlier 360px scan band instead of assuming the usual 720px.
+        10: (420, 48, 470, (473, 481)),
+        24: (720, 28, 750, (753, 761)),
+        26: (720, 68, 790, (793, 801)),
     }[visible_rows]
+    active_band_top = (
+        detected_band_top if structure_band_top is None else structure_band_top
+    )
     screenshot_regions = []
 
     def _screenshot(*, region):
@@ -1605,7 +1613,9 @@ def _synthetic_gdi_visual_snapshot(
                 else []
             )
             return _SyntheticGdiImage(width, height, separator_rows=rows)
-        active_y = red_sample_y if top == main_rect.top + structure_band_top else None
+        active_y = (
+            red_sample_y if structure_row_center_y is None else structure_row_center_y
+        ) if top == main_rect.top + active_band_top else None
         return _SyntheticGdiImage(
             width,
             height,
@@ -1752,6 +1762,29 @@ def test_gdi_visual_snapshot_infers_first_row_from_single_lower_separator():
     assert active_band["structure"]["source"] == "inferred-single-line"
     assert active_band["structure"]["upper"] == 20
     assert active_band["structure"]["lower"] == 40
+
+
+def test_gdi_inferred_header_interval_targets_next_data_row_without_moving_voucher_boundary():
+    snapshot, main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        include_upper_separator=False,
+        structure_row_center_y=14,
+        separators=False,
+    )
+
+    assert snapshot["visual_ready"] is True
+    active_band = next(
+        band
+        for band in snapshot["visual_counts"]["bands"]
+        if band["top"] == 720
+    )
+    assert active_band["horizontal_lines"] == [26]
+    assert active_band["structure"]["source"] == "inferred-single-line"
+    assert active_band["structure"]["upper"] == 6
+    assert active_band["structure"]["lower"] == 26
+    assert snapshot["first_value_y"] == 756
+    assert snapshot["voucher_clip_bottom_abs"] == main_rect.top + 692
+    assert snapshot["visual_signature"] == (720, 756, 692, 1)
 
 
 def test_gdi_single_separator_fallback_still_requires_triad_and_label_ink():
@@ -3078,8 +3111,11 @@ def test_fixed_anchor_reuses_enter_or_down_mode_through_dynamic_total():
 
 
 def test_fast_geometry_navigation_never_probes_uia_through_dynamic_bank_row():
-    for full_row_count in (24, 26):
-        for total_rows in (230, 300):
+    # The horizontal splitter can leave a short voucher viewport (for example,
+    # 10 rows) or a taller one.  Navigation must use the runtime boundary, not
+    # a workstation-specific fixed last-row number.
+    for full_row_count in (10, 23, 24, 26):
+        for total_rows in (210, 230, 300):
             snapshot = _visible_voucher_snapshot(
                 first_logical_row=1,
                 full_row_count=full_row_count,
@@ -3120,14 +3156,12 @@ def test_fast_geometry_navigation_never_probes_uia_through_dynamic_bank_row():
             assert current_y == snapshot["last_full_y"]
             assert state["bottom_scroll_mode"] is True
             assert state["scroll_anchor_y"] == snapshot["last_full_y"]
-            assert state["scroll_advance_mode"] == "enter"
-            assert sum(event == ("key", "down") for event in events) == (
-                full_row_count - 1
-            )
+            assert state["scroll_advance_mode"] == "down"
+            assert sum(event == ("key", "down") for event in events) == total_rows - 1
 
 
-def test_fast_geometry_boundary_uses_one_down_when_management_enter_was_not_sent():
-    for full_row_count in (24, 26):
+def test_fast_geometry_boundary_uses_one_down_even_when_management_enter_was_sent():
+    for full_row_count in (10, 23, 24, 26):
         snapshot = _visible_voucher_snapshot(
             first_logical_row=1,
             full_row_count=full_row_count,
@@ -3153,7 +3187,7 @@ def test_fast_geometry_boundary_uses_one_down_when_management_enter_was_not_sent
         assert loaded["_advance_grid_row"](
             snapshot["last_full_y"],
             full_row_count + 1,
-            management_enter_sent=False,
+            management_enter_sent=True,
         ) == snapshot["last_full_y"]
 
         assert [event[0] for event in events] == ["click", "key", "sleep"]
@@ -3372,8 +3406,8 @@ def _fast_visible_voucher_snapshot(
     return snapshot
 
 
-def test_fast_visible_snapshot_uses_cached_header_for_24_or_26_rows():
-    for full_row_count, last_full_y in ((24, 691), (26, 731)):
+def test_fast_visible_snapshot_uses_cached_header_for_variable_viewport_height():
+    for full_row_count, last_full_y in ((10, 411), (24, 691), (26, 731)):
         snapshot = _fast_visible_voucher_snapshot(full_row_count=full_row_count)
 
         assert snapshot["slot_ys"] == list(range(231, last_full_y + 1, 20))
@@ -3428,8 +3462,9 @@ def test_fast_visible_snapshot_uses_cached_viewport_when_uia_header_text_is_miss
     assert snapshot["geometry_source"] == "ready-viewport-snapshot"
 
 
-def test_fast_visible_snapshot_uses_dynamic_gdi_boundary_for_24_or_26_rows():
+def test_fast_visible_snapshot_uses_dynamic_gdi_boundary_for_variable_viewport_height():
     for full_row_count, boundary, last_full_y in (
+        (10, 423, 411),
         (24, 703, 691),
         (26, 743, 731),
     ):
@@ -3659,9 +3694,12 @@ def test_resume_print_only_reuses_open_voucher_without_form_input_or_save():
     save_helper = source[save_start:coord_start]
     assert 'if _env_flag("ERP_RESUME_PRINT_ONLY", "0"):' in save_helper
     assert "이미 저장된 현재 전표를 유지하고 Ctrl+S를 생략합니다." in save_helper
-    assert save_helper.index("ERP_RESUME_PRINT_ONLY") < save_helper.index(
-        "pyautogui.hotkey('ctrl', 's')"
-    )
+    resume_start = save_helper.index("ERP_RESUME_PRINT_ONLY")
+    management_start = save_helper.index("ERP_RESUME_MANAGEMENT_SAVE_PRINT", resume_start)
+    assert "_save_current_voucher_via_toolbar()" not in save_helper[
+        resume_start:management_start
+    ]
+    assert "pyautogui.hotkey('ctrl', 's')" not in save_helper
 
     coord_call = source.index("\n            _setup_by_coordinates_only()", coord_start)
     pre_coord = source[coord_start:coord_call]
@@ -4174,6 +4212,10 @@ def test_management_save_precedes_print_and_rd_timeout_scales_with_row_count():
     safe_save = helper.index("_save_current_voucher_via_toolbar()", management_flag)
     print_hotkey = helper.index("pyautogui.hotkey('ctrl', 'p')", safe_save)
     assert management_flag < safe_save < print_hotkey
+    assert helper.count("_save_current_voucher_via_toolbar()") == 2
+    assert "Ctrl+S 저장 시작" not in helper
+    assert "pyautogui.hotkey('ctrl', 's')" not in helper
+    assert "저장 알림 닫기용 Enter" not in helper
     assert 'ERP_PRINT_VIEWER_SECONDS_PER_ROW", "0.8"' in helper
     assert 'ERP_PRINT_VIEWER_INITIAL_SECONDS_PER_ROW", "0.5"' in helper
     assert "effective_row_count * max(0.0, viewer_seconds_per_row)" in helper

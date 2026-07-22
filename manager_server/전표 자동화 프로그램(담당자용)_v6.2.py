@@ -3158,7 +3158,13 @@ class ERPLoginBot:
                     row_height,
                     int(os.getenv("ERP_MGMT_VISUAL_VALUE_TO_GRID_BOTTOM", "44") or "44"),
                 )
-                for top_rel in (360, 480, 600, 720, 820):
+                # The horizontal splitter height is persisted by the ERP user
+                # account.  A management row can therefore straddle any boundary
+                # of the normal 120px bands after a person resized the panes and
+                # closed ERP.  Keep the common bands first for normal speed, then
+                # inspect overlapping bands only when none of them contained a
+                # complete management row.
+                for top_rel in (360, 480, 600, 720, 820, 420, 540, 660, 780):
                     if top_rel >= max_top:
                         continue
                     top = main_rect.top + top_rel
@@ -3610,21 +3616,37 @@ class ERPLoginBot:
                         }
                     )
                     if structural_candidate is not None:
-                        first_sample_center = int(round(
+                        structure_sample_center = int(round(
                             (
                                 int(structural_candidate["upper"])
                                 + int(structural_candidate["lower"])
                             )
                             / 2.0
                         ))
+                        first_sample_center = int(structure_sample_center)
+                        if (
+                            structural_candidate.get("source") == "inferred-single-line"
+                            and int(structural_candidate["lower"])
+                            <= int(round(row_height * 1.5))
+                        ):
+                            # A lone separator near the top of the 720px scan band
+                            # is the management header's lower edge.  The detected
+                            # ink belongs to 관리항목/관리항목값, while the first data
+                            # row is one pitch below it (observed at y=756, not 736).
+                            first_sample_center += row_height
                         first_value_y = top_rel + first_sample_center
                         first_value_abs = main_rect.top + first_value_y
-                        fallback_boundary_abs = first_value_abs - value_to_grid_bottom
+                        boundary_reference_abs = (
+                            main_rect.top + top_rel + structure_sample_center
+                        )
+                        fallback_boundary_abs = (
+                            boundary_reference_abs - value_to_grid_bottom
+                        )
                         (
                             voucher_clip_bottom_abs,
                             boundary_detail,
                         ) = _management_grid_visual_boundary(
-                            first_value_abs,
+                            boundary_reference_abs,
                             fallback_boundary_abs,
                         )
                         # GDI/원격 화면 배율에 따라 얇은 구분선이 캡처에서 빠질 수
@@ -6440,6 +6462,7 @@ class ERPLoginBot:
                     )
                     if (
                         management_enter_sent
+                        and not skip_visible_row_scan
                         and row_geometry_state.get("scroll_advance_mode") == "enter"
                     ):
                         self.logger.info(
@@ -6465,16 +6488,10 @@ class ERPLoginBot:
                     ):
                         # From the first row beyond the painted viewport onward,
                         # the fully visible bottom slot is the fixed coordinate.
-                        # A direct management-value Enter already advances the ERP
-                        # row; rows without that Enter are advanced once with Down.
+                        # In the GDI-only production screen, Enter commits the
+                        # management value but does not advance the voucher row.
+                        # Always restore the current summary row and press Down once.
                         anchor_y = int(snapshot["last_full_y"])
-                        if management_enter_sent:
-                            return _set_calibrated_scroll_anchor(
-                                next_row_no,
-                                anchor_y,
-                                "fast-management-enter-geometry",
-                                "enter",
-                            )
                         _click_form_xy(
                             summary_x,
                             int(current_y),
@@ -8628,12 +8645,10 @@ class ERPLoginBot:
                     )
                     _save_current_voucher_via_toolbar()
                 else:
-                    self.logger.info("  [SAVE] Ctrl+S 저장 시작")
-                    pyautogui.hotkey('ctrl', 's')
-                    time.sleep(ERP_PRINT_SAVE_WAIT)
-                    pyautogui.press('enter')
-                    self.logger.info("  [SAVE] 저장 알림 닫기용 Enter 전송 완료")
-                    time.sleep(ERP_SETTLE_WAIT)
+                    self.logger.info(
+                        "  [SAVE] 신규 전표를 실제 '저장' 툴바 버튼으로 저장하고 결과를 검증합니다."
+                    )
+                    _save_current_voucher_via_toolbar()
 
                 print_runtime_baseline = _capture_print_runtime()
                 self.logger.info("  [PRINT] ERP 전표출력 Ctrl+P 전송")
