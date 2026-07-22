@@ -353,3 +353,10 @@
 - 검색조건 3개 중 현재 저장 위치와 무관하게 `Tab 4 → Up 2 → Tab 3 → Enter`로 계좌번호를 선택한다. 팝업 열림·종료 및 금융기관지점 자동입력 화면을 모두 검증하고 하나라도 실패하면 저장 전 중단한다.
 - 검증: 계좌 관련 `10 passed`, 전체 `154 passed`, Python AST와 `git diff --check` 통과. 금융기관지점 GDI 반영 확인은 최대 8회×0.25초로 완화했다. Graphify CLI는 없어 갱신하지 못했다.
 - 배포: 커밋 `cf9397b`를 `origin/main`에 push했다. Manager SHA-256은 `64756E54FCD9CEFD7AA5E64BCC27DBD65EE7B1F6F9965A2C0EE7DAB9C488AFDF`이며 243 실기기 재검증은 아직 남아 있다.
+
+## 2026-07-22 작업 826102544bac F9 내부 계좌 창 UIA 정지
+- 증상: F9 후 계좌 팝업과 전체 계좌 목록은 화면에 정상 표시됐지만 검색어는 비어 있었고, 작업은 `210행 계좌번호 F9 후 '계좌' 선택 팝업을 확인하지 못했습니다.`로 종료됐다.
+- 증거: 로그의 계좌 셀 클릭은 15:21:24.680, 실패는 15:23:46.254로 약 142초 차이다. 작업 관리자에는 ERP PID 8928의 자식 창으로 `계좌`와 `대승`이 함께 표시됐다.
+- 원인: `_find_internal_bank_account_popup()`의 `main_win.descendants()`가 GDI MDI 전체를 장시간 열거하고도 `계좌` 창 서명을 얻지 못했다. 함수의 외부 timeout 1초는 내부 블로킹 호출을 중단하지 못했다.
+- 조치: 입력 경로에서는 `_find_bank_account_popup()`과 `_wait_bank_account_popup_closed()`를 호출하지 않는다. F9 전후 화면 변화율 최소 5%로 열림을 확인하고, Enter 후 기준 화면 대비 변화가 열린 화면의 55% 이하로 복귀했는지와 금융기관지점 셀 잉크를 확인한다.
+- 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.
