@@ -360,6 +360,7 @@
 - 원인: `_find_internal_bank_account_popup()`의 `main_win.descendants()`가 GDI MDI 전체를 장시간 열거하고도 `계좌` 창 서명을 얻지 못했다. 함수의 외부 timeout 1초는 내부 블로킹 호출을 중단하지 못했다.
 - 조치: 입력 경로에서는 `_find_bank_account_popup()`과 `_wait_bank_account_popup_closed()`를 호출하지 않는다. F9 전후 화면 변화율 최소 5%로 열림을 확인하고, Enter 후 기준 화면 대비 변화가 열린 화면의 55% 이하로 복귀했는지와 금융기관지점 셀 잉크를 확인한다.
 - 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.
+- 배포: 커밋 `cc7e654`를 `origin/main`에 push했다. Manager SHA-256은 `C7D7CD53B2F58F5F9B76B9FA59AC5609E9F140495EF2B4F9F02EF4D610487998`이며 243 실기기 재검증은 남아 있다.
 - 배포: 커밋 `3028584`를 `origin/main`에 push했다. Manager SHA-256은 `89A2EA3A4BD8666B3A7C910DEE94C1A22E5BF03E0835ACC3E3DCEE0DF5E34440`이며 243 재검증은 남아 있다.
 
 ## 2026-07-23 작업 7f1fe41c5bc6 F9 화면 변화율 오판
