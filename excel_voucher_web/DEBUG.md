@@ -302,13 +302,18 @@
 ## 2026-07-22 243 이전 Manager 실행 확인
 - 신규 업로드 작업 `876c1b0aad14`은 08:09:46 243이 claim했고 08:11:27 `1행 거래처번호 F9 키보드 입력에 실패했습니다.`로 종료됐다.
 - 서버 보관 로그에는 `ERP_SKIP_VISIBLE_ROW_SCAN=1` 운영 경로임에도 08:11:26 `_wait_vendor_ds_foreground()`의 `F9 후 거래처ds foreground 미확인`이 남았다. 커밋 `34317ae`의 fast 경로는 이 함수를 호출하지 않으므로 243이 이전 Manager를 실행한 직접 증거다.
-- 최신 저장소 Manager SHA-256은 `273524745B5A1D755520C33142F818A9D196B03C1F3809E72DF8B587551957B5`다. 코드 추가 수정 없이 `243 최신 적용` 완료 해시 앞 12자리 `273524745B5A`를 먼저 확인한다.
+- 당시 Windows 작업 트리 Manager SHA-256은 `273524745B5A1D755520C33142F818A9D196B03C1F3809E72DF8B587551957B5`였다. 이 값은 Git 줄바꿈 정규화 전 로컬 파일 해시이므로 243 배포 ZIP 확인값으로 사용하지 않는다.
 
 ## 2026-07-22 243 업데이트 원본 불일치
 - 증상: 사용자가 243 최신 적용을 완료했지만 화면 해시는 `B3830427A6CF`였고, 작업 `876c1b0aad14` 로그는 수정 전 fast 경로의 `_wait_vendor_ds_foreground()` 호출을 남겼다.
 - 원인: 수정본은 private `ERP_Auto_Finance`에만 push됐고 Agent 업데이트 기본 URL은 공개 `ERP_Auto_Web/main.zip`이었다. 공개 Manager는 7,689행, 검증본은 11,742행으로 단일 F9 수정 외에도 동적 행·복구·출력 안전장치가 누락된 상태였다.
 - 조치: 공개 저장소의 깨끗한 Manager, `agent_adapter.py`, `agent_worker.py`, `main.py`, `test_manager_vendor_search.py`를 private 검증본과 동일 해시로 동기화했다. 상태 문서 외 다른 dirty 파일은 수정하지 않았다.
 - 검증: Python 구문 검사 통과, 핵심 4건 통과, 처음에는 결합 파일 세대 불일치로 5건 실패했으나 결합 파일 동기화 후 원격 최신본 기준 전체 `142 passed`.
-- 다음 확인: 공개 push 후 243 적용 해시 `273524745B5A`; 해시가 다르면 재업로드하지 않는다.
+- 다음 확인: 공개 push 후 GitHub ZIP 기준 243 적용 해시를 계산해 완료 화면과 비교한다.
 - Graphify 갱신은 공개 작업공간에서 `graphify` 실행 파일을 찾을 수 없어 수행하지 못했다. 기존 `graphify-out/GRAPH_REPORT.md`는 보존했고 코드·테스트 검증을 배포 기준으로 사용한다.
-- 원격 최신본 `c731806` 위에서 배포 커밋 `c7cce27`을 생성해 `ERP_Auto_Web/main`에 push했다. 다음 운영 입력 전 243 Manager 해시 `273524745B5A`를 확인한다.
+- 원격 최신본 `c731806` 위에서 배포 커밋 `c7cce27`을 생성해 `ERP_Auto_Web/main`에 push했다.
+
+## 2026-07-22 배포 ZIP Manager 해시 확인
+- 243 완료 화면은 `Manager DD4E9C3C2788`을 표시했다. Git 커밋의 Manager blob을 직접 읽어 SHA-256을 계산한 결과 `DD4E9C3C27889CAAD23851E576F7B931CA30B57E7F78BE38F8AD56D168EEC50F`로 정확히 일치했다.
+- 로컬 작업 파일 해시 `273524...`와 차이가 난 이유는 Git의 줄바꿈 정규화다. Agent는 GitHub ZIP 원본 해시와 설치 대상 해시를 내부에서 다시 비교해 동일할 때만 완료하므로 243에는 최신 수정본이 정상 설치됐다.
+- 실제 엑셀 재업로드를 진행해도 된다.
