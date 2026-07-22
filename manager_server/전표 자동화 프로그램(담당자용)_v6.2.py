@@ -4020,6 +4020,11 @@ class ERPLoginBot:
         management_active_row_context = {"row_no": None}
         finance_vendor_entry_state = {"f9_seeded": False}
         vendor_popup_detection_state = {"signature": None}
+        bank_account_popup_state = {
+            "opened": False,
+            "closed": True,
+            "source": "",
+        }
 
         def _prepare_fast_bank_management_coordinates():
             """Reuse the already captured first management row without a full UIA walk."""
@@ -5512,10 +5517,122 @@ class ERPLoginBot:
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
                 return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)
 
+            def _find_internal_bank_account_popup():
+                """Find the 계좌 selector when K-System hosts it inside the ERP MDI."""
+                try:
+                    descendants = main_win.descendants()
+                except Exception as exc:
+                    self.logger.debug(
+                        f"  [MGMT-BANK] 내부 계좌 팝업 UIA 탐색 실패: {exc}"
+                    )
+                    return None
+
+                title_controls = []
+                marker_controls = []
+                marker_names = {
+                    _norm_text("계좌번호"),
+                    _norm_text("계좌명"),
+                    _norm_text("금융기관지점명"),
+                    _norm_text("계정과목"),
+                    _norm_text("계정코드"),
+                }
+                seen_markers = set()
+                for ctrl in descendants:
+                    try:
+                        if not ctrl.is_visible():
+                            continue
+                        values = _direct_vendor_popup_text(ctrl)
+                        if any(value == _norm_text("계좌") for value in values):
+                            title_controls.append(ctrl)
+                        for value in values:
+                            if value in marker_names:
+                                seen_markers.add(value)
+                                marker_controls.append(ctrl)
+                    except Exception:
+                        continue
+
+                required_headers = {
+                    _norm_text("계좌번호"),
+                    _norm_text("계좌명"),
+                    _norm_text("금융기관지점명"),
+                }
+                if not title_controls and not required_headers.issubset(seen_markers):
+                    return None
+
+                main_rect = _main_rect()
+                min_width = max(500, int(main_rect.width() * 0.35))
+                min_height = max(250, int(main_rect.height() * 0.25))
+                candidates = []
+                for ctrl in title_controls + marker_controls:
+                    current = ctrl
+                    for _ in range(10):
+                        try:
+                            rect = current.rectangle()
+                            inside_main = (
+                                rect.left >= main_rect.left - 5
+                                and rect.top >= main_rect.top - 5
+                                and rect.right <= main_rect.right + 5
+                                and rect.bottom <= main_rect.bottom + 5
+                            )
+                            if (
+                                inside_main
+                                and rect.width() >= min_width
+                                and rect.height() >= min_height
+                            ):
+                                candidates.append(
+                                    (rect.width() * rect.height(), current, rect)
+                                )
+                            parent = current.parent()
+                            if parent is None:
+                                break
+                            current = parent
+                        except Exception:
+                            break
+
+                seen_candidates = set()
+                for _, root, popup_rect in sorted(candidates, key=lambda item: item[0]):
+                    candidate_key = (
+                        _vendor_control_identity(root),
+                        popup_rect.left,
+                        popup_rect.top,
+                        popup_rect.right,
+                        popup_rect.bottom,
+                    )
+                    if candidate_key in seen_candidates:
+                        continue
+                    seen_candidates.add(candidate_key)
+                    nearly_main_window = (
+                        abs(popup_rect.left - main_rect.left) <= 12
+                        and abs(popup_rect.top - main_rect.top) <= 12
+                        and popup_rect.width() >= int(main_rect.width() * 0.95)
+                        and popup_rect.height() >= int(main_rect.height() * 0.90)
+                    )
+                    if nearly_main_window:
+                        continue
+                    popup = _vendor_popup_context(
+                        root,
+                        popup_rect,
+                        "bank-account-internal-uia",
+                    )
+                    edits = _visible_vendor_popup_controls(
+                        popup,
+                        "Edit",
+                        top_band=True,
+                    )
+                    combos = _visible_vendor_popup_controls(
+                        popup,
+                        "ComboBox",
+                        top_band=True,
+                    )
+                    if edits and (combos or title_controls):
+                        return popup
+                return None
+
             def _find_bank_account_popup(timeout=3.0):
                 """Find the ERP account selector opened from the 계좌번호 item."""
                 deadline = time.time() + max(0.0, float(timeout))
                 expected_pid = int(getattr(self, "erp_process_pid", 0) or 0)
+                internal_scanned = False
                 while True:
                     try:
                         for win in Desktop(backend="uia").windows():
@@ -5543,7 +5660,8 @@ class ERPLoginBot:
                                 )
                                 self.logger.info(
                                     "  [MGMT-BANK] 계좌 선택 팝업 감지: "
-                                    f"pid={pid}, rect=({rect.left},{rect.top})-"
+                                    f"source=bank-account-top-level, pid={pid}, "
+                                    f"rect=({rect.left},{rect.top})-"
                                     f"({rect.right},{rect.bottom})"
                                 )
                                 return popup
@@ -5551,6 +5669,18 @@ class ERPLoginBot:
                                 continue
                     except Exception:
                         pass
+                    if not internal_scanned:
+                        popup = _find_internal_bank_account_popup()
+                        internal_scanned = True
+                        if popup is not None:
+                            popup_rect = _vendor_popup_rect(popup)
+                            self.logger.info(
+                                "  [MGMT-BANK] 계좌 선택 팝업 감지: "
+                                "source=bank-account-internal-uia, "
+                                f"rect=({popup_rect.left},{popup_rect.top})-"
+                                f"({popup_rect.right},{popup_rect.bottom})"
+                            )
+                            return popup
                     if time.time() >= deadline:
                         return None
                     time.sleep(0.10)
@@ -5659,48 +5789,67 @@ class ERPLoginBot:
                     paste_settle_wait=max(0.50, mgmt_key_wait),
                     commit_settle_wait=max(0.70, mgmt_commit_wait),
                 )
-                popup = _find_bank_account_popup(timeout=4.0)
+
+                # A unique account is committed directly when ERP's persisted
+                # search condition is already 계좌번호.  In that normal path no
+                # selector opens and the branch value is painted automatically.
+                pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
+                direct_branch_metrics = (0, 0, 0, 0)
+                for _ in range(3):
+                    direct_branch_metrics = _management_value_visual_ink(x, y + pitch)
+                    ink_pixels, ink_rows, ink_columns, ink_span = direct_branch_metrics
+                    if (
+                        ink_pixels >= 6
+                        and ink_rows >= 3
+                        and ink_columns >= 3
+                        and ink_span >= 8
+                    ):
+                        self.logger.info(
+                            f"  [MGMT-BANK] {label}: 계좌번호 직접 확정 및 "
+                            "금융기관지점 자동입력 화면 확인 "
+                            f"(ink={direct_branch_metrics})"
+                        )
+                        return True
+                    time.sleep(0.20)
+
+                popup = _find_bank_account_popup(timeout=1.5)
                 if popup is None:
-                    raise RuntimeError(
-                        f"{label} 입력 후 '계좌' 선택 팝업을 확인하지 못했습니다."
+                    self.logger.info(
+                        f"  [MGMT-BANK] {label}: 계좌번호 직접 확정 완료; "
+                        "선택 팝업이 열리지 않아 ERP 자동입력 결과를 유지합니다."
                     )
-
-                edits = _visible_vendor_popup_controls(
-                    popup,
-                    "Edit",
-                    top_band=True,
-                )
-                edits.sort(
-                    key=lambda ctrl: (
-                        ctrl.rectangle().top,
-                        -ctrl.rectangle().width(),
-                    )
-                )
-                if edits:
-                    edits[0].click_input()
-                else:
-                    popup_rect = _vendor_popup_rect(popup)
-                    pyautogui.click(
-                        popup_rect.left + max(260, popup_rect.width() // 2),
-                        popup_rect.top + 63,
-                    )
-                time.sleep(mgmt_focus_wait)
-                pyautogui.hotkey("ctrl", "a")
-                _release_modifiers("계좌 팝업 검색어 Ctrl+A 후", wait=False)
-                _type_or_paste_text(
-                    account_no,
-                    f"{label} 계좌 팝업 검색어",
-                    settle_wait=max(0.50, mgmt_key_wait),
+                    return True
+                bank_account_popup_state["opened"] = True
+                bank_account_popup_state["closed"] = False
+                bank_account_popup_state["source"] = str(
+                    popup.get("source", "") if isinstance(popup, dict) else "top-level"
                 )
 
-                popup_rect = _vendor_popup_rect(popup)
-                search_x = popup_rect.right - 62
-                search_y = popup_rect.top + 63
-                pyautogui.click(search_x, search_y)
                 self.logger.info(
-                    f"  [MGMT-BANK] {label}: 계좌번호 검색 실행: {account_no}"
+                    f"  [MGMT-BANK] {label}: 계좌 팝업 검색조건을 계좌번호로 고정하는 "
+                    "키보드 시퀀스 시작(Tab 4 → Up 2 → Tab 3 → Enter)"
                 )
-                time.sleep(max(1.5, vendor_popup_search_wait))
+                pyautogui.press("tab", presses=4, interval=0.08)
+                time.sleep(mgmt_key_wait)
+                pyautogui.press("up", presses=2, interval=0.08)
+                time.sleep(mgmt_key_wait)
+                pyautogui.press("tab", presses=3, interval=0.08)
+                time.sleep(mgmt_key_wait)
+                pyautogui.press("enter")
+                time.sleep(max(1.0, vendor_popup_search_wait))
+
+                if _wait_bank_account_popup_closed(timeout=1.5):
+                    bank_account_popup_state["closed"] = True
+                    self.logger.info(
+                        f"  [MGMT-BANK] {label}: 계좌번호 조건 선택 및 결과 확정 완료 "
+                        f"(account={account_no}, branch={branch_name})"
+                    )
+                    time.sleep(max(0.50, mgmt_commit_wait))
+                    return True
+
+                # Some ERP builds use the final Enter only to refresh the result
+                # grid.  In that case select the verified exact account row.
+                popup = _find_bank_account_popup(timeout=0.0) or popup
 
                 target = None
                 deadline = time.time() + 5.0
@@ -5735,6 +5884,7 @@ class ERPLoginBot:
                     raise RuntimeError(
                         f"{label} 검색 결과를 선택했지만 '계좌' 팝업이 닫히지 않았습니다."
                     )
+                bank_account_popup_state["closed"] = True
                 self.logger.info(
                     f"  [MGMT-BANK] {label}: 계좌 선택 확정 및 팝업 종료 확인 "
                     f"(source={source}, account={account_no}, branch={branch_name})"
@@ -7801,6 +7951,17 @@ class ERPLoginBot:
                             blockers.append(signature)
                     except Exception:
                         continue
+            if (
+                bank_account_popup_state.get("opened")
+                and not bank_account_popup_state.get("closed")
+            ):
+                blockers.append(
+                    (
+                        "계좌(internal-state)",
+                        expected_pid,
+                        bank_account_popup_state.get("source", ""),
+                    )
+                )
             return blockers
 
         def _assert_no_erp_management_lookup_popup(context):

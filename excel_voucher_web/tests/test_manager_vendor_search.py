@@ -2346,6 +2346,186 @@ def test_bank_account_result_matches_account_and_branch_on_same_row():
     assert target({}, "140-000-948562", "다른 금융기관지점") is None
 
 
+def test_internal_bank_account_popup_uses_dialog_specific_mdi_signature():
+    main = _FakeControl("대승", "Window", _FakeRect(0, 0, 1920, 1040))
+    popup = main.add(
+        _FakeControl("", "Pane", _FakeRect(843, 540, 1743, 1015))
+    )
+    popup.add(_FakeControl("계좌", "Text", _FakeRect(860, 545, 940, 570)))
+    popup.add(_FakeControl("계좌번호", "Text", _FakeRect(900, 680, 1060, 700)))
+    popup.add(_FakeControl("계좌명", "Text", _FakeRect(1060, 680, 1220, 700)))
+    popup.add(
+        _FakeControl("금융기관지점명", "Text", _FakeRect(1220, 680, 1400, 700))
+    )
+    popup.add(_FakeControl("계좌번호", "ComboBox", _FakeRect(860, 585, 1010, 615)))
+    popup.add(_FakeControl("", "Edit", _FakeRect(1010, 585, 1600, 615)))
+    loaded = _load_nested_functions(
+        "_find_internal_bank_account_popup",
+        namespace={
+            "main_win": main,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "_direct_vendor_popup_text": lambda ctrl: [
+                re.sub(r"\s+", "", str(ctrl.window_text() or "")).lower()
+            ],
+            "_main_rect": lambda: main.rectangle(),
+            "_vendor_control_identity": lambda ctrl: ("handle", ctrl.handle),
+            "_vendor_popup_context": lambda root, rect, source: {
+                "root": root,
+                "rect": rect,
+                "source": source,
+            },
+            "_visible_vendor_popup_controls": lambda candidate, control_type=None, top_band=False: [
+                ctrl
+                for ctrl in candidate["root"].descendants()
+                if not control_type or ctrl.element_info.control_type == control_type
+            ],
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    result = loaded["_find_internal_bank_account_popup"]()
+
+    assert result["root"] is popup
+    assert result["rect"] is popup.rectangle()
+    assert result["source"] == "bank-account-internal-uia"
+
+
+def test_internal_bank_account_popup_rejects_normal_management_labels():
+    main = _FakeControl("대승", "Window", _FakeRect(0, 0, 1920, 1040))
+    lower_form = main.add(
+        _FakeControl("", "Pane", _FakeRect(60, 700, 1850, 1000))
+    )
+    lower_form.add(_FakeControl("계좌번호", "Text", _FakeRect(700, 720, 850, 745)))
+    lower_form.add(
+        _FakeControl("금융기관지점", "Text", _FakeRect(700, 745, 850, 770))
+    )
+    lower_form.add(_FakeControl("거래처", "Text", _FakeRect(700, 770, 850, 795)))
+    loaded = _load_nested_functions(
+        "_find_internal_bank_account_popup",
+        namespace={
+            "main_win": main,
+            "_norm_text": lambda value: re.sub(r"\s+", "", str(value or "")).lower(),
+            "_direct_vendor_popup_text": lambda ctrl: [
+                re.sub(r"\s+", "", str(ctrl.window_text() or "")).lower()
+            ],
+            "_main_rect": lambda: main.rectangle(),
+            "_vendor_control_identity": lambda ctrl: ("handle", ctrl.handle),
+            "_vendor_popup_context": lambda root, rect, source: {
+                "root": root,
+                "rect": rect,
+                "source": source,
+            },
+            "_visible_vendor_popup_controls": lambda *_args, **_kwargs: [],
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_find_internal_bank_account_popup"]() is None
+
+
+def test_bank_account_popup_falls_back_to_internal_mdi_detector():
+    popup_rect = _FakeRect(843, 540, 1743, 1015)
+    popup = {
+        "root": object(),
+        "rect": popup_rect,
+        "source": "bank-account-internal-uia",
+    }
+    loaded = _load_nested_functions(
+        "_find_bank_account_popup",
+        namespace={
+            "Desktop": lambda **_kwargs: SimpleNamespace(windows=lambda: []),
+            "_find_internal_bank_account_popup": lambda: popup,
+            "_vendor_popup_rect": lambda candidate: candidate["rect"],
+            "time": SimpleNamespace(time=lambda: 100.0, sleep=lambda _seconds: None),
+            "re": re,
+            "self": SimpleNamespace(erp_process_pid=243, logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_find_bank_account_popup"](timeout=0.0) is popup
+
+
+def test_bank_account_input_accepts_visually_confirmed_direct_unique_match_without_uia_scan():
+    events = []
+    loaded = _load_nested_functions(
+        "_input_bank_account_by_popup",
+        namespace={
+            "_input_value_xy": lambda *args, **kwargs: events.append(
+                ("input", args, kwargs)
+            ),
+            "_management_value_visual_ink": lambda *_args: (24, 7, 10, 36),
+            "_find_bank_account_popup": lambda **_kwargs: pytest.fail(
+                "direct account match must not scan for a popup"
+            ),
+            "bank_account_popup_state": {
+                "opened": False,
+                "closed": True,
+                "source": "",
+            },
+            "mgmt_key_wait": 0.1,
+            "mgmt_commit_wait": 0.16,
+            "os": __import__("os"),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_bank_account_by_popup"](
+        1118,
+        756,
+        "140-000-948562",
+        "신한 수원금융센터",
+        "210행 계좌번호",
+    ) is True
+    assert [event[0] for event in events] == ["input"]
+
+
+def test_bank_account_input_accepts_direct_match_when_no_popup_opens():
+    loaded = _load_nested_functions(
+        "_input_bank_account_by_popup",
+        namespace={
+            "_input_value_xy": lambda *_args, **_kwargs: None,
+            "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
+            "_find_bank_account_popup": lambda **_kwargs: None,
+            "bank_account_popup_state": {
+                "opened": False,
+                "closed": True,
+                "source": "",
+            },
+            "mgmt_key_wait": 0.1,
+            "mgmt_commit_wait": 0.16,
+            "os": __import__("os"),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_bank_account_by_popup"](
+        1118,
+        756,
+        "140-000-948562",
+        "신한 수원금융센터",
+        "210행 계좌번호",
+    ) is True
+
+
+def test_bank_account_popup_uses_account_number_keyboard_sequence():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _input_bank_account_by_popup")
+    helper_end = source.index("def _input_vendor_value_xy", helper_start)
+    helper = source[helper_start:helper_end]
+    expected_order = [
+        'pyautogui.press("tab", presses=4',
+        'pyautogui.press("up", presses=2',
+        'pyautogui.press("tab", presses=3',
+        'pyautogui.press("enter")',
+    ]
+    positions = [helper.index(token) for token in expected_order]
+
+    assert positions == sorted(positions)
+    assert "Tab 4 → Up 2 → Tab 3 → Enter" in helper
+
+
 def test_management_snapshot_caches_cash_processing_checkbox_once():
     class _FakeCheckBox(_FakeControl):
         def get_toggle_state(self):
@@ -4250,6 +4430,11 @@ def test_save_and_print_guard_rejects_open_account_lookup_popup():
                 windows=lambda: [main_window, unrelated_popup, account_popup]
             ),
             "re": re,
+            "bank_account_popup_state": {
+                "opened": False,
+                "closed": True,
+                "source": "",
+            },
             "self": SimpleNamespace(erp_process_pid=243, logger=_FakeLogger()),
         },
     )
@@ -4259,6 +4444,28 @@ def test_save_and_print_guard_rejects_open_account_lookup_popup():
     assert blockers[0][0:2] == ("계좌", 243)
     with pytest.raises(RuntimeError, match="계좌/거래처 선택 팝업이 닫히지 않아"):
         loaded["_assert_no_erp_management_lookup_popup"]("저장 전")
+
+
+def test_lookup_popup_guard_blocks_unclosed_internal_account_state():
+    loaded = _load_nested_functions(
+        "_visible_erp_management_lookup_popups",
+        namespace={
+            "Desktop": lambda **_kwargs: SimpleNamespace(windows=lambda: []),
+            "re": re,
+            "bank_account_popup_state": {
+                "opened": True,
+                "closed": False,
+                "source": "bank-account-internal-uia",
+            },
+            "self": SimpleNamespace(erp_process_pid=243, logger=_FakeLogger()),
+        },
+    )
+
+    blockers = loaded["_visible_erp_management_lookup_popups"]()
+
+    assert blockers == [
+        ("계좌(internal-state)", 243, "bank-account-internal-uia")
+    ]
 
 
 def test_save_and_print_paths_call_lookup_popup_guard_before_actions():
