@@ -2445,39 +2445,26 @@ def test_bank_account_popup_falls_back_to_internal_mdi_detector():
     assert loaded["_find_bank_account_popup"](timeout=0.0) is popup
 
 
-def test_bank_visual_change_ratio_detects_large_popup_without_uia_scan():
-    class SolidImage:
-        size = (160, 120)
+def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
+    events = []
 
-        def __init__(self, color):
-            self.color = color
+    def press(key, presses=1, **_kwargs):
+        events.append(("press", key, presses))
 
-        def getpixel(self, _point):
-            return self.color
-
-    loaded = _load_nested_functions(
-        "_bank_visual_change_ratio",
-        namespace={"self": SimpleNamespace(logger=_FakeLogger())},
-    )
-
-    white = SolidImage((255, 255, 255))
-    gray = SolidImage((180, 180, 180))
-
-    assert loaded["_bank_visual_change_ratio"](white, white) == 0.0
-    assert loaded["_bank_visual_change_ratio"](white, gray) == 1.0
-    assert loaded["_bank_visual_change_ratio"](None, gray) is None
-
-
-def test_bank_account_input_requires_f9_visual_change_before_search_text():
-    pressed = []
     loaded = _load_nested_functions(
         "_input_bank_account_by_popup",
         namespace={
-            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_click_form_xy": lambda *_args, **_kwargs: events.append(("click",)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
-            "_bank_main_window_visual_snapshot": lambda: object(),
-            "_bank_visual_change_ratio": lambda _before, _after: 0.0,
-            "pyautogui": SimpleNamespace(press=lambda key, **_kwargs: pressed.append(key)),
+            "_type_vendor_code": lambda value, *_args, **_kwargs: events.append(
+                ("type", value)
+            )
+            or True,
+            "_management_value_visual_ink": lambda *_args: (12, 4, 6, 14),
+            "pyautogui": SimpleNamespace(
+                press=press,
+                hotkey=lambda *keys: events.append(("hotkey", *keys)),
+            ),
             "bank_account_popup_state": {
                 "opened": False,
                 "closed": True,
@@ -2489,13 +2476,62 @@ def test_bank_account_input_requires_f9_visual_change_before_search_text():
             "mgmt_focus_wait": 0.1,
             "vendor_popup_open_wait": 0.1,
             "vendor_popup_search_wait": 0.1,
+            "ERP_FORM_WAIT": 0.1,
             "os": __import__("os"),
             "time": SimpleNamespace(sleep=lambda _seconds: None),
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
 
-    with pytest.raises(RuntimeError, match="F9 후 '계좌' 팝업 화면 변화"):
+    assert loaded["_input_bank_account_by_popup"](
+        1118,
+        756,
+        "140-000-948562",
+        "신한 수원금융센터",
+        "210행 계좌번호",
+    ) is True
+    assert events == [
+        ("click",),
+        ("press", "f9", 1),
+        ("hotkey", "ctrl", "a"),
+        ("type", "140-000-948562"),
+        ("press", "tab", 4),
+        ("press", "up", 2),
+        ("press", "tab", 3),
+        ("press", "enter", 1),
+    ]
+    assert loaded["bank_account_popup_state"]["closed"] is True
+
+
+def test_bank_account_input_requires_auto_filled_branch_after_sequence():
+    pressed = []
+    state = {"opened": False, "closed": True, "source": ""}
+    loaded = _load_nested_functions(
+        "_input_bank_account_by_popup",
+        namespace={
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key),
+                hotkey=lambda *_args: None,
+            ),
+            "bank_account_popup_state": state,
+            "mgmt_key_wait": 0.1,
+            "mgmt_commit_wait": 0.16,
+            "mgmt_click_wait": 0.1,
+            "mgmt_focus_wait": 0.1,
+            "vendor_popup_open_wait": 0.1,
+            "vendor_popup_search_wait": 0.1,
+            "ERP_FORM_WAIT": 0.1,
+            "os": __import__("os"),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="금융기관지점 자동입력 화면"):
         loaded["_input_bank_account_by_popup"](
             1118,
             756,
@@ -2503,7 +2539,13 @@ def test_bank_account_input_requires_f9_visual_change_before_search_text():
             "신한 수원금융센터",
             "210행 계좌번호",
         )
-    assert pressed == ["f9"]
+
+    assert pressed == ["f9", "tab", "up", "tab", "enter"]
+    assert state == {
+        "opened": True,
+        "closed": False,
+        "source": "bank-account-f9-command",
+    }
 
 
 def test_bank_account_popup_uses_account_number_keyboard_sequence():
@@ -2513,7 +2555,6 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     helper = source[helper_start:helper_end]
     expected_order = [
         "_click_form_xy",
-        "_bank_main_window_visual_snapshot",
         'pyautogui.press("f9")',
         "_type_vendor_code",
         'pyautogui.press("tab", presses=4',
@@ -2525,6 +2566,8 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
 
     assert positions == sorted(positions)
     assert "Tab 4 → Up 2 → Tab 3 → Enter" in helper
+    assert "_bank_main_window_visual_snapshot" not in helper
+    assert "_bank_visual_change_ratio" not in helper
     assert "_find_bank_account_popup" not in helper
     assert "_wait_bank_account_popup_closed" not in helper
     assert "_input_value_xy" not in helper

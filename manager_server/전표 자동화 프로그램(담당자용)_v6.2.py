@@ -5698,47 +5698,6 @@ class ERPLoginBot:
                     time.sleep(0.12)
                 return False
 
-            def _bank_main_window_visual_snapshot():
-                """Capture the ERP surface without walking the slow GDI/UIA tree."""
-                try:
-                    rect = _main_rect()
-                    return pyautogui.screenshot(
-                        region=(
-                            int(rect.left),
-                            int(rect.top),
-                            max(1, int(rect.width())),
-                            max(1, int(rect.height())),
-                        )
-                    )
-                except Exception as exc:
-                    self.logger.debug(
-                        f"  [MGMT-BANK] 계좌 팝업 화면 캡처 실패: {exc}"
-                    )
-                    return None
-
-            def _bank_visual_change_ratio(before, after):
-                """Return sampled screen-change ratio, or None for invalid captures."""
-                try:
-                    if before is None or after is None or before.size != after.size:
-                        return None
-                    width, height = before.size
-                    step = max(8, min(20, min(width, height) // 60 or 8))
-                    changed = 0
-                    samples = 0
-                    for sample_y in range(step // 2, height, step):
-                        for sample_x in range(step // 2, width, step):
-                            left = before.getpixel((sample_x, sample_y))[:3]
-                            right = after.getpixel((sample_x, sample_y))[:3]
-                            if max(abs(int(a) - int(b)) for a, b in zip(left, right)) >= 35:
-                                changed += 1
-                            samples += 1
-                    return (changed / samples) if samples else None
-                except Exception as exc:
-                    self.logger.debug(
-                        f"  [MGMT-BANK] 계좌 팝업 화면 변화 계산 실패: {exc}"
-                    )
-                    return None
-
             def _bank_account_result_target(popup, account_no, branch_name):
                 """Return an exact result-cell point, or a verified first-row fallback."""
                 popup_rect = _vendor_popup_rect(popup)
@@ -5839,32 +5798,15 @@ class ERPLoginBot:
                 _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
                 _release_modifiers(f"{label} F9 직전", wait=False)
                 time.sleep(mgmt_focus_wait)
-                before_popup_visual = _bank_main_window_visual_snapshot()
                 pyautogui.press("f9")
                 time.sleep(f9_open_wait)
 
-                popup_visual = _bank_main_window_visual_snapshot()
-                popup_open_ratio = _bank_visual_change_ratio(
-                    before_popup_visual,
-                    popup_visual,
-                )
-                popup_open_min = max(
-                    0.01,
-                    float(
-                        os.getenv("ERP_MGMT_BANK_F9_VISUAL_OPEN_MIN", "0.05")
-                        or "0.05"
-                    ),
-                )
-                if popup_open_ratio is None or popup_open_ratio < popup_open_min:
-                    raise RuntimeError(
-                        f"{label} F9 후 '계좌' 팝업 화면 변화를 확인하지 못했습니다."
-                    )
                 bank_account_popup_state["opened"] = True
                 bank_account_popup_state["closed"] = False
-                bank_account_popup_state["source"] = "bank-account-f9-visual"
+                bank_account_popup_state["source"] = "bank-account-f9-command"
                 self.logger.info(
-                    f"  [MGMT-BANK] {label}: F9 계좌 팝업 화면 변화 확인 "
-                    f"(ratio={popup_open_ratio:.3f})"
+                    f"  [MGMT-BANK] {label}: F9 후 {f9_open_wait:.2f}초 대기 완료; "
+                    "계좌번호 입력과 고정 키보드 시퀀스를 바로 실행합니다."
                 )
 
                 pyautogui.hotkey("ctrl", "a")
@@ -5897,31 +5839,6 @@ class ERPLoginBot:
                 pyautogui.press("enter")
                 time.sleep(ERP_FORM_WAIT)
 
-                closed_visual = _bank_main_window_visual_snapshot()
-                closed_to_baseline_ratio = _bank_visual_change_ratio(
-                    before_popup_visual,
-                    closed_visual,
-                )
-                popup_close_max = max(
-                    0.03,
-                    min(
-                        0.15,
-                        popup_open_ratio
-                        * float(
-                            os.getenv("ERP_MGMT_BANK_F9_VISUAL_CLOSE_FACTOR", "0.55")
-                            or "0.55"
-                        ),
-                    ),
-                )
-                if (
-                    closed_to_baseline_ratio is None
-                    or closed_to_baseline_ratio > popup_close_max
-                ):
-                    raise RuntimeError(
-                        f"{label} F9 키보드 시퀀스 후 '계좌' 팝업 종료 화면을 "
-                        "확인하지 못했습니다."
-                    )
-
                 pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
                 branch_metrics = (0, 0, 0, 0)
                 branch_confirmed = False
@@ -5945,10 +5862,7 @@ class ERPLoginBot:
                 self.logger.info(
                     f"  [MGMT-BANK] {label}: F9 계좌번호 선택·팝업 종료·"
                     "금융기관지점 자동입력 확인 "
-                    f"(account={account_no}, branch={branch_name}, "
-                    f"open_ratio={popup_open_ratio:.3f}, "
-                    f"close_ratio={closed_to_baseline_ratio:.3f}, "
-                    f"ink={branch_metrics})"
+                    f"(account={account_no}, branch={branch_name}, ink={branch_metrics})"
                 )
                 time.sleep(max(0.50, mgmt_commit_wait))
                 return True
