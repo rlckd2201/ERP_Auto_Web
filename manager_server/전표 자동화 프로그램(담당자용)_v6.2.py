@@ -5775,119 +5775,101 @@ class ERPLoginBot:
                 if not account_no:
                     raise RuntimeError("보통예금 계좌번호가 비어 있어 계좌 선택을 중단합니다.")
 
-                # Enter opens the account selector.  Do not continue to the next
-                # management item until an exact account row is selected and the
-                # selector is proven closed.  Selecting the account fills the
-                # 금융기관지점 item automatically in ERP.
-                _input_value_xy(
-                    x,
-                    y,
-                    account_no,
-                    label,
-                    enter_count=1,
-                    clear=True,
-                    paste_settle_wait=max(0.50, mgmt_key_wait),
-                    commit_settle_wait=max(0.70, mgmt_commit_wait),
+                # The ERP user can persist any one of the three account search
+                # conditions.  Force F9 and normalize it to 계좌번호 every time.
+                f9_open_wait = max(
+                    1.0,
+                    vendor_popup_open_wait,
+                    float(os.getenv("ERP_MGMT_BANK_F9_OPEN_WAIT", "2.00") or "2.00"),
+                )
+                f9_search_wait = max(
+                    vendor_popup_search_wait,
+                    float(os.getenv("ERP_MGMT_BANK_F9_SEARCH_WAIT", "1.50") or "1.50"),
+                )
+                f9_key_interval = max(
+                    0.08,
+                    float(os.getenv("ERP_MGMT_BANK_F9_KEY_INTERVAL", "0.12") or "0.12"),
+                )
+                f9_group_wait = max(
+                    mgmt_key_wait,
+                    float(os.getenv("ERP_MGMT_BANK_F9_GROUP_WAIT", "0.20") or "0.20"),
                 )
 
-                # A unique account is committed directly when ERP's persisted
-                # search condition is already 계좌번호.  In that normal path no
-                # selector opens and the branch value is painted automatically.
-                pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
-                direct_branch_metrics = (0, 0, 0, 0)
-                for _ in range(3):
-                    direct_branch_metrics = _management_value_visual_ink(x, y + pitch)
-                    ink_pixels, ink_rows, ink_columns, ink_span = direct_branch_metrics
-                    if (
-                        ink_pixels >= 6
-                        and ink_rows >= 3
-                        and ink_columns >= 3
-                        and ink_span >= 8
-                    ):
-                        self.logger.info(
-                            f"  [MGMT-BANK] {label}: 계좌번호 직접 확정 및 "
-                            "금융기관지점 자동입력 화면 확인 "
-                            f"(ink={direct_branch_metrics})"
-                        )
-                        return True
-                    time.sleep(0.20)
+                _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
+                _release_modifiers(f"{label} F9 직전", wait=False)
+                time.sleep(mgmt_focus_wait)
+                pyautogui.press("f9")
+                time.sleep(f9_open_wait)
 
-                popup = _find_bank_account_popup(timeout=1.5)
+                popup = _find_bank_account_popup(timeout=1.0)
                 if popup is None:
-                    self.logger.info(
-                        f"  [MGMT-BANK] {label}: 계좌번호 직접 확정 완료; "
-                        "선택 팝업이 열리지 않아 ERP 자동입력 결과를 유지합니다."
+                    raise RuntimeError(
+                        f"{label} F9 후 '계좌' 선택 팝업을 확인하지 못했습니다."
                     )
-                    return True
                 bank_account_popup_state["opened"] = True
                 bank_account_popup_state["closed"] = False
                 bank_account_popup_state["source"] = str(
                     popup.get("source", "") if isinstance(popup, dict) else "top-level"
                 )
 
-                self.logger.info(
-                    f"  [MGMT-BANK] {label}: 계좌 팝업 검색조건을 계좌번호로 고정하는 "
-                    "키보드 시퀀스 시작(Tab 4 → Up 2 → Tab 3 → Enter)"
+                pyautogui.hotkey("ctrl", "a")
+                _release_modifiers(f"{label} 계좌 팝업 검색칸 Ctrl+A 후", wait=False)
+                type_interval = max(
+                    0.05,
+                    float(os.getenv("ERP_MGMT_BANK_TYPE_INTERVAL", "0.05") or "0.05"),
                 )
-                pyautogui.press("tab", presses=4, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press("up", presses=2, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press("tab", presses=3, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press("enter")
-                time.sleep(max(1.0, vendor_popup_search_wait))
-
-                if _wait_bank_account_popup_closed(timeout=1.5):
-                    bank_account_popup_state["closed"] = True
-                    self.logger.info(
-                        f"  [MGMT-BANK] {label}: 계좌번호 조건 선택 및 결과 확정 완료 "
-                        f"(account={account_no}, branch={branch_name})"
-                    )
-                    time.sleep(max(0.50, mgmt_commit_wait))
-                    return True
-
-                # Some ERP builds use the final Enter only to refresh the result
-                # grid.  In that case select the verified exact account row.
-                popup = _find_bank_account_popup(timeout=0.0) or popup
-
-                target = None
-                deadline = time.time() + 5.0
-                while time.time() < deadline:
-                    target = _bank_account_result_target(
-                        popup,
-                        account_no,
-                        branch_name,
-                    )
-                    if target is not None:
-                        break
-                    time.sleep(0.25)
-                if target is None:
+                if not _type_vendor_code(
+                    account_no,
+                    f"{label} 계좌번호",
+                    interval=type_interval,
+                ):
                     raise RuntimeError(
-                        f"계좌 팝업에서 계좌번호 {account_no!r}"
-                        + (
-                            f" / 금융기관지점 {branch_name!r}"
-                            if branch_name
-                            else ""
-                        )
-                        + " 결과를 확인하지 못했습니다."
+                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다."
                     )
+                _release_modifiers(f"{label} 계좌번호 키보드 입력 후", wait=False)
+                time.sleep(f9_search_wait)
 
-                target_x, target_y, source = target
-                _vendor_double_click_abs(
-                    target_x,
-                    target_y,
-                    f"{label} 계좌 검색 결과",
-                    wait=ERP_FORM_WAIT,
+                self.logger.info(
+                    f"  [MGMT-BANK] {label}: F9 계좌번호 키보드 시퀀스 시작"
+                    "(Tab 4 → Up 2 → Tab 3 → Enter)"
                 )
+                pyautogui.press("tab", presses=4, interval=f9_key_interval)
+                time.sleep(f9_group_wait)
+                pyautogui.press("up", presses=2, interval=f9_key_interval)
+                time.sleep(f9_group_wait)
+                pyautogui.press("tab", presses=3, interval=f9_key_interval)
+                time.sleep(f9_group_wait)
+                pyautogui.press("enter")
+                time.sleep(ERP_FORM_WAIT)
                 if not _wait_bank_account_popup_closed(timeout=3.0):
                     raise RuntimeError(
-                        f"{label} 검색 결과를 선택했지만 '계좌' 팝업이 닫히지 않았습니다."
+                        f"{label} F9 키보드 시퀀스 후 '계좌' 팝업이 닫히지 않았습니다."
                     )
                 bank_account_popup_state["closed"] = True
+
+                pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
+                branch_metrics = (0, 0, 0, 0)
+                branch_confirmed = False
+                for _ in range(8):
+                    branch_metrics = _management_value_visual_ink(x, y + pitch)
+                    ink_pixels, ink_rows, ink_columns, ink_span = branch_metrics
+                    if (
+                        ink_pixels >= 6
+                        and ink_rows >= 3
+                        and ink_columns >= 3
+                        and ink_span >= 8
+                    ):
+                        branch_confirmed = True
+                        break
+                    time.sleep(0.25)
+                if branch_name and not branch_confirmed:
+                    raise RuntimeError(
+                        f"{label} 선택 후 금융기관지점 자동입력 화면을 확인하지 못했습니다."
+                    )
                 self.logger.info(
-                    f"  [MGMT-BANK] {label}: 계좌 선택 확정 및 팝업 종료 확인 "
-                    f"(source={source}, account={account_no}, branch={branch_name})"
+                    f"  [MGMT-BANK] {label}: F9 계좌번호 선택·팝업 종료·"
+                    "금융기관지점 자동입력 확인 "
+                    f"(account={account_no}, branch={branch_name}, ink={branch_metrics})"
                 )
                 time.sleep(max(0.50, mgmt_commit_wait))
                 return True

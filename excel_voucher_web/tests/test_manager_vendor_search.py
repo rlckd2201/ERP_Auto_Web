@@ -2445,48 +2445,15 @@ def test_bank_account_popup_falls_back_to_internal_mdi_detector():
     assert loaded["_find_bank_account_popup"](timeout=0.0) is popup
 
 
-def test_bank_account_input_accepts_visually_confirmed_direct_unique_match_without_uia_scan():
-    events = []
+def test_bank_account_input_requires_f9_popup_before_search_text():
+    pressed = []
     loaded = _load_nested_functions(
         "_input_bank_account_by_popup",
         namespace={
-            "_input_value_xy": lambda *args, **kwargs: events.append(
-                ("input", args, kwargs)
-            ),
-            "_management_value_visual_ink": lambda *_args: (24, 7, 10, 36),
-            "_find_bank_account_popup": lambda **_kwargs: pytest.fail(
-                "direct account match must not scan for a popup"
-            ),
-            "bank_account_popup_state": {
-                "opened": False,
-                "closed": True,
-                "source": "",
-            },
-            "mgmt_key_wait": 0.1,
-            "mgmt_commit_wait": 0.16,
-            "os": __import__("os"),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
-            "self": SimpleNamespace(logger=_FakeLogger()),
-        },
-    )
-
-    assert loaded["_input_bank_account_by_popup"](
-        1118,
-        756,
-        "140-000-948562",
-        "신한 수원금융센터",
-        "210행 계좌번호",
-    ) is True
-    assert [event[0] for event in events] == ["input"]
-
-
-def test_bank_account_input_accepts_direct_match_when_no_popup_opens():
-    loaded = _load_nested_functions(
-        "_input_bank_account_by_popup",
-        namespace={
-            "_input_value_xy": lambda *_args, **_kwargs: None,
-            "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
             "_find_bank_account_popup": lambda **_kwargs: None,
+            "pyautogui": SimpleNamespace(press=lambda key, **_kwargs: pressed.append(key)),
             "bank_account_popup_state": {
                 "opened": False,
                 "closed": True,
@@ -2494,19 +2461,25 @@ def test_bank_account_input_accepts_direct_match_when_no_popup_opens():
             },
             "mgmt_key_wait": 0.1,
             "mgmt_commit_wait": 0.16,
+            "mgmt_click_wait": 0.1,
+            "mgmt_focus_wait": 0.1,
+            "vendor_popup_open_wait": 0.1,
+            "vendor_popup_search_wait": 0.1,
             "os": __import__("os"),
             "time": SimpleNamespace(sleep=lambda _seconds: None),
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
 
-    assert loaded["_input_bank_account_by_popup"](
-        1118,
-        756,
-        "140-000-948562",
-        "신한 수원금융센터",
-        "210행 계좌번호",
-    ) is True
+    with pytest.raises(RuntimeError, match="F9 후 '계좌' 선택 팝업"):
+        loaded["_input_bank_account_by_popup"](
+            1118,
+            756,
+            "140-000-948562",
+            "신한 수원금융센터",
+            "210행 계좌번호",
+        )
+    assert pressed == ["f9"]
 
 
 def test_bank_account_popup_uses_account_number_keyboard_sequence():
@@ -2515,6 +2488,10 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     helper_end = source.index("def _input_vendor_value_xy", helper_start)
     helper = source[helper_start:helper_end]
     expected_order = [
+        "_click_form_xy",
+        'pyautogui.press("f9")',
+        "_find_bank_account_popup",
+        "_type_vendor_code",
         'pyautogui.press("tab", presses=4',
         'pyautogui.press("up", presses=2',
         'pyautogui.press("tab", presses=3',
@@ -2524,6 +2501,8 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
 
     assert positions == sorted(positions)
     assert "Tab 4 → Up 2 → Tab 3 → Enter" in helper
+    assert "_input_value_xy" not in helper
+    assert "계좌번호 직접 확정" not in helper
 
 
 def test_management_snapshot_caches_cash_processing_checkbox_once():
