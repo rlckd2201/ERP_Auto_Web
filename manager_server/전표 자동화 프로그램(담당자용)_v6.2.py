@@ -5351,17 +5351,30 @@ class ERPLoginBot:
                     return False
                 _force_english_ime(label)
                 try:
-                    # 사용자 지시: 거래처번호/계좌번호는 타이핑하지 않고
-                    # 클립보드로 붙여넣는다. 붙여넣기는 한/영 IME 상태와
-                    # 무관해 자모 깨짐(예: PT→ㅔㅅ)이 없다.
-                    pyperclip.copy(vendor_code)
-                    time.sleep(max(0.05, mgmt_clipboard_wait))
-                    pyautogui.hotkey('ctrl', 'v')
-                    time.sleep(0.10)
+                    # 클립보드는 원격지원 도구·메신저·수동 조작과 공유되어
+                    # 실행 중 오염될 수 있다(실기기에서 다른 거래처 문자열이
+                    # 붙은 사고 확인). 값 입력은 클립보드를 쓰지 않는
+                    # VK_PACKET 유니코드 입력으로 한다(IME 상태와도 무관).
+                    send_keys(
+                        vendor_code,
+                        pause=max(
+                            0.05,
+                            float(
+                                interval
+                                if interval is not None
+                                else os.getenv(
+                                    "ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"
+                                )
+                                or "0.15"
+                            ),
+                        ),
+                        with_spaces=True,
+                        vk_packet=True,
+                    )
                     return True
                 except Exception as exc:
                     self.logger.warning(
-                        f"  [MGMT-XY] {label}: 거래처번호 붙여넣기 실패: {exc}"
+                        f"  [MGMT-XY] {label}: 거래처번호 키보드 입력 실패: {exc}"
                     )
                     return False
 
@@ -5431,17 +5444,22 @@ class ERPLoginBot:
                     0.10,
                     float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15") or "0.15"),
                 )
-                _release_modifiers(f"{label} 거래처번호 붙여넣기 직전", wait=False)
-                # 사용자 지시: 검색칸도 타이핑하지 않고 클립보드로 붙여넣는다.
-                if not _type_vendor_code(vendor_code, label, interval=type_interval):
+                _release_modifiers(f"{label} 거래처번호 물리 키 입력 직전", wait=False)
+                # 조회창 검색칸은 VK_PACKET을 간헐적으로 무시하므로 물리 키로
+                # 입력한다. 클립보드는 원격 도구와 공유되어 오염될 수 있어
+                # 쓰지 않고, 한/영 깨짐은 직전의 IME 영문 강제로 막는다.
+                _force_english_ime(label)
+                try:
+                    pyautogui.write(vendor_code, interval=type_interval)
+                except Exception as exc:
                     self.logger.warning(
-                        f"  [MGMT-XY] {label}: 거래처ds 검색칸 입력 실패"
+                        f"  [MGMT-XY] {label}: 거래처ds 검색칸 입력 실패: {exc}"
                     )
                     return False
-                _release_modifiers(f"{label} 거래처번호 붙여넣기 후", wait=False)
+                _release_modifiers(f"{label} 거래처번호 물리 키 입력 후", wait=False)
                 time.sleep(max(0.25, float(settle_wait)))
                 self.logger.info(
-                    f"  [MGMT-XY] {label}: 거래처ds 검색칸 붙여넣기 완료: "
+                    f"  [MGMT-XY] {label}: 거래처ds 검색칸 물리 키 입력 완료: "
                     f"{vendor_code}"
                 )
                 return True

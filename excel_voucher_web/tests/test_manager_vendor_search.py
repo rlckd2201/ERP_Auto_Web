@@ -757,8 +757,13 @@ def test_vendor_ds_foreground_activates_background_same_pid_window_with_win32():
     assert not any(event[0] == "show" and event[1] == 301 for event in events)
 
 
-def test_finance_first_vendor_search_pastes_code_without_visual_probe():
+def test_finance_first_vendor_search_types_physically_without_clipboard():
     events = []
+
+    class _FakePyAutoGui:
+        @staticmethod
+        def write(text, interval=0):
+            events.append(("write", text, interval))
 
     loaded = _load_nested_functions(
         "_replace_vendor_ds_search_text",
@@ -768,9 +773,8 @@ def test_finance_first_vendor_search_pastes_code_without_visual_probe():
             "_release_modifiers": lambda label, wait=False: events.append(
                 ("release", label)
             ),
-            "_type_vendor_code": lambda value, label, interval=None: (
-                events.append(("paste", value)) or True
-            ),
+            "_force_english_ime": lambda label="": events.append(("ime", label)),
+            "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(
                 sleep=lambda seconds: events.append(("sleep", seconds))
             ),
@@ -780,9 +784,10 @@ def test_finance_first_vendor_search_pastes_code_without_visual_probe():
 
     assert loaded["_replace_vendor_ds_search_text"]("PT032", "1행 거래처", 0.40) is True
     assert events == [
-        ("release", "1행 거래처 거래처번호 붙여넣기 직전"),
-        ("paste", "PT032"),
-        ("release", "1행 거래처 거래처번호 붙여넣기 후"),
+        ("release", "1행 거래처 거래처번호 물리 키 입력 직전"),
+        ("ime", "1행 거래처"),
+        ("write", "PT032", 0.15),
+        ("release", "1행 거래처 거래처번호 물리 키 입력 후"),
         ("sleep", 0.40),
     ]
 
@@ -790,50 +795,57 @@ def test_finance_first_vendor_search_pastes_code_without_visual_probe():
     helper_start = source.index("def _replace_vendor_ds_search_text")
     helper_end = source.index("def _seed_vendor_by_number_f9", helper_start)
     helper = source[helper_start:helper_end]
-    # 검색칸 입력은 공용 붙여넣기 함수만 사용한다(타이핑 금지, IME 무관).
-    assert "_type_vendor_code" in helper
-    assert "pyautogui.write(" not in helper
+    # 클립보드는 원격 도구와 공유되어 오염될 수 있어 값 입력에 쓰지 않는다.
+    assert "pyperclip" not in helper
+    assert "pyautogui.write(vendor_code" in helper
+    assert "_force_english_ime(label)" in helper
+    assert "_type_vendor_code" not in helper
     assert "_paste_text_fast" not in helper
     assert "_vendor_ds_search_visual_ink" not in helper
 
 
-def test_vendor_code_paste_is_ime_safe_and_rejects_non_ascii():
-    copied = []
-    hotkeys = []
+def test_vendor_code_input_uses_vk_packet_without_clipboard():
+    calls = []
     ime = []
+
+    def _send_keys(text, **kwargs):
+        calls.append((text, kwargs))
 
     loaded = _load_nested_functions(
         "_type_vendor_code",
         namespace={
             "re": re,
             "os": SimpleNamespace(getenv=lambda _name, default=None: default),
-            "pyperclip": SimpleNamespace(copy=lambda text: copied.append(text)),
-            "pyautogui": SimpleNamespace(
-                hotkey=lambda *keys: hotkeys.append(keys)
-            ),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
-            "mgmt_clipboard_wait": 0.02,
+            "send_keys": _send_keys,
             "_force_english_ime": lambda label="": ime.append(label),
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
 
     assert loaded["_type_vendor_code"]("PT032", "1행 거래처", interval=0.01) is True
-    assert copied == ["PT032"]
-    assert hotkeys == [("ctrl", "v")]
+    assert calls == [
+        (
+            "PT032",
+            {
+                "pause": 0.05,
+                "with_spaces": True,
+                "vk_packet": True,
+            },
+        )
+    ]
     assert ime == ["1행 거래처"]
 
     assert loaded["_type_vendor_code"]("거래처1", "2행 거래처") is False
     assert loaded["_type_vendor_code"]("PT 032", "2행 거래처") is False
-    assert copied == ["PT032"]
+    assert len(calls) == 1
 
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
     helper_start = source.index("def _type_vendor_code")
     helper_end = source.index("def _wait_first_vendor_value_committed", helper_start)
     helper = source[helper_start:helper_end]
-    assert "pyperclip.copy(vendor_code)" in helper
-    assert "send_keys(" not in helper
-    # 한/영 IME 강제 전환 구현이 존재해야 한다.
+    # 클립보드 미사용(VK_PACKET) — 원격 클립보드 오염과 IME 상태에 모두 무관.
+    assert "pyperclip" not in helper
+    assert "vk_packet=True" in helper
     assert "def _force_english_ime" in source
     assert "ImmSetConversionStatus" in source
 
