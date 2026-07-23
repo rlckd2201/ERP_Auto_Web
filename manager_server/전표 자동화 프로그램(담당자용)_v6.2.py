@@ -2052,15 +2052,17 @@ class ERPLoginBot:
         vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
         finance_vendor_paste_settle_wait = max(
             mgmt_key_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.75") or "0.75"),
+            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "1.00") or "1.00"),
         )
         finance_vendor_commit_settle_wait = max(
             mgmt_commit_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.50") or "1.50"),
+            float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "2.00") or "2.00"),
         )
+        # 분할 바 위치에 따라 전표 그리드가 커지면 GDI/RDP 스크롤 재도색이
+        # 더 느려진다. 행 전환 대기는 큰 화면 기준으로 충분히 잡는다.
         finance_row_advance_settle_wait = max(
             mgmt_commit_wait,
-            float(os.getenv("ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT", "1.50") or "1.50"),
+            float(os.getenv("ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT", "2.50") or "2.50"),
         )
         vendor_double_click_hold = min(
             0.25,
@@ -5301,7 +5303,7 @@ class ERPLoginBot:
                                 interval
                                 if interval is not None
                                 else os.getenv(
-                                    "ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.10"
+                                    "ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"
                                 )
                                 or "0.10"
                             ),
@@ -5380,7 +5382,7 @@ class ERPLoginBot:
                     return False
                 type_interval = max(
                     0.10,
-                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.10") or "0.10"),
+                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15") or "0.15"),
                 )
                 _release_modifiers(f"{label} 거래처번호 물리 키 입력 직전", wait=False)
                 try:
@@ -5506,9 +5508,24 @@ class ERPLoginBot:
                 _click_form_xy(x, y, label, wait=mgmt_click_wait)
                 _release_modifiers(f"{label} 클릭 후", wait=False)
                 time.sleep(max(0.20, mgmt_focus_wait))
+                # 새 행의 관리항목값 셀은 비어 있어야 한다. 이전 행 값이 남아
+                # 보이면 전표 행이 이동하지 않은 것이므로 밀린 채 계속 입력하지
+                # 않고 즉시 중단한다.
+                pre_ink = _management_value_visual_ink(x, y)
+                if (
+                    pre_ink[0] >= 6
+                    and pre_ink[1] >= 3
+                    and pre_ink[2] >= 3
+                    and pre_ink[3] >= 8
+                ):
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 입력 전 관리항목값 셀이 비어 있지 "
+                        f"않아 중단합니다(전표 행 미이동 의심, ink={pre_ink})."
+                    )
+                    return False
                 type_interval = max(
                     0.10,
-                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.10") or "0.10"),
+                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15") or "0.15"),
                 )
                 if not _type_vendor_code(
                     vendor_code,
@@ -5518,7 +5535,48 @@ class ERPLoginBot:
                     return False
                 _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
                 time.sleep(max(0.25, float(paste_settle_wait)))
-                pyautogui.press('enter')
+                typed_ink = _management_value_visual_ink(x, y)
+                confirm_timeout = max(
+                    1.0,
+                    float(
+                        os.getenv("ERP_FINANCE_VENDOR_CONFIRM_TIMEOUT", "4.0")
+                        or "4.0"
+                    ),
+                )
+                poll_count = max(4, int(confirm_timeout / 0.25))
+                converted_ink = None
+                for attempt in (1, 2):
+                    pyautogui.press('enter')
+                    for _ in range(poll_count):
+                        time.sleep(0.25)
+                        now_ink = _management_value_visual_ink(x, y)
+                        # ERP가 Enter를 확정하면 코드가 이름(거래처번호) 형식으로
+                        # 바뀌어 글자 폭이 눈에 띄게 늘어난다. 변환이 보여야만
+                        # 확정 성공으로 인정한다.
+                        if (
+                            now_ink[3] >= typed_ink[3] + 8
+                            or now_ink[0] >= typed_ink[0] + 20
+                        ):
+                            converted_ink = now_ink
+                            break
+                    if converted_ink is not None:
+                        break
+                    if attempt == 1:
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: Enter 후 이름(거래처번호) 변환이 "
+                            "보이지 않아 Enter를 1회 재전송합니다."
+                        )
+                        _release_modifiers(f"{label} Enter 재전송 직전", wait=False)
+                if converted_ink is None:
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 거래처번호 Enter 확정(이름 변환)을 "
+                        f"확인하지 못해 중단합니다(ink={typed_ink})."
+                    )
+                    return False
+                self.logger.info(
+                    f"  [MGMT-XY] {label}: 거래처 확정 변환 확인 완료"
+                    f"(ink {typed_ink} → {converted_ink})"
+                )
                 time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
                 return True
 

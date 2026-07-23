@@ -784,7 +784,7 @@ def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_v
     assert loaded["_replace_vendor_ds_search_text"]("PT032", "1행 거래처", 0.40) is True
     assert events == [
         ("release", "1행 거래처 거래처번호 물리 키 입력 직전"),
-        ("write", "PT032", 0.10),
+        ("write", "PT032", 0.15),
         ("release", "1행 거래처 거래처번호 키보드 입력 후"),
         ("sleep", 0.40),
     ]
@@ -844,11 +844,26 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
         def press(key, presses=1, interval=0):
             events.append(("key", key, presses))
 
+    # 입력 전 빈 셀 → 타이핑된 코드 → Enter 확정 후 이름(코드) 변환 순서의
+    # 셀 잉크 변화를 재현한다.
+    ink_sequence = iter(
+        [
+            (0, 0, 0, 0),
+            (30, 6, 12, 40),
+            (90, 8, 30, 120),
+        ]
+    )
+
+    def fake_ink(_x, _y):
+        events.append(("ink",))
+        return next(ink_sequence, (90, 8, 30, 120))
+
     loaded = _load_nested_functions(
         "_input_finance_vendor_code_xy",
         namespace={
             "re": re,
             "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_management_value_visual_ink": fake_ink,
             "_click_form_xy": lambda x, y, label, wait=0: events.append(
                 ("click", x, y, label)
             ),
@@ -893,16 +908,89 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
     helper = source[helper_start:helper_end]
     assert "pyperclip" not in helper
     assert "_paste_text_fast" not in helper
-    assert "_management_value_visual_ink" not in helper
+    # 입력 전 빈 셀 확인과 Enter 확정(이름 변환) 검증은 셀 잉크 검사로 한다.
+    assert "_management_value_visual_ink" in helper
     assert "_raise_if_vendor_ds_open" not in helper
     assert "_recover_finance_vendor_ds_popup" not in helper
+
+
+def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
+    events = []
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: events.append(("click",)),
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: (
+                events.append(("type",)) or True
+            ),
+            "_management_value_visual_ink": lambda _x, _y: (120, 10, 40, 160),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: events.append(("key", key))
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 797, "A001", "5행 거래처", 0.0, 0.0
+    ) is False
+    # 셀이 비어 있지 않으면 타이핑도 Enter도 보내지 않고 즉시 중단한다.
+    assert ("type",) not in events
+    assert not any(event[0] == "key" for event in events)
+
+
+def test_finance_direct_vendor_retries_enter_once_then_stops_without_conversion():
+    pressed = []
+    ink_calls = {"count": 0}
+
+    def fake_ink(_x, _y):
+        ink_calls["count"] += 1
+        if ink_calls["count"] == 1:
+            return (0, 0, 0, 0)
+        # 타이핑된 코드 잉크가 Enter 후에도 그대로 = 이름(코드) 변환 실패.
+        return (30, 6, 12, 40)
+
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": fake_ink,
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 797, "A001", "5행 거래처", 0.0, 0.0
+    ) is False
+    # Enter 1회 재전송 후에도 변환이 없으면 실패로 중단한다.
+    assert pressed == ["enter", "enter"]
 
 
 def test_finance_direct_vendor_uses_safe_default_settle_times():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
-    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.75"' in source
-    assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.50"' in source
+    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "1.00"' in source
+    assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "2.00"' in source
+    assert 'ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT", "2.50"' in source
+    assert 'ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"' in source
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
@@ -3223,7 +3311,7 @@ def _load_runtime_navigation(
             "mgmt_summary_open_wait": 0.55,
             "mgmt_key_wait": 0.05,
             "mgmt_commit_wait": 0.08,
-            "finance_row_advance_settle_wait": 1.50,
+            "finance_row_advance_settle_wait": 2.50,
             "pyautogui": SimpleNamespace(
                 press=lambda key: events.append(("key", key))
             ),
@@ -3575,7 +3663,7 @@ def test_fast_geometry_boundary_uses_one_down_even_when_management_enter_was_sen
         assert events[1] == ("key", "down")
         # Down 후에는 다음 적요 더블클릭 전에 스크롤이 끝나도록
         # 전용 행 전환 대기를 사용해야 한다(밀림 방지).
-        assert events[2] == ("sleep", 1.50)
+        assert events[2] == ("sleep", 2.50)
         assert state["bottom_scroll_mode"] is True
         assert state["scroll_advance_mode"] == "down"
 
