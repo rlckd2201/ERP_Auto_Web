@@ -7800,7 +7800,10 @@ class ERPLoginBot:
                     pass
                 return values
 
-            for backend in ("win32", "uia"):
+            # ERP Message 창은 WPF(HwndWrapper)라 win32 backend로는 내부
+            # 문구/버튼이 보이지 않고 제목 'Message'만 읽힌다. 문구 검증이
+            # 가능하도록 uia를 먼저 시도하고 win32는 fallback으로 유지한다.
+            for backend in ("uia", "win32"):
                 try:
                     windows = Desktop(backend=backend).windows()
                 except Exception:
@@ -8176,11 +8179,14 @@ class ERPLoginBot:
 
             _click_save_button()
             try:
+                # 210행급 대형 전표는 저장 처리 후 '자료가 저장되었습니다'
+                # 확인창이 수십 초 뒤에 뜰 수 있다. 확인창을 닫지 않고 출력을
+                # 시작하면 모달에 막혀 RD Viewer가 열리지 않는다.
                 confirmation_timeout = float(
-                    os.getenv("ERP_SAVE_CONFIRM_TIMEOUT_SECONDS", "3") or "3"
+                    os.getenv("ERP_SAVE_CONFIRM_TIMEOUT_SECONDS", "60") or "60"
                 )
             except ValueError:
-                confirmation_timeout = 3.0
+                confirmation_timeout = 60.0
             confirmation = _wait_erp_message(max(1.0, confirmation_timeout))
             if not confirmation:
                 self.logger.info(

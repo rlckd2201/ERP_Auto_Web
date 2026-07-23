@@ -4436,6 +4436,23 @@ def test_erp_message_snapshot_uses_only_same_process_message_window():
     assert "저장 후 출력해 주십시오." not in snapshot["text"]
 
 
+def test_save_message_reads_uia_first_and_waits_for_late_dialog():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    find_start = source.index("def _find_erp_message_snapshot")
+    find_end = source.index("def _wait_erp_message", find_start)
+    find_helper = source[find_start:find_end]
+    # WPF Message 창의 문구/버튼은 uia로만 읽히므로 uia를 먼저 시도해야 한다.
+    assert 'for backend in ("uia", "win32"):' in find_helper
+    assert 'for backend in ("win32", "uia"):' not in find_helper
+
+    save_start = source.index("def _save_current_voucher_via_toolbar")
+    save_end = source.index("def _wait_rd_viewer_ready", save_start)
+    save_helper = source[save_start:save_end]
+    # 대형 전표는 저장 확인창이 늦게 뜨므로 기본 대기가 충분히 길어야 한다.
+    assert 'os.getenv("ERP_SAVE_CONFIRM_TIMEOUT_SECONDS", "60")' in save_helper
+
+
 def test_verified_erp_message_dismissal_never_enters_unknown_dialog():
     pressed = []
     bot = SimpleNamespace(logger=_FakeLogger())
