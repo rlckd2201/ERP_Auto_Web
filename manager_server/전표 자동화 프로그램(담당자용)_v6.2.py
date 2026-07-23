@@ -5824,20 +5824,23 @@ class ERPLoginBot:
                     0.05,
                     float(os.getenv("ERP_MGMT_BANK_TYPE_INTERVAL", "0.05") or "0.05"),
                 )
-                # 첫 미지급금 행과 동일한 공용 F9 검색값 입력 방식을 사용한다.
-                # 계좌 팝업 검색칸은 새로 열린 빈 칸이므로 Ctrl+A를 보내지 않는다.
-                if not _type_vendor_code(
-                    account_no,
-                    f"{label} 계좌번호",
-                    interval=type_interval,
-                ):
+                if not account_no.isascii() or not re.fullmatch(r"[0-9-]+", account_no):
                     raise RuntimeError(
-                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다."
+                        f"{label} 계좌번호 형식이 숫자/하이픈이 아닙니다: {account_no!r}"
                     )
+                _release_modifiers(f"{label} 계좌번호 물리 키 입력 직전", wait=False)
+                try:
+                    # K-System의 GDI 계좌 검색칸은 거래처 검색에서 사용하는
+                    # VK_PACKET 문자를 무시한다. 계좌번호만 물리 키로 입력한다.
+                    pyautogui.write(account_no, interval=type_interval)
+                except Exception as exc:
+                    raise RuntimeError(
+                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다: {exc}"
+                    ) from exc
                 _release_modifiers(f"{label} 계좌번호 키보드 입력 후", wait=False)
                 time.sleep(max(0.25, min(f9_search_wait, 0.50)))
                 self.logger.info(
-                    f"  [MGMT-BANK] {label}: 1행과 동일한 공용 F9 검색값 입력 완료: "
+                    f"  [MGMT-BANK] {label}: 계좌번호 물리 키 입력 완료: "
                     f"{account_no}"
                 )
                 time.sleep(f9_search_wait)
