@@ -10,7 +10,7 @@
 - [x] 담당자 프로그램 회귀 127개와 Python 구문 검사를 통과한다.
 - [x] 전체 `excel_voucher_web/tests` 156개 회귀를 통과한다.
 - [x] Graphify 갱신을 시도한다. CLI 미설치로 기존 그래프를 보존하고 미갱신 사유를 기록한다.
-- [ ] 커밋·push, 실제 GitHub `main.zip` Manager 해시를 확인한다.
+- [x] 커밋 `5fd2e45`를 `origin/main`에 push하고 실제 GitHub `main.zip` Manager 해시 `7F5344365341`을 확인한다.
 - [ ] 243 최신 적용 후 `6월 대승 수시결제.xlsx`로 1행 `피티테크(PT032)`, 중간 행, 마지막 계좌·금융기관지점, 저장·출력을 실기기 검증한다.
 
 ## 2026-07-23 243 재검증
