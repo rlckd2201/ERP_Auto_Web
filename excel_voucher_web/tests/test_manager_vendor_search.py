@@ -133,8 +133,7 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
         "pyautogui.press('f9')",
         "_replace_vendor_ds_search_text",
         "pyautogui.press('tab', presses=4",
-        "pyautogui.press('down', presses=5",
-        "pyautogui.press('up', presses=2",
+        "pyautogui.press('home')",
         "pyautogui.press('tab', presses=3",
         "pyautogui.press('enter', presses=2",
     ]
@@ -542,8 +541,7 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
         ("key", "f9", 1),
         ("search", "A001"),
         ("key", "tab", 4),
-        ("key", "down", 5),
-        ("key", "up", 2),
+        ("key", "home", 1),
         ("key", "tab", 3),
         ("key", "enter", 2),
     ]
@@ -760,9 +758,10 @@ def test_vendor_ds_foreground_activates_background_same_pid_window_with_win32():
 def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_visual():
     events = []
 
-    def _type_vendor_code(text, label, interval=None):
-        events.append(("type", text, label, interval))
-        return True
+    class _FakePyAutoGui:
+        @staticmethod
+        def write(text, interval=0):
+            events.append(("write", text, interval))
 
     loaded = _load_nested_functions(
         "_replace_vendor_ds_search_text",
@@ -772,7 +771,7 @@ def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_v
             "_release_modifiers": lambda label, wait=False: events.append(
                 ("release", label)
             ),
-            "_type_vendor_code": _type_vendor_code,
+            "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(
                 sleep=lambda seconds: events.append(("sleep", seconds))
             ),
@@ -782,7 +781,8 @@ def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_v
 
     assert loaded["_replace_vendor_ds_search_text"]("PT032", "1행 거래처", 0.40) is True
     assert events == [
-        ("type", "PT032", "1행 거래처 거래처번호", 0.05),
+        ("release", "1행 거래처 거래처번호 물리 키 입력 직전"),
+        ("write", "PT032", 0.10),
         ("release", "1행 거래처 거래처번호 키보드 입력 후"),
         ("sleep", 0.40),
     ]
@@ -794,6 +794,8 @@ def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_v
     assert "pyperclip" not in helper
     assert "_paste_text_fast" not in helper
     assert "_vendor_ds_search_visual_ink" not in helper
+    assert "_type_vendor_code" not in helper
+    assert "pyautogui.write(vendor_code" in helper
 
 
 def test_vendor_code_keyboard_input_uses_vk_packet_and_rejects_non_ascii():
@@ -854,9 +856,6 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
             "_type_vendor_code": lambda text, label, interval=None: (
                 events.append(("type", text, label, interval)) or type_result
             ),
-            "_raise_if_vendor_ds_open": lambda _label, stage: events.append(
-                ("popup-check", stage)
-            ),
             "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(
                 sleep=lambda seconds: events.append(("sleep", seconds))
@@ -873,14 +872,13 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
     )
 
     assert result is type_result
-    assert events[0] == ("popup-check", "입력 전")
+    assert events[0] == ("click", 1118, 797, "2행 거래처")
     if type_result:
         typed_at = next(index for index, event in enumerate(events) if event[0] == "type")
         settle_at = events.index(("sleep", 0.30))
         enter_at = events.index(("key", "enter", 1))
         commit_at = events.index(("sleep", 0.40))
-        final_check_at = events.index(("popup-check", "Enter 확정 후"))
-        assert typed_at < settle_at < enter_at < commit_at < final_check_at
+        assert typed_at < settle_at < enter_at < commit_at
         assert [event for event in events if event[:2] == ("key", "enter")] == [
             ("key", "enter", 1)
         ]
@@ -894,52 +892,15 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
     assert "pyperclip" not in helper
     assert "_paste_text_fast" not in helper
     assert "_management_value_visual_ink" not in helper
-
-
-def test_finance_direct_vendor_stops_when_vendor_popup_is_still_open():
-    loaded = _load_nested_functions(
-        "_raise_if_vendor_ds_open",
-        namespace={
-            "_foreground_window_title": lambda: (8928, "거래처ds"),
-            "_is_vendor_ds_title": lambda title: title == "거래처ds",
-        },
-    )
-
-    with pytest.raises(RuntimeError, match="156행 거래처.*다음 행 이동을 중단"):
-        loaded["_raise_if_vendor_ds_open"]("156행 거래처", "Enter 확정 후")
+    assert "_raise_if_vendor_ds_open" not in helper
+    assert "_recover_finance_vendor_ds_popup" not in helper
 
 
 def test_finance_direct_vendor_uses_safe_default_settle_times():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
-    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35"' in source
-    assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.20"' in source
-
-
-def test_vendor_popup_guard_calls_stay_in_their_defining_runtime_scope():
-    tree = ast.parse(MANAGER_SOURCE.read_text(encoding="utf-8"))
-    parents = {}
-    for parent in ast.walk(tree):
-        for child in ast.iter_child_nodes(parent):
-            parents[child] = parent
-
-    call_scopes = []
-    for node in ast.walk(tree):
-        if not (
-            isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Name)
-            and node.func.id == "_raise_if_vendor_ds_open"
-        ):
-            continue
-        parent = parents.get(node)
-        while parent is not None and not isinstance(parent, ast.FunctionDef):
-            parent = parents.get(parent)
-        call_scopes.append(parent.name if parent is not None else "")
-
-    assert call_scopes == [
-        "_input_finance_vendor_code_xy",
-        "_input_finance_vendor_code_xy",
-    ]
+    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.75"' in source
+    assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.50"' in source
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
@@ -2543,7 +2504,7 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
         ("press", "f9", 1),
         ("write", "140-000-948562"),
         ("press", "tab", 4),
-        ("press", "up", 2),
+        ("press", "home", 1),
         ("press", "tab", 3),
         ("press", "enter", 1),
     ]
@@ -2587,7 +2548,7 @@ def test_bank_account_input_requires_auto_filled_branch_after_sequence():
             "210행 계좌번호",
         )
 
-    assert pressed == ["f9", "tab", "up", "tab", "enter"]
+    assert pressed == ["f9", "tab", "home", "tab", "enter"]
     assert state == {
         "opened": True,
         "closed": False,
@@ -2605,14 +2566,14 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
         'pyautogui.press("f9")',
         "pyautogui.write(account_no",
         'pyautogui.press("tab", presses=4',
-        'pyautogui.press("up", presses=2',
+        'pyautogui.press("home")',
         'pyautogui.press("tab", presses=3',
         'pyautogui.press("enter")',
     ]
     positions = [helper.index(token) for token in expected_order]
 
     assert positions == sorted(positions)
-    assert "Tab 4 → Up 2 → Tab 3 → Enter" in helper
+    assert "Tab 4 → Home=계좌번호 → Tab 3 → Enter" in helper
     assert "_bank_main_window_visual_snapshot" not in helper
     assert "_bank_visual_change_ratio" not in helper
     assert "pyautogui.hotkey" not in helper

@@ -2052,11 +2052,11 @@ class ERPLoginBot:
         vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
         finance_vendor_paste_settle_wait = max(
             mgmt_key_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35") or "0.35"),
+            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.75") or "0.75"),
         )
         finance_vendor_commit_settle_wait = max(
             mgmt_commit_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.20") or "1.20"),
+            float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.50") or "1.50"),
         )
         vendor_double_click_hold = min(
             0.25,
@@ -5120,15 +5120,6 @@ class ERPLoginBot:
                 compact = re.sub(r"[\s_]+", "", str(title or "")).lower()
                 return "거래처ds" in compact
 
-            def _raise_if_vendor_ds_open(label, stage):
-                hwnd, title = _foreground_window_title()
-                if not _is_vendor_ds_title(title):
-                    return
-                raise RuntimeError(
-                    f"{label} {stage} 거래처ds 선택 팝업이 열려 있습니다. "
-                    "ERP 거래처 확정 지연으로 다음 행 이동을 중단합니다."
-                )
-
             def _window_process_id(hwnd):
                 try:
                     process_id = ctypes.c_ulong(0)
@@ -5306,9 +5297,9 @@ class ERPLoginBot:
                                 interval
                                 if interval is not None
                                 else os.getenv(
-                                    "ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.05"
+                                    "ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.10"
                                 )
-                                or "0.05"
+                                or "0.10"
                             ),
                         ),
                         with_spaces=True,
@@ -5384,14 +5375,18 @@ class ERPLoginBot:
                     )
                     return False
                 type_interval = max(
-                    0.05,
-                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.05") or "0.05"),
+                    0.10,
+                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.10") or "0.10"),
                 )
-                if not _type_vendor_code(
-                    vendor_code,
-                    f"{label} 거래처번호",
-                    interval=type_interval,
-                ):
+                _release_modifiers(f"{label} 거래처번호 물리 키 입력 직전", wait=False)
+                try:
+                    # K-System GDI 조회창은 VK_PACKET 입력을 간헐적으로
+                    # 무시한다. 조회창 검색칸만 실제 키 입력으로 고정한다.
+                    pyautogui.write(vendor_code, interval=type_interval)
+                except Exception as exc:
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 거래처ds 검색칸 입력 실패: {exc}"
+                    )
                     return False
                 _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
                 time.sleep(max(0.25, float(settle_wait)))
@@ -5405,7 +5400,7 @@ class ERPLoginBot:
                 try:
                     # 재정 미지급금 첫 행은 ERP에서 확인한 키보드 흐름만 사용한다.
                     # 관리항목값 셀 1회 클릭 -> F9 -> 거래처번호 ->
-                    # Tab 4 -> Down 5 -> Up 2 -> Tab 3 -> Enter 2.
+                    # Tab 4 -> Home(거래처번호) -> Tab 3 -> Enter 2.
                     _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
                     _release_modifiers(f"{label} F9 직전", wait=False)
                     time.sleep(mgmt_focus_wait)
@@ -5429,19 +5424,19 @@ class ERPLoginBot:
                     )
                     f9_search_wait = max(
                         vendor_popup_search_wait,
-                        float(os.getenv("ERP_MGMT_F9_SEARCH_WAIT", "1.50") or "1.50"),
+                        float(os.getenv("ERP_MGMT_F9_SEARCH_WAIT", "2.00") or "2.00"),
                     )
                     f9_key_interval = max(
-                        0.08,
-                        float(os.getenv("ERP_MGMT_F9_KEY_INTERVAL", "0.12") or "0.12"),
+                        0.12,
+                        float(os.getenv("ERP_MGMT_F9_KEY_INTERVAL", "0.18") or "0.18"),
                     )
                     f9_group_wait = max(
                         mgmt_key_wait,
-                        float(os.getenv("ERP_MGMT_F9_GROUP_WAIT", "0.20") or "0.20"),
+                        float(os.getenv("ERP_MGMT_F9_GROUP_WAIT", "0.35") or "0.35"),
                     )
                     f9_enter_interval = max(
-                        0.12,
-                        float(os.getenv("ERP_MGMT_F9_ENTER_INTERVAL", "0.30") or "0.30"),
+                        0.20,
+                        float(os.getenv("ERP_MGMT_F9_ENTER_INTERVAL", "0.40") or "0.40"),
                     )
                     pyautogui.press('f9')
                     if skip_visible_row_scan:
@@ -5470,9 +5465,9 @@ class ERPLoginBot:
                     time.sleep(f9_search_wait)
                     pyautogui.press('tab', presses=4, interval=f9_key_interval)
                     time.sleep(f9_group_wait)
-                    pyautogui.press('down', presses=5, interval=f9_key_interval)
-                    time.sleep(f9_group_wait)
-                    pyautogui.press('up', presses=2, interval=f9_key_interval)
+                    # 검색 조건 콤보에 도착한 뒤 현재 저장값과 관계없이
+                    # 첫 항목인 거래처번호를 선택한다.
+                    pyautogui.press('home')
                     time.sleep(f9_group_wait)
                     pyautogui.press('tab', presses=3, interval=f9_key_interval)
                     time.sleep(f9_group_wait)
@@ -5480,7 +5475,7 @@ class ERPLoginBot:
                     time.sleep(ERP_FORM_WAIT)
                     self.logger.info(
                         f"  [MGMT-XY] {label}: F9 거래처번호 키보드 시퀀스 완료"
-                        f"(Tab 4, Down 5, Up 2, Tab 3, Enter 2): {vendor_code}"
+                        f"(Tab 4, Home=거래처번호, Tab 3, Enter 2): {vendor_code}"
                     )
                     return True
                 except Exception as exc:
@@ -5504,13 +5499,12 @@ class ERPLoginBot:
                         f"{vendor_code!r}"
                     )
                     return False
-                _raise_if_vendor_ds_open(label, "입력 전")
                 _click_form_xy(x, y, label, wait=mgmt_click_wait)
                 _release_modifiers(f"{label} 클릭 후", wait=False)
                 time.sleep(max(0.20, mgmt_focus_wait))
                 type_interval = max(
-                    0.05,
-                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.05") or "0.05"),
+                    0.10,
+                    float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.10") or "0.10"),
                 )
                 if not _type_vendor_code(
                     vendor_code,
@@ -5522,7 +5516,6 @@ class ERPLoginBot:
                 time.sleep(max(0.25, float(paste_settle_wait)))
                 pyautogui.press('enter')
                 time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
-                _raise_if_vendor_ds_open(label, "Enter 확정 후")
                 return True
 
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
@@ -5795,15 +5788,15 @@ class ERPLoginBot:
                 )
                 f9_search_wait = max(
                     vendor_popup_search_wait,
-                    float(os.getenv("ERP_MGMT_BANK_F9_SEARCH_WAIT", "1.50") or "1.50"),
+                    float(os.getenv("ERP_MGMT_BANK_F9_SEARCH_WAIT", "2.00") or "2.00"),
                 )
                 f9_key_interval = max(
-                    0.08,
-                    float(os.getenv("ERP_MGMT_BANK_F9_KEY_INTERVAL", "0.12") or "0.12"),
+                    0.12,
+                    float(os.getenv("ERP_MGMT_BANK_F9_KEY_INTERVAL", "0.18") or "0.18"),
                 )
                 f9_group_wait = max(
                     mgmt_key_wait,
-                    float(os.getenv("ERP_MGMT_BANK_F9_GROUP_WAIT", "0.20") or "0.20"),
+                    float(os.getenv("ERP_MGMT_BANK_F9_GROUP_WAIT", "0.35") or "0.35"),
                 )
 
                 _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
@@ -5819,10 +5812,9 @@ class ERPLoginBot:
                     f"  [MGMT-BANK] {label}: F9 후 {f9_open_wait:.2f}초 대기 완료; "
                     "계좌번호 입력과 고정 키보드 시퀀스를 바로 실행합니다."
                 )
-
                 type_interval = max(
-                    0.05,
-                    float(os.getenv("ERP_MGMT_BANK_TYPE_INTERVAL", "0.05") or "0.05"),
+                    0.10,
+                    float(os.getenv("ERP_MGMT_BANK_TYPE_INTERVAL", "0.10") or "0.10"),
                 )
                 if not account_no.isascii() or not re.fullmatch(r"[0-9-]+", account_no):
                     raise RuntimeError(
@@ -5847,11 +5839,13 @@ class ERPLoginBot:
 
                 self.logger.info(
                     f"  [MGMT-BANK] {label}: F9 계좌번호 키보드 시퀀스 시작"
-                    "(Tab 4 → Up 2 → Tab 3 → Enter)"
+                    "(Tab 4 → Home=계좌번호 → Tab 3 → Enter)"
                 )
                 pyautogui.press("tab", presses=4, interval=f9_key_interval)
                 time.sleep(f9_group_wait)
-                pyautogui.press("up", presses=2, interval=f9_key_interval)
+                # 검색 조건 콤보의 첫 항목은 계좌번호다. Home을 사용해
+                # 담당자가 마지막으로 저장한 조건과 무관하게 고정한다.
+                pyautogui.press("home")
                 time.sleep(f9_group_wait)
                 pyautogui.press("tab", presses=3, interval=f9_key_interval)
                 time.sleep(f9_group_wait)
