@@ -5253,7 +5253,15 @@ class ERPLoginBot:
                 try:
                     rect = _main_rect()
                     right = rect.left + int(x) - 10
-                    left = max(rect.left, right - 250)
+                    # 분할 바 위치에 따라 관리항목값 칸의 구분선이 클릭 지점보다
+                    # 훨씬 왼쪽(value_x-360 부근)까지 올 수 있다. 짧은 거래처
+                    # 코드가 칸 왼쪽 끝에 그려져도 잡히도록 값 칸 전체를 본다.
+                    # (칸 왼쪽의 관리항목 이름은 빨간 글자라 잉크로 세지 않는다.)
+                    scan_width = max(
+                        250,
+                        int(float(os.getenv("ERP_MGMT_VALUE_SCAN_WIDTH", "350") or "350")),
+                    )
+                    left = max(rect.left, right - scan_width)
                     top = rect.top + int(y) - 8
                     bottom = rect.top + int(y) + 8
                     image = pyautogui.screenshot(
@@ -5536,11 +5544,20 @@ class ERPLoginBot:
                 _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
                 time.sleep(max(0.25, float(paste_settle_wait)))
                 typed_ink = _management_value_visual_ink(x, y)
+                # 사용자 확정 흐름: 거래처번호 입력 → F9 → Enter.
+                # F9가 입력된 번호로 거래처 조회를 명시적으로 실행하게 한 뒤
+                # Enter로 확정한다.
+                pyautogui.press('f9')
+                f9_wait = max(
+                    0.35,
+                    float(os.getenv("ERP_FINANCE_VENDOR_F9_WAIT", "1.00") or "1.00"),
+                )
+                time.sleep(f9_wait)
                 confirm_timeout = max(
                     1.0,
                     float(
-                        os.getenv("ERP_FINANCE_VENDOR_CONFIRM_TIMEOUT", "4.0")
-                        or "4.0"
+                        os.getenv("ERP_FINANCE_VENDOR_CONFIRM_TIMEOUT", "6.0")
+                        or "6.0"
                     ),
                 )
                 poll_count = max(4, int(confirm_timeout / 0.25))

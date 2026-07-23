@@ -893,14 +893,17 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
     if type_result:
         typed_at = next(index for index, event in enumerate(events) if event[0] == "type")
         settle_at = events.index(("sleep", 0.30))
+        f9_at = events.index(("key", "f9", 1))
         enter_at = events.index(("key", "enter", 1))
         commit_at = events.index(("sleep", 0.40))
-        assert typed_at < settle_at < enter_at < commit_at
+        # 사용자 확정 흐름: 입력 → F9 → Enter 순서를 유지해야 한다.
+        assert typed_at < settle_at < f9_at < enter_at < commit_at
         assert [event for event in events if event[:2] == ("key", "enter")] == [
             ("key", "enter", 1)
         ]
     else:
         assert not any(event[:2] == ("key", "enter") for event in events)
+        assert not any(event[:2] == ("key", "f9") for event in events)
 
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
     helper_start = source.index("def _input_finance_vendor_code_xy")
@@ -980,8 +983,8 @@ def test_finance_direct_vendor_retries_enter_once_then_stops_without_conversion(
     assert loaded["_input_finance_vendor_code_xy"](
         1118, 797, "A001", "5행 거래처", 0.0, 0.0
     ) is False
-    # Enter 1회 재전송 후에도 변환이 없으면 실패로 중단한다.
-    assert pressed == ["enter", "enter"]
+    # F9 조회 후 Enter 1회 재전송까지 해도 변환이 없으면 실패로 중단한다.
+    assert pressed == ["f9", "enter", "enter"]
 
 
 def test_finance_direct_vendor_uses_safe_default_settle_times():
@@ -991,6 +994,10 @@ def test_finance_direct_vendor_uses_safe_default_settle_times():
     assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "2.00"' in source
     assert 'ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT", "2.50"' in source
     assert 'ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"' in source
+    # 값 칸 스캔은 분할 바 위치와 무관하게 칸 전체를 덮어야 한다.
+    assert 'ERP_MGMT_VALUE_SCAN_WIDTH", "350"' in source
+    assert 'ERP_FINANCE_VENDOR_CONFIRM_TIMEOUT", "6.0"' in source
+    assert 'ERP_FINANCE_VENDOR_F9_WAIT", "1.00"' in source
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
