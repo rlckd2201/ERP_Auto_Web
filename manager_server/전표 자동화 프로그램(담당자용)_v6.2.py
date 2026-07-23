@@ -5400,7 +5400,7 @@ class ERPLoginBot:
                 try:
                     # 재정 미지급금 첫 행은 ERP에서 확인한 키보드 흐름만 사용한다.
                     # 관리항목값 셀 1회 클릭 -> F9 -> 거래처번호 ->
-                    # Tab 4 -> Home(거래처번호) -> Tab 3 -> Enter 2.
+                    # Tab 4 -> Down 5 -> Up 2 -> Tab 3 -> Enter 2.
                     _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
                     _release_modifiers(f"{label} F9 직전", wait=False)
                     time.sleep(mgmt_focus_wait)
@@ -5465,9 +5465,9 @@ class ERPLoginBot:
                     time.sleep(f9_search_wait)
                     pyautogui.press('tab', presses=4, interval=f9_key_interval)
                     time.sleep(f9_group_wait)
-                    # 검색 조건 콤보에 도착한 뒤 현재 저장값과 관계없이
-                    # 첫 항목인 거래처번호를 선택한다.
-                    pyautogui.press('home')
+                    pyautogui.press('down', presses=5, interval=f9_key_interval)
+                    time.sleep(f9_group_wait)
+                    pyautogui.press('up', presses=2, interval=f9_key_interval)
                     time.sleep(f9_group_wait)
                     pyautogui.press('tab', presses=3, interval=f9_key_interval)
                     time.sleep(f9_group_wait)
@@ -5475,7 +5475,7 @@ class ERPLoginBot:
                     time.sleep(ERP_FORM_WAIT)
                     self.logger.info(
                         f"  [MGMT-XY] {label}: F9 거래처번호 키보드 시퀀스 완료"
-                        f"(Tab 4, Home=거래처번호, Tab 3, Enter 2): {vendor_code}"
+                        f"(Tab 4, Down 5, Up 2, Tab 3, Enter 2): {vendor_code}"
                     )
                     return True
                 except Exception as exc:
@@ -5839,13 +5839,11 @@ class ERPLoginBot:
 
                 self.logger.info(
                     f"  [MGMT-BANK] {label}: F9 계좌번호 키보드 시퀀스 시작"
-                    "(Tab 4 → Home=계좌번호 → Tab 3 → Enter)"
+                    "(Tab 4 → Up 2 → Tab 3 → Enter)"
                 )
                 pyautogui.press("tab", presses=4, interval=f9_key_interval)
                 time.sleep(f9_group_wait)
-                # 검색 조건 콤보의 첫 항목은 계좌번호다. Home을 사용해
-                # 담당자가 마지막으로 저장한 조건과 무관하게 고정한다.
-                pyautogui.press("home")
+                pyautogui.press("up", presses=2, interval=f9_key_interval)
                 time.sleep(f9_group_wait)
                 pyautogui.press("tab", presses=3, interval=f9_key_interval)
                 time.sleep(f9_group_wait)

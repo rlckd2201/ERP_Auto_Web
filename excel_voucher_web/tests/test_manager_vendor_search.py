@@ -133,7 +133,8 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
         "pyautogui.press('f9')",
         "_replace_vendor_ds_search_text",
         "pyautogui.press('tab', presses=4",
-        "pyautogui.press('home')",
+        "pyautogui.press('down', presses=5",
+        "pyautogui.press('up', presses=2",
         "pyautogui.press('tab', presses=3",
         "pyautogui.press('enter', presses=2",
     ]
@@ -541,7 +542,8 @@ def test_finance_fast_first_vendor_executes_exact_f9_key_order_without_uia_probe
         ("key", "f9", 1),
         ("search", "A001"),
         ("key", "tab", 4),
-        ("key", "home", 1),
+        ("key", "down", 5),
+        ("key", "up", 2),
         ("key", "tab", 3),
         ("key", "enter", 2),
     ]
@@ -2504,7 +2506,7 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
         ("press", "f9", 1),
         ("write", "140-000-948562"),
         ("press", "tab", 4),
-        ("press", "home", 1),
+        ("press", "up", 2),
         ("press", "tab", 3),
         ("press", "enter", 1),
     ]
@@ -2548,7 +2550,7 @@ def test_bank_account_input_requires_auto_filled_branch_after_sequence():
             "210행 계좌번호",
         )
 
-    assert pressed == ["f9", "tab", "home", "tab", "enter"]
+    assert pressed == ["f9", "tab", "up", "tab", "enter"]
     assert state == {
         "opened": True,
         "closed": False,
@@ -2566,14 +2568,14 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
         'pyautogui.press("f9")',
         "pyautogui.write(account_no",
         'pyautogui.press("tab", presses=4',
-        'pyautogui.press("home")',
+        'pyautogui.press("up", presses=2',
         'pyautogui.press("tab", presses=3',
         'pyautogui.press("enter")',
     ]
     positions = [helper.index(token) for token in expected_order]
 
     assert positions == sorted(positions)
-    assert "Tab 4 → Home=계좌번호 → Tab 3 → Enter" in helper
+    assert "Tab 4 → Up 2 → Tab 3 → Enter" in helper
     assert "_bank_main_window_visual_snapshot" not in helper
     assert "_bank_visual_change_ratio" not in helper
     assert "pyautogui.hotkey" not in helper
