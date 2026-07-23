@@ -2456,11 +2456,13 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
         namespace={
             "_click_form_xy": lambda *_args, **_kwargs: events.append(("click",)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda value, *_args, **_kwargs: events.append(
+                ("type", value)
+            )
+            or True,
             "_management_value_visual_ink": lambda *_args: (12, 4, 6, 14),
             "pyautogui": SimpleNamespace(
                 press=press,
-                hotkey=lambda *keys: events.append(("hotkey", *keys)),
-                write=lambda value, **_kwargs: events.append(("write", value)),
             ),
             "bank_account_popup_state": {
                 "opened": False,
@@ -2491,8 +2493,7 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
     assert events == [
         ("click",),
         ("press", "f9", 1),
-        ("hotkey", "ctrl", "a"),
-        ("write", "140-000-948562"),
+        ("type", "140-000-948562"),
         ("press", "tab", 4),
         ("press", "up", 2),
         ("press", "tab", 3),
@@ -2509,11 +2510,10 @@ def test_bank_account_input_requires_auto_filled_branch_after_sequence():
         namespace={
             "_click_form_xy": lambda *_args, **_kwargs: None,
             "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
             "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
             "pyautogui": SimpleNamespace(
                 press=lambda key, **_kwargs: pressed.append(key),
-                hotkey=lambda *_args: None,
-                write=lambda *_args, **_kwargs: None,
             ),
             "bank_account_popup_state": state,
             "mgmt_key_wait": 0.1,
@@ -2555,7 +2555,7 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     expected_order = [
         "_click_form_xy",
         'pyautogui.press("f9")',
-        "pyautogui.write(account_no",
+        "_type_vendor_code",
         'pyautogui.press("tab", presses=4',
         'pyautogui.press("up", presses=2',
         'pyautogui.press("tab", presses=3',
@@ -2567,7 +2567,8 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     assert "Tab 4 → Up 2 → Tab 3 → Enter" in helper
     assert "_bank_main_window_visual_snapshot" not in helper
     assert "_bank_visual_change_ratio" not in helper
-    assert "send_keys(" not in helper
+    assert "pyautogui.hotkey" not in helper
+    assert "pyautogui.write" not in helper
     assert "_find_bank_account_popup" not in helper
     assert "_wait_bank_account_popup_closed" not in helper
     assert "_input_value_xy" not in helper

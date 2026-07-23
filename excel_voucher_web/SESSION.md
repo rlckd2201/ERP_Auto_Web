@@ -113,3 +113,8 @@
 - 보통예금 계좌번호만 `pyautogui.write` 물리 키 입력으로 분리했다. F9·고정 대기·`Tab 4 → Up 2 → Tab 3 → Enter` 및 금융기관지점 최종 검증은 유지한다.
 - 전용 회귀 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check`를 확인했다. Graphify CLI는 없어 갱신하지 못했다. 다음 시작점은 배포·243 최신 적용 후 동일 엑셀 재업로드다.
 - 수정 커밋 `83325f9`를 `origin/main`에 push했다. 배포 Manager SHA-256은 `FABF26AA4DCFA1900E98BA6CE9B83C72C44D533D4AC8B8DFB7299EFBF04EF34C`이며, 243 완료 화면에서 `Manager FABF26AA4DCF` 확인 후 재업로드한다.
+
+## 2026-07-23 마지막 행 입력을 1행 방식으로 통일
+- 사용자 재확인에 따라 마지막 보통예금도 첫 미지급금 행과 동일한 공용 `_type_vendor_code()` 입력 방식을 사용한다.
+- 별도 `Ctrl+A`와 `pyautogui.write` 물리 키 분기를 제거했다. 차이는 검색값이 계좌번호이고 선택 키가 `Tab 4 → Up 2 → Tab 3 → Enter`라는 점뿐이다.
+- 전용 회귀 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check`를 확인했다. Graphify CLI는 없어 갱신하지 못했다. 다음 시작점은 배포·243 최신 적용 후 동일 엑셀 재업로드다.

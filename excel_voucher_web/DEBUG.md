@@ -376,3 +376,8 @@
 - 조치: 숫자/하이픈 형식을 확인한 뒤 `pyautogui.write(account_no, interval=...)`로 물리 키 이벤트를 보낸다. 거래처번호 입력 경로는 변경하지 않았다.
 - 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.
 - 배포: 커밋 `83325f9`를 `origin/main`에 push했다. Manager SHA-256은 `FABF26AA4DCFA1900E98BA6CE9B83C72C44D533D4AC8B8DFB7299EFBF04EF34C`이며 243 실기기 재검증은 남아 있다.
+
+## 2026-07-23 1행 동일 검색값 입력으로 최종 정리
+- 사용자 피드백: 마지막 행도 이미 검증된 1행 검색값 입력 원리를 그대로 사용해야 하며 별도 입력 방식을 만들 필요가 없다.
+- 조치: 계좌 팝업의 `Ctrl+A`와 `pyautogui.write`를 제거하고, 1행이 사용하는 `_type_vendor_code(account_no, ...)` 및 동일한 입력 후 안정화 대기를 재사용한다. F9 이후 계좌 선택 키 순서와 금융기관지점 최종 확인은 유지한다.
+- 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.

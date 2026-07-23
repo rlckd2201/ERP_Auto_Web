@@ -5809,32 +5809,27 @@ class ERPLoginBot:
                     "계좌번호 입력과 고정 키보드 시퀀스를 바로 실행합니다."
                 )
 
-                pyautogui.hotkey("ctrl", "a")
-                _release_modifiers(f"{label} 계좌 팝업 검색칸 Ctrl+A 후", wait=False)
                 type_interval = max(
                     0.05,
                     float(os.getenv("ERP_MGMT_BANK_TYPE_INTERVAL", "0.05") or "0.05"),
                 )
-                if not account_no.isascii() or not re.fullmatch(
-                    r"[0-9-]+", account_no
+                # 첫 미지급금 행과 동일한 공용 F9 검색값 입력 방식을 사용한다.
+                # 계좌 팝업 검색칸은 새로 열린 빈 칸이므로 Ctrl+A를 보내지 않는다.
+                if not _type_vendor_code(
+                    account_no,
+                    f"{label} 계좌번호",
+                    interval=type_interval,
                 ):
                     raise RuntimeError(
-                        f"{label} 계좌번호 형식이 숫자/하이픈이 아닙니다: {account_no!r}"
+                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다."
                     )
-                try:
-                    # K-System의 GDI 계좌 검색칸은 pywinauto send_keys의
-                    # VK_PACKET 입력을 무시할 수 있다. 숫자/하이픈은 물리 키
-                    # 이벤트로 직접 보내 검색칸에 확실히 입력한다.
-                    pyautogui.write(account_no, interval=type_interval)
-                except Exception as exc:
-                    raise RuntimeError(
-                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다: {exc}"
-                    ) from exc
                 _release_modifiers(f"{label} 계좌번호 키보드 입력 후", wait=False)
-                time.sleep(f9_search_wait)
+                time.sleep(max(0.25, min(f9_search_wait, 0.50)))
                 self.logger.info(
-                    f"  [MGMT-BANK] {label}: 계좌번호 물리 키 입력 완료: {account_no}"
+                    f"  [MGMT-BANK] {label}: 1행과 동일한 공용 F9 검색값 입력 완료: "
+                    f"{account_no}"
                 )
+                time.sleep(f9_search_wait)
 
                 self.logger.info(
                     f"  [MGMT-BANK] {label}: F9 계좌번호 키보드 시퀀스 시작"
