@@ -6989,7 +6989,13 @@ class ERPLoginBot:
                         wait=mgmt_key_wait,
                     )
                     pyautogui.press('down')
-                    time.sleep(mgmt_commit_wait)
+                    if skip_visible_row_scan:
+                        # 경계 이후 매 행이 타는 실제 경로다. Down 후 ERP
+                        # 스크롤이 끝나기 전에 다음 적요를 더블클릭하면 이전
+                        # 행을 다시 선택해 밀림/이전 값 F9 사고가 난다.
+                        time.sleep(finance_row_advance_settle_wait)
+                    else:
+                        time.sleep(mgmt_commit_wait)
                     return anchor_y
 
                 if skip_visible_row_scan:

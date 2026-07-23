@@ -3653,6 +3653,12 @@ def test_fast_geometry_navigation_never_probes_uia_through_dynamic_bank_row():
             assert state["scroll_anchor_y"] == snapshot["last_full_y"]
             assert state["scroll_advance_mode"] == "down"
             assert sum(event == ("key", "down") for event in events) == total_rows - 1
+            # 경계 이후 매 행 전환(스크롤 모드 포함)이 전용 행 전환 대기를
+            # 타야 한다. 최초 경계 1회만 대기하고 이후 행이 짧은 대기로
+            # 돌면 밀림/이전 값 F9 사고가 재발한다.
+            assert sum(event == ("sleep", 2.50) for event in events) >= (
+                total_rows - full_row_count
+            )
 
 
 def test_fast_geometry_boundary_uses_one_down_even_when_management_enter_was_sent():
