@@ -854,6 +854,9 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
             "_type_vendor_code": lambda text, label, interval=None: (
                 events.append(("type", text, label, interval)) or type_result
             ),
+            "_raise_if_vendor_ds_open": lambda _label, stage: events.append(
+                ("popup-check", stage)
+            ),
             "pyautogui": _FakePyAutoGui,
             "time": SimpleNamespace(
                 sleep=lambda seconds: events.append(("sleep", seconds))
@@ -870,12 +873,14 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
     )
 
     assert result is type_result
+    assert events[0] == ("popup-check", "입력 전")
     if type_result:
         typed_at = next(index for index, event in enumerate(events) if event[0] == "type")
         settle_at = events.index(("sleep", 0.30))
         enter_at = events.index(("key", "enter", 1))
         commit_at = events.index(("sleep", 0.40))
-        assert typed_at < settle_at < enter_at < commit_at
+        final_check_at = events.index(("popup-check", "Enter 확정 후"))
+        assert typed_at < settle_at < enter_at < commit_at < final_check_at
         assert [event for event in events if event[:2] == ("key", "enter")] == [
             ("key", "enter", 1)
         ]
@@ -889,6 +894,27 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
     assert "pyperclip" not in helper
     assert "_paste_text_fast" not in helper
     assert "_management_value_visual_ink" not in helper
+
+
+def test_finance_direct_vendor_stops_when_vendor_popup_is_still_open():
+    loaded = _load_nested_functions(
+        "_raise_if_vendor_ds_open",
+        namespace={
+            "_foreground_window_title": lambda: (8928, "거래처ds"),
+            "_is_vendor_ds_title": lambda title: title == "거래처ds",
+        },
+    )
+
+    with pytest.raises(RuntimeError, match="156행 거래처.*다음 행 이동을 중단"):
+        loaded["_raise_if_vendor_ds_open"]("156행 거래처", "Enter 확정 후")
+
+
+def test_finance_direct_vendor_uses_safe_default_settle_times():
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35"' in source
+    assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.20"' in source
+    assert '_raise_if_vendor_ds_open(f"{row_no}행 거래처", "다음 행 이동 전")' in source
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():

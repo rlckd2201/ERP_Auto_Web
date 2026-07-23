@@ -2052,11 +2052,11 @@ class ERPLoginBot:
         vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
         finance_vendor_paste_settle_wait = max(
             mgmt_key_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.10") or "0.10"),
+            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35") or "0.35"),
         )
         finance_vendor_commit_settle_wait = max(
             mgmt_commit_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "0.16") or "0.16"),
+            float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.20") or "1.20"),
         )
         vendor_double_click_hold = min(
             0.25,
@@ -5120,6 +5120,15 @@ class ERPLoginBot:
                 compact = re.sub(r"[\s_]+", "", str(title or "")).lower()
                 return "거래처ds" in compact
 
+            def _raise_if_vendor_ds_open(label, stage):
+                hwnd, title = _foreground_window_title()
+                if not _is_vendor_ds_title(title):
+                    return
+                raise RuntimeError(
+                    f"{label} {stage} 거래처ds 선택 팝업이 열려 있습니다. "
+                    "ERP 거래처 확정 지연으로 다음 행 이동을 중단합니다."
+                )
+
             def _window_process_id(hwnd):
                 try:
                     process_id = ctypes.c_ulong(0)
@@ -5495,6 +5504,7 @@ class ERPLoginBot:
                         f"{vendor_code!r}"
                     )
                     return False
+                _raise_if_vendor_ds_open(label, "입력 전")
                 _click_form_xy(x, y, label, wait=mgmt_click_wait)
                 _release_modifiers(f"{label} 클릭 후", wait=False)
                 time.sleep(max(0.20, mgmt_focus_wait))
@@ -5512,6 +5522,7 @@ class ERPLoginBot:
                 time.sleep(max(0.25, float(paste_settle_wait)))
                 pyautogui.press('enter')
                 time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
+                _raise_if_vendor_ds_open(label, "Enter 확정 후")
                 return True
 
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
@@ -7224,6 +7235,8 @@ class ERPLoginBot:
                     _fill_management_for_current_row(row_no, account_name)
                 )
                 time.sleep(mgmt_key_wait)
+                if management_enter_sent:
+                    _raise_if_vendor_ds_open(f"{row_no}행 거래처", "다음 행 이동 전")
                 if idx < rows_to_fill - 1:
                     current_y = _advance_grid_row(
                         current_y,
