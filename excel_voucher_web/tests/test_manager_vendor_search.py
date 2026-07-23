@@ -757,13 +757,8 @@ def test_vendor_ds_foreground_activates_background_same_pid_window_with_win32():
     assert not any(event[0] == "show" and event[1] == 301 for event in events)
 
 
-def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_visual():
+def test_finance_first_vendor_search_pastes_code_without_visual_probe():
     events = []
-
-    class _FakePyAutoGui:
-        @staticmethod
-        def write(text, interval=0):
-            events.append(("write", text, interval))
 
     loaded = _load_nested_functions(
         "_replace_vendor_ds_search_text",
@@ -773,7 +768,9 @@ def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_v
             "_release_modifiers": lambda label, wait=False: events.append(
                 ("release", label)
             ),
-            "pyautogui": _FakePyAutoGui,
+            "_type_vendor_code": lambda value, label, interval=None: (
+                events.append(("paste", value)) or True
+            ),
             "time": SimpleNamespace(
                 sleep=lambda seconds: events.append(("sleep", seconds))
             ),
@@ -783,9 +780,9 @@ def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_v
 
     assert loaded["_replace_vendor_ds_search_text"]("PT032", "1행 거래처", 0.40) is True
     assert events == [
-        ("release", "1행 거래처 거래처번호 물리 키 입력 직전"),
-        ("write", "PT032", 0.15),
-        ("release", "1행 거래처 거래처번호 키보드 입력 후"),
+        ("release", "1행 거래처 거래처번호 붙여넣기 직전"),
+        ("paste", "PT032"),
+        ("release", "1행 거래처 거래처번호 붙여넣기 후"),
         ("sleep", 0.40),
     ]
 
@@ -793,44 +790,52 @@ def test_finance_first_vendor_search_uses_direct_keyboard_without_clipboard_or_v
     helper_start = source.index("def _replace_vendor_ds_search_text")
     helper_end = source.index("def _seed_vendor_by_number_f9", helper_start)
     helper = source[helper_start:helper_end]
-    assert "pyperclip" not in helper
+    # 검색칸 입력은 공용 붙여넣기 함수만 사용한다(타이핑 금지, IME 무관).
+    assert "_type_vendor_code" in helper
+    assert "pyautogui.write(" not in helper
     assert "_paste_text_fast" not in helper
     assert "_vendor_ds_search_visual_ink" not in helper
-    assert "_type_vendor_code" not in helper
-    assert "pyautogui.write(vendor_code" in helper
 
 
-def test_vendor_code_keyboard_input_uses_vk_packet_and_rejects_non_ascii():
-    calls = []
-
-    def _send_keys(text, **kwargs):
-        calls.append((text, kwargs))
+def test_vendor_code_paste_is_ime_safe_and_rejects_non_ascii():
+    copied = []
+    hotkeys = []
+    ime = []
 
     loaded = _load_nested_functions(
         "_type_vendor_code",
         namespace={
             "re": re,
             "os": SimpleNamespace(getenv=lambda _name, default=None: default),
-            "send_keys": _send_keys,
+            "pyperclip": SimpleNamespace(copy=lambda text: copied.append(text)),
+            "pyautogui": SimpleNamespace(
+                hotkey=lambda *keys: hotkeys.append(keys)
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_clipboard_wait": 0.02,
+            "_force_english_ime": lambda label="": ime.append(label),
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
 
     assert loaded["_type_vendor_code"]("PT032", "1행 거래처", interval=0.01) is True
-    assert calls == [
-        (
-            "PT032",
-            {
-                "pause": 0.05,
-                "with_spaces": True,
-                "vk_packet": True,
-            },
-        )
-    ]
+    assert copied == ["PT032"]
+    assert hotkeys == [("ctrl", "v")]
+    assert ime == ["1행 거래처"]
 
     assert loaded["_type_vendor_code"]("거래처1", "2행 거래처") is False
     assert loaded["_type_vendor_code"]("PT 032", "2행 거래처") is False
-    assert len(calls) == 1
+    assert copied == ["PT032"]
+
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    helper_start = source.index("def _type_vendor_code")
+    helper_end = source.index("def _wait_first_vendor_value_committed", helper_start)
+    helper = source[helper_start:helper_end]
+    assert "pyperclip.copy(vendor_code)" in helper
+    assert "send_keys(" not in helper
+    # 한/영 IME 강제 전환 구현이 존재해야 한다.
+    assert "def _force_english_ime" in source
+    assert "ImmSetConversionStatus" in source
 
 
 @pytest.mark.parametrize("type_result", [True, False])
@@ -889,7 +894,9 @@ def test_finance_direct_vendor_waits_after_keyboard_input_before_single_enter(
     )
 
     assert result is type_result
-    assert events[0] == ("click", 1118, 797, "2행 거래처")
+    # 빈 셀 검사는 편집 반전을 피하려고 셀 클릭 전에 수행한다.
+    assert events[0] == ("ink",)
+    assert events[1] == ("click", 1118, 797, "2행 거래처")
     if type_result:
         typed_at = next(index for index, event in enumerate(events) if event[0] == "type")
         settle_at = events.index(("sleep", 0.30))
@@ -949,17 +956,8 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
     assert not any(event[0] == "key" for event in events)
 
 
-def test_finance_direct_vendor_retries_enter_once_then_stops_without_conversion():
+def test_finance_direct_vendor_sends_f9_then_single_enter():
     pressed = []
-    ink_calls = {"count": 0}
-
-    def fake_ink(_x, _y):
-        ink_calls["count"] += 1
-        if ink_calls["count"] == 1:
-            return (0, 0, 0, 0)
-        # 타이핑된 코드 잉크가 Enter 후에도 그대로 = 이름(코드) 변환 실패.
-        return (30, 6, 12, 40)
-
     loaded = _load_nested_functions(
         "_input_finance_vendor_code_xy",
         namespace={
@@ -968,7 +966,7 @@ def test_finance_direct_vendor_retries_enter_once_then_stops_without_conversion(
             "_click_form_xy": lambda *_args, **_kwargs: None,
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_type_vendor_code": lambda *_args, **_kwargs: True,
-            "_management_value_visual_ink": fake_ink,
+            "_management_value_visual_ink": lambda _x, _y: (0, 0, 0, 0),
             "pyautogui": SimpleNamespace(
                 press=lambda key, **_kwargs: pressed.append(key)
             ),
@@ -982,9 +980,9 @@ def test_finance_direct_vendor_retries_enter_once_then_stops_without_conversion(
 
     assert loaded["_input_finance_vendor_code_xy"](
         1118, 797, "A001", "5행 거래처", 0.0, 0.0
-    ) is False
-    # F9 조회 후 Enter 1회 재전송까지 해도 변환이 없으면 실패로 중단한다.
-    assert pressed == ["f9", "enter", "enter"]
+    ) is True
+    # 사용자 확정 흐름: 붙여넣기 후 F9로 조회하고 Enter 1회로 확정한다.
+    assert pressed == ["f9", "enter"]
 
 
 def test_finance_direct_vendor_uses_safe_default_settle_times():
@@ -996,7 +994,6 @@ def test_finance_direct_vendor_uses_safe_default_settle_times():
     assert 'ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"' in source
     # 값 칸 스캔은 분할 바 위치와 무관하게 칸 전체를 덮어야 한다.
     assert 'ERP_MGMT_VALUE_SCAN_WIDTH", "350"' in source
-    assert 'ERP_FINANCE_VENDOR_CONFIRM_TIMEOUT", "6.0"' in source
     assert 'ERP_FINANCE_VENDOR_F9_WAIT", "1.00"' in source
 
 
@@ -2566,10 +2563,10 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
             "_click_form_xy": lambda *_args, **_kwargs: events.append(("click",)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_management_value_visual_ink": lambda *_args: (12, 4, 6, 14),
-            "pyautogui": SimpleNamespace(
-                press=press,
-                write=lambda value, **_kwargs: events.append(("write", value)),
+            "_type_vendor_code": lambda value, label, interval=None: (
+                events.append(("paste", value)) or True
             ),
+            "pyautogui": SimpleNamespace(press=press),
             "bank_account_popup_state": {
                 "opened": False,
                 "closed": True,
@@ -2599,7 +2596,7 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
     assert events == [
         ("click",),
         ("press", "f9", 1),
-        ("write", "140-000-948562"),
+        ("paste", "140-000-948562"),
         ("press", "tab", 4),
         ("press", "up", 2),
         ("press", "tab", 3),
@@ -2617,9 +2614,9 @@ def test_bank_account_input_requires_auto_filled_branch_after_sequence():
             "_click_form_xy": lambda *_args, **_kwargs: None,
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
             "pyautogui": SimpleNamespace(
                 press=lambda key, **_kwargs: pressed.append(key),
-                write=lambda *_args, **_kwargs: None,
             ),
             "bank_account_popup_state": state,
             "mgmt_key_wait": 0.1,
@@ -2661,7 +2658,7 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     expected_order = [
         "_click_form_xy",
         'pyautogui.press("f9")',
-        "pyautogui.write(account_no",
+        "_type_vendor_code(account_no",
         'pyautogui.press("tab", presses=4',
         'pyautogui.press("up", presses=2',
         'pyautogui.press("tab", presses=3',
@@ -2674,8 +2671,9 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     assert "_bank_main_window_visual_snapshot" not in helper
     assert "_bank_visual_change_ratio" not in helper
     assert "pyautogui.hotkey" not in helper
-    assert "_type_vendor_code" not in helper
-    assert "pyautogui.write(account_no" in helper
+    # 계좌번호도 공용 붙여넣기 함수로 입력한다(타이핑 금지, IME 무관).
+    assert "_type_vendor_code(account_no" in helper
+    assert "pyautogui.write(" not in helper
     assert "_find_bank_account_popup" not in helper
     assert "_wait_bank_account_popup_closed" not in helper
     assert "_input_value_xy" not in helper

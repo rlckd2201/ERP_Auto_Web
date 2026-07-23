@@ -5292,6 +5292,34 @@ class ERPLoginBot:
                     )
                     return 0, 0, 0, 0
 
+            def _force_english_ime(label=""):
+                # 물리 키 입력은 세션의 한/영 IME 상태를 그대로 거친다. 한글
+                # 모드면 거래처번호가 자모로 깨지므로(예: PT→ㅔㅅ) 키 입력
+                # 직전마다 IME를 영숫자 모드로 강제 전환한다.
+                try:
+                    import ctypes
+
+                    user32 = ctypes.windll.user32
+                    imm32 = ctypes.windll.imm32
+                    hwnd = user32.GetForegroundWindow()
+                    if not hwnd:
+                        return
+                    himc = imm32.ImmGetContext(hwnd)
+                    if himc:
+                        try:
+                            imm32.ImmSetConversionStatus(himc, 0, 0)
+                        finally:
+                            imm32.ImmReleaseContext(hwnd, himc)
+                    ime_hwnd = imm32.ImmGetDefaultIMEWnd(hwnd)
+                    if ime_hwnd:
+                        WM_IME_CONTROL = 0x283
+                        IMC_SETCONVERSIONMODE = 0x002
+                        user32.SendMessageW(
+                            ime_hwnd, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, 0
+                        )
+                except Exception as exc:
+                    self.logger.debug(f"  [IME] 영문 전환 실패({label}): {exc}")
+
             def _type_vendor_code(vendor_code, label, interval=None):
                 vendor_code = str(vendor_code or "").strip()
                 if not vendor_code.isascii() or not re.fullmatch(
@@ -5302,27 +5330,19 @@ class ERPLoginBot:
                         f"{vendor_code!r}"
                     )
                     return False
+                _force_english_ime(label)
                 try:
-                    send_keys(
-                        vendor_code,
-                        pause=max(
-                            0.05,
-                            float(
-                                interval
-                                if interval is not None
-                                else os.getenv(
-                                    "ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"
-                                )
-                                or "0.10"
-                            ),
-                        ),
-                        with_spaces=True,
-                        vk_packet=True,
-                    )
+                    # 사용자 지시: 거래처번호/계좌번호는 타이핑하지 않고
+                    # 클립보드로 붙여넣는다. 붙여넣기는 한/영 IME 상태와
+                    # 무관해 자모 깨짐(예: PT→ㅔㅅ)이 없다.
+                    pyperclip.copy(vendor_code)
+                    time.sleep(max(0.05, mgmt_clipboard_wait))
+                    pyautogui.hotkey('ctrl', 'v')
+                    time.sleep(0.10)
                     return True
                 except Exception as exc:
                     self.logger.warning(
-                        f"  [MGMT-XY] {label}: 거래처번호 키보드 입력 실패: {exc}"
+                        f"  [MGMT-XY] {label}: 거래처번호 붙여넣기 실패: {exc}"
                     )
                     return False
 
@@ -5392,20 +5412,17 @@ class ERPLoginBot:
                     0.10,
                     float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15") or "0.15"),
                 )
-                _release_modifiers(f"{label} 거래처번호 물리 키 입력 직전", wait=False)
-                try:
-                    # K-System GDI 조회창은 VK_PACKET 입력을 간헐적으로
-                    # 무시한다. 조회창 검색칸만 실제 키 입력으로 고정한다.
-                    pyautogui.write(vendor_code, interval=type_interval)
-                except Exception as exc:
+                _release_modifiers(f"{label} 거래처번호 붙여넣기 직전", wait=False)
+                # 사용자 지시: 검색칸도 타이핑하지 않고 클립보드로 붙여넣는다.
+                if not _type_vendor_code(vendor_code, label, interval=type_interval):
                     self.logger.warning(
-                        f"  [MGMT-XY] {label}: 거래처ds 검색칸 입력 실패: {exc}"
+                        f"  [MGMT-XY] {label}: 거래처ds 검색칸 입력 실패"
                     )
                     return False
-                _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
+                _release_modifiers(f"{label} 거래처번호 붙여넣기 후", wait=False)
                 time.sleep(max(0.25, float(settle_wait)))
                 self.logger.info(
-                    f"  [MGMT-XY] {label}: 거래처ds 검색칸 키보드 입력 완료: "
+                    f"  [MGMT-XY] {label}: 거래처ds 검색칸 붙여넣기 완료: "
                     f"{vendor_code}"
                 )
                 return True
@@ -5513,12 +5530,10 @@ class ERPLoginBot:
                         f"{vendor_code!r}"
                     )
                     return False
-                _click_form_xy(x, y, label, wait=mgmt_click_wait)
-                _release_modifiers(f"{label} 클릭 후", wait=False)
-                time.sleep(max(0.20, mgmt_focus_wait))
-                # 새 행의 관리항목값 셀은 비어 있어야 한다. 이전 행 값이 남아
-                # 보이면 전표 행이 이동하지 않은 것이므로 밀린 채 계속 입력하지
-                # 않고 즉시 중단한다.
+                # 새 행의 관리항목값 셀은 비어 있어야 한다. 편집 상태의 셀은
+                # 글자가 선택 반전으로 그려져 잉크가 잡히지 않을 수 있으므로
+                # 셀을 클릭하기 전(표시 상태)에 검사한다. 이전 행 값이 남아
+                # 보이면 전표 행이 이동하지 않은 것이므로 즉시 중단한다.
                 pre_ink = _management_value_visual_ink(x, y)
                 if (
                     pre_ink[0] >= 6
@@ -5527,10 +5542,13 @@ class ERPLoginBot:
                     and pre_ink[3] >= 8
                 ):
                     self.logger.warning(
-                        f"  [MGMT-XY] {label}: 입력 전 관리항목값 셀이 비어 있지 "
+                        f"  [MGMT-XY] {label}: 클릭 전 관리항목값 셀이 비어 있지 "
                         f"않아 중단합니다(전표 행 미이동 의심, ink={pre_ink})."
                     )
                     return False
+                _click_form_xy(x, y, label, wait=mgmt_click_wait)
+                _release_modifiers(f"{label} 클릭 후", wait=False)
+                time.sleep(max(0.20, mgmt_focus_wait))
                 type_interval = max(
                     0.10,
                     float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15") or "0.15"),
@@ -5543,7 +5561,6 @@ class ERPLoginBot:
                     return False
                 _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
                 time.sleep(max(0.25, float(paste_settle_wait)))
-                typed_ink = _management_value_visual_ink(x, y)
                 # 사용자 확정 흐름: 거래처번호 입력 → F9 → Enter.
                 # F9가 입력된 번호로 거래처 조회를 명시적으로 실행하게 한 뒤
                 # Enter로 확정한다.
@@ -5553,47 +5570,7 @@ class ERPLoginBot:
                     float(os.getenv("ERP_FINANCE_VENDOR_F9_WAIT", "1.00") or "1.00"),
                 )
                 time.sleep(f9_wait)
-                confirm_timeout = max(
-                    1.0,
-                    float(
-                        os.getenv("ERP_FINANCE_VENDOR_CONFIRM_TIMEOUT", "6.0")
-                        or "6.0"
-                    ),
-                )
-                poll_count = max(4, int(confirm_timeout / 0.25))
-                converted_ink = None
-                for attempt in (1, 2):
-                    pyautogui.press('enter')
-                    for _ in range(poll_count):
-                        time.sleep(0.25)
-                        now_ink = _management_value_visual_ink(x, y)
-                        # ERP가 Enter를 확정하면 코드가 이름(거래처번호) 형식으로
-                        # 바뀌어 글자 폭이 눈에 띄게 늘어난다. 변환이 보여야만
-                        # 확정 성공으로 인정한다.
-                        if (
-                            now_ink[3] >= typed_ink[3] + 8
-                            or now_ink[0] >= typed_ink[0] + 20
-                        ):
-                            converted_ink = now_ink
-                            break
-                    if converted_ink is not None:
-                        break
-                    if attempt == 1:
-                        self.logger.warning(
-                            f"  [MGMT-XY] {label}: Enter 후 이름(거래처번호) 변환이 "
-                            "보이지 않아 Enter를 1회 재전송합니다."
-                        )
-                        _release_modifiers(f"{label} Enter 재전송 직전", wait=False)
-                if converted_ink is None:
-                    self.logger.warning(
-                        f"  [MGMT-XY] {label}: 거래처번호 Enter 확정(이름 변환)을 "
-                        f"확인하지 못해 중단합니다(ink={typed_ink})."
-                    )
-                    return False
-                self.logger.info(
-                    f"  [MGMT-XY] {label}: 거래처 확정 변환 확인 완료"
-                    f"(ink {typed_ink} → {converted_ink})"
-                )
+                pyautogui.press('enter')
                 time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
                 return True
 
@@ -5903,19 +5880,16 @@ class ERPLoginBot:
                     raise RuntimeError(
                         f"{label} 계좌번호 형식이 숫자/하이픈이 아닙니다: {account_no!r}"
                     )
-                _release_modifiers(f"{label} 계좌번호 물리 키 입력 직전", wait=False)
-                try:
-                    # K-System의 GDI 계좌 검색칸은 거래처 검색에서 사용하는
-                    # VK_PACKET 문자를 무시한다. 계좌번호만 물리 키로 입력한다.
-                    pyautogui.write(account_no, interval=type_interval)
-                except Exception as exc:
+                _release_modifiers(f"{label} 계좌번호 붙여넣기 직전", wait=False)
+                # 사용자 지시: 계좌번호도 타이핑하지 않고 클립보드로 붙여넣는다.
+                if not _type_vendor_code(account_no, label, interval=type_interval):
                     raise RuntimeError(
-                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다: {exc}"
-                    ) from exc
-                _release_modifiers(f"{label} 계좌번호 키보드 입력 후", wait=False)
+                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다."
+                    )
+                _release_modifiers(f"{label} 계좌번호 붙여넣기 후", wait=False)
                 time.sleep(max(0.25, min(f9_search_wait, 0.50)))
                 self.logger.info(
-                    f"  [MGMT-BANK] {label}: 계좌번호 물리 키 입력 완료: "
+                    f"  [MGMT-BANK] {label}: 계좌번호 붙여넣기 완료: "
                     f"{account_no}"
                 )
                 time.sleep(f9_search_wait)
