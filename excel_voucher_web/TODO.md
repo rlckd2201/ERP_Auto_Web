@@ -101,4 +101,5 @@
 - [ ] 243에서 `Manager C7D7CD53B2F5` 최신 적용 후 동일 엑셀 재검증.
 - [x] 작업 `ec565a23bd1e` 화면·로그에서 계좌 팝업은 열렸지만 검색칸에 계좌번호가 입력되지 않은 원인 확인.
 - [x] 보통예금 계좌번호 입력을 pywinauto VK_PACKET에서 `pyautogui.write` 물리 키 입력으로 교체(`11 passed`, 전체 `155 passed`).
-- [ ] 계좌번호 물리 키 입력 수정 배포 후 243 최신 적용 및 동일 엑셀 재검증.
+- [x] 계좌번호 물리 키 입력 커밋 `83325f9`를 `origin/main`에 push하고 Manager 해시 `FABF26AA4DCF` 산출.
+- [ ] 243에서 `Manager FABF26AA4DCF` 최신 적용 후 동일 엑셀 재검증.

@@ -375,3 +375,4 @@
 - 원인: pywinauto `send_keys(..., vk_packet=True)`가 K-System GDI 계좌 검색칸에서 문자 입력으로 처리되지 않았다.
 - 조치: 숫자/하이픈 형식을 확인한 뒤 `pyautogui.write(account_no, interval=...)`로 물리 키 이벤트를 보낸다. 거래처번호 입력 경로는 변경하지 않았다.
 - 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.
+- 배포: 커밋 `83325f9`를 `origin/main`에 push했다. Manager SHA-256은 `FABF26AA4DCFA1900E98BA6CE9B83C72C44D533D4AC8B8DFB7299EFBF04EF34C`이며 243 실기기 재검증은 남아 있다.
