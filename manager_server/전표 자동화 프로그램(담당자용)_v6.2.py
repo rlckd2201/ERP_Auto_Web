@@ -7235,8 +7235,6 @@ class ERPLoginBot:
                     _fill_management_for_current_row(row_no, account_name)
                 )
                 time.sleep(mgmt_key_wait)
-                if management_enter_sent:
-                    _raise_if_vendor_ds_open(f"{row_no}행 거래처", "다음 행 이동 전")
                 if idx < rows_to_fill - 1:
                     current_y = _advance_grid_row(
                         current_y,

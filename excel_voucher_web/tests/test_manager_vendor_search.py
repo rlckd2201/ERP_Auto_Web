@@ -914,7 +914,32 @@ def test_finance_direct_vendor_uses_safe_default_settle_times():
 
     assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35"' in source
     assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.20"' in source
-    assert '_raise_if_vendor_ds_open(f"{row_no}행 거래처", "다음 행 이동 전")' in source
+
+
+def test_vendor_popup_guard_calls_stay_in_their_defining_runtime_scope():
+    tree = ast.parse(MANAGER_SOURCE.read_text(encoding="utf-8"))
+    parents = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parents[child] = parent
+
+    call_scopes = []
+    for node in ast.walk(tree):
+        if not (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Name)
+            and node.func.id == "_raise_if_vendor_ds_open"
+        ):
+            continue
+        parent = parents.get(node)
+        while parent is not None and not isinstance(parent, ast.FunctionDef):
+            parent = parents.get(parent)
+        call_scopes.append(parent.name if parent is not None else "")
+
+    assert call_scopes == [
+        "_input_finance_vendor_code_xy",
+        "_input_finance_vendor_code_xy",
+    ]
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():

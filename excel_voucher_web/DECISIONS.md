@@ -1,10 +1,12 @@
 # DECISIONS.md
 
 ## 2026-07-23 반복 거래처 입력은 속도보다 ERP 확정 안정성을 우선한다
+- `거래처ds` 가드 정의는 `_fill_management_for_current_row` 내부 범위에 있으므로 같은 범위의 `_input_finance_vendor_code_xy`에서만 호출한다. 바깥 행 이동 루프에서는 이 내부 이름을 직접 참조하지 않는다.
 - 156행 실패는 거래처번호 자체나 좌표 문제가 아니라 Enter 후 ERP 확정 전에 다음 행을 조작한 경쟁 조건으로 판단한다.
 - 운영 기본값은 `ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT=0.35`, `ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT=1.20`으로 상향한다. 환경변수로 더 느리게 조정할 수 있다.
 - 전체 UIA 탐색은 반복 행마다 사용하지 않는다. 빠른 Win32 foreground 제목 검사로 `거래처ds`만 차단해 GDI 화면의 성능 저하를 제한한다.
 - 마지막 보통예금 행의 F9 계좌 선택 로직과 첫 미지급금 행의 F9 거래처 선택 로직은 변경하지 않는다.
+- 243 배포 확인값은 로컬 작업 파일이나 로컬 `git archive`가 아니라 Agent가 실제 요청하는 GitHub `main.zip`의 Manager 원본 해시로 계산한다.
 
 ## 확정 설계
 - ERP 전표 작성은 운영서버가 아니라 172.17.30.243 자동 전표처리 PC Agent에서 수행한다.
