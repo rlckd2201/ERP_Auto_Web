@@ -1,5 +1,10 @@
 # DECISIONS.md
 
+## 2026-07-23 저장 확인창은 uia로 읽어 검증 후 닫는다
+- ERP Message 창은 WPF라 win32 backend로는 제목 'Message'만 보인다. Message 탐색은 uia 우선, win32 fallback으로 한다. 문구가 검증된 창만 닫는 기존 규칙(blind Enter 금지)은 유지한다.
+- 대형 전표는 저장 확인창이 늦게 뜨므로 `ERP_SAVE_CONFIRM_TIMEOUT_SECONDS` 기본값은 60초다. 확인창을 닫지 않은 채 출력을 시작하면 모달이 Ctrl+P/전표출력을 막는다.
+- 이 결정의 최초 배포 기준은 Manager SHA-256 `156E1C66F4382EF6C5E0FAC5590F1324D67A0944C377DA20FD714A3B6B8096F9`다.
+
 ## 2026-07-23 행 전환은 스크롤 완료를 기다린다
 - fast 경계 전환의 Down 뒤에는 다음 적요 더블클릭 전에 ERP 스크롤/재도색이 끝나도록 `ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT`(기본 1.50초)를 기다린다. 이 대기가 짧으면 같은 슬롯의 이전 행을 다시 선택해 거래처가 한 행씩 밀린다.
 - 사용자 판단에 따라 검증·복구 로직 추가 없이 속도 하향만 적용한다. 밀림이 재발하면 환경변수로 대기를 더 늘리는 것이 1차 대응이다.
