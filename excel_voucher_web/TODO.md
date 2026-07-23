@@ -4,6 +4,8 @@
 - [x] 210행 계좌 팝업 검색칸에 `%`만 남은 실기기 증상을 계좌 GDI의 VK_PACKET 무시로 확정한다.
 - [x] 계좌번호만 `pyautogui.write` 물리 키로 입력하고 `Ctrl+A`는 보내지 않도록 수정한다.
 - [x] 계좌 전용 3개 및 전체 158개 회귀 테스트를 통과한다.
+- [x] 계좌 물리 키 수정 커밋 `6aa2d4d`를 배포하고 GitHub ZIP Manager 해시 `821C726BBA84`를 확인한다.
+- [ ] 243 최신 적용 화면에서 `Manager 821C726BBA84`를 확인한다.
 - [x] 243 작업에서 발생한 `_raise_if_vendor_ds_open` NameError의 중첩 범위 원인을 수정한다.
 - [x] 팝업 가드 호출이 정의된 내부 입력 함수 범위를 벗어나지 않는 정적 회귀 테스트를 추가한다.
 - [x] NameError 수정 커밋 `60e240f`를 배포하고 GitHub ZIP Manager 해시 `4A1EFCBF25E7`을 검증한다.

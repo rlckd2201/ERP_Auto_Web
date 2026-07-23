@@ -5,6 +5,7 @@
 - 원인: 공용 `_type_vendor_code()`의 pywinauto VK_PACKET 입력은 거래처 검색칸에서는 동작하지만 K-System GDI 계좌 검색칸에서는 성공을 반환하고도 문자를 그리지 않는다.
 - 조치: 계좌번호 형식을 숫자/하이픈으로 제한하고 `pyautogui.write(account_no, interval=...)`로 입력한다. `Ctrl+A`는 보내지 않고 기존 고정 선택 순서와 금융기관지점 최종 확인을 유지한다.
 - 검증: 계좌 전용 3 passed, 전체 158 passed. 실제 243 재검증은 배포 후 수행한다.
+- 배포: 커밋 `6aa2d4d`, GitHub ZIP Manager `821C726BBA84455F...`. ZIP에서 `pyautogui.write(account_no)` 포함, 계좌 함수의 `Ctrl+A`와 `_type_vendor_code` 미포함을 직접 확인했다.
 
 ## 2026-07-23 작업 366779ea7b46 거래처ds 지연 팝업
 - 후속 243 작업은 10:32:42 자료 처리를 시작하고 10:34:23 `name '_raise_if_vendor_ds_open' is not defined`로 중단했다. 2행 직접 입력 후 바깥 행 루프가 내부 함수 범위의 가드를 직접 호출한 것이 원인이며, 해당 호출만 제거했다. 입력 함수 내부의 입력 전·Enter 확정 후 가드는 정상 범위라 유지했다.
