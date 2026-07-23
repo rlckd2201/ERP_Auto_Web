@@ -2508,7 +2508,7 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
         ("press", "tab", 4),
         ("press", "up", 2),
         ("press", "tab", 3),
-        ("press", "enter", 1),
+        ("press", "enter", 2),
     ]
     assert loaded["bank_account_popup_state"]["closed"] is True
 
@@ -2570,12 +2570,12 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
         'pyautogui.press("tab", presses=4',
         'pyautogui.press("up", presses=2',
         'pyautogui.press("tab", presses=3',
-        'pyautogui.press("enter")',
+        'pyautogui.press("enter", presses=2',
     ]
     positions = [helper.index(token) for token in expected_order]
 
     assert positions == sorted(positions)
-    assert "Tab 4 → Up 2 → Tab 3 → Enter" in helper
+    assert "Tab 4 → Up 2 → Tab 3 → Enter 2" in helper
     assert "_bank_main_window_visual_snapshot" not in helper
     assert "_bank_visual_change_ratio" not in helper
     assert "pyautogui.hotkey" not in helper

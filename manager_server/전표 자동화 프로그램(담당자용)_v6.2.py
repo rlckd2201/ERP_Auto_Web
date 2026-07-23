@@ -5798,6 +5798,10 @@ class ERPLoginBot:
                     mgmt_key_wait,
                     float(os.getenv("ERP_MGMT_BANK_F9_GROUP_WAIT", "0.35") or "0.35"),
                 )
+                f9_enter_interval = max(
+                    0.20,
+                    float(os.getenv("ERP_MGMT_BANK_F9_ENTER_INTERVAL", "0.40") or "0.40"),
+                )
 
                 _click_form_xy(x, y, f"{label} 관리항목값", wait=mgmt_click_wait)
                 _release_modifiers(f"{label} F9 직전", wait=False)
@@ -5839,7 +5843,7 @@ class ERPLoginBot:
 
                 self.logger.info(
                     f"  [MGMT-BANK] {label}: F9 계좌번호 키보드 시퀀스 시작"
-                    "(Tab 4 → Up 2 → Tab 3 → Enter)"
+                    "(Tab 4 → Up 2 → Tab 3 → Enter 2)"
                 )
                 pyautogui.press("tab", presses=4, interval=f9_key_interval)
                 time.sleep(f9_group_wait)
@@ -5847,7 +5851,9 @@ class ERPLoginBot:
                 time.sleep(f9_group_wait)
                 pyautogui.press("tab", presses=3, interval=f9_key_interval)
                 time.sleep(f9_group_wait)
-                pyautogui.press("enter")
+                # 실기기 확인: 첫 Enter는 조회만 실행하고 선택 팝업이 열린 채
+                # 남는다. 거래처ds와 동일하게 두 번째 Enter로 결과행을 확정한다.
+                pyautogui.press("enter", presses=2, interval=f9_enter_interval)
                 time.sleep(ERP_FORM_WAIT)
 
                 pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
