@@ -360,11 +360,18 @@
 - 원인: `_find_internal_bank_account_popup()`의 `main_win.descendants()`가 GDI MDI 전체를 장시간 열거하고도 `계좌` 창 서명을 얻지 못했다. 함수의 외부 timeout 1초는 내부 블로킹 호출을 중단하지 못했다.
 - 조치: 입력 경로에서는 `_find_bank_account_popup()`과 `_wait_bank_account_popup_closed()`를 호출하지 않는다. F9 전후 화면 변화율 최소 5%로 열림을 확인하고, Enter 후 기준 화면 대비 변화가 열린 화면의 55% 이하로 복귀했는지와 금융기관지점 셀 잉크를 확인한다.
 - 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.
-- 배포: 커밋 `cc7e654`를 `origin/main`에 push했다. Manager SHA-256은 `C7D7CD53B2F58F5F9B76B9FA59AC5609E9F140495EF2B4F9F02EF4D610487998`이며 243 실기기 재검증은 남아 있다.
 - 배포: 커밋 `3028584`를 `origin/main`에 push했다. Manager SHA-256은 `89A2EA3A4BD8666B3A7C910DEE94C1A22E5BF03E0835ACC3E3DCEE0DF5E34440`이며 243 재검증은 남아 있다.
 
 ## 2026-07-23 작업 7f1fe41c5bc6 F9 화면 변화율 오판
 - 증상: 08:09:08에 243이 수신한 작업이 약 8분 31초 뒤 210행에서 `F9 후 '계좌' 팝업 화면 변화를 확인하지 못했습니다.`로 중단했다.
 - 원인: F9 팝업을 여는 동작보다 화면 변화율 사전검증을 성공 전제로 둔 것이 잘못이었다. GDI/RDP 화면 캡처 결과는 팝업 표시 여부의 신뢰 가능한 판정값이 아니다.
 - 조치: `_bank_main_window_visual_snapshot`과 `_bank_visual_change_ratio` 및 입력 전후 호출을 제거했다. F9 고정 대기 후 계좌번호와 `Tab 4 → Up 2 → Tab 3 → Enter`를 바로 보낸다. 최종 금융기관지점 셀 잉크가 없으면 실패하고 내부 상태를 미완료로 남겨 저장·출력을 차단한다.
+- 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.
+- 배포: 커밋 `cc7e654`를 `origin/main`에 push했다. Manager SHA-256은 `C7D7CD53B2F58F5F9B76B9FA59AC5609E9F140495EF2B4F9F02EF4D610487998`이며 243 실기기 재검증은 남아 있다.
+
+## 2026-07-23 작업 ec565a23bd1e 계좌 검색칸 입력 누락
+- 증상: 210행 F9 팝업은 열리고 검색조건은 계좌번호였지만 검색칸은 `%`만 표시했으며 전체 계좌 목록에서 멈췄다. 금융기관지점은 비어 있어 저장 전에 중단했다.
+- 로그: 08:45:12 F9 대기 완료, 08:45:14 키 시퀀스 시작, 08:45:19 금융기관지점 미확인 실패. 공용 `_type_vendor_code()`는 예외 없이 반환했지만 실제 글자는 그려지지 않았다.
+- 원인: pywinauto `send_keys(..., vk_packet=True)`가 K-System GDI 계좌 검색칸에서 문자 입력으로 처리되지 않았다.
+- 조치: 숫자/하이픈 형식을 확인한 뒤 `pyautogui.write(account_no, interval=...)`로 물리 키 이벤트를 보낸다. 거래처번호 입력 경로는 변경하지 않았다.
 - 검증: 관련 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check` 통과. Graphify CLI는 없어 갱신하지 못했다.
