@@ -995,6 +995,10 @@ def test_finance_direct_vendor_uses_safe_default_settle_times():
     # 값 칸 스캔은 분할 바 위치와 무관하게 칸 전체를 덮어야 한다.
     assert 'ERP_MGMT_VALUE_SCAN_WIDTH", "350"' in source
     assert 'ERP_FINANCE_VENDOR_F9_WAIT", "1.00"' in source
+    # 지점 자동입력 확인은 기본 6초(24회) 폴링한다.
+    assert 'ERP_MGMT_BANK_BRANCH_CONFIRM_POLLS", "24"' in source
+    # 관리항목 실패 시 무인 진단용 스크린샷을 저장한다.
+    assert "def _save_management_failure_screenshot" in source
 
 
 def test_finance_direct_vendor_waits_before_enter_and_before_next_row():
@@ -2563,10 +2567,12 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
             "_click_form_xy": lambda *_args, **_kwargs: events.append(("click",)),
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_management_value_visual_ink": lambda *_args: (12, 4, 6, 14),
-            "_type_vendor_code": lambda value, label, interval=None: (
-                events.append(("paste", value)) or True
+            "_force_english_ime": lambda *_args, **_kwargs: None,
+            "_save_management_failure_screenshot": lambda *_args, **_kwargs: "",
+            "pyautogui": SimpleNamespace(
+                press=press,
+                write=lambda value, **_kwargs: events.append(("write", value)),
             ),
-            "pyautogui": SimpleNamespace(press=press),
             "bank_account_popup_state": {
                 "opened": False,
                 "closed": True,
@@ -2596,7 +2602,7 @@ def test_bank_account_input_runs_fixed_sequence_without_popup_precheck():
     assert events == [
         ("click",),
         ("press", "f9", 1),
-        ("paste", "140-000-948562"),
+        ("write", "140-000-948562"),
         ("press", "tab", 4),
         ("press", "up", 2),
         ("press", "tab", 3),
@@ -2614,9 +2620,11 @@ def test_bank_account_input_requires_auto_filled_branch_after_sequence():
             "_click_form_xy": lambda *_args, **_kwargs: None,
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_management_value_visual_ink": lambda *_args: (0, 0, 0, 0),
-            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_force_english_ime": lambda *_args, **_kwargs: None,
+            "_save_management_failure_screenshot": lambda *_args, **_kwargs: "",
             "pyautogui": SimpleNamespace(
                 press=lambda key, **_kwargs: pressed.append(key),
+                write=lambda *_args, **_kwargs: None,
             ),
             "bank_account_popup_state": state,
             "mgmt_key_wait": 0.1,
@@ -2658,7 +2666,7 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     expected_order = [
         "_click_form_xy",
         'pyautogui.press("f9")',
-        "_type_vendor_code(account_no",
+        "pyautogui.write(account_no",
         'pyautogui.press("tab", presses=4',
         'pyautogui.press("up", presses=2',
         'pyautogui.press("tab", presses=3',
@@ -2671,9 +2679,11 @@ def test_bank_account_popup_uses_account_number_keyboard_sequence():
     assert "_bank_main_window_visual_snapshot" not in helper
     assert "_bank_visual_change_ratio" not in helper
     assert "pyautogui.hotkey" not in helper
-    # 계좌번호도 공용 붙여넣기 함수로 입력한다(타이핑 금지, IME 무관).
-    assert "_type_vendor_code(account_no" in helper
-    assert "pyautogui.write(" not in helper
+    # 계좌 검색칸은 VK_PACKET/Ctrl+V를 모두 무시하므로 물리 키 + IME 영문
+    # 강제 조합만 사용한다.
+    assert "pyautogui.write(account_no" in helper
+    assert "_force_english_ime(label)" in helper
+    assert "_type_vendor_code(account_no" not in helper
     assert "_find_bank_account_popup" not in helper
     assert "_wait_bank_account_popup_closed" not in helper
     assert "_input_value_xy" not in helper

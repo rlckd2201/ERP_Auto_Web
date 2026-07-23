@@ -5292,6 +5292,25 @@ class ERPLoginBot:
                     )
                     return 0, 0, 0, 0
 
+            def _save_management_failure_screenshot(label=""):
+                # 243은 무인 PC라 실패 순간의 화면을 사람이 볼 수 없다.
+                # 관리항목 입력 실패 시 전체 화면을 파일로 남겨 원격 진단에 쓴다.
+                try:
+                    output_dir = Path(
+                        str(os.getenv("ERP_OUTPUT_DIR", "") or tempfile.gettempdir())
+                    )
+                    output_dir.mkdir(parents=True, exist_ok=True)
+                    safe_label = re.sub(
+                        r"[^0-9A-Za-z_.-]+", "_", str(label or "management")
+                    )
+                    path = output_dir / f"mgmt_fail_{safe_label}_{int(time.time())}.png"
+                    pyautogui.screenshot(str(path))
+                    self.logger.warning(f"  [MGMT-DIAG] 실패 스크린샷 저장: {path}")
+                    return str(path)
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-DIAG] 실패 스크린샷 저장 실패: {exc}")
+                    return ""
+
             def _force_english_ime(label=""):
                 # 물리 키 입력은 세션의 한/영 IME 상태를 그대로 거친다. 한글
                 # 모드면 거래처번호가 자모로 깨지므로(예: PT→ㅔㅅ) 키 입력
@@ -5880,13 +5899,19 @@ class ERPLoginBot:
                     raise RuntimeError(
                         f"{label} 계좌번호 형식이 숫자/하이픈이 아닙니다: {account_no!r}"
                     )
-                _release_modifiers(f"{label} 계좌번호 붙여넣기 직전", wait=False)
-                # 사용자 지시: 계좌번호도 타이핑하지 않고 클립보드로 붙여넣는다.
-                if not _type_vendor_code(account_no, label, interval=type_interval):
+                _release_modifiers(f"{label} 계좌번호 물리 키 입력 직전", wait=False)
+                # 계좌 검색칸은 VK_PACKET과 Ctrl+V 붙여넣기를 모두 무시하는
+                # GDI 컨트롤이다(붙여넣기 실기기 2회 연속 실패, 물리 키만 성공
+                # 이력 있음). 이 칸만 물리 키로 입력하고 한/영 깨짐은 직전의
+                # IME 영문 강제로 막는다.
+                _force_english_ime(label)
+                try:
+                    pyautogui.write(account_no, interval=type_interval)
+                except Exception as exc:
                     raise RuntimeError(
-                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다."
-                    )
-                _release_modifiers(f"{label} 계좌번호 붙여넣기 후", wait=False)
+                        f"{label} 계좌 팝업 검색칸에 계좌번호를 입력하지 못했습니다: {exc}"
+                    ) from exc
+                _release_modifiers(f"{label} 계좌번호 물리 키 입력 후", wait=False)
                 time.sleep(max(0.25, min(f9_search_wait, 0.50)))
                 self.logger.info(
                     f"  [MGMT-BANK] {label}: 계좌번호 붙여넣기 완료: "
@@ -5912,7 +5937,12 @@ class ERPLoginBot:
                 pitch = max(10, int(os.getenv("ERP_MGMT_ROW_HEIGHT", "20") or "20"))
                 branch_metrics = (0, 0, 0, 0)
                 branch_confirmed = False
-                for _ in range(8):
+                # 지점 자동입력이 그려질 때까지 충분히 기다린다(기본 6초).
+                branch_confirm_polls = max(
+                    8,
+                    int(float(os.getenv("ERP_MGMT_BANK_BRANCH_CONFIRM_POLLS", "24") or "24")),
+                )
+                for _ in range(branch_confirm_polls):
                     branch_metrics = _management_value_visual_ink(x, y + pitch)
                     ink_pixels, ink_rows, ink_columns, ink_span = branch_metrics
                     if (
@@ -5925,6 +5955,7 @@ class ERPLoginBot:
                         break
                     time.sleep(0.25)
                 if branch_name and not branch_confirmed:
+                    _save_management_failure_screenshot(f"{label}_bank_branch")
                     raise RuntimeError(
                         f"{label} 선택 후 금융기관지점 자동입력 화면을 확인하지 못했습니다."
                     )
@@ -6108,6 +6139,9 @@ class ERPLoginBot:
                                     finance_vendor_paste_settle_wait,
                                     finance_vendor_commit_settle_wait,
                                 ):
+                                    _save_management_failure_screenshot(
+                                        f"row{row_no}_vendor_input"
+                                    )
                                     raise RuntimeError(
                                         f"{row_no}행 거래처번호 직접 키보드 입력에 실패했습니다."
                                     )
