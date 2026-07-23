@@ -104,4 +104,5 @@
 - [x] 계좌번호 물리 키 입력 커밋 `83325f9`를 `origin/main`에 push하고 Manager 해시 `FABF26AA4DCF` 산출.
 - [ ] 243에서 `Manager FABF26AA4DCF` 최신 적용 후 동일 엑셀 재검증.
 - [x] 마지막 보통예금 검색값 입력을 첫 행과 동일한 공용 `_type_vendor_code()`로 통일하고 `Ctrl+A`/물리 키 분기 제거(`11 passed`, 전체 `155 passed`).
-- [ ] 1행 동일 입력 방식 수정 배포 후 243 최신 적용 및 동일 엑셀 재검증.
+- [x] 1행 동일 입력 방식 커밋 `5c84075`를 `origin/main`에 push하고 Manager 해시 `D18D59CB25FB` 산출.
+- [ ] 243에서 `Manager D18D59CB25FB` 최신 적용 후 동일 엑셀 재검증.

@@ -112,6 +112,7 @@
 - 실기기 화면에서 `계좌` 팝업과 계좌번호 조건은 열렸지만 검색칸에는 `%`만 있고 `140-000-948562`가 없었다. 공용 pywinauto `send_keys(vk_packet=True)`가 GDI 계좌 검색칸에서 무시된 것이 직접 원인이다.
 - 보통예금 계좌번호만 `pyautogui.write` 물리 키 입력으로 분리했다. F9·고정 대기·`Tab 4 → Up 2 → Tab 3 → Enter` 및 금융기관지점 최종 검증은 유지한다.
 - 전용 회귀 `11 passed`, 전체 `155 passed`, Python AST와 `git diff --check`를 확인했다. Graphify CLI는 없어 갱신하지 못했다. 다음 시작점은 배포·243 최신 적용 후 동일 엑셀 재업로드다.
+- 수정 커밋 `5c84075`를 `origin/main`에 push했다. 배포 Manager SHA-256은 `D18D59CB25FB01C9C4F0209D4833E50DE7EC536DB9F8A94D153168F7EDF9305E`이며, 243 완료 화면에서 `Manager D18D59CB25FB` 확인 후 재업로드한다.
 - 수정 커밋 `83325f9`를 `origin/main`에 push했다. 배포 Manager SHA-256은 `FABF26AA4DCFA1900E98BA6CE9B83C72C44D533D4AC8B8DFB7299EFBF04EF34C`이며, 243 완료 화면에서 `Manager FABF26AA4DCF` 확인 후 재업로드한다.
 
 ## 2026-07-23 마지막 행 입력을 1행 방식으로 통일
