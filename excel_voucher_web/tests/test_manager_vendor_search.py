@@ -3223,6 +3223,7 @@ def _load_runtime_navigation(
             "mgmt_summary_open_wait": 0.55,
             "mgmt_key_wait": 0.05,
             "mgmt_commit_wait": 0.08,
+            "finance_row_advance_settle_wait": 1.50,
             "pyautogui": SimpleNamespace(
                 press=lambda key: events.append(("key", key))
             ),
@@ -3572,6 +3573,9 @@ def test_fast_geometry_boundary_uses_one_down_even_when_management_enter_was_sen
         assert [event[0] for event in events] == ["click", "key", "sleep"]
         assert events[0][1:4] == (970, snapshot["last_full_y"], 0.05)
         assert events[1] == ("key", "down")
+        # Down 후에는 다음 적요 더블클릭 전에 스크롤이 끝나도록
+        # 전용 행 전환 대기를 사용해야 한다(밀림 방지).
+        assert events[2] == ("sleep", 1.50)
         assert state["bottom_scroll_mode"] is True
         assert state["scroll_advance_mode"] == "down"
 

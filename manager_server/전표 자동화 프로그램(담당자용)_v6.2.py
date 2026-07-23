@@ -2058,6 +2058,10 @@ class ERPLoginBot:
             mgmt_commit_wait,
             float(os.getenv("ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "1.50") or "1.50"),
         )
+        finance_row_advance_settle_wait = max(
+            mgmt_commit_wait,
+            float(os.getenv("ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT", "1.50") or "1.50"),
+        )
         vendor_double_click_hold = min(
             0.25,
             max(0.04, float(os.getenv("ERP_VENDOR_DOUBLE_CLICK_HOLD", "0.08") or "0.08")),
@@ -6906,7 +6910,11 @@ class ERPLoginBot:
                             wait=mgmt_key_wait,
                         )
                         pyautogui.press('down')
-                        time.sleep(mgmt_commit_wait)
+                        # Down 후 ERP 스크롤/재도색이 끝나기 전에 다음 적요를
+                        # 더블클릭하면 같은 슬롯에 남아 있는 이전 행을 다시
+                        # 선택해 이후 거래처가 한 행씩 밀린다. 화면 이동이
+                        # 끝날 때까지 충분히 기다린다.
+                        time.sleep(finance_row_advance_settle_wait)
                         return _set_calibrated_scroll_anchor(
                             next_row_no,
                             anchor_y,
