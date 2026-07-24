@@ -970,43 +970,14 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
     assert not any(event[0] == "key" for event in events)
 
 
-def test_finance_direct_vendor_sends_f9_then_single_enter():
-    pressed = []
-    loaded = _load_nested_functions(
-        "_input_finance_vendor_code_xy",
-        namespace={
-            "re": re,
-            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
-            "_click_form_xy": lambda *_args, **_kwargs: None,
-            "_release_modifiers": lambda *_args, **_kwargs: None,
-            "_type_vendor_code": lambda *_args, **_kwargs: True,
-            "_management_value_visual_ink": lambda _x, _y: (0, 0, 0, 0),
-            "pyautogui": SimpleNamespace(
-                press=lambda key, **_kwargs: pressed.append(key)
-            ),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
-            "mgmt_click_wait": 0.0,
-            "mgmt_focus_wait": 0.0,
-            "mgmt_key_wait": 0.0,
-            "self": SimpleNamespace(logger=_FakeLogger()),
-        },
-    )
-
-    assert loaded["_input_finance_vendor_code_xy"](
-        1118, 797, "A001", "5행 거래처", 0.0, 0.0
-    ) is True
-    # 사용자 확정 흐름: 붙여넣기 후 F9로 조회하고 Enter 1회로 확정한다.
-    assert pressed == ["f9", "enter"]
-
-
-def test_finance_direct_vendor_escapes_stuck_popup_then_confirms():
-    # 첫 Enter 후 팝업이 남고(ink 2324), ESC로 닫힌 뒤 재확정에 성공한다.
+def test_finance_direct_vendor_confirms_when_name_appears():
+    # 입력값(번호)이 셀에 반영된 뒤 F9→Enter로 이름(번호)로 변환되면
+    # 잉크가 늘고 확정 성공으로 처리한다.
     pressed = []
     ink_seq = iter([
-        (0, 0, 0, 0),        # 입력 전: 비어 있음
-        (2324, 14, 166, 348),  # Enter 후: 팝업이 값 셀을 덮음
-        (0, 0, 0, 0),        # ESC 후: 팝업 닫힘
-        (150, 8, 40, 120),   # 재확정 후: 이름(코드) 표시(팝업 아님)
+        (0, 0, 0, 0),      # 입력 전: 비어 있음
+        (30, 6, 12, 26),   # 입력 후(F9 전): 번호가 셀에 반영됨
+        (120, 8, 40, 150),  # Enter 후: 이름(번호)로 변환되어 잉크 증가
     ])
     loaded = _load_nested_functions(
         "_input_finance_vendor_code_xy",
@@ -1029,10 +1000,85 @@ def test_finance_direct_vendor_escapes_stuck_popup_then_confirms():
     )
 
     assert loaded["_input_finance_vendor_code_xy"](
-        1118, 756, "NY018", "169행 거래처", 0.0, 0.0
+        1118, 797, "A001", "5행 거래처", 0.0, 0.0
     ) is True
-    # 팝업이 남으면 ESC로 닫고(f9→enter→esc) 다시 확정(f9→enter)한다.
-    assert pressed == ["f9", "enter", "esc", "f9", "enter"]
+    # 입력 → F9 → Enter 1회로 확정한다.
+    assert pressed == ["f9", "enter"]
+
+
+def test_finance_direct_vendor_retries_when_name_not_converted():
+    # Enter 후에도 원본 번호만 남아(잉크 증가 없음) 확정이 안 되면 다시 시도한다.
+    pressed = []
+    ink_seq = iter([
+        (0, 0, 0, 0),      # 입력 전
+        (30, 6, 12, 26),   # att1 입력 후(번호 반영)
+        (30, 6, 12, 26),   # att1 Enter 후: 변환 없음(원본 번호만)
+        (30, 6, 12, 26),   # raw ESC close 확인(팝업 아님 → 즉시 반환)
+        (30, 6, 12, 26),   # att2 입력 후
+        (120, 8, 40, 150),  # att2 Enter 후: 변환됨
+    ])
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": lambda _x, _y: next(ink_seq, (0, 0, 0, 0)),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 756, "GL001", "18행 거래처", 0.0, 0.0
+    ) is True
+    # 변환이 안 되면 재확정한다: att1(f9,enter) → att2(f9,enter).
+    assert pressed.count("f9") == 2
+    assert pressed.count("enter") == 2
+
+
+def test_finance_direct_vendor_reinputs_when_value_not_registered():
+    # 입력 후에도 셀이 비어 있으면(F9 전 등록 실패) 재입력하고 F9는 보내지 않는다.
+    pressed = []
+    ink_seq = iter([
+        (0, 0, 0, 0),      # 입력 전
+        (0, 0, 0, 0),      # att1 입력 후: 셀 비어 있음(등록 안 됨) → 재입력
+        (30, 6, 12, 26),   # att2 입력 후: 번호 반영
+        (120, 8, 40, 150),  # att2 Enter 후: 변환됨
+    ])
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": lambda _x, _y: next(ink_seq, (0, 0, 0, 0)),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 756, "A001", "5행 거래처", 0.0, 0.0
+    ) is True
+    # 등록 실패한 att1에서는 F9를 보내지 않고, att2에서만 f9→enter를 보낸다.
+    assert pressed == ["f9", "enter"]
 
 
 def test_finance_direct_vendor_fails_when_popup_never_closes():
@@ -1075,9 +1121,10 @@ def test_finance_direct_vendor_closes_leftover_popup_before_input():
     pressed = []
     ink_seq = iter([
         (2324, 14, 166, 348),  # 입력 전: 이전 행 팝업이 남음
-        (0, 0, 0, 0),        # ESC 후: 닫힘
-        (0, 0, 0, 0),        # 재검사(비어 있음)
-        (150, 8, 40, 120),   # Enter 후: 확정
+        (0, 0, 0, 0),        # ESC 후: 팝업 닫힘 확인 → close 반환
+        (0, 0, 0, 0),        # pre 재측정(비어 있음)
+        (30, 6, 12, 26),     # 입력 후(F9 전): 번호 반영
+        (120, 8, 40, 150),   # Enter 후: 이름(번호)로 변환
     ])
     loaded = _load_nested_functions(
         "_input_finance_vendor_code_xy",
@@ -1137,8 +1184,9 @@ def test_row_advance_recovery_lives_in_coord_fill_scope():
 def test_finance_direct_vendor_uses_safe_default_settle_times():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
-    # 붙여넣기 후 곧바로 F9 (입력 등록용 짧은 대기만). 1초 대기는 F9 뒤.
-    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35"' in source
+    # 입력 후 F9 전에 ERP가 값을 받아들일 시간을 충분히 준다(너무 빠르면
+    # 검색이 빈 값이 되어 거래처가 확정되지 않는다).
+    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "1.20"' in source
     assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "2.00"' in source
     assert 'ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT", "2.50"' in source
     assert 'ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"' in source

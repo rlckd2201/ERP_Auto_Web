@@ -2050,11 +2050,12 @@ class ERPLoginBot:
         vendor_popup_open_wait = max(0.35, float(os.getenv("ERP_VENDOR_POPUP_OPEN_WAIT", "0.55") or "0.55"))
         vendor_popup_focus_wait = max(mgmt_focus_wait, float(os.getenv("ERP_VENDOR_POPUP_FOCUS_WAIT", "0.12" if fast_management else "0.45") or "0.45"))
         vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
-        # 사용자 확정 흐름: 붙여넣기(VK_PACKET) 후 곧바로 F9. 입력 등록에만
-        # 필요한 짧은 대기만 둔다(1초 대기는 F9 뒤에 있다).
+        # 입력 후 F9 전에 ERP가 값을 실제로 받아들일 시간을 충분히 준다.
+        # 너무 빨리 F9를 누르면 검색이 빈 값/불완전 값으로 실행돼 거래처가
+        # 확정되지 않고 원본 번호만 남는다(실기기 확인).
         finance_vendor_paste_settle_wait = max(
             mgmt_key_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35") or "0.35"),
+            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "1.20") or "1.20"),
         )
         finance_vendor_commit_settle_wait = max(
             mgmt_commit_wait,
@@ -5628,41 +5629,69 @@ class ERPLoginBot:
                         )
                     ),
                 )
-                # 사용자 확정 흐름: 빈칸 클릭 → 입력 → F9 → 1초 대기 → Enter.
-                # Enter 후 거래처ds 팝업이 닫혔는지(값 셀이 팝업으로 덮이지
-                # 않았는지) 확인하고, 안 닫혔으면 ESC 후 다시 시도한다. 이러면
-                # 어떤 행도 열린 팝업을 남기지 않아 이후 행 밀림/헛돎이 없다.
+                # 확정되면 값 셀이 "거래처명(거래처번호)"로 바뀌어 잉크가 눈에
+                # 띄게 늘어난다. 입력값(번호)만 남았을 때와 이 잉크 증가로 구분한다.
+                confirm_ink_margin = max(
+                    10,
+                    int(
+                        float(
+                            os.getenv("ERP_FINANCE_VENDOR_CONFIRM_INK_MARGIN", "25")
+                            or "25"
+                        )
+                    ),
+                )
+                # 사용자 확정 흐름: 빈칸 클릭 → 입력 → (등록 확인) → F9 → 1초 대기
+                # → Enter → (이름 변환 확인). 입력이 셀에 반영되기 전에 F9를 누르면
+                # 검색이 빈 값이 되어 거래처가 확정되지 않으므로, F9 전에 값 등록을,
+                # Enter 후 이름 변환을 각각 확인하고 안 되면 다시 시도한다.
                 for confirm_attempt in range(confirm_attempts):
                     _click_form_xy(x, y, label, wait=mgmt_click_wait)
                     _release_modifiers(f"{label} 클릭 후", wait=False)
-                    time.sleep(max(0.20, mgmt_focus_wait))
+                    time.sleep(max(0.50, mgmt_focus_wait))
                     if not _type_vendor_code(vendor_code, label, interval=type_interval):
                         return False
                     _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
                     time.sleep(max(0.25, float(paste_settle_wait)))
+                    typed_ink = _management_value_visual_ink(x, y)
+                    if not _is_occupied(typed_ink):
+                        # 입력값이 셀에 반영되지 않음(F9 전) → 다시 입력한다.
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: 입력이 셀에 반영되지 않아 재입력 "
+                            f"{confirm_attempt + 1}/{confirm_attempts} "
+                            f"(ink={typed_ink})."
+                        )
+                        continue
                     pyautogui.press('f9')
                     time.sleep(f9_wait)
                     pyautogui.press('enter')
                     time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
                     post_ink = _management_value_visual_ink(x, y)
-                    if not _is_popup(post_ink):
-                        # 팝업이 닫힘 = 확정 완료(값 셀에 이름(코드) 표시).
-                        return True
-                    if confirm_attempt < confirm_attempts - 1:
+                    if _is_popup(post_ink):
+                        # 거래처ds 팝업이 남음 → ESC로 닫고 다시 시도.
                         self.logger.warning(
                             f"  [MGMT-XY] {label}: Enter 후에도 거래처ds 팝업이 "
                             f"남아 ESC 후 재확정 {confirm_attempt + 1}/"
-                            f"{confirm_attempts - 1} (ink={post_ink})."
+                            f"{confirm_attempts} (ink={post_ink})."
                         )
-                        if not _close_stuck_vendor_popup(f"post{confirm_attempt + 1}"):
-                            self.logger.warning(
-                                f"  [MGMT-XY] {label}: 거래처ds 팝업이 닫히지 않아 "
-                                "중단합니다."
-                            )
-                            return False
+                        _close_stuck_vendor_popup(f"post{confirm_attempt + 1}")
+                        continue
+                    if post_ink[0] >= typed_ink[0] + confirm_ink_margin:
+                        # 거래처명이 붙어 잉크가 늘었다 = 이름(번호)로 확정됨.
+                        self.logger.info(
+                            f"  [MGMT-XY] {label}: 거래처 확정 완료"
+                            f"(ink {typed_ink} → {post_ink})."
+                        )
+                        return True
+                    # 원본 번호만 남음(변환 안 됨) → 다시 시도.
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: Enter 후에도 거래처명 변환이 없어 "
+                        f"(원본 번호만 남음) 재확정 {confirm_attempt + 1}/"
+                        f"{confirm_attempts} (typed={typed_ink}, post={post_ink})."
+                    )
+                    _close_stuck_vendor_popup(f"raw{confirm_attempt + 1}")
                 self.logger.warning(
-                    f"  [MGMT-XY] {label}: 거래처 확정 후에도 거래처ds 팝업이 "
-                    "남아 중단합니다."
+                    f"  [MGMT-XY] {label}: 거래처가 이름(번호)로 확정되지 않아 "
+                    "중단합니다."
                 )
                 _close_stuck_vendor_popup("final")
                 return False
