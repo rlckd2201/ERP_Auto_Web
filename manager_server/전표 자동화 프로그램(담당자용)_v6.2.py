@@ -6139,36 +6139,30 @@ class ERPLoginBot:
                     if item_key in ("거래처", "거래처코드", "업체코드", "vendor", "vendor_code"):
                         label = f"{row_no}행 {item_name}"
                         if account_key == "미지급금(원화)":
-                            if not finance_vendor_entry_state["f9_seeded"]:
-                                if not _seed_vendor_by_number_f9(value_x, value_y, label, text):
-                                    raise RuntimeError(
-                                        f"{row_no}행 거래처번호 F9 키보드 입력에 실패했습니다."
-                                    )
-                                finance_vendor_entry_state["f9_seeded"] = True
-                                self.logger.info(
-                                    f"  [MGMT-XY] {label}: 최초 F9 키보드 입력 완료, 이후 행 직접 입력 전환"
+                            # 사용자 확정: 1행부터 마지막 미지급금 행까지 전부
+                            # 동일하게 값 입력 → F9 → Enter로 확정한다.
+                            # 1행 전용 거래처ds 팝업 키 시퀀스는 사용하지 않는다.
+                            if not _input_finance_vendor_code_xy(
+                                value_x,
+                                value_y,
+                                text,
+                                label,
+                                finance_vendor_paste_settle_wait,
+                                finance_vendor_commit_settle_wait,
+                            ):
+                                _save_management_failure_screenshot(
+                                    f"row{row_no}_vendor_input"
                                 )
-                            else:
-                                if not _input_finance_vendor_code_xy(
-                                    value_x,
-                                    value_y,
-                                    text,
-                                    label,
-                                    finance_vendor_paste_settle_wait,
-                                    finance_vendor_commit_settle_wait,
-                                ):
-                                    _save_management_failure_screenshot(
-                                        f"row{row_no}_vendor_input"
-                                    )
-                                    raise RuntimeError(
-                                        f"{row_no}행 거래처번호 직접 키보드 입력에 실패했습니다."
-                                    )
-                                management_enter_sent = True
-                                self.logger.info(
-                                    f"  [MGMT-XY] {label}: 관리항목값 셀 키보드 입력 후 Enter 완료"
-                                    f"(입력대기 {finance_vendor_paste_settle_wait:.2f}s, "
-                                    f"Enter 확정 {finance_vendor_commit_settle_wait:.2f}s): {text}"
+                                raise RuntimeError(
+                                    f"{row_no}행 거래처번호 직접 키보드 입력에 실패했습니다."
                                 )
+                            finance_vendor_entry_state["f9_seeded"] = True
+                            management_enter_sent = True
+                            self.logger.info(
+                                f"  [MGMT-XY] {label}: 관리항목값 셀 키보드 입력 후 Enter 완료"
+                                f"(입력대기 {finance_vendor_paste_settle_wait:.2f}s, "
+                                f"Enter 확정 {finance_vendor_commit_settle_wait:.2f}s): {text}"
+                            )
                             y += 20
                             continue
                         if _input_vendor_by_number_keyboard(value_x, value_y, label, text):

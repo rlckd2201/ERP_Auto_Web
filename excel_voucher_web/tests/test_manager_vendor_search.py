@@ -154,9 +154,11 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     assert "_management_value_visual_ink(" not in helper
     assert 'finance_vendor_entry_state = {"f9_seeded": False}' in source
     assert 'if account_key == "미지급금(원화)":' in source
-    assert 'if not finance_vendor_entry_state["f9_seeded"]:' in source
+    # 사용자 확정: 1행 전용 팝업 시퀀스는 더 이상 호출하지 않는다.
+    # 1행부터 마지막 미지급금 행까지 동일한 입력→F9→Enter 흐름만 사용한다.
+    assert source.count("_seed_vendor_by_number_f9") == 1
+    assert 'if not finance_vendor_entry_state["f9_seeded"]:' not in source
     assert 'finance_vendor_entry_state["f9_seeded"] = True' in source
-    assert "최초 F9 키보드 입력 완료, 이후 행 직접 입력 전환" in source
     assert "관리항목값 셀 키보드 입력 후 Enter 완료" in source
     assert "거래처번호 팝업 입력 실패, 직접 입력 fallback" in source
 
@@ -1425,14 +1427,19 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     )
     fill = loaded["_fill_explicit_management_items"]
 
-    assert fill() is False
+    # 사용자 확정: 1행도 다른 행과 동일한 입력→F9→Enter 흐름을 쓴다.
+    # 1행 전용 seed(거래처ds 팝업 시퀀스)는 호출되지 않는다.
+    assert fill() is True
     assert state["f9_seeded"] is True
-    assert [event[0] for event in events] == ["seed"]
+    assert [event[0] for event in events] == ["finance-input"]
+    _, first_args = events[-1]
+    assert first_args[2] == "A001"
+    assert first_args[4:] == (0.10, 0.16)
 
     loaded["row_no"] = 2
     loaded["explicit_management"] = {"거래처": "B002"}
     assert fill() is True
-    assert [event[0] for event in events] == ["seed", "finance-input"]
+    assert [event[0] for event in events] == ["finance-input", "finance-input"]
     _, direct_args = events[-1]
     assert direct_args[2] == "B002"
     assert direct_args[4:] == (0.10, 0.16)
