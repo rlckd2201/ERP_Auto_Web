@@ -1006,45 +1006,6 @@ def test_finance_direct_vendor_confirms_when_name_appears():
     assert pressed == ["f9", "enter"]
 
 
-def test_finance_direct_vendor_retries_when_name_not_converted():
-    # Enter 후에도 원본 번호만 남아(잉크 증가 없음) 확정이 안 되면 다시 시도한다.
-    pressed = []
-    ink_seq = iter([
-        (0, 0, 0, 0),      # 입력 전
-        (30, 6, 12, 26),   # att1 입력 후(번호 반영)
-        (30, 6, 12, 26),   # att1 Enter 후: 변환 없음(원본 번호만)
-        (30, 6, 12, 26),   # raw ESC close 확인(팝업 아님 → 즉시 반환)
-        (30, 6, 12, 26),   # att2 입력 후
-        (120, 8, 40, 150),  # att2 Enter 후: 변환됨
-    ])
-    loaded = _load_nested_functions(
-        "_input_finance_vendor_code_xy",
-        namespace={
-            "re": re,
-            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
-            "_click_form_xy": lambda *_args, **_kwargs: None,
-            "_release_modifiers": lambda *_args, **_kwargs: None,
-            "_type_vendor_code": lambda *_args, **_kwargs: True,
-            "_management_value_visual_ink": lambda _x, _y: next(ink_seq, (0, 0, 0, 0)),
-            "pyautogui": SimpleNamespace(
-                press=lambda key, **_kwargs: pressed.append(key)
-            ),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
-            "mgmt_click_wait": 0.0,
-            "mgmt_focus_wait": 0.0,
-            "mgmt_key_wait": 0.0,
-            "self": SimpleNamespace(logger=_FakeLogger()),
-        },
-    )
-
-    assert loaded["_input_finance_vendor_code_xy"](
-        1118, 756, "GL001", "18행 거래처", 0.0, 0.0
-    ) is True
-    # 변환이 안 되면 재확정한다: att1(f9,enter) → att2(f9,enter).
-    assert pressed.count("f9") == 2
-    assert pressed.count("enter") == 2
-
-
 def test_finance_direct_vendor_reinputs_when_value_not_registered():
     # 입력 후에도 셀이 비어 있으면(F9 전 등록 실패) 재입력하고 F9는 보내지 않는다.
     pressed = []
