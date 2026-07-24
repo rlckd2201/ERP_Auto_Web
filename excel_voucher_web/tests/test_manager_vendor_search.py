@@ -958,6 +958,10 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
             "mgmt_click_wait": 0.0,
             "mgmt_focus_wait": 0.0,
             "mgmt_key_wait": 0.0,
+            "summary_x": 970,
+            "finance_row_advance_settle_wait": 2.5,
+            # 스크롤 모드가 아니면 재시도 없이 즉시 중단한다.
+            "row_geometry_state": {"bottom_scroll_mode": False},
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
@@ -968,6 +972,55 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
     # 셀이 비어 있지 않으면 타이핑도 Enter도 보내지 않고 즉시 중단한다.
     assert ("type",) not in events
     assert not any(event[0] == "key" for event in events)
+
+
+def test_finance_direct_vendor_retries_down_when_row_did_not_advance():
+    events = []
+    # 첫 검사는 이전 행 값이 남아 있고(미이동), Down 재전송 뒤 비워진다.
+    ink_seq = iter([(120, 10, 40, 160), (0, 0, 0, 0)])
+
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda x, y, label, wait=0: events.append(
+                ("click", x, y, label)
+            ),
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: (
+                events.append(("type",)) or True
+            ),
+            "_management_value_visual_ink": lambda _x, _y: next(
+                ink_seq, (0, 0, 0, 0)
+            ),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: events.append(("key", key))
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "summary_x": 970,
+            "finance_row_advance_settle_wait": 2.5,
+            "row_geometry_state": {
+                "bottom_scroll_mode": True,
+                "scroll_anchor_y": 671,
+            },
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 756, "GK003", "60행 거래처", 0.0, 0.0
+    ) is True
+    # 미이동을 감지하면 요약 앵커를 다시 클릭하고 Down을 재전송해 복구한다.
+    assert ("click", 970, 671, "60행 거래처 행 이동 재시도") in events
+    assert ("key", "down") in events
+    # 복구 후에는 정상 흐름(입력 → F9 → Enter)이 진행된다.
+    assert ("type",) in events
+    assert ("key", "f9") in events
+    assert ("key", "enter") in events
 
 
 def test_finance_direct_vendor_sends_f9_then_single_enter():

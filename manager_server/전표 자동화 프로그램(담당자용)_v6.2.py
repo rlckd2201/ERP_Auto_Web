@@ -5570,19 +5570,63 @@ class ERPLoginBot:
                 # 새 행의 관리항목값 셀은 비어 있어야 한다. 편집 상태의 셀은
                 # 글자가 선택 반전으로 그려져 잉크가 잡히지 않을 수 있으므로
                 # 셀을 클릭하기 전(표시 상태)에 검사한다. 이전 행 값이 남아
-                # 보이면 전표 행이 이동하지 않은 것이므로 즉시 중단한다.
-                pre_ink = _management_value_visual_ink(x, y)
-                if (
-                    pre_ink[0] >= 6
-                    and pre_ink[1] >= 3
-                    and pre_ink[2] >= 3
-                    and pre_ink[3] >= 8
-                ):
-                    self.logger.warning(
-                        f"  [MGMT-XY] {label}: 클릭 전 관리항목값 셀이 비어 있지 "
-                        f"않아 중단합니다(전표 행 미이동 의심, ink={pre_ink})."
+                # 보이면 전표 행이 이동하지 않은 것이다(Down 키 유실 등).
+                def _value_cell_occupied():
+                    ink = _management_value_visual_ink(x, y)
+                    return ink, (
+                        ink[0] >= 6 and ink[1] >= 3 and ink[2] >= 3 and ink[3] >= 8
                     )
-                    return False
+
+                pre_ink, occupied = _value_cell_occupied()
+                if occupied:
+                    # 하단 스크롤 모드에서는 요약 행 앵커가 고정돼 있어, 이동이
+                    # 유실됐을 때 요약 행을 다시 선택하고 Down을 재전송하는 것이
+                    # 안전한 복구다. 사람이 하는 것과 같은 단일 복구이며 팝업
+                    # 탐색·재시도 로직은 추가하지 않는다.
+                    advance_retries = max(
+                        0,
+                        int(
+                            float(
+                                os.getenv("ERP_FINANCE_ROW_ADVANCE_RETRIES", "3")
+                                or "3"
+                            )
+                        ),
+                    )
+                    if row_geometry_state.get("bottom_scroll_mode"):
+                        anchor_y = int(
+                            row_geometry_state.get("scroll_anchor_y")
+                            or (row_geometry_state.get("snapshot") or {}).get(
+                                "last_full_y"
+                            )
+                            or y
+                        )
+                        for attempt in range(1, advance_retries + 1):
+                            self.logger.warning(
+                                f"  [MGMT-XY] {label}: 전표 행 미이동 감지, "
+                                f"Down 재전송 {attempt}/{advance_retries} "
+                                f"(ink={pre_ink})."
+                            )
+                            _click_form_xy(
+                                summary_x,
+                                anchor_y,
+                                f"{label} 행 이동 재시도",
+                                wait=mgmt_key_wait,
+                            )
+                            pyautogui.press('down')
+                            time.sleep(finance_row_advance_settle_wait)
+                            pre_ink, occupied = _value_cell_occupied()
+                            if not occupied:
+                                self.logger.info(
+                                    f"  [MGMT-XY] {label}: Down 재전송으로 전표 행 "
+                                    f"이동 복구 완료(attempt={attempt})."
+                                )
+                                break
+                    if occupied:
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: 클릭 전 관리항목값 셀이 비어 있지 "
+                            f"않아 중단합니다(전표 행 미이동, ink={pre_ink})."
+                        )
+                        return False
                 _click_form_xy(x, y, label, wait=mgmt_click_wait)
                 _release_modifiers(f"{label} 클릭 후", wait=False)
                 time.sleep(max(0.20, mgmt_focus_wait))
