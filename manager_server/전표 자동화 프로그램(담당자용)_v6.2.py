@@ -9588,6 +9588,29 @@ class ERPLoginBot:
                 )
 
             _paste_grid_until_reflected()
+            # 붙여넣기 후 그리드가 1행이 아닌 위치에 있을 수 있다(비결정적).
+            # 관리항목 입력은 "맨 위 = 1행" 가정으로 진행하므로, 첫 셀을 클릭해
+            # 포커스를 그리드에 두고 Ctrl+Home으로 맨 위(1행)로 올려 항상 1행부터
+            # 시작하도록 고정한다.
+            if str(os.getenv("ERP_GRID_SCROLL_TOP_BEFORE_MGMT", "1") or "1").strip() not in ("0", "false", "False"):
+                try:
+                    _click_form_xy(
+                        first_account_cell_xy[0],
+                        first_account_cell_xy[1],
+                        "그리드 맨 위 이동용 첫 셀",
+                        wait=mgmt_click_wait,
+                    )
+                    _release_modifiers("그리드 Ctrl+Home 직전", wait=False)
+                    pyautogui.hotkey('ctrl', 'home')
+                    _release_modifiers("그리드 Ctrl+Home 직후", wait=False)
+                    time.sleep(max(0.30, mgmt_after_grid_paste_wait))
+                    self.logger.info(
+                        "  [FORM-XY] 붙여넣기 후 그리드를 맨 위(1행)로 이동(Ctrl+Home)"
+                    )
+                except Exception as scroll_top_exc:
+                    self.logger.warning(
+                        f"  [FORM-XY] 그리드 맨 위 이동 실패: {scroll_top_exc}"
+                    )
             self.logger.info("  [FORM-XY] grid paste reflected; waiting for management items")
             try:
                 if excel_copy_used:

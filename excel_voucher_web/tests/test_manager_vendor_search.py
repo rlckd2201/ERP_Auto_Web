@@ -1115,6 +1115,19 @@ def test_finance_direct_vendor_closes_leftover_popup_before_input():
     assert pressed[-2:] == ["f9", "enter"]
 
 
+def test_grid_scrolls_to_top_before_management_fill():
+    # 붙여넣기 후 그리드가 1행이 아닌 위치에 있을 수 있으므로, 관리항목
+    # 입력 시작 전에 첫 셀 클릭 + Ctrl+Home으로 맨 위(1행)로 올려야 한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    anchor = source.index("_paste_grid_until_reflected()")
+    fill_at = source.index("_fill_management_items_by_coord()", anchor)
+    between = source[anchor:fill_at]
+    assert "pyautogui.hotkey('ctrl', 'home')" in between
+    assert "ERP_GRID_SCROLL_TOP_BEFORE_MGMT" in between
+    assert "first_account_cell_xy[0]" in between
+
+
 def test_row_advance_recovery_lives_in_coord_fill_scope():
     # 전표 행 미이동 복구(Down 재전송)는 요약 앵커/스크롤 상태가 있는
     # _fill_management_items_by_coord 루프 안에 있어야 한다. 입력 함수
