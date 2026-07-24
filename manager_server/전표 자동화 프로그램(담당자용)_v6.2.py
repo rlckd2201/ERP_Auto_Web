@@ -9588,6 +9588,71 @@ class ERPLoginBot:
                 )
 
             _paste_grid_until_reflected()
+            # ERP는 210행을 한 번에가 아니라 순차적으로(느리게) 붙여넣는다
+            # (사용자 실기기 확인). 모든 행이 다 들어가야 하단 관리항목값 칸이
+            # 나타나므로, 하단 차변합계 박스가 더 이상 변하지 않을 때까지
+            # (= 붙여넣기 완료) 기다린 뒤 관리항목 입력을 시작한다. 고정 시간을
+            # 추측하지 않고 합계 안정으로 자동 감지한다.
+            if str(os.getenv("ERP_WAIT_PASTE_TOTAL_STABLE", "1") or "1").strip() not in ("0", "false", "False"):
+                try:
+                    tb_x = int(float(os.getenv("ERP_TOTAL_BOX_X", "200") or "200"))
+                    tb_y = int(float(os.getenv("ERP_TOTAL_BOX_Y", "897") or "897"))
+                    tb_w = int(float(os.getenv("ERP_TOTAL_BOX_W", "150") or "150"))
+                    tb_h = int(float(os.getenv("ERP_TOTAL_BOX_H", "18") or "18"))
+
+                    def _total_box_ink():
+                        img = pyautogui.screenshot(region=(tb_x, tb_y, tb_w, tb_h))
+                        cnt = 0
+                        w0, h0 = img.size
+                        for yy in range(0, h0, 2):
+                            for xx in range(0, w0, 2):
+                                r0, g0, b0 = img.getpixel((xx, yy))[:3]
+                                if max(r0, g0, b0) < 125:
+                                    cnt += 1
+                        return cnt
+
+                    min_wait = float(os.getenv("ERP_PASTE_TOTAL_MIN_WAIT", "10") or "10")
+                    total_timeout = float(os.getenv("ERP_PASTE_TOTAL_TIMEOUT", "600") or "600")
+                    stable_need = max(2, int(float(os.getenv("ERP_PASTE_TOTAL_STABLE_COUNT", "3") or "3")))
+                    poll = max(1.0, float(os.getenv("ERP_PASTE_TOTAL_POLL", "2.0") or "2.0"))
+                    # 붙여넣기 중에는 합계가 0(또는 빈칸)이라 잉크가 매우 작다.
+                    # 완료 시 최종 합계(예: 1,018,207,215)로 바뀌며 잉크가 급증한다.
+                    # "0"의 작은 잉크를 완료로 오탐하지 않도록 최소 잉크 문턱을 둔다
+                    # (여러 자리 숫자만 통과). ink_tol은 안티앨리어싱 미세 흔들림 허용.
+                    min_ink = int(float(os.getenv("ERP_PASTE_TOTAL_MIN_INK", "40") or "40"))
+                    ink_tol = int(float(os.getenv("ERP_PASTE_TOTAL_INK_TOL", "2") or "2"))
+                    time.sleep(min_wait)
+                    deadline = time.time() + total_timeout
+                    prev_ink = -999
+                    stable = 0
+                    detected = False
+                    while time.time() < deadline:
+                        cur_ink = _total_box_ink()
+                        if cur_ink >= min_ink and abs(cur_ink - prev_ink) <= ink_tol:
+                            stable += 1
+                            if stable >= stable_need:
+                                self.logger.info(
+                                    f"  [FORM-XY] 붙여넣기 완료 감지: 차변합계 안정"
+                                    f"(ink={cur_ink}, {stable}회 연속)"
+                                )
+                                detected = True
+                                break
+                        else:
+                            stable = 0
+                        self.logger.info(
+                            f"  [FORM-XY] 붙여넣기 진행 대기: 차변합계 ink={cur_ink} "
+                            f"(문턱={min_ink}, stable={stable}/{stable_need})"
+                        )
+                        prev_ink = cur_ink
+                        time.sleep(poll)
+                    if not detected:
+                        self.logger.warning(
+                            "  [FORM-XY] 붙여넣기 합계 안정 감지 시간초과 — 그대로 진행"
+                        )
+                except Exception as paste_wait_exc:
+                    self.logger.warning(
+                        f"  [FORM-XY] 붙여넣기 완료 대기 실패: {paste_wait_exc}"
+                    )
             # 붙여넣기 후 그리드가 1행이 아닌 위치에 있을 수 있다(비결정적).
             # 관리항목 입력은 "맨 위 = 1행" 가정으로 진행하므로, 첫 셀을 클릭해
             # 포커스를 그리드에 두고 Ctrl+Home으로 맨 위(1행)로 올려 항상 1행부터

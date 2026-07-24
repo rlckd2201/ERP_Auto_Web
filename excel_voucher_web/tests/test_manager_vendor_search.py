@@ -5141,3 +5141,28 @@ def test_print_wait_uses_baseline_and_skips_duplicate_click_for_pending_new_proc
         strict_guard,
     )
     assert "Never replace the verified fresh window with a stale Viewer" in focus_helper
+
+
+def test_waits_for_slow_paste_completion_before_management_fill():
+    # ERP는 210행을 순차적으로(느리게) 붙여넣는다(사용자 실기기 확인).
+    # 모든 행이 다 들어가기 전에는 하단 관리항목값 칸이 나타나지 않으므로,
+    # 하단 차변합계가 안정될 때까지(= 붙여넣기 완료) 기다린 뒤 관리항목
+    # 입력을 시작해야 한다. 붙여넣기 도중 합계는 0이라 잉크가 작으므로
+    # 최소 잉크 문턱(min_ink)으로 "0"을 완료로 오탐하지 않아야 한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    anchor = source.index("_paste_grid_until_reflected()")
+    fill_at = source.index("_fill_management_items_by_coord()", anchor)
+    between = source[anchor:fill_at]
+    assert "ERP_WAIT_PASTE_TOTAL_STABLE" in between
+    assert "ERP_PASTE_TOTAL_MIN_INK" in between
+    assert "ERP_PASTE_TOTAL_TIMEOUT" in between
+    assert "붙여넣기 완료 감지" in between
+
+    # 완료 대기(합계 안정)는 Ctrl+Home 스크롤과 관리준비 감지보다 먼저 실행돼야 한다.
+    wait_at = between.index("ERP_WAIT_PASTE_TOTAL_STABLE")
+    scroll_at = between.index("ERP_GRID_SCROLL_TOP_BEFORE_MGMT")
+    assert wait_at < scroll_at
+
+    # "0" 오탐 방지: 안정 판정은 min_ink 문턱을 통과한 잉크만 인정해야 한다.
+    assert "cur_ink >= min_ink" in between
