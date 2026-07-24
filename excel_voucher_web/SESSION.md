@@ -1,5 +1,13 @@
 # SESSION.md
 
+## 2026-07-24 근본 원인: 거래처ds 팝업 미닫힘 → 행별 팝업 닫힘 검증 추가
+- 이전 빌드(3AC8490767FA) 실행 `6c0acebb1811`은 미이동 복구가 15번 작동해 60→169행까지 전진했으나 169행에서 최종 실패. 결정적 로그: 복구 성공 행 잉크는 59행 `(25,..)`·144행 `(189,..)`(정상 잔존 값, Down으로 해결)인데, 164/169행은 `ink=(2324,14,166,348)` — 값 셀 97%가 검게 채워진 **거래처ds 팝업이 열린 채 값 셀을 덮은 상태**. Down은 팝업을 못 닫아 169는 3회 재시도 후 실패.
+- 근본 원인: 어떤 행의 `F9 → Enter`가 거래처ds 팝업을 못 닫으면(코드 애매/무결과) 다음 행이 그 팝업 위에서 헛돈다. 기존엔 Enter 후 팝업 닫힘을 검증하지 않았다.
+- 조치(`_input_finance_vendor_code_xy`): 값 셀 잉크로 상태 구분 — 큰 잉크(≥`ERP_FINANCE_POPUP_INK_MIN` 기본 600)=팝업, 중간=잔존 값, 빈=정상. ① 입력 전 팝업이 남아 있으면 ESC로 닫음. ② Enter 후 팝업이 안 닫혔으면 ESC 후 `F9→Enter` 재확정(`ERP_FINANCE_VENDOR_CONFIRM_RETRIES` 기본 2회). 닫히면 True, 끝까지 안 닫히면 False. 이로써 어떤 행도 팝업을 남기지 않아 cascade 원천 차단. UIA 팝업 탐색 없이 ESC/잉크만 사용(스코프 안전, 입력 함수 로컬만).
+- 실패 스크린샷은 각 실패 시 243 `C:\ERP_Auto_Web\excel_voucher_web\data\agent_results\erp_outputs\mgmt_fail_row*.png`에 저장됨(서버 업로드는 아님).
+- Manager 회귀 134 passed(팝업 ESC 재확정/미닫힘 실패/입력전 잔존팝업 3개 추가), 전체 163 passed. 커밋 `b592d8e`, GitHub `main.zip` Manager SHA-256 `0FEB0D2F89AD6010E599E1932C55A7D8AE03566620553BA0393B74BFF96C726C`.
+- 다음 시작점: 미저장 전표 폐기 → 243 최신 적용 `Manager 0FEB0D2F89AD` 확인 → 재업로드 전 구간 검증.
+
 ## 2026-07-24 행 속도 균일화 (사용자 지시)
 - 사용자가 1행과 60행 근처 속도가 다르다고 지적하고, 전 미지급금 행을 동일 흐름 `빈칸 클릭 → 입력 → F9 → 1초 대기 → Enter`로 통일 요청.
 - 원인: `_advance_grid_row` 마지막 fallback 분기(뷰포트 행 1~23 실제 경로)가 `mgmt_commit_wait`(~0.08~0.3초)를 쓰고, 스크롤 행(24+)은 `finance_row_advance_settle_wait`(2.5초)를 써서 행 전환 속도가 달랐다.
