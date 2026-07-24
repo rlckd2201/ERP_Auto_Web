@@ -1,5 +1,14 @@
 # SESSION.md
 
+## 2026-07-24 행 속도 균일화 (사용자 지시)
+- 사용자가 1행과 60행 근처 속도가 다르다고 지적하고, 전 미지급금 행을 동일 흐름 `빈칸 클릭 → 입력 → F9 → 1초 대기 → Enter`로 통일 요청.
+- 원인: `_advance_grid_row` 마지막 fallback 분기(뷰포트 행 1~23 실제 경로)가 `mgmt_commit_wait`(~0.08~0.3초)를 쓰고, 스크롤 행(24+)은 `finance_row_advance_settle_wait`(2.5초)를 써서 행 전환 속도가 달랐다.
+- 조치: ① 뷰포트 행 전환 대기를 `finance_row_advance_settle_wait`로 통일(1~209행 동일 속도). ② 입력 후 F9 전 대기(`finance_vendor_paste_settle_wait`)를 1.00→0.35초로 낮춰 "붙여넣기 후 곧바로 F9"에 맞춤. F9 뒤 1초 대기·Enter는 유지. Enter 후 확정 대기(팝업 닫힘용) 2.00초 유지.
+- 실측 검증: 30행 fast 시뮬레이션에서 29개 행 전환이 전부 2.50초, 구 0.08초 0개. 균일 확인. 회귀 테스트로 뷰포트 0.08초 잔존 금지를 고정.
+- Manager 회귀 131 passed, 전체 160 passed. 커밋 `4c4d1d7`, GitHub `main.zip` Manager SHA-256 `F06AA58C8D07543A7E739ACD94D640FB1C81F74BCBC327ED0478FAB17E9BA0A3`.
+- 입력 방식은 VK_PACKET 주입 유지(클립보드 미사용). 미이동 자동 복구·계좌 물리키·저장 확인창 uia 모두 유지.
+- 다음 시작점: 미저장 전표 폐기 → 243 최신 적용 `Manager F06AA58C8D07` 확인 → 재업로드 전 구간 검증.
+
 ## 2026-07-24 행 미이동 복구 NameError 수정·복구를 올바른 스코프로 이동
 - 직전 배포(502668)가 작업 `e51b1982e406`에서 `name 'row_geometry_state' is not defined`로 60행에서 죽었다. 내 실수 — `_input_finance_vendor_code_xy`(6260행 `_fill_management_items_by_coord` 이전 함수 소속)에 다른 함수의 지역변수 `row_geometry_state`/`summary_x`를 참조하는 재시도 코드를 넣었다. `_load_nested_functions` 테스트가 이름을 주입해 통과시켜 스코프 결함을 못 잡았다.
 - 조치: 입력 함수의 재시도를 제거하고 미이동 감지 시 안전 중단(known-good로 복원)했다. 미이동 복구는 요약 앵커/스크롤 상태가 실제 있는 `_fill_management_items_by_coord` 루프로 옮겼다 — 바로 위 "보통예금 행 이동 재시도"와 동일한 방식(같은 스코프 함수·변수만 사용). `거래처번호 직접 키보드 입력` 실패 + 스크롤 모드일 때만 요약 앵커 재클릭+Down 재전송+재선택 후 재입력(기본 3회, `ERP_FINANCE_ROW_ADVANCE_RETRIES`).
