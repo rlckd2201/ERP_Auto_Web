@@ -958,10 +958,6 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
             "mgmt_click_wait": 0.0,
             "mgmt_focus_wait": 0.0,
             "mgmt_key_wait": 0.0,
-            "summary_x": 970,
-            "finance_row_advance_settle_wait": 2.5,
-            # 스크롤 모드가 아니면 재시도 없이 즉시 중단한다.
-            "row_geometry_state": {"bottom_scroll_mode": False},
             "self": SimpleNamespace(logger=_FakeLogger()),
         },
     )
@@ -972,55 +968,6 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
     # 셀이 비어 있지 않으면 타이핑도 Enter도 보내지 않고 즉시 중단한다.
     assert ("type",) not in events
     assert not any(event[0] == "key" for event in events)
-
-
-def test_finance_direct_vendor_retries_down_when_row_did_not_advance():
-    events = []
-    # 첫 검사는 이전 행 값이 남아 있고(미이동), Down 재전송 뒤 비워진다.
-    ink_seq = iter([(120, 10, 40, 160), (0, 0, 0, 0)])
-
-    loaded = _load_nested_functions(
-        "_input_finance_vendor_code_xy",
-        namespace={
-            "re": re,
-            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
-            "_click_form_xy": lambda x, y, label, wait=0: events.append(
-                ("click", x, y, label)
-            ),
-            "_release_modifiers": lambda *_args, **_kwargs: None,
-            "_type_vendor_code": lambda *_args, **_kwargs: (
-                events.append(("type",)) or True
-            ),
-            "_management_value_visual_ink": lambda _x, _y: next(
-                ink_seq, (0, 0, 0, 0)
-            ),
-            "pyautogui": SimpleNamespace(
-                press=lambda key, **_kwargs: events.append(("key", key))
-            ),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
-            "mgmt_click_wait": 0.0,
-            "mgmt_focus_wait": 0.0,
-            "mgmt_key_wait": 0.0,
-            "summary_x": 970,
-            "finance_row_advance_settle_wait": 2.5,
-            "row_geometry_state": {
-                "bottom_scroll_mode": True,
-                "scroll_anchor_y": 671,
-            },
-            "self": SimpleNamespace(logger=_FakeLogger()),
-        },
-    )
-
-    assert loaded["_input_finance_vendor_code_xy"](
-        1118, 756, "GK003", "60행 거래처", 0.0, 0.0
-    ) is True
-    # 미이동을 감지하면 요약 앵커를 다시 클릭하고 Down을 재전송해 복구한다.
-    assert ("click", 970, 671, "60행 거래처 행 이동 재시도") in events
-    assert ("key", "down") in events
-    # 복구 후에는 정상 흐름(입력 → F9 → Enter)이 진행된다.
-    assert ("type",) in events
-    assert ("key", "f9") in events
-    assert ("key", "enter") in events
 
 
 def test_finance_direct_vendor_sends_f9_then_single_enter():
@@ -1050,6 +997,33 @@ def test_finance_direct_vendor_sends_f9_then_single_enter():
     ) is True
     # 사용자 확정 흐름: 붙여넣기 후 F9로 조회하고 Enter 1회로 확정한다.
     assert pressed == ["f9", "enter"]
+
+
+def test_row_advance_recovery_lives_in_coord_fill_scope():
+    # 전표 행 미이동 복구(Down 재전송)는 요약 앵커/스크롤 상태가 있는
+    # _fill_management_items_by_coord 루프 안에 있어야 한다. 입력 함수
+    # (_input_finance_vendor_code_xy)는 그 상태를 볼 수 없어 여기 두면
+    # NameError가 난다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    coord_scope_start = source.index("def _fill_management_items_by_coord")
+    recovery_at = source.index("전표 행 미이동 복구: ")
+    assert recovery_at > coord_scope_start
+
+    # 입력 함수 본문에는 스코프 밖 이름이 없어야 한다.
+    input_start = source.index("def _input_finance_vendor_code_xy")
+    input_end = source.index("def _input_vendor_by_number_keyboard", input_start)
+    input_body = source[input_start:input_end]
+    assert "row_geometry_state" not in input_body
+    assert "_advance_grid_row" not in input_body
+
+    # 복구 조건은 미지급금 거래처 입력 실패 + 스크롤 모드로 한정되고,
+    # 복구 로직과 함께 coord-fill 함수 구역 안에 있어야 한다.
+    coord_region = source[coord_scope_start:]
+    recoverable_at = coord_region.index("거래처번호 직접 키보드 입력")
+    assert 'if not recoverable:' in coord_region
+    assert "bottom_scroll_mode" in coord_region[recoverable_at : recoverable_at + 400]
+    assert "pyautogui.press('down')" in coord_region
 
 
 def test_finance_direct_vendor_uses_safe_default_settle_times():
