@@ -2050,9 +2050,11 @@ class ERPLoginBot:
         vendor_popup_open_wait = max(0.35, float(os.getenv("ERP_VENDOR_POPUP_OPEN_WAIT", "0.55") or "0.55"))
         vendor_popup_focus_wait = max(mgmt_focus_wait, float(os.getenv("ERP_VENDOR_POPUP_FOCUS_WAIT", "0.12" if fast_management else "0.45") or "0.45"))
         vendor_popup_search_wait = max(mgmt_key_wait, float(os.getenv("ERP_VENDOR_POPUP_SEARCH_WAIT", "0.25" if fast_management else "0.55") or "0.55"))
+        # 사용자 확정 흐름: 붙여넣기(VK_PACKET) 후 곧바로 F9. 입력 등록에만
+        # 필요한 짧은 대기만 둔다(1초 대기는 F9 뒤에 있다).
         finance_vendor_paste_settle_wait = max(
             mgmt_key_wait,
-            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "1.00") or "1.00"),
+            float(os.getenv("ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35") or "0.35"),
         )
         finance_vendor_commit_settle_wait = max(
             mgmt_commit_wait,
@@ -7141,7 +7143,9 @@ class ERPLoginBot:
                     wait=mgmt_key_wait,
                 )
                 pyautogui.press('down')
-                time.sleep(mgmt_commit_wait)
+                # 뷰포트 행(1~23)도 스크롤 행(24+)과 동일한 행 전환 대기를
+                # 사용해 1행부터 마지막까지 속도를 균일하게 한다.
+                time.sleep(finance_row_advance_settle_wait)
                 return int(next_y)
 
             bank_management_norms = {

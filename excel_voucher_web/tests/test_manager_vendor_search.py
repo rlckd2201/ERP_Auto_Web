@@ -1029,7 +1029,8 @@ def test_row_advance_recovery_lives_in_coord_fill_scope():
 def test_finance_direct_vendor_uses_safe_default_settle_times():
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
-    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "1.00"' in source
+    # 붙여넣기 후 곧바로 F9 (입력 등록용 짧은 대기만). 1초 대기는 F9 뒤.
+    assert 'ERP_FINANCE_VENDOR_PASTE_SETTLE_WAIT", "0.35"' in source
     assert 'ERP_FINANCE_VENDOR_COMMIT_SETTLE_WAIT", "2.00"' in source
     assert 'ERP_FINANCE_ROW_ADVANCE_SETTLE_WAIT", "2.50"' in source
     assert 'ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15"' in source
@@ -3687,12 +3688,12 @@ def test_fast_geometry_navigation_never_probes_uia_through_dynamic_bank_row():
             assert state["scroll_anchor_y"] == snapshot["last_full_y"]
             assert state["scroll_advance_mode"] == "down"
             assert sum(event == ("key", "down") for event in events) == total_rows - 1
-            # 경계 이후 매 행 전환(스크롤 모드 포함)이 전용 행 전환 대기를
-            # 타야 한다. 최초 경계 1회만 대기하고 이후 행이 짧은 대기로
-            # 돌면 밀림/이전 값 F9 사고가 재발한다.
-            assert sum(event == ("sleep", 2.50) for event in events) >= (
-                total_rows - full_row_count
-            )
+            # 1행부터 마지막 행까지 모든 행 전환이 동일한 2.50초 대기를
+            # 써야 한다(뷰포트 행 0.08초 잔존 금지 — 속도 균일). 최초 경계
+            # 전환만 별도 계산이라 나머지 전 구간이 2.50초여야 한다.
+            uniform_sleeps = sum(event == ("sleep", 2.50) for event in events)
+            assert uniform_sleeps >= total_rows - 2
+            assert not any(event == ("sleep", 0.08) for event in events)
 
 
 def test_fast_geometry_boundary_uses_one_down_even_when_management_enter_was_sent():
