@@ -804,6 +804,44 @@ def run_loop(
                         )
                 except Exception as screenshot_exc:
                     error_result["print_screenshot_upload_error"] = str(screenshot_exc)
+            # 관리항목(거래처/계좌) 입력 실패 순간의 화면을 서버로 올려
+            # 무인 PC라도 원격에서 실제 화면으로 원인을 확인할 수 있게 한다.
+            try:
+                mgmt_shot_dir = output_dir / "erp_outputs"
+                mgmt_shots = (
+                    sorted(
+                        mgmt_shot_dir.glob("mgmt_fail_*.png"),
+                        key=lambda p: p.stat().st_mtime,
+                    )
+                    if mgmt_shot_dir.is_dir()
+                    else []
+                )
+                if mgmt_shots:
+                    newest_mgmt_shot = mgmt_shots[-1]
+                    error_result["mgmt_screenshot_path"] = str(newest_mgmt_shot)
+                    mgmt_resp = _upload_job_artifact(
+                        session,
+                        server,
+                        job_id,
+                        agent_id,
+                        newest_mgmt_shot,
+                        "mgmt_screenshot",
+                        verify_tls=verify_tls,
+                    )
+                    mgmt_artifact = (
+                        mgmt_resp.get("artifact")
+                        if isinstance(mgmt_resp, dict)
+                        else {}
+                    )
+                    if isinstance(mgmt_artifact, dict):
+                        error_result.update(
+                            {
+                                "mgmt_screenshot_filename": mgmt_artifact.get("filename") or "",
+                                "mgmt_screenshot_download_url": mgmt_artifact.get("download_url") or "",
+                            }
+                        )
+            except Exception as mgmt_shot_exc:
+                error_result["mgmt_screenshot_upload_error"] = str(mgmt_shot_exc)
             try:
                 _post(
                     session,
