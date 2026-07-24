@@ -954,7 +954,11 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
             "pyautogui": SimpleNamespace(
                 press=lambda key, **_kwargs: events.append(("key", key))
             ),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            # 폴링 대기(지연 갱신)까지 소진되도록 time.time을 가짜 시계로 제공.
+            "time": SimpleNamespace(
+                sleep=lambda _seconds: None,
+                time=lambda _c=iter(range(0, 1000)): float(next(_c)),
+            ),
             "mgmt_click_wait": 0.0,
             "mgmt_focus_wait": 0.0,
             "mgmt_key_wait": 0.0,
@@ -965,7 +969,8 @@ def test_finance_direct_vendor_stops_when_previous_row_value_still_visible():
     assert loaded["_input_finance_vendor_code_xy"](
         1118, 797, "A001", "5행 거래처", 0.0, 0.0
     ) is False
-    # 셀이 비어 있지 않으면 타이핑도 Enter도 보내지 않고 즉시 중단한다.
+    # 값이 계속 남아 있으면(지연 갱신 폴링 후에도) 타이핑도 Enter도 보내지
+    # 않고 중단한다.
     assert ("type",) not in events
     assert not any(event[0] == "key" for event in events)
 
@@ -5166,3 +5171,52 @@ def test_waits_for_slow_paste_completion_before_management_fill():
 
     # "0" 오탐 방지: 안정 판정은 min_ink 문턱을 통과한 잉크만 인정해야 한다.
     assert "cur_ink >= min_ink" in between
+
+
+def test_paste_total_box_uses_measured_coordinates_and_threshold():
+    # 실기기(1920x1080) 실패 스크린샷 실측: 차변합계 박스 (110,936) 160x17,
+    # 숫자 밝기 190~199(연회색)라 문턱 215 필요. 이전 기본값(200,897/문턱
+    # 125)은 빈 여백을 봐서 ink=0으로 10분 시간초과했다(작업 c7cfe6b99a2f).
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    anchor = source.index("_paste_grid_until_reflected()")
+    fill_at = source.index("_fill_management_items_by_coord()", anchor)
+    between = source[anchor:fill_at]
+    assert '"ERP_TOTAL_BOX_X", "110"' in between
+    assert '"ERP_TOTAL_BOX_Y", "936"' in between
+    assert '"ERP_PASTE_TOTAL_INK_THR", "215"' in between
+    assert '"ERP_PASTE_TOTAL_MIN_INK", "20"' in between
+
+
+def test_precheck_waits_for_slow_panel_refresh_before_abort():
+    # 행 이동 뒤 하단 패널 갱신이 느려 이전 행 확정값이 잠시 남는다(18행
+    # 실패 스크린샷: 더블클릭 0.65초 후에도 이전 행 값 표시, 몇 초 뒤
+    # 비워짐). 미이동 단정 전에 비워질 때까지 폴링해야 한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    input_start = source.index("def _input_finance_vendor_code_xy")
+    input_end = source.index("def _input_vendor_by_number_keyboard", input_start)
+    input_body = source[input_start:input_end]
+
+    assert "ERP_MGMT_PANEL_REFRESH_WAIT" in input_body
+    assert "지연 갱신" in input_body
+    # 폴링이 중단 판정보다 먼저 와야 한다.
+    poll_at = input_body.index("ERP_MGMT_PANEL_REFRESH_WAIT")
+    abort_at = input_body.index("클릭 전 관리항목값 셀이 비어 있지")
+    assert poll_at < abort_at
+    # 스코프 안전: 입력 함수 로컬/공유 헬퍼만 사용해야 한다.
+    assert "row_geometry_state" not in input_body
+    assert "summary_x" not in input_body
+
+
+def test_viewport_rows_also_recover_from_missed_advance():
+    # 미이동 복구가 스크롤 모드 전용이라 뷰포트 행(1~23)은 즉시 실패했다
+    # (18행 사례). 뷰포트 행은 해당 y 재더블클릭이 복구다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    coord_scope_start = source.index("def _fill_management_items_by_coord")
+    viewport_recovery_at = source.index("적요 재더블클릭")
+    assert viewport_recovery_at > coord_scope_start
+    # recoverable 판정이 더 이상 bottom_scroll_mode에 묶여 있지 않아야 한다.
+    rec_at = source.index('"거래처번호 직접 키보드 입력" in str(fill_exc)')
+    rec_block = source[rec_at:rec_at + 220]
+    assert "bottom_scroll_mode" not in rec_block.split("recoverable")[0]
+    assert "fill_attempt < fill_attempts - 1" in rec_block

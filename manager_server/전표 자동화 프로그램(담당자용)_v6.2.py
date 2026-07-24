@@ -5606,7 +5606,37 @@ class ERPLoginBot:
                     _close_stuck_vendor_popup("pre")
                     pre_ink = _management_value_visual_ink(x, y)
                 if _is_occupied(pre_ink):
-                    # 팝업이 아니라 이전 행 값이 남은 미이동 → 호출부 Down 복구.
+                    # ERP 하단 패널은 행 이동 뒤 갱신이 느려 이전 행의 확정값이
+                    # 잠시 남아 보인다(18행 실패 스크린샷: 더블클릭 0.65초 후에도
+                    # 이전 행 값 표시, 몇 초 뒤 비워짐 확인). 미이동으로 단정하기
+                    # 전에 패널이 비워질 때까지 폴링 대기한다.
+                    panel_wait = max(
+                        1.0,
+                        float(
+                            os.getenv("ERP_MGMT_PANEL_REFRESH_WAIT", "8.0") or "8.0"
+                        ),
+                    )
+                    panel_poll = max(
+                        0.2,
+                        float(
+                            os.getenv("ERP_MGMT_PANEL_REFRESH_POLL", "0.5") or "0.5"
+                        ),
+                    )
+                    refresh_deadline = time.time() + panel_wait
+                    while time.time() < refresh_deadline:
+                        time.sleep(panel_poll)
+                        pre_ink = _management_value_visual_ink(x, y)
+                        if _is_popup(pre_ink):
+                            _close_stuck_vendor_popup("pre-refresh")
+                            pre_ink = _management_value_visual_ink(x, y)
+                        if not _is_occupied(pre_ink):
+                            self.logger.info(
+                                f"  [MGMT-XY] {label}: 이전 행 값이 지연 갱신으로 "
+                                f"비워짐(ink={pre_ink}) — 정상 진행합니다."
+                            )
+                            break
+                if _is_occupied(pre_ink):
+                    # 대기 후에도 값이 남아 있으면 진짜 미이동 → 호출부 복구.
                     self.logger.warning(
                         f"  [MGMT-XY] {label}: 클릭 전 관리항목값 셀이 비어 있지 "
                         f"않아 중단합니다(전표 행 미이동 의심, ink={pre_ink})."
@@ -7417,11 +7447,28 @@ class ERPLoginBot:
                     except RuntimeError as fill_exc:
                         recoverable = (
                             "거래처번호 직접 키보드 입력" in str(fill_exc)
-                            and row_geometry_state.get("bottom_scroll_mode")
                             and fill_attempt < fill_attempts - 1
                         )
                         if not recoverable:
                             raise
+                        if not row_geometry_state.get("bottom_scroll_mode"):
+                            # 뷰포트 행(1~23)은 해당 y 더블클릭이 곧 행 선택이므로
+                            # 재더블클릭이 복구다. (이전에는 스크롤 모드만 복구해
+                            # 뷰포트 행은 즉시 실패했다 — 18행 사례.)
+                            self.logger.warning(
+                                f"  [MGMT-XY] {row_no}행 전표 행 미이동 복구: "
+                                f"적요 재더블클릭 "
+                                f"{fill_attempt + 1}/{fill_attempts - 1}"
+                            )
+                            _double_click_form_xy(
+                                summary_x,
+                                current_y,
+                                f"{row_no}행 재선택",
+                                wait=mgmt_summary_open_wait,
+                            )
+                            if mgmt_after_summary_open_wait:
+                                time.sleep(mgmt_after_summary_open_wait)
+                            continue
                         anchor_y = int(
                             row_geometry_state.get("scroll_anchor_y")
                             or (row_geometry_state.get("snapshot") or {}).get(
@@ -9595,10 +9642,16 @@ class ERPLoginBot:
             # 추측하지 않고 합계 안정으로 자동 감지한다.
             if str(os.getenv("ERP_WAIT_PASTE_TOTAL_STABLE", "1") or "1").strip() not in ("0", "false", "False"):
                 try:
-                    tb_x = int(float(os.getenv("ERP_TOTAL_BOX_X", "200") or "200"))
-                    tb_y = int(float(os.getenv("ERP_TOTAL_BOX_Y", "897") or "897"))
-                    tb_w = int(float(os.getenv("ERP_TOTAL_BOX_W", "150") or "150"))
-                    tb_h = int(float(os.getenv("ERP_TOTAL_BOX_H", "18") or "18"))
+                    # 실기기(1920x1080) 실패 스크린샷 실측: 하단 원화 차변합계
+                    # 박스는 (110,936) 160x17. 숫자는 밝기 190~199의 연회색이라
+                    # 문턱 215가 필요하다(배경 230+와 분리). 매2픽셀(짝수 좌표)
+                    # 샘플은 패널 배경 디더링을 피하므로 유지 — 완성 합계 실측
+                    # ink=34, 빈 박스 0.
+                    tb_x = int(float(os.getenv("ERP_TOTAL_BOX_X", "110") or "110"))
+                    tb_y = int(float(os.getenv("ERP_TOTAL_BOX_Y", "936") or "936"))
+                    tb_w = int(float(os.getenv("ERP_TOTAL_BOX_W", "160") or "160"))
+                    tb_h = int(float(os.getenv("ERP_TOTAL_BOX_H", "17") or "17"))
+                    tb_thr = int(float(os.getenv("ERP_PASTE_TOTAL_INK_THR", "215") or "215"))
 
                     def _total_box_ink():
                         img = pyautogui.screenshot(region=(tb_x, tb_y, tb_w, tb_h))
@@ -9607,7 +9660,7 @@ class ERPLoginBot:
                         for yy in range(0, h0, 2):
                             for xx in range(0, w0, 2):
                                 r0, g0, b0 = img.getpixel((xx, yy))[:3]
-                                if max(r0, g0, b0) < 125:
+                                if max(r0, g0, b0) < tb_thr:
                                     cnt += 1
                         return cnt
 
@@ -9616,10 +9669,11 @@ class ERPLoginBot:
                     stable_need = max(2, int(float(os.getenv("ERP_PASTE_TOTAL_STABLE_COUNT", "3") or "3")))
                     poll = max(1.0, float(os.getenv("ERP_PASTE_TOTAL_POLL", "2.0") or "2.0"))
                     # 붙여넣기 중에는 합계가 0(또는 빈칸)이라 잉크가 매우 작다.
-                    # 완료 시 최종 합계(예: 1,018,207,215)로 바뀌며 잉크가 급증한다.
+                    # 완료 시 최종 합계(예: 1,018,207,215)로 바뀌며 잉크가 급증한다
+                    # (실측: 완성 합계 34, 빈 박스 0, "0" 한 글자 ~수 픽셀).
                     # "0"의 작은 잉크를 완료로 오탐하지 않도록 최소 잉크 문턱을 둔다
                     # (여러 자리 숫자만 통과). ink_tol은 안티앨리어싱 미세 흔들림 허용.
-                    min_ink = int(float(os.getenv("ERP_PASTE_TOTAL_MIN_INK", "40") or "40"))
+                    min_ink = int(float(os.getenv("ERP_PASTE_TOTAL_MIN_INK", "20") or "20"))
                     ink_tol = int(float(os.getenv("ERP_PASTE_TOTAL_INK_TOL", "2") or "2"))
                     time.sleep(min_wait)
                     deadline = time.time() + total_timeout
