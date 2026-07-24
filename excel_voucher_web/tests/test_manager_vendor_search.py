@@ -1156,7 +1156,8 @@ def test_row_advance_recovery_lives_in_coord_fill_scope():
     coord_region = source[coord_scope_start:]
     recoverable_at = coord_region.index("거래처번호 직접 키보드 입력")
     assert 'if not recoverable:' in coord_region
-    assert "bottom_scroll_mode" in coord_region[recoverable_at : recoverable_at + 400]
+    # Ctrl+Home 재탐색 블록이 추가되어 검사 창을 넓힌다(스크롤 모드 분기 보존 확인).
+    assert "bottom_scroll_mode" in coord_region[recoverable_at : recoverable_at + 20000]
     assert "pyautogui.press('down')" in coord_region
 
 
@@ -5220,3 +5221,58 @@ def test_viewport_rows_also_recover_from_missed_advance():
     rec_block = source[rec_at:rec_at + 220]
     assert "bottom_scroll_mode" not in rec_block.split("recoverable")[0]
     assert "fill_attempt < fill_attempts - 1" in rec_block
+
+
+def test_missed_advance_escalates_to_ctrl_home_renavigation():
+    # 86행 사례: ERP가 그리드를 맨 아래(210행)로 돌발 점프시키면 Down
+    # 재전송(가벼운 복구)은 무력하다. 2차부터는 Ctrl+Home으로 1행 복귀 후
+    # Down×(row_no-1)로 목표 행까지 결정적으로 재탐색해야 한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    coord_scope_start = source.index("def _fill_management_items_by_coord")
+    renav_at = source.index("Ctrl+Home 재탐색")
+    assert renav_at > coord_scope_start
+
+    rec_at = source.index('"거래처번호 직접 키보드 입력" in str(fill_exc)')
+    block = source[rec_at:rec_at + 20000]
+    # 재탐색은 가벼운 복구(1차) 다음(2차 이상)에만 발동한다.
+    assert "if fill_attempt >= 1:" in block
+    # Ctrl+Home → Down 반복 → 재선택 순서.
+    home_at = block.index("pyautogui.hotkey('ctrl', 'home')")
+    downs_at = block.index("for _ in range(row_no - 1):")
+    reselect_at = block.index("재탐색 재선택")
+    assert home_at < downs_at < reselect_at
+    # 뷰포트/스크롤 두 좌표 모두 계산한다.
+    assert "first_row_y + (row_no - 1) * row_height" in block
+    assert '"scroll_anchor_y"' in block or "scroll_anchor_y" in block
+    # 기존 가벼운 복구(재더블클릭·Down 재전송)도 보존된다.
+    assert "적요 재더블클릭" in block
+    assert "Down 재전송" in block
+
+
+def test_renavigation_verifies_arrival_row_by_summary_before_input():
+    # 적대 검증에서 확정된 결함 보완: 재탐색이 Down 유실/돌발 점프 재발로
+    # 엉뚱한 "빈" 행에 착지하면 빈칸 가드를 통과해 다른 행에 거래처가
+    # 입력될 수 있다. 적요(행마다 거래처명이 달라 유일)를 복사해 목표
+    # 행과 대조하고, 일치할 때만 재선택·입력을 진행해야 한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    rec_at = source.index('"거래처번호 직접 키보드 입력" in str(fill_exc)')
+    block = source[rec_at:rec_at + 20000]
+
+    # 검증이 재선택(더블클릭)보다 먼저 온다.
+    verify_at = block.index("재탐색 적요 검증 클릭")
+    reselect_at = block.index("재탐색 재선택")
+    assert verify_at < reselect_at
+    # 적요 유일성 대조: erp_rows의 마지막 탭 필드와 정규화 비교.
+    assert "renav_expected_summary" in block
+    assert "_norm_text(renav_copied)" in block
+    # 불일치·복사 불능이면 재탐색 반복, 소진 시 입력 경로에 절대 들어가지
+    # 않고 즉시 raise(안전 실패). continue로 넘기면 다음 시도의 첫 동작이
+    # 입력 함수 호출이라 잘못 선택된 빈 행에 입력될 수 있다(검증으로 확정).
+    assert "재탐색을 반복합니다" in block
+    assert "잘못된 행 입력을 막기 위해 중단합니다" in block
+    raise_at = block.index("잘못된 행 입력을 막기 위해 중단합니다")
+    assert raise_at < reselect_at
+    assert "ERP_FINANCE_RENAV_VERIFY_RETRIES" in block
+    # 클립보드는 sentinel 가드 + 원복.
+    assert "renav_sentinel" in block
+    assert "pyperclip.copy(renav_old_clip)" in block

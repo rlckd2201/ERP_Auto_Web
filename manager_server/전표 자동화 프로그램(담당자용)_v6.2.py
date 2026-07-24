@@ -7451,6 +7451,172 @@ class ERPLoginBot:
                         )
                         if not recoverable:
                             raise
+                        if fill_attempt >= 1:
+                            # 결정적 재탐색: ERP가 그리드를 어디로 튕겼든(86행
+                            # 사례: 맨 아래 210행으로 돌발 점프해 Down 재전송이
+                            # 무력) Ctrl+Home으로 1행 복귀 후 Down×(row_no-1)로
+                            # 목표 행까지 다시 내려간다. 가벼운 복구(1차)가
+                            # 실패했을 때만 사용한다.
+                            #
+                            # 도착 행 검증: Down 유실/돌발 점프 재발로 엉뚱한
+                            # "빈" 행에 착지하면 빈칸 가드를 통과해 다른 행에
+                            # 거래처가 들어갈 수 있다(적대 검증에서 확정된
+                            # 경로). 적요는 행마다 거래처명이 달라 유일하므로,
+                            # 재선택 전에 적요 셀을 복사해 목표 행과 대조한다.
+                            # 불일치·복사 불능이면 재탐색을 반복하고, 소진되면
+                            # 입력 경로에 절대 들어가지 않고 즉시 안전 실패한다
+                            # (무인 PC — 오염이 실패보다 나쁨). continue로
+                            # 넘기면 다음 시도의 첫 동작이 입력 함수 호출이라
+                            # 잘못 선택된 빈 행에 입력될 수 있다(검증으로 확정).
+                            renav_step_wait = max(
+                                0.05,
+                                float(
+                                    os.getenv(
+                                        "ERP_FINANCE_RENAV_STEP_WAIT", "0.15"
+                                    )
+                                    or "0.15"
+                                ),
+                            )
+                            renav_attempts = max(
+                                1,
+                                int(
+                                    float(
+                                        os.getenv(
+                                            "ERP_FINANCE_RENAV_VERIFY_RETRIES",
+                                            "2",
+                                        )
+                                        or "2"
+                                    )
+                                ),
+                            )
+                            renav_expected_summary = ""
+                            if 1 <= row_no <= len(erp_rows):
+                                renav_cols = str(
+                                    erp_rows[row_no - 1] or ""
+                                ).split('\t')
+                                if renav_cols:
+                                    renav_expected_summary = renav_cols[-1].strip()
+                            renav_verified = False
+                            renav_copied = ""
+                            renav_y = int(current_y)
+                            for renav_try in range(renav_attempts):
+                                self.logger.warning(
+                                    f"  [MGMT-XY] {row_no}행 전표 행 미이동 복구: "
+                                    f"Ctrl+Home 재탐색 "
+                                    f"{fill_attempt + 1}/{fill_attempts - 1} "
+                                    f"(반복 {renav_try + 1}/{renav_attempts})"
+                                )
+                                _click_form_xy(
+                                    summary_x,
+                                    first_row_y,
+                                    f"{row_no}행 재탐색 기준 클릭",
+                                    wait=mgmt_key_wait,
+                                )
+                                _release_modifiers(
+                                    f"{row_no}행 재탐색 Ctrl+Home 직전",
+                                    wait=False,
+                                )
+                                pyautogui.hotkey('ctrl', 'home')
+                                _release_modifiers(
+                                    f"{row_no}행 재탐색 Ctrl+Home 직후",
+                                    wait=False,
+                                )
+                                time.sleep(finance_row_advance_settle_wait)
+                                for _ in range(row_no - 1):
+                                    pyautogui.press('down')
+                                    time.sleep(renav_step_wait)
+                                time.sleep(finance_row_advance_settle_wait)
+                                if row_geometry_state.get("bottom_scroll_mode"):
+                                    renav_y = int(
+                                        row_geometry_state.get("scroll_anchor_y")
+                                        or (
+                                            row_geometry_state.get("snapshot")
+                                            or {}
+                                        ).get("last_full_y")
+                                        or current_y
+                                    )
+                                else:
+                                    renav_y = (
+                                        first_row_y + (row_no - 1) * row_height
+                                    )
+                                if not renav_expected_summary:
+                                    # 적요가 없으면 대조 불가 — 기존 동작 유지.
+                                    renav_verified = True
+                                    break
+                                renav_old_clip = None
+                                try:
+                                    renav_old_clip = pyperclip.paste()
+                                except Exception:
+                                    renav_old_clip = None
+                                try:
+                                    _click_form_xy(
+                                        summary_x,
+                                        renav_y,
+                                        f"{row_no}행 재탐색 적요 검증 클릭",
+                                        wait=mgmt_key_wait,
+                                    )
+                                    renav_sentinel = (
+                                        f"__ERP_RENAV_VERIFY_{row_no}__"
+                                    )
+                                    for _ in range(3):
+                                        pyperclip.copy(renav_sentinel)
+                                        _release_modifiers(
+                                            f"{row_no}행 재탐색 적요 복사",
+                                            wait=False,
+                                        )
+                                        pyautogui.hotkey('ctrl', 'c')
+                                        time.sleep(max(0.15, mgmt_key_wait))
+                                        renav_copied = str(
+                                            pyperclip.paste() or ""
+                                        )
+                                        if renav_copied != renav_sentinel:
+                                            break
+                                    if (
+                                        renav_copied
+                                        and renav_copied != renav_sentinel
+                                        and _norm_text(renav_copied)
+                                        == _norm_text(renav_expected_summary)
+                                    ):
+                                        renav_verified = True
+                                except Exception as renav_verify_exc:
+                                    self.logger.warning(
+                                        f"  [MGMT-XY] {row_no}행 재탐색 적요 "
+                                        f"검증 실패: {renav_verify_exc}"
+                                    )
+                                finally:
+                                    if renav_old_clip is not None:
+                                        try:
+                                            pyperclip.copy(renav_old_clip)
+                                        except Exception:
+                                            pass
+                                if renav_verified:
+                                    break
+                                self.logger.warning(
+                                    f"  [MGMT-XY] {row_no}행 재탐색 도착 행 "
+                                    f"불일치 — 재탐색을 반복합니다. "
+                                    f"expected={renav_expected_summary!r}, "
+                                    f"copied={renav_copied[:80]!r}"
+                                )
+                            if not renav_verified:
+                                raise RuntimeError(
+                                    f"{row_no}행 재탐색 도착 행 검증에 실패했습니다"
+                                    f"(적요 불일치, copied={renav_copied[:60]!r}). "
+                                    "잘못된 행 입력을 막기 위해 중단합니다."
+                                )
+                            self.logger.info(
+                                f"  [MGMT-XY] {row_no}행 재탐색 도착 행 확인: "
+                                f"적요 일치({renav_expected_summary[:40]!r})"
+                            )
+                            _double_click_form_xy(
+                                summary_x,
+                                renav_y,
+                                f"{row_no}행 재탐색 재선택",
+                                wait=mgmt_summary_open_wait,
+                            )
+                            if mgmt_after_summary_open_wait:
+                                time.sleep(mgmt_after_summary_open_wait)
+                            current_y = renav_y
+                            continue
                         if not row_geometry_state.get("bottom_scroll_mode"):
                             # 뷰포트 행(1~23)은 해당 y 더블클릭이 곧 행 선택이므로
                             # 재더블클릭이 복구다. (이전에는 스크롤 모드만 복구해
