@@ -5569,52 +5569,103 @@ class ERPLoginBot:
                         f"{vendor_code!r}"
                     )
                     return False
-                # 새 행의 관리항목값 셀은 비어 있어야 한다. 편집 상태의 셀은
-                # 글자가 선택 반전으로 그려져 잉크가 잡히지 않을 수 있으므로
-                # 셀을 클릭하기 전(표시 상태)에 검사한다. 이전 행 값이 남아
-                # 보이면 전표 행이 이동하지 않은 것이다(Down 키 유실 등).
-                # 새 행의 관리항목값 셀은 비어 있어야 한다. 이전 행 값이 남아
-                # 보이면 전표 행이 이동하지 않은 것이므로 즉시 중단한다.
-                # (미이동 자동 복구는 요약 앵커가 있는 호출부 루프에서 한다.)
+
+                # 값 셀 잉크로 상태를 구분한다.
+                #  - 비어 있음: 정상(입력 가능)
+                #  - 적은/중간 잉크: 이전 행 값 잔존(전표 행 미이동) → 호출부 Down 복구
+                #  - 매우 큰 잉크: 거래처ds 팝업이 값 셀을 덮은 상태 → ESC로 닫는다
+                popup_ink_min = max(
+                    400,
+                    int(float(os.getenv("ERP_FINANCE_POPUP_INK_MIN", "600") or "600")),
+                )
+
+                def _is_occupied(ink):
+                    return ink[0] >= 6 and ink[1] >= 3 and ink[2] >= 3 and ink[3] >= 8
+
+                def _is_popup(ink):
+                    return ink[0] >= popup_ink_min
+
+                def _close_stuck_vendor_popup(tag):
+                    # 거래처ds 팝업만 ESC로 닫는다. UIA 탐색은 하지 않는다.
+                    for _ in range(3):
+                        _release_modifiers(f"{label} ESC {tag}", wait=False)
+                        pyautogui.press('esc')
+                        time.sleep(max(0.40, mgmt_focus_wait))
+                        if not _is_popup(_management_value_visual_ink(x, y)):
+                            return True
+                    return False
+
                 pre_ink = _management_value_visual_ink(x, y)
-                if (
-                    pre_ink[0] >= 6
-                    and pre_ink[1] >= 3
-                    and pre_ink[2] >= 3
-                    and pre_ink[3] >= 8
-                ):
+                if _is_popup(pre_ink):
+                    # 이전 행의 F9 확정이 실패해 거래처ds 팝업이 남아 있다.
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 입력 전 거래처ds 팝업 감지, "
+                        f"ESC로 닫습니다(ink={pre_ink})."
+                    )
+                    _close_stuck_vendor_popup("pre")
+                    pre_ink = _management_value_visual_ink(x, y)
+                if _is_occupied(pre_ink):
+                    # 팝업이 아니라 이전 행 값이 남은 미이동 → 호출부 Down 복구.
                     self.logger.warning(
                         f"  [MGMT-XY] {label}: 클릭 전 관리항목값 셀이 비어 있지 "
                         f"않아 중단합니다(전표 행 미이동 의심, ink={pre_ink})."
                     )
                     return False
-                _click_form_xy(x, y, label, wait=mgmt_click_wait)
-                _release_modifiers(f"{label} 클릭 후", wait=False)
-                time.sleep(max(0.20, mgmt_focus_wait))
+
                 type_interval = max(
                     0.10,
                     float(os.getenv("ERP_MGMT_VENDOR_TYPE_INTERVAL", "0.15") or "0.15"),
                 )
-                if not _type_vendor_code(
-                    vendor_code,
-                    label,
-                    interval=type_interval,
-                ):
-                    return False
-                _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
-                time.sleep(max(0.25, float(paste_settle_wait)))
-                # 사용자 확정 흐름: 거래처번호 입력 → F9 → Enter.
-                # F9가 입력된 번호로 거래처 조회를 명시적으로 실행하게 한 뒤
-                # Enter로 확정한다.
-                pyautogui.press('f9')
                 f9_wait = max(
                     0.35,
                     float(os.getenv("ERP_FINANCE_VENDOR_F9_WAIT", "1.00") or "1.00"),
                 )
-                time.sleep(f9_wait)
-                pyautogui.press('enter')
-                time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
-                return True
+                confirm_attempts = 1 + max(
+                    0,
+                    int(
+                        float(
+                            os.getenv("ERP_FINANCE_VENDOR_CONFIRM_RETRIES", "2") or "2"
+                        )
+                    ),
+                )
+                # 사용자 확정 흐름: 빈칸 클릭 → 입력 → F9 → 1초 대기 → Enter.
+                # Enter 후 거래처ds 팝업이 닫혔는지(값 셀이 팝업으로 덮이지
+                # 않았는지) 확인하고, 안 닫혔으면 ESC 후 다시 시도한다. 이러면
+                # 어떤 행도 열린 팝업을 남기지 않아 이후 행 밀림/헛돎이 없다.
+                for confirm_attempt in range(confirm_attempts):
+                    _click_form_xy(x, y, label, wait=mgmt_click_wait)
+                    _release_modifiers(f"{label} 클릭 후", wait=False)
+                    time.sleep(max(0.20, mgmt_focus_wait))
+                    if not _type_vendor_code(vendor_code, label, interval=type_interval):
+                        return False
+                    _release_modifiers(f"{label} 거래처번호 키보드 입력 후", wait=False)
+                    time.sleep(max(0.25, float(paste_settle_wait)))
+                    pyautogui.press('f9')
+                    time.sleep(f9_wait)
+                    pyautogui.press('enter')
+                    time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
+                    post_ink = _management_value_visual_ink(x, y)
+                    if not _is_popup(post_ink):
+                        # 팝업이 닫힘 = 확정 완료(값 셀에 이름(코드) 표시).
+                        return True
+                    if confirm_attempt < confirm_attempts - 1:
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: Enter 후에도 거래처ds 팝업이 "
+                            f"남아 ESC 후 재확정 {confirm_attempt + 1}/"
+                            f"{confirm_attempts - 1} (ink={post_ink})."
+                        )
+                        if not _close_stuck_vendor_popup(f"post{confirm_attempt + 1}"):
+                            self.logger.warning(
+                                f"  [MGMT-XY] {label}: 거래처ds 팝업이 닫히지 않아 "
+                                "중단합니다."
+                            )
+                            return False
+                self.logger.warning(
+                    f"  [MGMT-XY] {label}: 거래처 확정 후에도 거래처ds 팝업이 "
+                    "남아 중단합니다."
+                )
+                _close_stuck_vendor_popup("final")
+                return False
 
             def _input_vendor_by_number_keyboard(x, y, label, vendor_code):
                 return _input_vendor_by_popup_keyboard(x, y, label, vendor_code, "거래처번호", 2)

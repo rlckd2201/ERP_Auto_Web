@@ -999,6 +999,114 @@ def test_finance_direct_vendor_sends_f9_then_single_enter():
     assert pressed == ["f9", "enter"]
 
 
+def test_finance_direct_vendor_escapes_stuck_popup_then_confirms():
+    # 첫 Enter 후 팝업이 남고(ink 2324), ESC로 닫힌 뒤 재확정에 성공한다.
+    pressed = []
+    ink_seq = iter([
+        (0, 0, 0, 0),        # 입력 전: 비어 있음
+        (2324, 14, 166, 348),  # Enter 후: 팝업이 값 셀을 덮음
+        (0, 0, 0, 0),        # ESC 후: 팝업 닫힘
+        (150, 8, 40, 120),   # 재확정 후: 이름(코드) 표시(팝업 아님)
+    ])
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": lambda _x, _y: next(ink_seq, (0, 0, 0, 0)),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 756, "NY018", "169행 거래처", 0.0, 0.0
+    ) is True
+    # 팝업이 남으면 ESC로 닫고(f9→enter→esc) 다시 확정(f9→enter)한다.
+    assert pressed == ["f9", "enter", "esc", "f9", "enter"]
+
+
+def test_finance_direct_vendor_fails_when_popup_never_closes():
+    # Enter 후 팝업(2324)이 계속 남아 ESC로도 닫히지 않으면 중단한다.
+    pressed = []
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            # 입력 전만 비어 있고 이후로는 계속 팝업(2324).
+            "_management_value_visual_ink": (
+                lambda _x, _y, _c={"n": 0}: (0, 0, 0, 0)
+                if _c.__setitem__("n", _c["n"] + 1) or _c["n"] == 1
+                else (2324, 14, 166, 348)
+            ),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 756, "NY018", "169행 거래처", 0.0, 0.0
+    ) is False
+    # 팝업이 닫히지 않으면 ESC를 시도하고 실패로 중단한다.
+    assert "esc" in pressed
+
+
+def test_finance_direct_vendor_closes_leftover_popup_before_input():
+    # 입력 전 값 셀이 팝업(2324)으로 덮여 있으면 ESC로 닫고 진행한다.
+    pressed = []
+    ink_seq = iter([
+        (2324, 14, 166, 348),  # 입력 전: 이전 행 팝업이 남음
+        (0, 0, 0, 0),        # ESC 후: 닫힘
+        (0, 0, 0, 0),        # 재검사(비어 있음)
+        (150, 8, 40, 120),   # Enter 후: 확정
+    ])
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": lambda _x, _y: next(ink_seq, (0, 0, 0, 0)),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 756, "PT032", "170행 거래처", 0.0, 0.0
+    ) is True
+    # 입력 전 팝업을 먼저 ESC로 닫고 그 다음 정상 입력(f9→enter)한다.
+    assert pressed[0] == "esc"
+    assert pressed[-2:] == ["f9", "enter"]
+
+
 def test_row_advance_recovery_lives_in_coord_fill_scope():
     # 전표 행 미이동 복구(Down 재전송)는 요약 앵커/스크롤 상태가 있는
     # _fill_management_items_by_coord 루프 안에 있어야 한다. 입력 함수
