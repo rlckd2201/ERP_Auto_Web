@@ -2120,32 +2120,12 @@ class ERPLoginBot:
             except Exception as e:
                 self.logger.warning(f"  [진단] 덤프 실패: {e}")
 
-        # [신규] 버튼. 두 복구 모드에서는 현재 붙여넣은 전표를 보존해야 하므로 절대 누르지 않습니다.
-        if not resume_existing_voucher:
-            try:
-                btn_new = None
-                for b in main_win.descendants(control_type='Button'):
-                    try:
-                        aid = b.element_info.automation_id or ''
-                        nm  = b.window_text() or ''
-                        nm_norm = _norm_text(nm)
-                        if "복사" in nm_norm or "저장" in nm_norm:
-                            continue
-                        if aid == 'New' or nm_norm == _norm_text('신규'):
-                            btn_new = b; break
-                    except: pass
-                if btn_new and btn_new.is_visible():
-                    try:
-                        new_click_count = int(str(os.getenv("ERP_NEW_CLICK_COUNT", "1") or "1").strip())
-                    except:
-                        new_click_count = 1
-                    new_click_count = max(1, min(2, new_click_count))
-                    for idx in range(new_click_count):
-                        btn_new.click_input()
-                        self.logger.info(f"  ✅ [신규] 클릭 ({idx + 1}/{new_click_count})")
-                        time.sleep(max(0.03, float(os.getenv("ERP_NEW_FORM_WAIT", "0.12") or "0.12")))
-            except Exception as e:
-                self.logger.warning(f"  [신규] 클릭 실패: {e}")
+        # [신규] 버튼은 여기서 누르지 않는다. 이 지점의 클릭은 그 직후 뜨는
+        # "저장하시겠습니까" 확인창을 처리할 코드가 없어, 그 창이 뒤에서
+        # 시작 정리 로직과 만나 Enter로 닫힐 수 있었다(= 미저장 전표가 저장되거나
+        # 파기됨). 대신 _ensure_fresh_voucher_form()이 화면이 실제로 더러울
+        # 때만 [신규]를 누르고 확인창을 Enter 없이 안전하게 처리한다.
+        # 두 복구 모드에서는 현재 붙여넣은 전표를 보존해야 하므로 어차피 누르지 않는다.
 
         def _safe_paste(text):
             pyperclip.copy(text)
@@ -7852,6 +7832,9 @@ class ERPLoginBot:
                                     f"copied={renav_copied[:80]!r}"
                                 )
                             if not renav_verified:
+                                _save_erp_message_screenshot(
+                                    f"renav_fail_row{row_no}"
+                                )
                                 raise RuntimeError(
                                     f"{row_no}행 재탐색 도착 행 검증에 실패했습니다"
                                     f"(적요 불일치, copied={renav_copied[:60]!r}). "
@@ -8579,6 +8562,58 @@ class ERPLoginBot:
                 line for line in body_lines if line and line != title
             ]
             return not meaningful
+
+        def _close_erp_message_with_escape(snapshot, label="Message"):
+            """판독 불가 Message를 ESC(=취소)로 닫아 본다.
+
+            ESC는 어떤 확인창에서도 "취소"이므로 저장도 파기도 하지 않는다.
+            Enter(기본 버튼 수락)보다 항상 안전하므로 먼저 시도한다.
+            """
+            handle = _erp_message_handle(snapshot)
+            if not handle:
+                return False
+            attempts = max(
+                1, min(5, int(float(os.getenv("ERP_MESSAGE_ESC_RETRIES", "2") or "2")))
+            )
+            win = (snapshot or {}).get("window")
+            for attempt in range(1, attempts + 1):
+                try:
+                    if win is not None:
+                        win.set_focus()
+                except Exception:
+                    pass
+                time.sleep(max(0.3, min(ERP_SETTLE_WAIT, 1.0)))
+                try:
+                    foreground = int(
+                        ctypes.windll.user32.GetForegroundWindow() or 0
+                    )
+                except Exception:
+                    foreground = 0
+                if foreground != handle:
+                    self.logger.warning(
+                        f"  [ERP-MESSAGE] {label}가 최전면임을 확인하지 못해 "
+                        "ESC를 보내지 않습니다."
+                    )
+                    return False
+                _release_modifiers(f"{label} ESC 직전", wait=False)
+                pyautogui.press("esc")
+                time.sleep(max(ERP_SETTLE_WAIT, 1.0))
+                try:
+                    alive = bool(ctypes.windll.user32.IsWindow(handle)) and bool(
+                        ctypes.windll.user32.IsWindowVisible(handle)
+                    )
+                except Exception:
+                    alive = True
+                if not alive:
+                    self.logger.info(
+                        f"  [ERP-MESSAGE] {label} ESC로 닫힘 확인"
+                        f"(handle={handle}, 시도 {attempt}/{attempts})"
+                    )
+                    return True
+            self.logger.info(
+                f"  [ERP-MESSAGE] {label}가 ESC로 닫히지 않았습니다."
+            )
+            return False
 
         def _close_erp_message_with_enter(snapshot, label="Message"):
             """판독 불가 Message를 Enter로 닫고 실제로 닫혔는지 확인한다.
@@ -10210,11 +10245,388 @@ class ERPLoginBot:
                 self.logger.warning(f"  [SAVE/PRINT] 자동 저장/출력 흐름 실패: {e}")
                 raise
 
+        def _debit_total_ink():
+            """하단 원화 차변합계 박스의 잉크 픽셀 수. 판독 실패 시 -1.
+
+            실측(ERP 창 기준): 박스는 창 좌상단 기준 (110,936) 160x17이고
+            숫자는 밝기 190~199의 연회색이라 문턱 215가 필요하다. 빈 전표는
+            0~5, 완성 합계는 34 수준이다. 창이 (0,0)에 없을 수도 있으므로
+            반드시 창 좌표를 더해 절대 좌표로 변환해 읽는다.
+            """
+            tb_x = int(float(os.getenv("ERP_TOTAL_BOX_X", "110") or "110"))
+            tb_y = int(float(os.getenv("ERP_TOTAL_BOX_Y", "936") or "936"))
+            tb_w = int(float(os.getenv("ERP_TOTAL_BOX_W", "160") or "160"))
+            tb_h = int(float(os.getenv("ERP_TOTAL_BOX_H", "17") or "17"))
+            tb_thr = int(float(os.getenv("ERP_PASTE_TOTAL_INK_THR", "215") or "215"))
+            try:
+                main_r = _main_rect()
+                abs_x = int(main_r.left) + tb_x
+                abs_y = int(main_r.top) + tb_y
+                shot = pyautogui.screenshot(region=(abs_x, abs_y, tb_w, tb_h))
+            except Exception as exc:
+                self.logger.debug(f"  [FORM-XY] 차변합계 판독 실패: {exc}")
+                return -1
+            count = 0
+            width, height = shot.size
+            for yy in range(0, height, 2):
+                for xx in range(0, width, 2):
+                    r0, g0, b0 = shot.getpixel((xx, yy))[:3]
+                    if max(r0, g0, b0) < tb_thr:
+                        count += 1
+            return count
+
+        def _probe_grid_cell_text(rel_x, rel_y, label):
+            """그리드 셀 내용을 클립보드로 읽는다. 빈 셀/판독 실패면 ''."""
+            old_clip = None
+            try:
+                old_clip = pyperclip.paste()
+            except Exception:
+                old_clip = None
+            try:
+                sentinel = f"__ERP_CELL_PROBE_{int(rel_x)}_{int(rel_y)}__"
+                _click_form_xy(rel_x, rel_y, label, wait=mgmt_key_wait)
+                for _ in range(3):
+                    pyperclip.copy(sentinel)
+                    _release_modifiers(f"{label} 복사", wait=False)
+                    pyautogui.hotkey("ctrl", "c")
+                    time.sleep(max(0.15, mgmt_key_wait))
+                    copied = str(pyperclip.paste() or "")
+                    if copied != sentinel:
+                        return copied.strip()
+                return ""
+            except Exception as exc:
+                self.logger.warning(f"  [FORM-XY] {label} 판독 실패: {exc}")
+                return ""
+            finally:
+                if old_clip is not None:
+                    try:
+                        pyperclip.copy(old_clip)
+                    except Exception:
+                        pass
+                try:
+                    mgmt_clipboard_cache["text"] = None
+                except Exception:
+                    pass
+
+        def _voucher_form_is_dirty():
+            """화면에 이전 전표가 남아 있는지 판정한다. (dirty, 근거) 반환.
+
+            합계 잉크 하나로는 부족하다. 직전 실행이 행만 추가하고 죽으면
+            합계는 0인데 빈 행 209개가 남아 있어, 그 위에 또 붙여넣으면 행이
+            어긋난 전표가 만들어진다. 그래서 1행 적요 셀 내용도 함께 본다.
+            판독이 불가능하면 (None, 사유)로 알려 호출부가 fail-closed 하도록
+            한다.
+            """
+            fresh_max = int(
+                float(os.getenv("ERP_FRESH_TOTAL_MAX_INK", "12") or "12")
+            )
+            ink = _debit_total_ink()
+            if ink < 0:
+                return None, "차변합계 판독 불가"
+            if ink > fresh_max:
+                return True, f"차변합계 ink={ink}"
+            summary_text = _probe_grid_cell_text(
+                int(float(os.getenv("ERP_GRID_SUMMARY_X", "970") or "970")),
+                int(float(os.getenv("ERP_GRID_FIRST_ROW_Y", "239") or "239")),
+                "새 전표 확인용 1행 적요",
+            )
+            if summary_text:
+                return True, f"1행 적요={summary_text[:40]!r}"
+            # 직전 실행이 행추가만 하고 죽으면 합계도 0이고 적요도 비어 있지만
+            # 빈 행 209개가 남는다. 그 위에 또 붙여넣으면 행이 어긋나므로
+            # 아래쪽 행의 행번호 셀을 읽어 잔존 행을 잡는다(새 전표는 1행뿐).
+            row_no_text = _probe_grid_cell_text(
+                int(float(os.getenv("ERP_GRID_ROWNO_X", "196") or "196")),
+                int(float(os.getenv("ERP_GRID_LAST_ROW_Y", "711") or "711")),
+                "새 전표 확인용 하단 행번호",
+            )
+            if row_no_text:
+                return True, f"하단 행번호={row_no_text[:20]!r}(잔존 행)"
+            return False, (
+                f"차변합계 ink={ink}, 1행 적요/하단 행번호 비어 있음"
+            )
+
+        def _click_new_voucher_button():
+            """[신규] 버튼을 좌표+UIA 이름 확인으로 누른다.
+
+            기존 UIA descendants 탐색은 GDI 모드에서 버튼을 못 찾으면 로그도
+            없이 조용히 건너뛴다(실측: 작업 1d9829644a95에서 신규가 눌리지
+            않아 이전 전표 위에 붙여넣기를 시도했다). 저장 버튼과 같은
+            from_point 방식으로 확실히 누르고 결과를 남긴다. 무인 PC가 오래
+            멈추지 않도록 탐색에 시간 예산을 둔다.
+            """
+            configured = str(
+                os.getenv("ERP_NEW_BUTTON_XY", "115,80") or "115,80"
+            ).strip()
+            cy = 80
+            candidates = []
+            try:
+                cx, cy = [int(v.strip()) for v in configured.split(",")[:2]]
+                candidates.append((cx, cy))
+            except Exception:
+                cy = 80
+            # 실측(1920x1080): 툴바 y=80, 신규 텍스트 106~125, 조회 183, 저장 253.
+            for scan_x in range(99, 160, 8):
+                if (scan_x, cy) not in candidates:
+                    candidates.append((scan_x, cy))
+            budget = max(
+                2.0, float(os.getenv("ERP_NEW_BUTTON_SCAN_BUDGET", "12") or "12")
+            )
+            deadline = time.time() + budget
+            main_r = _main_rect()
+            for rel_x, rel_y in candidates:
+                if time.time() >= deadline:
+                    self.logger.warning(
+                        "  [FORM-XY] [신규] 버튼 탐색 시간 예산을 초과했습니다."
+                    )
+                    break
+                try:
+                    control = Desktop(backend="uia").from_point(
+                        int(main_r.left) + int(rel_x), int(main_r.top) + int(rel_y)
+                    )
+                except Exception:
+                    continue
+                names = []
+                for _depth in range(4):
+                    if control is None:
+                        break
+                    for getter in (
+                        lambda: control.window_text(),
+                        lambda: getattr(
+                            getattr(control, "element_info", None), "name", ""
+                        ),
+                        lambda: getattr(
+                            getattr(control, "element_info", None),
+                            "automation_id",
+                            "",
+                        ),
+                    ):
+                        try:
+                            value = re.sub(r"\s+", "", str(getter() or "")).lower()
+                        except Exception:
+                            value = ""
+                        if value and value not in names:
+                            names.append(value)
+                    try:
+                        control = control.parent()
+                    except Exception:
+                        break
+                # 기존 탐색과 같은 폭으로 인정한다: automation_id 'New',
+                # '신규', '신규(F2)'처럼 장식이 붙은 라벨.
+                if any(
+                    name == "new"
+                    or name == "신규"
+                    or re.fullmatch(r"신규(?:\([^)]*\)|\[[^\]]*\])", name)
+                    for name in names
+                ):
+                    _click_form_xy(rel_x, rel_y, "[신규] 버튼", wait=ERP_SETTLE_WAIT)
+                    self.logger.info(
+                        f"  [FORM-XY] [신규] 버튼 확인 후 클릭: rel=({rel_x},{rel_y})"
+                    )
+                    return True
+            self.logger.warning(
+                "  [FORM-XY] [신규] 버튼을 좌표에서 확인하지 못했습니다."
+            )
+            return False
+
+        def _handle_new_voucher_prompt():
+            """[신규] 직후 뜨는 확인창을 안전하게 처리한다.
+
+            이 창은 대개 미저장 전표를 "저장하시겠습니까"라고 묻는다. 여기서
+            Enter(기본 버튼)를 누르면 쓰레기 전표가 실제로 저장되거나 반대로
+            데이터가 파기될 수 있다 — 어느 쪽인지 알 수 없으므로 절대 Enter를
+            쓰지 않는다. 읽히면 '아니오/취소' 버튼을 이름으로 눌러 폐기하고,
+            읽을 수 없으면 화면을 남기고 중단한다.
+            """
+            snapshot = _find_erp_message_snapshot()
+            if not snapshot:
+                return
+            if _erp_message_is_unreadable(snapshot):
+                _save_erp_message_screenshot("new_voucher_prompt")
+                # ESC는 어떤 확인창에서도 "취소"라 저장도 파기도 하지 않는다.
+                # 모달을 남기면 다음 실행이 그 창을 만나 Enter로 닫을 수 있으므로
+                # 반드시 되돌려 놓고 중단한다.
+                closed = _close_erp_message_with_escape(snapshot, "[신규] 확인창")
+                raise RuntimeError(
+                    "[신규] 직후 본문을 읽을 수 없는 확인창이 떠 중단합니다"
+                    f"(ESC 취소={closed}). Enter를 보내면 미저장 전표가 "
+                    "저장되거나 파기될 수 있어 사람이 확인해야 합니다."
+                )
+            compact = _erp_message_compact(snapshot)
+            discard_phrases = (
+                "저장하시겠습니까",
+                "저장 하시겠습니까",
+                "저장할까요",
+                "변경사항",
+            )
+            if any(
+                re.sub(r"\s+", "", phrase).lower() in compact
+                for phrase in discard_phrases
+            ):
+                self.logger.warning(
+                    "  [FORM-XY] [신규] 직후 저장 확인창이 떠 '아니오'로 "
+                    "폐기합니다(이전 실행이 남긴 미저장 전표)."
+                )
+                _dismiss_verified_erp_message(
+                    snapshot,
+                    discard_phrases,
+                    button_labels=("아니오", "no", "취소", "cancel"),
+                    allow_enter_fallback=False,
+                )
+                return
+            _save_erp_message_screenshot("new_voucher_unexpected")
+            raise RuntimeError(
+                "[신규] 직후 예상하지 못한 ERP Message가 표시되어 중단합니다: "
+                f"{snapshot.get('text', '')[:300]}"
+            )
+
+        def _clear_startup_erp_message():
+            """이전 실행이 남긴 Message 모달을 시작 전에 정리한다.
+
+            모달이 떠 있으면 이후 클릭/키가 ERP에 도달하지 않아 빈 화면에
+            입력하는 것과 같아진다. 무인 PC라 사람이 닫아줄 수 없으므로
+            아는 창은 검증형으로 닫고, 본문을 읽을 수 없는 창만 Enter로
+            닫는다(기존 정책 유지).
+            """
+            snapshot = _find_erp_message_snapshot()
+            if not snapshot:
+                return
+            compact = _erp_message_compact(snapshot)
+            known_phrases = (
+                "저장 후 출력해 주십시오.",
+                "저장되었습니다",
+                "저장이 완료되었습니다",
+            )
+            matched = [
+                phrase
+                for phrase in known_phrases
+                if re.sub(r"\s+", "", phrase).lower() in compact
+            ]
+            if matched:
+                self.logger.warning(
+                    "  [FORM-XY] 시작 전 남아 있는 Message를 검증 후 닫습니다: "
+                    f"{matched[0]}"
+                )
+                _dismiss_verified_erp_message(snapshot, tuple(matched))
+                return
+            discard_phrases = (
+                "저장하시겠습니까",
+                "저장 하시겠습니까",
+                "저장할까요",
+                "변경사항",
+            )
+            if any(
+                re.sub(r"\s+", "", phrase).lower() in compact
+                for phrase in discard_phrases
+            ):
+                # 이전 실행이 남긴 미저장 전표에 대한 저장 질문. Enter(기본
+                # 버튼)는 저장/파기 중 무엇인지 알 수 없으므로 '아니오'를
+                # 이름으로 눌러 폐기한다.
+                self.logger.warning(
+                    "  [FORM-XY] 시작 전 저장 확인창을 '아니오'로 폐기합니다."
+                )
+                _dismiss_verified_erp_message(
+                    snapshot,
+                    discard_phrases,
+                    button_labels=("아니오", "no", "취소", "cancel"),
+                    allow_enter_fallback=False,
+                )
+                return
+            if _erp_message_is_unreadable(snapshot):
+                self.logger.warning(
+                    "  [FORM-XY] 시작 전 남아 있는 Message 본문을 읽지 못해 "
+                    f"ESC로 닫아 봅니다: title={snapshot.get('title', '')!r}"
+                )
+                _save_erp_message_screenshot("startup_unreadable_message")
+                if _close_erp_message_with_escape(snapshot, "시작 전 Message"):
+                    return
+                # ESC로 안 닫히는 창은 대개 확인(OK) 단추뿐인 안내창이다.
+                # 다만 화면에 미저장 전표가 있으면 저장 질문일 수 있으므로
+                # Enter를 보내지 않는다(저장/파기 위험).
+                dirty, dirty_reason = _voucher_form_is_dirty()
+                if dirty is not False:
+                    raise RuntimeError(
+                        "시작 전 본문을 읽을 수 없는 Message가 ESC로 닫히지 "
+                        f"않았고 화면에 미저장 전표가 있어 중단합니다({dirty_reason}). "
+                        "Enter를 보내면 그 전표가 저장되거나 파기될 수 있습니다."
+                    )
+                if not _env_flag("ERP_SAVE_UNKNOWN_MESSAGE_ENTER", "1"):
+                    raise RuntimeError(
+                        "시작 전 본문을 읽을 수 없는 Message를 닫지 못해 중단합니다."
+                    )
+                self.logger.warning(
+                    "  [FORM-XY] 빈 전표 화면이라 Enter로 닫습니다."
+                )
+                if not _close_erp_message_with_enter(snapshot, "시작 전 Message"):
+                    raise RuntimeError(
+                        "시작 전 ERP Message를 닫지 못해 중단합니다."
+                    )
+                return
+            _save_erp_message_screenshot("startup_unknown_message")
+            raise RuntimeError(
+                "시작 전 알 수 없는 ERP Message가 열려 있어 중단합니다: "
+                f"{snapshot.get('text', '')[:300]}"
+            )
+
+        def _ensure_fresh_voucher_form():
+            """빈 전표 화면에서 시작하는지 확인하고, 아니면 [신규]로 초기화한다.
+
+            이전 전표가 남아 있으면 붙여넣기 완료 감지가 그 합계를 보고 즉시
+            "완료"로 오판한다(실측: 작업 1d9829644a95는 ink=34로 시작해
+            붙여넣기 중인 그리드에 관리항목 입력을 시작했다). 무인 PC라 사람이
+            치울 수 없으므로 자동으로 초기화하고, 그래도 남아 있으면 중단한다.
+            """
+            if not _env_flag("ERP_ENSURE_FRESH_VOUCHER", "1"):
+                return
+            dirty, reason = _voucher_form_is_dirty()
+            if dirty is None:
+                raise RuntimeError(
+                    f"새 전표 여부를 확인하지 못해 중단합니다({reason}). "
+                    "이전 전표 위에 붙여넣으면 잘못된 전표가 만들어집니다."
+                )
+            if not dirty:
+                self.logger.info(f"  [FORM-XY] 빈 전표 화면 확인: {reason}")
+                return
+            self.logger.warning(
+                f"  [FORM-XY] 이전 전표가 남아 있습니다({reason}). "
+                "[신규]로 초기화합니다."
+            )
+            clicked = _click_new_voucher_button()
+            time.sleep(max(1.0, ERP_SETTLE_WAIT))
+            # [신규] 직후 확인창은 Enter 금지 — 이름으로 '아니오'만 누른다.
+            _handle_new_voucher_prompt()
+            # 210행 전표를 비우고 하단 합계가 다시 그려지는 데 시간이 걸린다.
+            settle_budget = max(
+                2.0, float(os.getenv("ERP_FRESH_SETTLE_WAIT", "20") or "20")
+            )
+            deadline = time.time() + settle_budget
+            last_reason = reason
+            while True:
+                dirty_after, last_reason = _voucher_form_is_dirty()
+                if dirty_after is False:
+                    self.logger.info(
+                        f"  [FORM-XY] [신규] 후 빈 전표 확인: {last_reason}"
+                    )
+                    return
+                if time.time() >= deadline:
+                    break
+                time.sleep(1.0)
+            _save_erp_message_screenshot("fresh_voucher_failed")
+            raise RuntimeError(
+                "이전 전표가 화면에 남아 있어 새 전표로 시작할 수 없습니다"
+                f"({last_reason}, 신규클릭={clicked}). "
+                "이전 전표 위에 붙여넣으면 잘못된 전표가 만들어지므로 중단합니다."
+            )
+
         def _setup_by_coordinates_only():
             nonlocal main_rect_cache
             self._force_erp_window_maximized(main_win, "좌표 전용 폼 세팅 전 ERP 메인 창")
             main_rect_cache = None
             self.logger.info("  [FORM-XY] 좌표 전용 폼 세팅 시작")
+            # 0. 이전 실행이 남긴 모달과 이전 전표를 먼저 정리한다. 이 두 가지가
+            #    남아 있으면 이후 입력이 전부 헛돈다(실측: 작업 1d9829644a95).
+            _clear_startup_erp_message()
+            _ensure_fresh_voucher_form()
             acc_unit_xy = (237, 124)
             slip_unit_xy = (512, 124)
             invoice_date_xy = (237, 149)
@@ -10306,6 +10718,12 @@ class ERPLoginBot:
                     "The voucher grid paste did not reach ERP, so saving was stopped."
                 )
 
+            # 붙여넣기 직전 합계 잉크. 이미 값이 있으면(이전 전표 잔존) 완료
+            # 감지가 그 값을 보고 즉시 통과해 버린다(실측: 작업 1d9829644a95).
+            paste_baseline_ink = _debit_total_ink()
+            self.logger.info(
+                f"  [FORM-XY] 붙여넣기 전 차변합계 ink={paste_baseline_ink}"
+            )
             _paste_grid_until_reflected()
             # ERP는 210행을 한 번에가 아니라 순차적으로(느리게) 붙여넣는다
             # (사용자 실기기 확인). 모든 행이 다 들어가야 하단 관리항목값 칸이
@@ -10319,22 +10737,7 @@ class ERPLoginBot:
                     # 문턱 215가 필요하다(배경 230+와 분리). 매2픽셀(짝수 좌표)
                     # 샘플은 패널 배경 디더링을 피하므로 유지 — 완성 합계 실측
                     # ink=34, 빈 박스 0.
-                    tb_x = int(float(os.getenv("ERP_TOTAL_BOX_X", "110") or "110"))
-                    tb_y = int(float(os.getenv("ERP_TOTAL_BOX_Y", "936") or "936"))
-                    tb_w = int(float(os.getenv("ERP_TOTAL_BOX_W", "160") or "160"))
-                    tb_h = int(float(os.getenv("ERP_TOTAL_BOX_H", "17") or "17"))
-                    tb_thr = int(float(os.getenv("ERP_PASTE_TOTAL_INK_THR", "215") or "215"))
-
-                    def _total_box_ink():
-                        img = pyautogui.screenshot(region=(tb_x, tb_y, tb_w, tb_h))
-                        cnt = 0
-                        w0, h0 = img.size
-                        for yy in range(0, h0, 2):
-                            for xx in range(0, w0, 2):
-                                r0, g0, b0 = img.getpixel((xx, yy))[:3]
-                                if max(r0, g0, b0) < tb_thr:
-                                    cnt += 1
-                        return cnt
+                    _total_box_ink = _debit_total_ink
 
                     min_wait = float(os.getenv("ERP_PASTE_TOTAL_MIN_WAIT", "10") or "10")
                     total_timeout = float(os.getenv("ERP_PASTE_TOTAL_TIMEOUT", "600") or "600")
@@ -10354,6 +10757,19 @@ class ERPLoginBot:
                     detected = False
                     while time.time() < deadline:
                         cur_ink = _total_box_ink()
+                        if (
+                            paste_baseline_ink >= min_ink
+                            and abs(cur_ink - paste_baseline_ink) <= ink_tol
+                        ):
+                            # 붙여넣기 전과 값이 그대로다 = 아직 반영되지 않았다.
+                            # (이전 전표가 남아 있던 경우 여기서 계속 기다린다.)
+                            self.logger.info(
+                                f"  [FORM-XY] 붙여넣기 진행 대기: 차변합계 ink="
+                                f"{cur_ink} (붙여넣기 전 {paste_baseline_ink}과 동일)"
+                            )
+                            prev_ink = cur_ink
+                            time.sleep(poll)
+                            continue
                         if cur_ink >= min_ink and abs(cur_ink - prev_ink) <= ink_tol:
                             stable += 1
                             if stable >= stable_need:
@@ -10372,6 +10788,21 @@ class ERPLoginBot:
                         prev_ink = cur_ink
                         time.sleep(poll)
                     if not detected:
+                        final_ink = _total_box_ink()
+                        if (
+                            paste_baseline_ink >= min_ink
+                            and abs(final_ink - paste_baseline_ink) <= ink_tol
+                        ):
+                            # 붙여넣기 전 값에서 한 번도 변하지 않았다 = 이 화면에
+                            # 붙여넣기가 반영되지 않았다. 그대로 진행하면 이전
+                            # 전표에 관리항목을 입력하게 되므로 중단한다.
+                            _save_erp_message_screenshot("paste_not_reflected")
+                            raise RuntimeError(
+                                "붙여넣기가 화면에 반영되지 않았습니다"
+                                f"(차변합계 ink={final_ink}, 붙여넣기 전 "
+                                f"{paste_baseline_ink}에서 변화 없음). "
+                                "이전 전표에 입력하지 않도록 중단합니다."
+                            )
                         self.logger.warning(
                             "  [FORM-XY] 붙여넣기 합계 안정 감지 시간초과 — 그대로 진행"
                         )

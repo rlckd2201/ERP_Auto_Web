@@ -4440,16 +4440,6 @@ def test_resume_print_guard_structurally_prevents_new_button_click():
                 return True
         return False
 
-    guarded_new = next(
-        node
-        for node in setup.body
-        if isinstance(node, ast.If)
-        and isinstance(node.test, ast.UnaryOp)
-        and isinstance(node.test.op, ast.Not)
-        and isinstance(node.test.operand, ast.Name)
-        and node.test.operand.id == "resume_existing_voucher"
-        and has_call(node, owner="btn_new", name="click_input")
-    )
     resume_output = next(
         node
         for node in setup.body
@@ -4458,9 +4448,49 @@ def test_resume_print_guard_structurally_prevents_new_button_click():
         and node.test.id == "resume_print_only_requested"
         and has_call(node, name="_save_and_open_print_dialog")
     )
+    assert resume_assignment.lineno < resume_output.lineno
 
-    assert resume_assignment.lineno < guarded_new.lineno < resume_output.lineno
-    assert not has_call(resume_output, owner="btn_new", name="click_input")
+    # [신규] 클릭 지점은 단 한 곳(_click_new_voucher_button)이며, 그 호출은
+    # _ensure_fresh_voucher_form 안에만 있고 그 함수는 _setup_by_coordinates_only
+    # 에서만 불린다. 복구 경로는 _setup_by_coordinates_only를 타지 않으므로
+    # 붙여넣은 전표가 [신규]로 지워질 수 없다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    assert "btn_new.click_input()" not in source  # 무처리 클릭 지점 제거됨
+
+    def _call_lines(name):
+        # 주석·정의 줄을 뺀 실제 호출 줄 수.
+        hits = []
+        for line in source.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("#") or stripped.startswith("def "):
+                continue
+            if f"{name}()" in stripped:
+                hits.append(stripped)
+        return hits
+
+    assert len(_call_lines("_click_new_voucher_button")) == 1
+    fresh_at = source.index("def _ensure_fresh_voucher_form")
+    fresh_end = source.index("def _setup_by_coordinates_only", fresh_at)
+    assert "_click_new_voucher_button()" in source[fresh_at:fresh_end]
+    assert len(_call_lines("_ensure_fresh_voucher_form")) == 1
+    coord_at = source.index("def _setup_by_coordinates_only")
+    assert "_ensure_fresh_voucher_form()" in source[coord_at:coord_at + 2000]
+    # 복구 분기들은 자체 흐름으로 끝나며 [신규]를 부르는 경로를 타지 않는다.
+    resume_branches = [
+        node
+        for node in setup.body
+        if isinstance(node, ast.If)
+        and isinstance(node.test, ast.Name)
+        and node.test.id
+        in {"resume_management_save_print", "resume_print_only_requested"}
+    ]
+    assert len(resume_branches) == 2
+    for branch in resume_branches:
+        assert not has_call(branch, name="_setup_by_coordinates_only")
+        assert not has_call(branch, name="_ensure_fresh_voucher_form")
+        assert not has_call(branch, name="_click_new_voucher_button")
+        # 각 복구 분기는 스스로 return으로 끝난다(아래 신규 경로로 흘러가지 않음).
+        assert any(isinstance(stmt, ast.Return) for stmt in branch.body)
 
 
 def test_resume_management_reuses_existing_grid_and_runs_normal_management_loop():
@@ -5184,13 +5214,20 @@ def test_paste_total_box_uses_measured_coordinates_and_threshold():
     # 125)은 빈 여백을 봐서 ink=0으로 10분 시간초과했다(작업 c7cfe6b99a2f).
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
 
+    # 좌표/문턱은 공용 헬퍼 _debit_total_ink에 있고, 붙여넣기 대기와 새 전표
+    # 확인이 같은 판독을 쓴다.
+    helper_at = source.index("def _debit_total_ink")
+    helper_end = source.index("def _click_new_voucher_button", helper_at)
+    helper = source[helper_at:helper_end]
+    assert '"ERP_TOTAL_BOX_X", "110"' in helper
+    assert '"ERP_TOTAL_BOX_Y", "936"' in helper
+    assert '"ERP_PASTE_TOTAL_INK_THR", "215"' in helper
+
     anchor = source.index("_paste_grid_until_reflected()")
     fill_at = source.index("_fill_management_items_by_coord()", anchor)
     between = source[anchor:fill_at]
-    assert '"ERP_TOTAL_BOX_X", "110"' in between
-    assert '"ERP_TOTAL_BOX_Y", "936"' in between
-    assert '"ERP_PASTE_TOTAL_INK_THR", "215"' in between
     assert '"ERP_PASTE_TOTAL_MIN_INK", "20"' in between
+    assert "_total_box_ink = _debit_total_ink" in between
 
 
 def test_precheck_waits_for_slow_panel_refresh_before_abort():
@@ -5485,3 +5522,133 @@ def test_recovery_entry_also_clears_unreadable_message():
     guard_at = tail.index("if stale_message:")
     dismiss_at = tail.index("_dismiss_verified_erp_message(")
     assert guard_at < dismiss_at
+
+
+def test_startup_clears_stale_modal_and_requires_fresh_voucher():
+    # 실측(작업 1d9829644a95): 이전 실행이 남긴 Message 모달 때문에 클릭·키가
+    # ERP에 도달하지 않았고, 이전 전표가 화면에 남아 붙여넣기 전부터 차변합계
+    # ink=34였다. 그 결과 붙여넣기 완료가 즉시 오판되고 Ctrl+C는 아무것도
+    # 복사하지 못해 1행에서 죽었다. 시작 시 모달 정리 + 새 전표 확인이 필요하다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    setup_at = source.index("def _setup_by_coordinates_only")
+    body = source[setup_at:setup_at + 2000]
+    clear_at = body.index("_clear_startup_erp_message()")
+    fresh_at = body.index("_ensure_fresh_voucher_form()")
+    unit_at = body.index("전표관리단위")
+    # 두 가드가 어떤 폼 입력보다도 먼저 실행된다.
+    assert clear_at < fresh_at < unit_at
+
+    # 모달 정리는 판독 불가일 때만 Enter, 읽히면 중단(기존 정책 유지).
+    clear_def_at = source.index("def _clear_startup_erp_message")
+    clear_def_end = source.index("def _ensure_fresh_voucher_form", clear_def_at)
+    clear_def = source[clear_def_at:clear_def_end]
+    assert "_erp_message_is_unreadable(snapshot)" in clear_def
+    assert "시작 전 알 수 없는 ERP Message가 열려 있어 중단합니다" in clear_def
+
+    # 새 전표 확인은 합계 잉크로 판정하고, 남아 있으면 [신규]로 초기화한 뒤
+    # 그래도 남으면 중단한다(이전 전표 위에 붙여넣지 않는다).
+    fresh_def_at = source.index("def _ensure_fresh_voucher_form")
+    fresh_def_end = source.index("def _setup_by_coordinates_only", fresh_def_at)
+    fresh_def = source[fresh_def_at:fresh_def_end]
+    assert "_voucher_form_is_dirty()" in fresh_def
+    assert "_click_new_voucher_button()" in fresh_def
+    assert "이전 전표 위에 붙여넣으면" in fresh_def
+    # [신규] 후 단발 측정이 아니라 폴링으로 확인한다(정상 초기화 오판 방지).
+    assert "ERP_FRESH_SETTLE_WAIT" in fresh_def
+    assert "while True:" in fresh_def
+    # 판독 불가는 fail-closed(그냥 진행 금지).
+    assert "if dirty is None:" in fresh_def
+    # [신규] 직후 확인창은 Enter가 아니라 전용 처리로 넘긴다.
+    assert "_handle_new_voucher_prompt()" in fresh_def
+
+    # 판정은 합계 잉크 + 1행 적요 내용 두 신호를 함께 본다.
+    dirty_at = source.index("def _voucher_form_is_dirty")
+    dirty_end = source.index("def _click_new_voucher_button", dirty_at)
+    dirty_def = source[dirty_at:dirty_end]
+    assert "_debit_total_ink()" in dirty_def
+    assert "_probe_grid_cell_text(" in dirty_def
+    assert "ERP_FRESH_TOTAL_MAX_INK" in dirty_def
+
+
+def test_new_voucher_prompt_never_uses_blind_enter():
+    # 적대 검증 확정(치명): [신규] 직후 확인창에 Enter를 보내면 쓰레기 전표가
+    # 실제 저장되거나 데이터가 파기된다 — 어느 쪽인지 알 수 없다. 읽히면
+    # '아니오/취소'를 이름으로 누르고, 읽을 수 없으면 화면을 남기고 중단한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    at = source.index("def _handle_new_voucher_prompt")
+    end = source.index("def _clear_startup_erp_message", at)
+    body = source[at:end]
+
+    assert "_close_erp_message_with_enter" not in body  # Enter 경로 자체가 없다.
+    assert 'button_labels=("아니오", "no", "취소", "cancel")' in body
+    assert "allow_enter_fallback=False" in body
+    assert "본문을 읽을 수 없는 확인창이 떠 중단합니다" in body
+    assert "new_voucher_prompt" in body  # 진단 화면 저장
+
+
+def test_startup_message_dismisses_known_phrases_instead_of_deadlocking():
+    # 적대 검증 확정: 읽히는 Message라고 무조건 중단하면 '저장 후 출력해
+    # 주십시오.' 같은 이미 다루던 창에서도 무인 PC가 영구 교착된다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    at = source.index("def _clear_startup_erp_message")
+    end = source.index("def _ensure_fresh_voucher_form", at)
+    body = source[at:end]
+    assert "저장 후 출력해 주십시오." in body
+    assert "_dismiss_verified_erp_message(snapshot, tuple(matched))" in body
+    known_at = body.index("known_phrases")
+    unknown_at = body.index("시작 전 알 수 없는 ERP Message")
+    assert known_at < unknown_at
+
+
+def test_total_ink_uses_window_relative_origin():
+    # 적대 검증 확정: 절대 좌표로 읽으면 ERP 창이 (0,0)에 없을 때 엉뚱한
+    # 픽셀을 보고 [신규] 여부를 결정한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    at = source.index("def _debit_total_ink")
+    end = source.index("def _probe_grid_cell_text", at)
+    body = source[at:end]
+    assert "main_r = _main_rect()" in body
+    assert "int(main_r.left) + tb_x" in body
+    assert "int(main_r.top) + tb_y" in body
+    assert "return -1" in body  # 판독 실패는 -1로 알린다.
+
+
+def test_paste_guard_fails_when_total_never_changes():
+    # 적대 검증 확정: 타임아웃 후 그냥 진행하면 이전 전표에 관리항목을
+    # 입력하게 된다. 붙여넣기 전 값에서 변화가 없으면 중단해야 한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    at = source.index("if not detected:")
+    body = source[at:at + 1500]
+    assert "붙여넣기가 화면에 반영되지 않았습니다" in body
+    assert "paste_not_reflected" in body
+    raise_at = body.index("붙여넣기가 화면에 반영되지 않았습니다")
+    proceed_at = body.index("붙여넣기 합계 안정 감지 시간초과")
+    assert raise_at < proceed_at
+
+
+def test_new_voucher_button_click_is_verified_and_logged():
+    # 기존 UIA descendants 탐색은 GDI에서 못 찾으면 로그도 없이 조용히
+    # 건너뛰었다. 저장 버튼과 같은 from_point 확인 방식으로 누르고 남긴다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    at = source.index("def _click_new_voucher_button")
+    end = source.index("def _clear_startup_erp_message", at)
+    body = source[at:end]
+    assert 'Desktop(backend="uia").from_point(' in body
+    assert '"신규"' in body
+    # 실측 좌표(1920x1080 툴바: 신규 텍스트 106~125, 저장 253).
+    assert '"ERP_NEW_BUTTON_XY", "115,80"' in body
+    # 못 찾으면 조용히 넘어가지 않고 경고를 남긴다.
+    assert "[신규] 버튼을 좌표에서 확인하지 못했습니다." in body
+
+
+def test_paste_completion_requires_change_from_baseline():
+    # 이전 전표의 합계가 이미 떠 있으면 "완료"로 오판하므로, 붙여넣기 전
+    # 값과 같은 동안에는 완료로 보지 않는다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    base_at = source.index("paste_baseline_ink = _debit_total_ink()")
+    paste_at = source.index("_paste_grid_until_reflected()", base_at)
+    assert base_at < paste_at
+    wait_block = source[paste_at:paste_at + 6000]
+    assert "abs(cur_ink - paste_baseline_ink) <= ink_tol" in wait_block
+    assert "붙여넣기 전 " in wait_block
