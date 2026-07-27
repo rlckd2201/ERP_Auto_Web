@@ -631,6 +631,11 @@ def run_loop(
             continue
 
         job_id = str(task.get("id") or "")
+        # 이 작업이 시작된 시각. 실패 스크린샷은 이 시각 이후에 만들어진
+        # 파일만 업로드해야 한다(이전 실행이 남긴 파일을 올리면 원격 진단이
+        # 엉뚱한 화면을 보게 된다 — 실측: 작업 6b82ad1d7c56이 이전 실행의
+        # 18행 실패 화면을 그대로 반환).
+        job_started_at = time.time()
         try:
             _post(
                 session,
@@ -746,6 +751,42 @@ def run_loop(
                         )
                     except Exception as log_exc:
                         result = {**result, "agent_log_upload_error": str(log_exc)}
+                # 성공했더라도 이번 작업 중 남긴 진단 화면이 있으면 올린다.
+                # 판독 불가 Message를 Enter로 닫고 진행한 경우가 여기 해당하며,
+                # 무인 PC라 이 화면이 없으면 무엇을 수락했는지 확인할 방법이 없다.
+                try:
+                    ok_shot_dir = output_dir / "erp_outputs"
+                    ok_shots = (
+                        sorted(
+                            (
+                                shot
+                                for shot in ok_shot_dir.glob("mgmt_fail_*.png")
+                                if shot.stat().st_mtime >= job_started_at - 5
+                            ),
+                            key=lambda p: p.stat().st_mtime,
+                        )
+                        if ok_shot_dir.is_dir()
+                        else []
+                    )
+                    if ok_shots:
+                        _upload_job_artifact(
+                            session,
+                            server,
+                            job_id,
+                            agent_id,
+                            ok_shots[-1],
+                            "mgmt_screenshot",
+                            verify_tls=verify_tls,
+                        )
+                        result = {
+                            **result,
+                            "mgmt_screenshot_path": str(ok_shots[-1]),
+                        }
+                except Exception as ok_shot_exc:
+                    result = {
+                        **result,
+                        "mgmt_screenshot_upload_error": str(ok_shot_exc),
+                    }
             _post(
                 session,
                 server,
@@ -810,7 +851,13 @@ def run_loop(
                 mgmt_shot_dir = output_dir / "erp_outputs"
                 mgmt_shots = (
                     sorted(
-                        mgmt_shot_dir.glob("mgmt_fail_*.png"),
+                        (
+                            shot
+                            for shot in mgmt_shot_dir.glob("mgmt_fail_*.png")
+                            # 이번 작업 중 생성된 화면만 올린다(약간의 시계
+                            # 오차를 감안해 5초 여유).
+                            if shot.stat().st_mtime >= job_started_at - 5
+                        ),
                         key=lambda p: p.stat().st_mtime,
                     )
                     if mgmt_shot_dir.is_dir()

@@ -5369,3 +5369,119 @@ def test_vendor_commit_check_fails_closed_when_value_never_appears():
     ) is False
     # 확정 시도는 한 번(F9→Enter)만 — 빈 셀 확인 후 재타이핑하지 않는다.
     assert pressed == ["f9", "enter"]
+
+
+def test_unreadable_save_message_is_closed_with_enter_then_print_verifies():
+    # 실측(작업 6b82ad1d7c56): 210행 입력·저장 클릭까지 성공했으나 저장 후
+    # Message가 GDI로 그려져 win32/uia 모두 본문을 노출하지 않았다
+    # (title='Message', text='Message') → 문구 검증 실패로 하드 중단.
+    # 사용자 확정 절차: 저장 → Enter → 출력. 저장이 실제로 안 됐다면 출력
+    # 단계가 '저장 후 출력해 주십시오.'를 즉시 감지해 안전 실패한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    # 판독 불가 Message는 Enter로 닫고 출력으로 진행한다. env 가드는 저장 전
+    # (stale)·저장 후 두 경로 모두에 있고, 저장 후 경로의 Enter 시도가 기존
+    # 하드 raise보다 먼저 온다.
+    stale_gate_at = source.index("ERP_SAVE_UNKNOWN_MESSAGE_ENTER")
+    confirm_gate_at = source.index(
+        "ERP_SAVE_UNKNOWN_MESSAGE_ENTER", stale_gate_at + 1
+    )
+    raise_at = source.index(
+        "ERP 저장 후 알 수 없는 Message가 표시되어 출력을 중단합니다"
+    )
+    assert stale_gate_at < confirm_gate_at < raise_at
+
+    # Enter 전송 후 실제로 닫혔는지 확인하고, 못 닫으면 안전 중단한다.
+    closer_at = source.index("def _close_erp_message_with_enter")
+    closer_end = source.index("def _dismiss_verified_erp_message", closer_at)
+    closer = source[closer_at:closer_end]
+    assert "IsWindow" in closer  # 그 창의 핸들 생존으로 닫힘을 판정한다.
+    assert "ERP_MESSAGE_ENTER_RETRIES" in closer
+    assert "Enter로 닫지 못해 출력을" in source
+
+    # 진단용 화면을 남기고(무인 PC), Agent가 업로드하는 파일명 규칙을 따른다.
+    shot_at = source.index("def _save_erp_message_screenshot")
+    shot_end = source.index("def _close_erp_message_with_enter", shot_at)
+    assert 'f"mgmt_fail_{safe_label}_{int(time.time())}.png"' in source[shot_at:shot_end]
+
+    # 저장 전 남은 판독 불가 Message도 같은 방식으로 닫아 모달 교착을 푼다
+    # (무인 PC라 사람이 닫아줄 수 없다).
+    stale_log_at = source.index("저장 전 남아 있는 Message 본문을 읽지 못해")
+    assert stale_gate_at < stale_log_at < confirm_gate_at
+    # Enter로 연 뒤에는 계좌/거래처 조회 팝업 가드를 다시 확인한다.
+    assert '_assert_no_erp_management_lookup_popup("저장 전 Message 정리 후")' in source
+    assert "저장 전 ERP Message를 Enter로 닫지 못해" in source
+
+    # 검증된 Message에만 확인/Enter를 보내는 기존 가드는 그대로 유지한다.
+    assert "검증되지 않은 ERP Message에는 확인/Enter를 전송할 수 없습니다." in source
+
+
+def test_enter_path_only_for_unreadable_messages_and_foreground_dialog():
+    # 적대 검증에서 확정된 결함 보완:
+    #  (a) 본문이 읽히는데 문구만 다른 창(저장 실패 사유·삭제 확인)은 Enter
+    #      금지 — 제목 외 본문이 하나도 없을 때만 예외로 인정한다.
+    #  (b) Enter는 그 대화상자가 최전면일 때만 — 포커스가 ERP 그리드에 있으면
+    #      Enter가 셀 확정이 되어 미저장 전표를 훼손한다(무인 PC라 복구 불가).
+    #  (c) 닫힘 판정은 그 핸들의 생존으로 — 아무 Message 창 유무로 판정하면
+    #      위양성이 나고 서로 다른 창에 연쇄 blind Enter가 나간다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+
+    # (a) 판독 불가 판정 헬퍼가 있고, Enter 분기들이 이 조건과 AND로 묶인다.
+    helper_at = source.index("def _erp_message_is_unreadable")
+    helper_end = source.index("def _close_erp_message_with_enter", helper_at)
+    helper = source[helper_at:helper_end]
+    assert "return not meaningful" in helper
+    # 저장 전/저장 후/복구 3개 경로 + 출력 단계 = 최소 4회 사용.
+    assert source.count("_erp_message_is_unreadable(") >= 4
+
+    closer_at = source.index("def _close_erp_message_with_enter")
+    closer_end = source.index("def _dismiss_verified_erp_message", closer_at)
+    closer = source[closer_at:closer_end]
+
+    # (b) 최전면 확인이 Enter보다 먼저이고, "일치가 확인될 때만" 보낸다
+    #     (fail-closed: 핸들/최전면을 못 구하면 전송하지 않는다).
+    fg_at = closer.index("GetForegroundWindow")
+    enter_at = closer.index('pyautogui.press("enter")')
+    assert fg_at < enter_at
+    assert "if foreground != handle:" in closer
+    assert "최전면임을 확인하지 못해 " in closer
+    assert "핸들을 구하지 못해 Enter를 " in closer
+    # 재시도마다 판독 가능 여부를 다시 확인한다(늦은 UIA 노출 대비).
+    recheck_at = closer.index("if not _erp_message_is_unreadable(current):")
+    assert recheck_at < enter_at
+
+    # (c) 핸들 기반 생존 확인 + 창이 바뀌면 판독 가능 여부를 다시 본다.
+    assert "_erp_message_handle(" in closer
+    assert "IsWindowVisible" in closer
+    assert "읽을 수 있는 새 ERP Message가 " in closer
+
+    # env 파싱은 예외 안전하고 상한이 있다(무인 PC 장시간 정지 방지).
+    assert "except (TypeError, ValueError):" in closer
+    assert "min(10, attempts)" in closer
+
+
+def test_print_stage_fails_on_unreadable_message_not_just_phrase():
+    # 순환 안전망 차단: 출력 단계가 '저장 후 출력해 주십시오.' 문구에만
+    # 의존하면 GDI(본문 판독 불가) 상황에서 원리적으로 작동하지 않는다.
+    # 정상 저장·출력에는 Message가 뜨지 않으므로 판독 불가 창은 실패로 본다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    wait_at = source.index("def _wait_rd_viewer_ready")
+    body = source[wait_at:wait_at + 4000]
+    assert "_erp_message_is_unreadable(" in body
+    assert "저장 여부 확인 불가" in body
+    assert "print_unknown_message" in body
+
+
+def test_recovery_entry_also_clears_unreadable_message():
+    # 복구 경로가 판독 불가 Message에서 하드 raise면 무인 재시도가 교착된다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    rec_at = source.index("복구 시작 전 남아 있는 Message 본문을 ")
+    raise_at = source.index(
+        "관리항목 복구 시작 전 알 수 없는 ERP Message가 표시되어 중단합니다"
+    )
+    assert rec_at < raise_at
+    # Enter로 닫은 뒤에는 검증형 dismiss에 None이 전달되지 않도록 가드한다.
+    tail = source[rec_at:raise_at + 3000]
+    guard_at = tail.index("if stale_message:")
+    dismiss_at = tail.index("_dismiss_verified_erp_message(")
+    assert guard_at < dismiss_at

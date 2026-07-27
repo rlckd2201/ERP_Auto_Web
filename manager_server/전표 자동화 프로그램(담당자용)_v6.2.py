@@ -8527,6 +8527,188 @@ class ERPLoginBot:
                     return None
                 time.sleep(max(ERP_CLICK_WAIT, ERP_POLL_WAIT))
 
+        def _save_erp_message_screenshot(label="save_message"):
+            # 243은 무인 PC라 사람이 화면을 볼 수 없다. Message 본문이 GDI로
+            # 그려져 읽히지 않을 때 화면을 남겨 원격 진단에 쓴다. 파일명은
+            # Agent가 자동 업로드하는 mgmt_fail_* 패턴을 따른다.
+            try:
+                output_dir = Path(
+                    str(os.getenv("ERP_OUTPUT_DIR", "") or tempfile.gettempdir())
+                )
+                output_dir.mkdir(parents=True, exist_ok=True)
+                safe_label = re.sub(r"[^0-9A-Za-z_.-]+", "_", str(label or "msg"))
+                path = output_dir / f"mgmt_fail_{safe_label}_{int(time.time())}.png"
+                pyautogui.screenshot(str(path))
+                self.logger.warning(f"  [ERP-MESSAGE] 화면 저장: {path}")
+                return str(path)
+            except Exception as exc:
+                self.logger.warning(f"  [ERP-MESSAGE] 화면 저장 실패: {exc}")
+                return ""
+
+        def _erp_message_handle(snapshot):
+            win = (snapshot or {}).get("window")
+            if win is None:
+                return 0
+            for getter in (
+                lambda: getattr(win, "handle", 0),
+                lambda: getattr(getattr(win, "element_info", None), "handle", 0),
+            ):
+                try:
+                    handle = int(getter() or 0)
+                except Exception:
+                    handle = 0
+                if handle:
+                    return handle
+            return 0
+
+        def _erp_message_is_unreadable(snapshot):
+            """본문이 전혀 노출되지 않은(GDI로 그려진) Message인지 판정한다.
+
+            읽히는 본문이 있는데 문구만 다른 경우(예: 저장 실패 사유, 삭제
+            확인)에는 절대 Enter를 보내면 안 된다. 그런 창은 사람이 읽고
+            판단해야 하므로 기존대로 하드 중단한다.
+            """
+            if not snapshot:
+                return False
+            title = re.sub(r"\s+", "", str(snapshot.get("title", "") or "")).lower()
+            body_lines = [
+                re.sub(r"\s+", "", str(line or "")).lower()
+                for line in str(snapshot.get("text", "") or "").splitlines()
+            ]
+            meaningful = [
+                line for line in body_lines if line and line != title
+            ]
+            return not meaningful
+
+        def _close_erp_message_with_enter(snapshot, label="Message"):
+            """판독 불가 Message를 Enter로 닫고 실제로 닫혔는지 확인한다.
+
+            Enter는 반드시 "그 대화상자가 최전면일 때만" 보낸다. 포커스가
+            ERP 메인 그리드에 있는 상태로 Enter가 나가면 셀 확정 동작이 되어
+            미저장 전표를 훼손할 수 있다(무인 PC라 되돌릴 수 없음).
+            창이 바뀌면 새 창도 판독 불가일 때만 이어서 처리한다.
+            """
+            try:
+                attempts = int(
+                    float(os.getenv("ERP_MESSAGE_ENTER_RETRIES", "3") or "3")
+                )
+            except (TypeError, ValueError):
+                attempts = 3
+            attempts = max(1, min(10, attempts))
+
+            def _window_alive(handle):
+                if not handle:
+                    return None
+                try:
+                    return bool(ctypes.windll.user32.IsWindow(handle)) and bool(
+                        ctypes.windll.user32.IsWindowVisible(handle)
+                    )
+                except Exception:
+                    return None
+
+            current = snapshot
+            seen_handles = set()
+            for attempt in range(1, attempts + 1):
+                # 재시도 때마다 판독 가능 여부를 다시 본다. UIA 트리가 뒤늦게
+                # 본문을 노출하면 "읽히는 창에는 Enter 금지" 불변식이 재시도
+                # 구간에서만 깨질 수 있다.
+                if not _erp_message_is_unreadable(current):
+                    raise RuntimeError(
+                        "본문을 읽을 수 있는 ERP Message로 바뀌어 Enter를 "
+                        "보내지 않고 중단합니다: "
+                        f"{(current or {}).get('text', '')[:300]}"
+                    )
+                handle = _erp_message_handle(current)
+                if not handle:
+                    # 핸들을 못 구하면 최전면 검증이 불가능하다. 검증 없이
+                    # Enter를 보내면 ERP 그리드로 샐 수 있으므로 중단한다.
+                    self.logger.warning(
+                        f"  [ERP-MESSAGE] {label} 창 핸들을 구하지 못해 Enter를 "
+                        "보내지 않습니다."
+                    )
+                    return False
+                if handle not in seen_handles:
+                    seen_handles.add(handle)
+                    _save_erp_message_screenshot(f"{label}_{handle}")
+                win = current.get("window") if current else None
+                try:
+                    if win is not None:
+                        win.set_focus()
+                except Exception as focus_exc:
+                    self.logger.warning(
+                        f"  [ERP-MESSAGE] {label} 창 활성화 실패: {focus_exc}"
+                    )
+                time.sleep(max(0.3, min(ERP_SETTLE_WAIT, 1.0)))
+                foreground = 0
+                try:
+                    foreground = int(
+                        ctypes.windll.user32.GetForegroundWindow() or 0
+                    )
+                except Exception:
+                    foreground = 0
+                if foreground != handle:
+                    # 대화상자가 최전면임이 "확인될 때만" Enter를 보낸다
+                    # (fail-closed). 최전면을 못 구했거나 다른 창이면 Enter가
+                    # ERP 그리드로 새어 미저장 전표를 훼손할 수 있다.
+                    self.logger.warning(
+                        f"  [ERP-MESSAGE] {label}가 최전면임을 확인하지 못해 "
+                        f"Enter를 보내지 않습니다"
+                        f"(dialog={handle}, foreground={foreground})."
+                    )
+                    if _window_alive(handle) is False:
+                        self.logger.info(
+                            f"  [ERP-MESSAGE] {label} 창이 이미 닫혀 있습니다."
+                        )
+                        return True
+                    continue
+                _release_modifiers(f"{label} Enter 직전", wait=False)
+                pyautogui.press("enter")
+                time.sleep(max(ERP_SETTLE_WAIT, 1.0))
+                if handle and _window_alive(handle) is False:
+                    self.logger.info(
+                        f"  [ERP-MESSAGE] {label} Enter로 닫힘 확인"
+                        f"(handle={handle}, 시도 {attempt}/{attempts})"
+                    )
+                    remaining = _find_erp_message_snapshot()
+                    if remaining is None:
+                        return True
+                    if _erp_message_handle(remaining) == handle:
+                        return True
+                    if not _erp_message_is_unreadable(remaining):
+                        raise RuntimeError(
+                            "Message를 닫은 뒤 읽을 수 있는 새 ERP Message가 "
+                            "표시되어 중단합니다: "
+                            f"{remaining.get('text', '')[:300]}"
+                        )
+                    self.logger.warning(
+                        "  [ERP-MESSAGE] 새 판독 불가 Message로 전환되어 이어서 "
+                        f"처리합니다: handle={_erp_message_handle(remaining)}"
+                    )
+                    current = remaining
+                    continue
+                nxt = _find_erp_message_snapshot()
+                if nxt is None and not handle:
+                    self.logger.info(
+                        f"  [ERP-MESSAGE] {label} 닫힘 확인(시도 {attempt}/{attempts})"
+                    )
+                    return True
+                if nxt is not None and _erp_message_handle(nxt) != handle:
+                    if not _erp_message_is_unreadable(nxt):
+                        raise RuntimeError(
+                            "Message를 닫은 뒤 읽을 수 있는 새 ERP Message가 "
+                            "표시되어 중단합니다: "
+                            f"{nxt.get('text', '')[:300]}"
+                        )
+                    current = nxt
+                    continue
+                self.logger.warning(
+                    f"  [ERP-MESSAGE] {label}가 아직 닫히지 않아 Enter 재전송 "
+                    f"{attempt}/{attempts}"
+                )
+                if nxt is not None:
+                    current = nxt
+            return False
+
         def _dismiss_verified_erp_message(
             snapshot,
             accepted_phrases,
@@ -8835,6 +9017,28 @@ class ERPLoginBot:
                         "  [SAVE] 이전 출력 시도의 '저장 후 출력' Message를 검증하고 닫습니다."
                     )
                     _dismiss_verified_erp_message(stale_message, (save_required,))
+                elif _env_flag(
+                    "ERP_SAVE_UNKNOWN_MESSAGE_ENTER", "1"
+                ) and _erp_message_is_unreadable(stale_message):
+                    # 이전 실행이 남긴 GDI Message(본문 판독 불가)가 모달로
+                    # 남아 있으면 저장 클릭 자체가 막힌다. 무인 PC라 사람이
+                    # 닫아줄 수 없으므로 Enter로 닫고 계속한다. 본문이 읽히는
+                    # Message는 여기 해당하지 않으며 아래에서 중단한다.
+                    self.logger.warning(
+                        "  [SAVE] 저장 전 남아 있는 Message 본문을 읽지 못해 "
+                        "Enter로 닫습니다: "
+                        f"title={stale_message.get('title', '')!r}"
+                    )
+                    if not _close_erp_message_with_enter(
+                        stale_message, "저장 전 Message"
+                    ):
+                        raise RuntimeError(
+                            "저장 전 ERP Message를 Enter로 닫지 못해 저장/출력을 "
+                            "중단합니다."
+                        )
+                    # Enter로 닫은 뒤 계좌/거래처 조회 팝업이 드러날 수 있으므로
+                    # 저장 전 가드를 다시 확인한다.
+                    _assert_no_erp_management_lookup_popup("저장 전 Message 정리 후")
                 else:
                     raise RuntimeError(
                         "저장 전 알 수 없는 ERP Message가 열려 있어 저장/출력을 중단합니다: "
@@ -8904,6 +9108,36 @@ class ERPLoginBot:
                 re.sub(r"\s+", "", phrase).lower() in compact
                 for phrase in save_success_phrases
             ):
+                # GDI ERP의 Message 창은 win32/uia 모두 본문을 노출하지 않아
+                # 제목만 'Message'로 읽히는 경우가 있다(실측 로그:
+                # title='Message', text='Message'). 사용자 확정 절차대로
+                # "저장 → Enter → 출력"을 따른다. 저장이 실제로 되지 않았다면
+                # 출력 단계가 '저장 후 출력해 주십시오.'를 즉시 감지해 안전
+                # 실패하므로 확인 없이 성공으로 넘어가지 않는다.
+                if _env_flag(
+                    "ERP_SAVE_UNKNOWN_MESSAGE_ENTER", "1"
+                ) and _erp_message_is_unreadable(confirmation):
+                    # 본문이 전혀 노출되지 않은 Message에만 해당한다. 읽히는
+                    # 본문이 있는데 문구가 다른 경우(저장 실패 사유, 삭제 확인
+                    # 등)는 사람이 판단해야 하므로 아래에서 하드 중단한다.
+                    self.logger.warning(
+                        "  [SAVE] 저장 후 Message 본문을 읽지 못해(GDI) Enter로 "
+                        "닫고 출력 단계로 진행합니다: "
+                        f"title={confirmation.get('title', '')!r}, "
+                        f"text={confirmation.get('text', '')[:120]!r}"
+                    )
+                    if not _close_erp_message_with_enter(
+                        confirmation, "저장 후 Message"
+                    ):
+                        raise RuntimeError(
+                            "ERP 저장 후 Message를 Enter로 닫지 못해 출력을 "
+                            "중단합니다."
+                        )
+                    self.logger.info(
+                        "  [SAVE] Message를 닫았습니다. 출력 단계의 "
+                        "'저장 후 출력' 즉시 감지로 저장 여부를 최종 검증합니다."
+                    )
+                    return True
                 raise RuntimeError(
                     "ERP 저장 후 알 수 없는 Message가 표시되어 출력을 중단합니다: "
                     f"{confirmation.get('text', '')[:500]}"
@@ -8925,6 +9159,23 @@ class ERPLoginBot:
                     raise RuntimeError(
                         "ERP 전표가 저장되지 않아 출력할 수 없습니다: "
                         "저장 후 출력해 주십시오."
+                    )
+                if erp_message is not None and _erp_message_is_unreadable(
+                    erp_message
+                ):
+                    # 정상 저장·출력이면 이 단계에서 Message가 뜨지 않는다.
+                    # GDI라 문구를 읽을 수 없으므로 '저장 후 출력해 주십시오.'
+                    # 여부를 확인할 수 없고, 확인 못 한 채 출력을 계속하면
+                    # 이전에 저장된 다른 전표가 인쇄될 수 있다. 화면을 남기고
+                    # 안전하게 중단한다.
+                    _save_erp_message_screenshot("print_unknown_message")
+                    self.logger.error(
+                        "  [PRINT] 출력 단계에서 본문을 읽을 수 없는 ERP Message가 "
+                        f"떠 중단합니다: title={erp_message.get('title', '')!r}"
+                    )
+                    raise RuntimeError(
+                        "출력 단계에서 본문을 읽을 수 없는 ERP Message가 표시되어 "
+                        "출력을 중단합니다(저장 여부 확인 불가)."
                     )
                 new_processes = _new_rd_viewer_processes(baseline)
                 new_pids = {int(proc.pid) for proc, _name in new_processes}
@@ -10184,18 +10435,42 @@ class ERPLoginBot:
             if stale_message:
                 stale_compact = _erp_message_compact(stale_message)
                 save_required_phrase = re.sub(r"\s+", "", "저장 후 출력해 주십시오.").lower()
-                if save_required_phrase not in stale_compact:
+                if save_required_phrase not in stale_compact and _env_flag(
+                    "ERP_SAVE_UNKNOWN_MESSAGE_ENTER", "1"
+                ) and _erp_message_is_unreadable(stale_message):
+                    # 판독 불가 Message가 모달로 남아 있으면 복구 실행 자체가
+                    # 시작되지 못한다(무인 PC라 사람이 닫아줄 수 없음).
+                    # 저장 경로와 같은 정책으로 Enter로 닫고 진행한다.
+                    self.logger.warning(
+                        "  [MGMT-RECOVERY] 복구 시작 전 남아 있는 Message 본문을 "
+                        "읽지 못해 Enter로 닫습니다: "
+                        f"title={stale_message.get('title', '')!r}"
+                    )
+                    if not _close_erp_message_with_enter(
+                        stale_message, "복구 시작 전 Message"
+                    ):
+                        raise RuntimeError(
+                            "관리항목 복구 시작 전 ERP Message를 Enter로 닫지 못해 "
+                            "중단합니다."
+                        )
+                    # Message를 닫으면 가려져 있던 계좌/거래처 조회 팝업이
+                    # 드러날 수 있으므로 복구 시작 전에 확인한다.
+                    _assert_no_erp_management_lookup_popup("복구 시작 전 Message 정리 후")
+                    stale_message = None
+                    stale_compact = ""
+                elif save_required_phrase not in stale_compact:
                     raise RuntimeError(
                         "관리항목 복구 시작 전 알 수 없는 ERP Message가 표시되어 중단합니다: "
                         f"{stale_message.get('text', '')[:500]}"
                     )
-                _dismiss_verified_erp_message(
-                    stale_message,
-                    ("저장 후 출력해 주십시오.",),
-                )
-                self.logger.info(
-                    "  [MGMT-RECOVERY] 이전 출력 시도의 '저장 후 출력' Message만 확인 후 닫았습니다."
-                )
+                if stale_message:
+                    _dismiss_verified_erp_message(
+                        stale_message,
+                        ("저장 후 출력해 주십시오.",),
+                    )
+                    self.logger.info(
+                        "  [MGMT-RECOVERY] 이전 출력 시도의 '저장 후 출력' Message만 확인 후 닫았습니다."
+                    )
             _prepare_management_recovery_from_first_row()
             _fill_management_items_by_coord()
             _save_and_open_print_dialog()
