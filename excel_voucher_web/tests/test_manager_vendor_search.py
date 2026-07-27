@@ -1012,13 +1012,14 @@ def test_finance_direct_vendor_confirms_when_name_appears():
 
 
 def test_finance_direct_vendor_reinputs_when_value_not_registered():
-    # 입력 후에도 셀이 비어 있으면(F9 전 등록 실패) 재입력하고 F9는 보내지 않는다.
+    # Enter 직후 값 셀이 아직 비어 보이면(렌더 지연) 확정 확인 폴링이
+    # 값이 나타날 때까지 재확인한 뒤 성공으로 처리한다(23행 무성 누락 감시).
     pressed = []
     ink_seq = iter([
         (0, 0, 0, 0),      # 입력 전
-        (0, 0, 0, 0),      # att1 입력 후: 셀 비어 있음(등록 안 됨) → 재입력
-        (30, 6, 12, 26),   # att2 입력 후: 번호 반영
-        (120, 8, 40, 150),  # att2 Enter 후: 변환됨
+        (0, 0, 0, 0),      # Enter 직후: 아직 비어 보임 → 폴링
+        (30, 6, 12, 26),   # 폴링 재확인: 값 반영
+        (120, 8, 40, 150),  # (여분)
     ])
     loaded = _load_nested_functions(
         "_input_finance_vendor_code_xy",
@@ -1028,11 +1029,14 @@ def test_finance_direct_vendor_reinputs_when_value_not_registered():
             "_click_form_xy": lambda *_args, **_kwargs: None,
             "_release_modifiers": lambda *_args, **_kwargs: None,
             "_type_vendor_code": lambda *_args, **_kwargs: True,
-            "_management_value_visual_ink": lambda _x, _y: next(ink_seq, (0, 0, 0, 0)),
+            "_management_value_visual_ink": lambda _x, _y: next(ink_seq, (30, 6, 12, 26)),
             "pyautogui": SimpleNamespace(
                 press=lambda key, **_kwargs: pressed.append(key)
             ),
-            "time": SimpleNamespace(sleep=lambda _seconds: None),
+            "time": SimpleNamespace(
+                sleep=lambda _seconds: None,
+                time=lambda _c=iter(range(0, 1000)): float(next(_c)),
+            ),
             "mgmt_click_wait": 0.0,
             "mgmt_focus_wait": 0.0,
             "mgmt_key_wait": 0.0,
@@ -1043,7 +1047,7 @@ def test_finance_direct_vendor_reinputs_when_value_not_registered():
     assert loaded["_input_finance_vendor_code_xy"](
         1118, 756, "A001", "5행 거래처", 0.0, 0.0
     ) is True
-    # 등록 실패한 att1에서는 F9를 보내지 않고, att2에서만 f9→enter를 보낸다.
+    # 입력·확정은 한 번만(F9→Enter), 폴링은 키 입력 없이 재확인만 한다.
     assert pressed == ["f9", "enter"]
 
 
@@ -5217,7 +5221,7 @@ def test_viewport_rows_also_recover_from_missed_advance():
     viewport_recovery_at = source.index("적요 재더블클릭")
     assert viewport_recovery_at > coord_scope_start
     # recoverable 판정이 더 이상 bottom_scroll_mode에 묶여 있지 않아야 한다.
-    rec_at = source.index('"거래처번호 직접 키보드 입력" in str(fill_exc)')
+    rec_at = source.index('"거래처번호 직접 키보드 입력",')
     rec_block = source[rec_at:rec_at + 220]
     assert "bottom_scroll_mode" not in rec_block.split("recoverable")[0]
     assert "fill_attempt < fill_attempts - 1" in rec_block
@@ -5232,7 +5236,7 @@ def test_missed_advance_escalates_to_ctrl_home_renavigation():
     renav_at = source.index("Ctrl+Home 재탐색")
     assert renav_at > coord_scope_start
 
-    rec_at = source.index('"거래처번호 직접 키보드 입력" in str(fill_exc)')
+    rec_at = source.index('"거래처번호 직접 키보드 입력",')
     block = source[rec_at:rec_at + 20000]
     # 재탐색은 가벼운 복구(1차) 다음(2차 이상)에만 발동한다.
     assert "if fill_attempt >= 1:" in block
@@ -5255,7 +5259,7 @@ def test_renavigation_verifies_arrival_row_by_summary_before_input():
     # 입력될 수 있다. 적요(행마다 거래처명이 달라 유일)를 복사해 목표
     # 행과 대조하고, 일치할 때만 재선택·입력을 진행해야 한다.
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
-    rec_at = source.index('"거래처번호 직접 키보드 입력" in str(fill_exc)')
+    rec_at = source.index('"거래처번호 직접 키보드 입력",')
     block = source[rec_at:rec_at + 20000]
 
     # 검증이 재선택(더블클릭)보다 먼저 온다.
@@ -5276,3 +5280,92 @@ def test_renavigation_verifies_arrival_row_by_summary_before_input():
     # 클립보드는 sentinel 가드 + 원복.
     assert "renav_sentinel" in block
     assert "pyperclip.copy(renav_old_clip)" in block
+
+
+def test_renavigation_probes_candidate_slots_for_scroll_alignment():
+    # 86행 실측(작업 7c3adeb3033a): Ctrl+Home+Down 도보 후 스크롤 정렬이
+    # 일반 진행 때와 한 슬롯 어긋나 목표 행이 앵커(691)가 아니라 한 칸
+    # 위(671)에 표시됐고, 앵커 슬롯에는 다음 행(87행)이 있었다(재탐색 2회
+    # 동일). 스크롤 모드에서는 앵커부터 위로 후보 슬롯을 차례로 복사·대조해
+    # 적요가 일치하는 슬롯을 클릭해야 한다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    rec_at = source.index('"거래처번호 직접 키보드 입력",')
+    block = source[rec_at:rec_at + 20000]
+
+    assert "renav_candidates" in block
+    assert "renav_y - row_height" in block
+    assert "renav_y - 2 * row_height" in block
+    # 일치한 후보 슬롯이 최종 재선택 좌표가 된다.
+    assert "renav_y = renav_probe_y" in block
+    # 뷰포트 모드는 기하 공식이 정확하므로 후보 1개.
+    assert "renav_candidates = [renav_y]" in block
+
+
+def test_row_identity_gate_verifies_summary_before_every_fill():
+    # 사용자 확정 원칙: 위치를 가정하지 말고 "화면에 보이는" 적요로 행을
+    # 구분한다. 모든 입력 전에 적요 셀을 복사해 목표 행과 대조하고,
+    # 스크롤 구간은 마지막 완전 행 앵커가 흔들릴 수 있어 위 슬롯을 후보로
+    # 훑는다(중단바 위치가 어디든 동작). 불일치는 복구 사다리로 넘긴다.
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    coord_at = source.index("def _fill_management_items_by_coord")
+
+    helper_at = source.index("def _verify_row_slot_by_summary")
+    assert helper_at > coord_at
+    helper_end = source.index("def _ensure_bank_management_row", helper_at)
+    helper_body = source[helper_at:helper_end]
+    assert "ident_candidates" in helper_body
+    assert "int(base_y) - row_height" in helper_body
+    assert "pyperclip.copy(ident_old_clip)" in helper_body
+
+    gate_at = source.index("row_identity_check", coord_at)
+    assert gate_at > coord_at
+    # 게이트가 입력 호출보다 먼저 온다(같은 try 안). 보통예금 행은 자체
+    # 검증(_ensure_bank_management_row)이 있어 게이트에서 제외한다.
+    try_block_at = source.index(
+        "if row_identity_check and not _requires_bank_management(", coord_at
+    )
+    fill_call_at = source.index(
+        "_fill_management_for_current_row(row_no, account_name)", try_block_at
+    )
+    assert try_block_at < fill_call_at
+    # 적요 편집이 열려 있으면 복사가 빗나가므로 ESC로 먼저 닫는다.
+    esc_at = source.index("행 식별 ESC 직전", coord_at)
+    assert esc_at < fill_call_at
+    # 불일치는 복구 사다리에서 잡는다.
+    assert "행 식별 불일치" in source
+    rec_at = source.index('"거래처번호 직접 키보드 입력",')
+    assert '"행 식별 불일치",' in source[rec_at:rec_at + 200]
+
+
+def test_vendor_commit_check_fails_closed_when_value_never_appears():
+    # 23행 사례: 로그는 "완료"인데 실제 값은 공란(무성 누락). Enter 후 값이
+    # 끝내 나타나지 않으면 재타이핑 없이 False로 복구 사다리에 넘긴다.
+    pressed = []
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": lambda *_args, **_kwargs: None,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": lambda _x, _y: (0, 0, 0, 0),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(
+                sleep=lambda _seconds: None,
+                time=lambda _c=iter(range(0, 1000)): float(next(_c)),
+            ),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 756, "A001", "5행 거래처", 0.0, 0.0
+    ) is False
+    # 확정 시도는 한 번(F9→Enter)만 — 빈 셀 확인 후 재타이핑하지 않는다.
+    assert pressed == ["f9", "enter"]

@@ -4454,8 +4454,13 @@ class ERPLoginBot:
                         pass
                 raise RuntimeError("출납처리여부 체크박스 UIA 미검출")
             except Exception as e:
-                self.logger.warning(f"  [MGMT-XY] {row_no}행 출납처리여부 UIA 해제 실패: {e}. 좌표 1회 클릭 fallback")
-                _click_form_xy(506, 772, f"{row_no}행 출납처리여부 체크박스")
+                # 상태 확인 없는 좌표 맹클릭은 재시도 때마다 체크박스를
+                # 토글해 켜버릴 수 있다(검증 워크플로 확정). 다른 안전 분기와
+                # 동일하게 임의 클릭 없이 기본 해제 상태를 유지한다.
+                self.logger.warning(
+                    f"  [MGMT-XY] {row_no}행 출납처리여부 UIA 해제 실패: {e}. "
+                    "임의 좌표 클릭 없이 현재 기본 해제 상태를 유지합니다."
+                )
 
         def _fill_management_for_current_row(row_no, account_name):
             vendor_name = str(form_data.get('vendor_name', '') or '').strip()
@@ -5678,8 +5683,87 @@ class ERPLoginBot:
                     time.sleep(max(mgmt_key_wait, float(commit_settle_wait)))
                     post_ink = _management_value_visual_ink(x, y)
                     if not _is_popup(post_ink):
-                        # 팝업이 닫힘 = 확정 진행. (값 셀에 거래처명(번호) 표시)
-                        return True
+                        # 팝업이 닫힘 = 확정 진행. 값이 실제로 남았는지 확인한다
+                        # (23행 사례: 로그는 "완료"인데 실제 공란으로 무성 누락).
+                        # 판정은 캐럿/노이즈를 걸러내는 _is_occupied를 쓰고,
+                        # 폴링 중 뒤늦게 뜨는 거래처ds 팝업은 값으로 오인하지
+                        # 않도록 재확인한다(검증 워크플로 확정 결함 보완).
+                        if _is_occupied(post_ink):
+                            return True
+                        # 커밋 확인은 행 식별 게이트가 켜져 있을 때만 켠다:
+                        # 게이트 없는 False는 맹목 Down 복구로 다른 행을 오염
+                        # 시킬 수 있다(검증 워크플로 확정).
+                        commit_check_on = str(
+                            os.getenv("ERP_FINANCE_VENDOR_COMMIT_CHECK", "1")
+                            or "1"
+                        ).strip() not in ("0", "false", "False") and str(
+                            os.getenv("ERP_FINANCE_ROW_IDENTITY_CHECK", "1")
+                            or "1"
+                        ).strip() not in ("0", "false", "False")
+                        if not commit_check_on:
+                            return True
+                        commit_deadline = time.time() + max(
+                            1.0,
+                            float(
+                                os.getenv(
+                                    "ERP_FINANCE_VENDOR_COMMIT_POLL", "3.0"
+                                )
+                                or "3.0"
+                            ),
+                        )
+                        commit_popup_late = False
+                        while True:
+                            if _is_popup(post_ink):
+                                commit_popup_late = True
+                                break
+                            if _is_occupied(post_ink):
+                                return True
+                            if time.time() >= commit_deadline:
+                                break
+                            time.sleep(0.5)
+                            post_ink = _management_value_visual_ink(x, y)
+                        if commit_popup_late:
+                            if confirm_attempt < confirm_attempts - 1:
+                                self.logger.warning(
+                                    f"  [MGMT-XY] {label}: Enter 후 거래처ds "
+                                    f"팝업이 늦게 감지되어 ESC 후 재확정 "
+                                    f"{confirm_attempt + 1}/"
+                                    f"{confirm_attempts - 1} (ink={post_ink})."
+                                )
+                                _close_stuck_vendor_popup(
+                                    f"commit{confirm_attempt + 1}"
+                                )
+                                continue
+                            _close_stuck_vendor_popup("commit-final")
+                            return False
+                        # 반전 렌더링(선택 상태)이 값을 0 잉크로 읽는 오탐을
+                        # 막기 위해, 관리항목 헤더를 클릭해 값 셀 포커스를
+                        # 해제한 뒤 한 번 더 판독하고 나서 판정한다.
+                        commit_defocus_dy = int(
+                            float(
+                                os.getenv("ERP_MGMT_VALUE_DEFOCUS_DY", "25")
+                                or "25"
+                            )
+                        )
+                        _click_form_xy(
+                            x,
+                            y - commit_defocus_dy,
+                            f"{label} 확정 재판독(포커스 해제)",
+                            wait=mgmt_click_wait,
+                        )
+                        time.sleep(max(0.25, mgmt_key_wait))
+                        recheck_ink = _management_value_visual_ink(x, y)
+                        if _is_occupied(recheck_ink):
+                            return True
+                        if _is_popup(recheck_ink):
+                            _close_stuck_vendor_popup("commit-recheck")
+                            return False
+                        self.logger.warning(
+                            f"  [MGMT-XY] {label}: Enter 후에도 값 셀이 비어 "
+                            f"있어 확정 미반영으로 판단합니다"
+                            f"(ink={post_ink}, 재판독={recheck_ink})."
+                        )
+                        return False
                     if confirm_attempt < confirm_attempts - 1:
                         self.logger.warning(
                             f"  [MGMT-XY] {label}: Enter 후에도 거래처ds 팝업이 "
@@ -7325,6 +7409,11 @@ class ERPLoginBot:
                             pyperclip.copy(old_clipboard)
                         except Exception:
                             pass
+                    # 물리 클립보드를 건드렸으므로 붙여넣기 캐시를 무효화한다.
+                    try:
+                        mgmt_clipboard_cache["text"] = None
+                    except Exception:
+                        pass
                 ok = matched_by is not None
                 self.logger.info(
                     f"  [MGMT-XY] {row_no}행 계정과목 검증: expected={expected_account}, "
@@ -7332,6 +7421,86 @@ class ERPLoginBot:
                     f"matched_x={matched_x}, probes={probe_results}, ok={ok}"
                 )
                 return ok
+
+            def _verify_row_slot_by_summary(row_no, base_y, allow_probe):
+                """적요 셀을 복사해 base_y(및 위쪽 후보 슬롯)의 행 정체를 확인한다.
+
+                일치하는 슬롯 y를 반환하고, 어떤 후보도 일치하지 않으면 None.
+                적요는 행마다 거래처명이 달라 유일하므로, 위치를 가정하지 않고
+                화면에 실제로 보이는 내용으로 행을 구분한다. 스크롤 구간은
+                "마지막 완전 행" 앵커가 흔들릴 수 있어(부분 행/스크롤 정렬)
+                위쪽 슬롯도 후보로 훑는다.
+                """
+                expected_summary = ""
+                if 1 <= int(row_no) <= len(erp_rows):
+                    ident_cols = str(erp_rows[int(row_no) - 1] or "").split('\t')
+                    if ident_cols:
+                        expected_summary = ident_cols[-1].strip()
+                if not expected_summary:
+                    return int(base_y)
+                expected_norm = _norm_text(expected_summary)
+                if allow_probe:
+                    ident_candidates = [
+                        int(base_y),
+                        int(base_y) - row_height,
+                        int(base_y) - 2 * row_height,
+                    ]
+                else:
+                    ident_candidates = [int(base_y)]
+                ident_old_clip = None
+                try:
+                    ident_old_clip = pyperclip.paste()
+                except Exception:
+                    ident_old_clip = None
+                matched_y = None
+                try:
+                    ident_sentinel = f"__ERP_ROW_IDENT_{row_no}__"
+                    for cand_y in ident_candidates:
+                        _click_form_xy(
+                            summary_x,
+                            cand_y,
+                            f"{row_no}행 행 식별 적요 클릭",
+                            wait=mgmt_key_wait,
+                        )
+                        ident_copied = ""
+                        for _ in range(3):
+                            pyperclip.copy(ident_sentinel)
+                            _release_modifiers(
+                                f"{row_no}행 행 식별 적요 복사", wait=False
+                            )
+                            pyautogui.hotkey('ctrl', 'c')
+                            time.sleep(max(0.15, mgmt_key_wait))
+                            ident_copied = str(pyperclip.paste() or "")
+                            if ident_copied != ident_sentinel:
+                                break
+                        if (
+                            ident_copied
+                            and ident_copied != ident_sentinel
+                            and _norm_text(ident_copied) == expected_norm
+                        ):
+                            matched_y = int(cand_y)
+                            break
+                        self.logger.info(
+                            f"  [MGMT-XY] {row_no}행 행 식별: 슬롯 y={cand_y} "
+                            f"불일치(copied={ident_copied[:60]!r})"
+                        )
+                except Exception as ident_exc:
+                    self.logger.warning(
+                        f"  [MGMT-XY] {row_no}행 행 식별 실패: {ident_exc}"
+                    )
+                finally:
+                    if ident_old_clip is not None:
+                        try:
+                            pyperclip.copy(ident_old_clip)
+                        except Exception:
+                            pass
+                    # 물리 클립보드를 건드렸으므로 붙여넣기 캐시를 무효화한다
+                    # (원복 실패 시 sentinel/적요가 캐시 값인 척 붙는 오염 방지).
+                    try:
+                        mgmt_clipboard_cache["text"] = None
+                    except Exception:
+                        pass
+                return matched_y
 
             def _ensure_bank_management_row(row_no, current_y, expected_account):
                 if skip_visible_row_scan:
@@ -7400,6 +7569,12 @@ class ERPLoginBot:
                     f"visible_labels={snapshot.get('labels')}"
                 )
 
+            # 행 식별 게이트: 화면의 적요를 복사해 지금 입력하려는 슬롯이
+            # 정말 row_no인지 확인한 뒤에만 입력한다(23행 무성 누락·재탐색
+            # 한 슬롯 어긋남 사례 — 위치 가정 금지, 실제 화면 기준).
+            row_identity_check = str(
+                os.getenv("ERP_FINANCE_ROW_IDENTITY_CHECK", "1") or "1"
+            ).strip() not in ("0", "false", "False")
             current_y = first_row_y
             for idx in range(rows_to_fill):
                 account_name = ""
@@ -7440,13 +7615,61 @@ class ERPLoginBot:
                 management_enter_sent = False
                 for fill_attempt in range(fill_attempts):
                     try:
+                        # 보통예금(마지막) 행은 _ensure_bank_management_row가
+                        # 계정과목/적요 검증과 관리항목 창 준비를 이미 수행하므로
+                        # 게이트를 건너뛴다(게이트의 프로브 클릭이 준비된 창
+                        # 상태를 흐트러뜨려 비복구 오류를 낼 수 있음 — 검증
+                        # 워크플로 확정).
+                        if row_identity_check and not _requires_bank_management(
+                            explicit_management_for_row
+                        ):
+                            # 적요 편집이 열려 있으면 Ctrl+C가 셀이 아닌 편집
+                            # 텍스트를 대상으로 해 복사가 빗나가므로 먼저 ESC로
+                            # 닫는다(행 선택은 유지됨).
+                            _release_modifiers(
+                                f"{row_no}행 행 식별 ESC 직전", wait=False
+                            )
+                            pyautogui.press('esc')
+                            time.sleep(max(0.25, mgmt_key_wait))
+                            ident_y = _verify_row_slot_by_summary(
+                                row_no,
+                                current_y,
+                                bool(
+                                    row_geometry_state.get("bottom_scroll_mode")
+                                ),
+                            )
+                            if ident_y is None:
+                                raise RuntimeError(
+                                    f"{row_no}행 행 식별 불일치: 적요 대조에 "
+                                    "실패해 입력하지 않았습니다."
+                                )
+                            if int(ident_y) != int(current_y):
+                                self.logger.warning(
+                                    f"  [MGMT-XY] {row_no}행 행 식별: 슬롯 보정 "
+                                    f"y={current_y}->{ident_y}"
+                                )
+                                current_y = int(ident_y)
+                            _double_click_form_xy(
+                                summary_x,
+                                current_y,
+                                f"{row_no}행 행 식별 재선택",
+                                wait=mgmt_summary_open_wait,
+                            )
+                            if mgmt_after_summary_open_wait:
+                                time.sleep(mgmt_after_summary_open_wait)
                         management_enter_sent = bool(
                             _fill_management_for_current_row(row_no, account_name)
                         )
                         break
                     except RuntimeError as fill_exc:
                         recoverable = (
-                            "거래처번호 직접 키보드 입력" in str(fill_exc)
+                            any(
+                                key in str(fill_exc)
+                                for key in (
+                                    "거래처번호 직접 키보드 입력",
+                                    "행 식별 불일치",
+                                )
+                            )
                             and fill_attempt < fill_attempts - 1
                         )
                         if not recoverable:
@@ -7543,41 +7766,65 @@ class ERPLoginBot:
                                     # 적요가 없으면 대조 불가 — 기존 동작 유지.
                                     renav_verified = True
                                     break
+                                # Down 도보 후 스크롤 정렬은 일반 진행 때와 한
+                                # 슬롯 어긋날 수 있다(86행 실측: 목표 행이 앵커
+                                # 691이 아니라 671에 표시, 87행이 691에 위치 —
+                                # 재탐색 2회 동일). 앵커부터 위로 한두 슬롯을
+                                # 차례로 복사·대조해 적요가 일치하는 슬롯을
+                                # 찾는다. 뷰포트 모드는 기하 공식이 정확하므로
+                                # 후보 1개만 쓴다.
+                                if row_geometry_state.get("bottom_scroll_mode"):
+                                    renav_candidates = [
+                                        renav_y,
+                                        renav_y - row_height,
+                                        renav_y - 2 * row_height,
+                                    ]
+                                else:
+                                    renav_candidates = [renav_y]
                                 renav_old_clip = None
                                 try:
                                     renav_old_clip = pyperclip.paste()
                                 except Exception:
                                     renav_old_clip = None
                                 try:
-                                    _click_form_xy(
-                                        summary_x,
-                                        renav_y,
-                                        f"{row_no}행 재탐색 적요 검증 클릭",
-                                        wait=mgmt_key_wait,
-                                    )
                                     renav_sentinel = (
                                         f"__ERP_RENAV_VERIFY_{row_no}__"
                                     )
-                                    for _ in range(3):
-                                        pyperclip.copy(renav_sentinel)
-                                        _release_modifiers(
-                                            f"{row_no}행 재탐색 적요 복사",
-                                            wait=False,
+                                    for renav_probe_y in renav_candidates:
+                                        _click_form_xy(
+                                            summary_x,
+                                            renav_probe_y,
+                                            f"{row_no}행 재탐색 적요 검증 클릭",
+                                            wait=mgmt_key_wait,
                                         )
-                                        pyautogui.hotkey('ctrl', 'c')
-                                        time.sleep(max(0.15, mgmt_key_wait))
-                                        renav_copied = str(
-                                            pyperclip.paste() or ""
-                                        )
-                                        if renav_copied != renav_sentinel:
+                                        renav_copied = ""
+                                        for _ in range(3):
+                                            pyperclip.copy(renav_sentinel)
+                                            _release_modifiers(
+                                                f"{row_no}행 재탐색 적요 복사",
+                                                wait=False,
+                                            )
+                                            pyautogui.hotkey('ctrl', 'c')
+                                            time.sleep(max(0.15, mgmt_key_wait))
+                                            renav_copied = str(
+                                                pyperclip.paste() or ""
+                                            )
+                                            if renav_copied != renav_sentinel:
+                                                break
+                                        if (
+                                            renav_copied
+                                            and renav_copied != renav_sentinel
+                                            and _norm_text(renav_copied)
+                                            == _norm_text(renav_expected_summary)
+                                        ):
+                                            renav_verified = True
+                                            renav_y = renav_probe_y
                                             break
-                                    if (
-                                        renav_copied
-                                        and renav_copied != renav_sentinel
-                                        and _norm_text(renav_copied)
-                                        == _norm_text(renav_expected_summary)
-                                    ):
-                                        renav_verified = True
+                                        self.logger.info(
+                                            f"  [MGMT-XY] {row_no}행 재탐색 "
+                                            f"후보 슬롯 y={renav_probe_y} 불일치: "
+                                            f"copied={renav_copied[:60]!r}"
+                                        )
                                 except Exception as renav_verify_exc:
                                     self.logger.warning(
                                         f"  [MGMT-XY] {row_no}행 재탐색 적요 "
@@ -7589,6 +7836,13 @@ class ERPLoginBot:
                                             pyperclip.copy(renav_old_clip)
                                         except Exception:
                                             pass
+                                    # 물리 클립보드를 건드렸으므로 붙여넣기
+                                    # 캐시를 무효화한다(원복 실패 시 sentinel이
+                                    # 캐시 값인 척 붙는 오염 방지).
+                                    try:
+                                        mgmt_clipboard_cache["text"] = None
+                                    except Exception:
+                                        pass
                                 if renav_verified:
                                     break
                                 self.logger.warning(
@@ -7605,7 +7859,8 @@ class ERPLoginBot:
                                 )
                             self.logger.info(
                                 f"  [MGMT-XY] {row_no}행 재탐색 도착 행 확인: "
-                                f"적요 일치({renav_expected_summary[:40]!r})"
+                                f"적요 일치({renav_expected_summary[:40]!r}), "
+                                f"y={renav_y}"
                             )
                             _double_click_form_xy(
                                 summary_x,
