@@ -48,7 +48,7 @@ def test_send_mail_outbox_records_pdf_attachment(tmp_path, monkeypatch):
     assert payload["attachments"] == [{"filename": "voucher.pdf", "content_type": "application/pdf"}]
 
 
-def test_failure_notification_sends_only_to_admin_and_attaches_debug_files(tmp_path, monkeypatch):
+def test_failure_notification_goes_to_admin_and_requester_with_debug_files(tmp_path, monkeypatch):
     outbox = tmp_path / "outbox"
     source = tmp_path / "upload.xlsx"
     source.write_bytes(b"xlsx")
@@ -106,12 +106,12 @@ def test_failure_notification_sends_only_to_admin_and_attaches_debug_files(tmp_p
     payload = json.loads(outbox_files[0].read_text(encoding="utf-8"))
     assert payload["cc"] == ""
     assert "재정전표자동화 시스템" in payload["from"]
+    # 오류 메일은 재정 자동화 관리자와 업로드 담당자에게 함께 간다.
     assert [address for _name, address in getaddresses([payload["to"]])] == [
-        "rlckd9646@dae-seung.co.kr"
+        "ds1501@dae-seung.co.kr",
+        "requester@example.com",
     ]
-    assert "requester@example.com" not in payload["to"]
-    assert "ds1501@dae-seung.co.kr" not in payload["to"]
-    assert "ds1501@dae-seung.co.kr" not in payload["cc"]
+    assert payload["cc"] == ""
     attachment_names = {item["filename"] for item in payload["attachments"]}
     assert "upload.xlsx" in attachment_names
     assert "agent.log" in attachment_names
@@ -126,7 +126,7 @@ def test_failure_notification_sends_only_to_admin_and_attaches_debug_files(tmp_p
     assert "secret-blob" not in diagnostic_text
 
 
-def test_failure_notification_falls_back_to_admin_without_support_cc(tmp_path, monkeypatch):
+def test_failure_notification_falls_back_when_requester_email_missing(tmp_path, monkeypatch):
     outbox = tmp_path / "outbox"
     monkeypatch.setattr(notifications, "settings", _fake_settings(tmp_path, outbox))
     now = datetime(2026, 7, 21, 15, 0, 0)
@@ -153,8 +153,74 @@ def test_failure_notification_falls_back_to_admin_without_support_cc(tmp_path, m
 
     assert result["queued"] is True
     payload = json.loads(next(outbox.glob("*.json")).read_text(encoding="utf-8"))
+    # 담당자 주소가 없으면 관리자 설정 주소로 대체된다(중복은 제거).
     assert [address for _name, address in getaddresses([payload["to"]])] == [
-        "rlckd9646@dae-seung.co.kr"
+        "ds1501@dae-seung.co.kr",
+        "another@example.com",
+    ]
+    assert payload["cc"] == ""
+
+
+def test_completion_notification_goes_only_to_requester(tmp_path, monkeypatch):
+    # 성공 메일은 업로드한 담당자에게만 간다(관리자 주소를 넣지 않는다).
+    outbox = tmp_path / "outbox"
+    monkeypatch.setattr(notifications, "settings", _fake_settings(tmp_path, outbox))
+    now = datetime(2026, 7, 27, 11, 0, 0)
+    job = JobRecord(
+        id="ok-job",
+        title="대승 2026-07-20 수시결제 전표",
+        requester="김기창",
+        company_key="daeseung",
+        accounting_date="2026-07-20",
+        source_filename="upload.xlsx",
+        status="done",
+        progress=100,
+        message="처리 완료",
+        target_agent_id="finance-agent-172-17-30-243",
+        target_client_ip="172.17.30.243",
+        created_at=now,
+        updated_at=now,
+        payload={
+            "requester": "김기창",
+            "requester_email": "requester@example.com",
+            "company_name": "대승",
+        },
+        result={},
+    )
+
+    result = notifications.notify_job_completed(job)
+
+    assert result["queued"] is True
+    payload = json.loads(next(outbox.glob("*.json")).read_text(encoding="utf-8"))
+    assert [address for _name, address in getaddresses([payload["to"]])] == [
+        "requester@example.com"
     ]
     assert payload["cc"] == ""
     assert "ds1501@dae-seung.co.kr" not in payload["to"]
+
+
+def test_failure_recipients_dedupe_when_requester_is_admin(tmp_path, monkeypatch):
+    # 담당자가 곧 관리자면 한 번만 보낸다.
+    outbox = tmp_path / "outbox"
+    monkeypatch.setattr(notifications, "settings", _fake_settings(tmp_path, outbox))
+    now = datetime(2026, 7, 27, 11, 0, 0)
+    job = JobRecord(
+        id="dup-job",
+        title="중복 수신자",
+        requester="관리자",
+        company_key="daeseung",
+        accounting_date="2026-07-27",
+        source_filename="upload.xlsx",
+        status="error",
+        progress=95,
+        message="오류",
+        target_agent_id="finance-agent-172-17-30-243",
+        target_client_ip="172.17.30.243",
+        created_at=now,
+        updated_at=now,
+        payload={"requester_email": "DS1501@dae-seung.co.kr"},
+        result={"error": "오류"},
+        error="오류",
+    )
+
+    assert notifications._failure_recipients(job) == ["ds1501@dae-seung.co.kr"]

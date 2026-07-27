@@ -16,7 +16,7 @@ from .settings import settings
 
 
 STEP_LABELS = ("작업시작", "업로드완료", "ERP 입력시작", "저장완료", "출력완료")
-FAILURE_RECIPIENT_EMAIL = "rlckd9646@dae-seung.co.kr"
+FAILURE_RECIPIENT_EMAIL = "ds1501@dae-seung.co.kr"
 
 
 def _recipients(value: str | Iterable[str] | None) -> list[str]:
@@ -191,6 +191,23 @@ def _support_email() -> str:
 
 def _failure_recipient() -> str:
     return FAILURE_RECIPIENT_EMAIL
+
+
+def _failure_recipients(job: JobRecord) -> list[str]:
+    """오류 메일 수신자: 재정 자동화 관리자 + 업로드한 담당자.
+
+    담당자 주소가 없으면 관리자에게만 간다. 중복은 제거한다.
+    """
+    addresses: list[str] = []
+    for candidate in (_failure_recipient(), _job_recipient(job)):
+        # 설정값은 "a@b; c@d"처럼 여러 주소일 수 있으므로 분리해서 담는다.
+        for item in _recipients(candidate):
+            address = _email_only(item).strip()
+            if address and address.lower() not in {
+                existing.lower() for existing in addresses
+            }:
+                addresses.append(address)
+    return addresses
 
 
 def _money(value: Any) -> str:
@@ -455,7 +472,7 @@ def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) 
     payload = job.payload or {}
     return "\n".join(
         [
-            "관리자님",
+            "안녕하세요.",
             "",
             "엑셀 수시결제 전표 처리 중 오류가 발생했습니다.",
             "원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.",
@@ -467,7 +484,7 @@ def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) 
             f"- 회계일: {job.accounting_date}",
             f"- 오류: {_job_error(job)}",
             "",
-            "오류 알림은 재정 자동화 관리자에게만 전송했습니다.",
+            "이 오류 알림은 재정 자동화 관리자와 업로드 담당자에게 함께 전송했습니다.",
         ]
     )
 
@@ -475,7 +492,7 @@ def failure_mail_body(job: JobRecord, events: Iterable[JobEvent] | None = None) 
 def failure_mail_html(job: JobRecord, events: Iterable[JobEvent] | None = None) -> str:
     payload = job.payload or {}
     body = f"""
-      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">관리자님, 처리 중 오류가 발생했습니다. 원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.</p>
+      <p style="margin:0 0 12px;font-size:15px;line-height:1.6;">처리 중 오류가 발생했습니다. 원본 엑셀, 진단 로그, 오류 내용을 이 메일에 함께 첨부했습니다.</p>
       {_steps_html(job, events)}
       <div style="border:1px solid #fecaca;background:#fef2f2;border-radius:8px;padding:12px 14px;margin:12px 0 18px;">
         <div style="font-weight:700;color:#991b1b;margin-bottom:4px;">오류 내용</div>
@@ -493,10 +510,14 @@ def notify_job_failed(
     events: Iterable[JobEvent] | None = None,
     source_path: Path | None = None,
 ) -> dict[str, Any]:
-    # Failure diagnostics are temporarily restricted to the finance automation
-    # administrator.  Do not mail the requester or the support distribution list.
-    recipient = _failure_recipient()
-    recipient_name = str(getattr(settings, "admin_name", "") or "").strip()
+    # 오류 메일은 재정 자동화 관리자와 업로드한 담당자에게 함께 보낸다.
+    # (성공 메일은 담당자에게만 간다 — notify_job_completed 참고.)
+    recipients = _failure_recipients(job)
+    recipient_name = (
+        _job_recipient_name(job)
+        if len(recipients) == 1 and recipients[0] == _email_only(_job_recipient(job))
+        else ""
+    )
     subject = f"[엑셀 전표 처리 오류] {job.title}"
     result = job.result or {}
     diagnostic = _diagnostic_attachment(job, events, source_path)
@@ -509,7 +530,7 @@ def notify_job_failed(
         ]
     )
     return send_mail(
-        recipient,
+        recipients,
         subject,
         failure_mail_body(job, events),
         html_body=failure_mail_html(job, events),
