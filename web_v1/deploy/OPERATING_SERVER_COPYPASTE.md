@@ -1,5 +1,32 @@
 # 운영서버 복붙 명령
 
+## 배포 전 필수 자산 점검 (WEB 1.0.228)
+
+설치 전에 아래 검사를 실행합니다. 하나라도 누락되면 설치를 진행하지 말고
+배포 ZIP을 다시 생성해야 합니다. `VERSION` 값은 현재 배포 기준인 `1.0.228`과
+일치해야 합니다.
+
+```powershell
+$Root = "C:\Users\Administrator\Desktop\전표 자동화 프로그램_WEB_Version"
+$Required = @(
+  "$Root\web_v1\frontend\index.html",
+  "$Root\web_v1\frontend\app.js",
+  "$Root\web_v1\frontend\styles.css",
+  "$Root\web_v1\frontend\admin_db.html",
+  "$Root\web_v1\frontend\admin_db.js",
+  "$Root\web_v1\frontend\admin_db.css",
+  "$Root\web_v1\frontend\sw.js",
+  "$Root\web_v1\backend\tools\AccountingWebRequiredSetup.exe",
+  "$Root\web_v1\backend\zoom_billing.py",
+  "$Root\web_v1\VERSION"
+)
+$Missing = $Required | Where-Object { -not (Test-Path -LiteralPath $_) }
+if ($Missing) { throw "배포 필수 자산 누락: $($Missing -join ', ')" }
+$Version = (Get-Content -LiteralPath "$Root\web_v1\VERSION" -Raw).Trim()
+if ($Version -ne "1.0.228") { throw "VERSION 불일치: expected 1.0.228, actual $Version" }
+Write-Host "배포 필수 자산 점검 통과: WEB $Version"
+```
+
 운영서버 기준 폴더:
 
 ```text

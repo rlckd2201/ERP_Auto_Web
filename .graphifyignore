@@ -1,0 +1,23 @@
+# Generated output and local runtime artifacts.
+graphify-out/
+outputs/
+__pycache__/
+
+# Historical copies, staging folders, and one-off local tools.
+_codex*
+_backup*
+_hotfix*
+_release*
+_serve*
+_verify*
+_rdp*
+_remote*
+_patch*
+_repair*
+_http*
+
+# Recursive accidental support copies and local audit utilities.
+support/support/
+admin_viewer.py
+invoice_db_biz_audit.py
+tax_biz_audit.py

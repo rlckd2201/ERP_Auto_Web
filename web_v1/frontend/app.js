@@ -3,6 +3,8 @@ const ONE_CLICK_OUTPUT_TARGETS = new Set(["pdf", "pyeongtaek", "gimje"]);
 const LOG_GROUP_LIMIT = 10;
 const RECENT_JOB_LIMIT = 10;
 const RECENT_JOB_FETCH_LIMIT = 50;
+const JOB_NOTIFICATION_STORAGE_KEY = "accountingWebNotifiedJobs";
+const JOB_NOTIFICATION_POLL_MS = 10000;
 
 const state = {
   user: (() => {
@@ -29,7 +31,18 @@ const state = {
   workLogOpen: false,
   setupMonitorTimer: null,
   mailCollectTimer: null,
+  jobNotificationTimer: null,
+  jobNotificationBaselineReady: false,
+  notifiedJobStates: (() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(JOB_NOTIFICATION_STORAGE_KEY) || "{}");
+      return saved && typeof saved === "object" ? saved : {};
+    } catch {
+      return {};
+    }
+  })(),
   setupWasReady: false,
+  setupDisconnectFailures: 0,
   agentAutoStartAttempted: false,
   setupDownloadPrompted: false,
   notificationPromptedThisSession: false,
@@ -91,6 +104,7 @@ const els = {
   refreshButton: document.querySelector("#refreshButton"),
   refreshInvoicesButton: document.querySelector("#refreshInvoicesButton"),
   erpQueueButton: document.querySelector("#erpQueueButton"),
+  completeInvoiceButton: document.querySelector("#completeInvoiceButton"),
   retryInvoiceButton: document.querySelector("#retryInvoiceButton"),
   deleteInvoiceButton: document.querySelector("#deleteInvoiceButton"),
   invoiceLogButton: document.querySelector("#invoiceLogButton"),
@@ -497,6 +511,7 @@ function clearLoginAndShowLogin(message = "") {
   }
   stopSetupMonitor();
   stopMailCollectMonitor();
+  stopJobNotificationMonitor();
   showView("login");
   if (els.loginMessage) els.loginMessage.textContent = message;
 }
@@ -508,6 +523,10 @@ function stopSetupMonitor() {
   }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function startSetupMonitor() {
   if (state.setupMonitorTimer) return;
   state.setupMonitorTimer = setInterval(async () => {
@@ -516,12 +535,24 @@ function startSetupMonitor() {
       const status = await requestJson(`/api/setup/status?user_id=${encodeURIComponent(state.user.id)}`);
       renderSetupStatus(status);
       if (!status.ready && !agentConnectedFromSetup()) {
-        clearLoginAndShowLogin("담당자 PC 필수 프로그램 연결이 끊겨 로그아웃되었습니다. 필수 프로그램을 다시 실행한 뒤 로그인하세요.");
+        state.setupDisconnectFailures += 1;
+        if (state.setupDisconnectFailures === 3) {
+          addLog({
+            status: "printing",
+            progress: 0,
+            message: "담당자 PC Agent 연결을 다시 확인하는 중입니다. 로그인과 현재 작업은 유지됩니다.",
+            created_at: new Date().toISOString(),
+          });
+        }
       } else if (!status.ready) {
+        state.setupDisconnectFailures = 0;
         showView("setup");
+      } else {
+        state.setupDisconnectFailures = 0;
       }
     } catch (error) {
-      clearLoginAndShowLogin(`필수환경 점검 중 오류가 발생해 로그아웃했습니다: ${error.message}`);
+      state.setupDisconnectFailures += 1;
+      console.warn("setup monitor check failed; keeping the current login", error);
     }
   }, 5000);
 }
@@ -693,13 +724,56 @@ async function loadSetupStatus({ showReadyApp = true } = {}) {
   return status;
 }
 
+async function pollSetupStatusAfterAction({
+  showReadyApp = true,
+  attempts = 24,
+  intervalMs = 1500,
+  message = "필수환경을 다시 점검하는 중입니다.",
+} = {}) {
+  let latest = null;
+  const refreshButton = els.setupRefreshButton;
+  const installButton = els.setupInstallButton;
+  const previousRefreshDisabled = Boolean(refreshButton?.disabled);
+  const previousInstallDisabled = Boolean(installButton?.disabled);
+  if (refreshButton) refreshButton.disabled = true;
+  if (installButton) installButton.disabled = true;
+  try {
+    for (let attempt = 0; attempt < attempts; attempt += 1) {
+      if (attempt > 0) await sleep(intervalMs);
+      latest = await loadSetupStatus({ showReadyApp: false });
+      if (latest?.ready) {
+        if (showReadyApp) await showApp();
+        return latest;
+      }
+      if (els.setupSummary) {
+        const remaining = Math.max(0, attempts - attempt - 1);
+        els.setupSummary.textContent = `${message} 자동 재확인 중입니다.${remaining ? ` (${remaining}회 남음)` : ""}`;
+      }
+      if (attempt === 2 && setupNeedsAgentStart()) {
+        requestAgentStartNow({ force: true });
+      }
+    }
+    return latest;
+  } finally {
+    if (refreshButton) refreshButton.disabled = previousRefreshDisabled;
+    if (installButton) installButton.disabled = previousInstallDisabled;
+    if (latest) renderSetupStatus(latest);
+  }
+}
+
 async function refreshSetupAndStartAgent() {
   state.agentAutoStartAttempted = false;
+  if (els.setupSummary) {
+    els.setupSummary.textContent = "필수환경을 다시 점검하는 중입니다.";
+  }
   if (setupNeedsAgentStart()) {
     requestAgentStartNow({ force: true });
-    await new Promise((resolve) => setTimeout(resolve, 1200));
+    await sleep(1200);
   }
-  const status = await loadSetupStatus({ showReadyApp: false });
+  const status = await pollSetupStatusAfterAction({
+    showReadyApp: true,
+    message: "필수환경을 다시 점검하는 중입니다.",
+  });
   if (status && !status.ready && setupNeedsAgentStart()) {
     autoStartAgentAfterLogin({ force: true });
   }
@@ -725,6 +799,7 @@ async function showApp(mode = state.invoiceMode) {
   state.setupWasReady = true;
   startSetupMonitor();
   startMailCollectMonitor();
+  startJobNotificationMonitor();
   if (state.appLoaded) {
     if (modeChanged) {
       state.selectedInvoiceIds.clear();
@@ -858,6 +933,11 @@ async function savePrinterMapping() {
 async function requestSetupInstall() {
   if (!agentConnectedFromSetup() || agentUpdateRequiredFromSetup()) {
     await requestInstalledAgentStart({ offerDownload: !agentConnectedFromSetup() });
+    await pollSetupStatusAfterAction({
+      showReadyApp: true,
+      attempts: 20,
+      message: "담당자 PC 필수 프로그램 연결 상태를 확인하는 중입니다.",
+    });
     return;
   }
   const companies = missingCompaniesFromSetup();
@@ -876,6 +956,11 @@ async function requestSetupInstall() {
     });
     const targets = [...companies, ...(installCertificate ? ["WEB HTTPS 인증서"] : [])];
     els.setupSummary.textContent = `설치 작업을 담당자 PC 필수 프로그램에 등록했습니다: ${targets.join(", ")}`;
+    await pollSetupStatusAfterAction({
+      showReadyApp: true,
+      attempts: 40,
+      message: "설치 작업 완료 여부를 확인하는 중입니다.",
+    });
   } catch (error) {
     alert(error.message);
   }
@@ -901,9 +986,9 @@ function syncNotificationState() {
   const labels = { granted: "허용됨", denied: "차단됨", default: "대기" };
   if (els.notifyState) els.notifyState.textContent = labels[Notification.permission] || "대기";
   if (els.notifyButton) {
-    els.notifyButton.textContent = Notification.permission === "granted" ? "알림 허용됨" : "알림 허용";
+    els.notifyButton.textContent = Notification.permission === "granted" ? "알림 테스트" : "알림 허용";
     els.notifyButton.disabled = Notification.permission === "denied";
-    els.notifyButton.title = Notification.permission === "denied" ? "Chrome 사이트 설정에서 알림 차단을 해제해야 합니다." : "작업 완료/실패를 Windows 알림으로 받습니다.";
+    els.notifyButton.title = Notification.permission === "denied" ? "Chrome 사이트 설정에서 알림 차단을 해제해야 합니다." : (Notification.permission === "granted" ? "Windows 알림을 테스트합니다." : "작업 완료/실패를 Windows 알림으로 받습니다.");
   }
 }
 function setBusy(isBusy) {
@@ -916,7 +1001,8 @@ function setBusy(isBusy) {
   const regular = selectedInvoiceType() === "regular" || state.invoiceMode === "regular";
   els.analyzePurchaseButton.disabled = regular || isBusy || !detail.quote_path;
   els.saveAnalysisButton.disabled = isBusy || !(Array.isArray(detail.items) && detail.items.length);
-  els.retryInvoiceButton.disabled = isBusy || !selectedInvoicesCanRetry();
+  if (els.completeInvoiceButton) els.completeInvoiceButton.disabled = isBusy || !selectedInvoicesCanComplete();
+  if (els.retryInvoiceButton) els.retryInvoiceButton.disabled = isBusy || !selectedInvoicesCanRetry();
   els.deleteInvoiceButton.disabled = isBusy || state.selectedInvoiceIds.size === 0;
   if (isBusy) els.erpQueueButton.disabled = true;
   else updateSelectionUi();
@@ -950,7 +1036,9 @@ function logClass(value) {
 function isFailureLog(log) {
   const status = String(log?.status || log?.level || "").toLowerCase();
   if (["error", "failed", "fail"].includes(status)) return true;
-  return /실패|오류|에러|error|failed/i.test(String(log?.message || ""));
+  const message = String(log?.message || "");
+  const messageWithoutZeroFailures = message.replace(/실패\s*0\s*건/g, "");
+  return /실패|오류|에러|error|failed/i.test(messageWithoutZeroFailures);
 }
 
 function splitRecentLogs(logs) {
@@ -1039,7 +1127,10 @@ async function requestNotification({ quiet = false } = {}) {
     syncNotificationState();
     return false;
   }
-  if (Notification.permission === "granted") return true;
+  if (Notification.permission === "granted") {
+    if (!quiet) showNotification("알림 테스트", "회계업무 WEB Windows 알림이 정상적으로 연결되었습니다.");
+    return true;
+  }
   if (Notification.permission === "denied") {
     syncNotificationState();
     if (!quiet) alert("Chrome에서 이 사이트 알림이 차단되어 있습니다. 주소창 왼쪽 사이트 설정에서 알림을 허용으로 바꿔야 합니다.");
@@ -1068,6 +1159,76 @@ function registerServiceWorker() {
     .register("/assets/sw.js")
     .then(() => navigator.serviceWorker.ready)
     .catch(() => null);
+}
+
+function jobNotificationKey(job) {
+  return `${String(job?.id || "")}:${String(job?.status || "")}`;
+}
+
+function rememberJobNotification(job) {
+  const key = jobNotificationKey(job);
+  if (!key || key === ":") return;
+  state.notifiedJobStates[key] = Date.now();
+  const cutoff = Date.now() - (7 * 24 * 60 * 60 * 1000);
+  Object.entries(state.notifiedJobStates).forEach(([savedKey, savedAt]) => {
+    if (Number(savedAt) < cutoff) delete state.notifiedJobStates[savedKey];
+  });
+  localStorage.setItem(JOB_NOTIFICATION_STORAGE_KEY, JSON.stringify(state.notifiedJobStates));
+}
+
+function jobNeedsBackgroundNotification(job) {
+  if (!job || !["done", "error"].includes(job.status)) return false;
+  if (job.payload?.source_job_id) return false;
+  if (job.status === "error") return true;
+  if (job.job_type === "purchase_mail_collect") {
+    const result = job.result || {};
+    return Number(result.saved_count || 0) > 0 || Number(result.failed_count || 0) > 0;
+  }
+  return true;
+}
+
+function jobFinishedAtMs(job) {
+  const value = job?.finished_at || job?.updated_at || job?.created_at || "";
+  const parsed = Date.parse(value);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function notifyBackgroundJobs(jobs) {
+  const now = Date.now();
+  for (const job of jobs || []) {
+    if (!job || !["done", "error"].includes(job.status)) continue;
+    const key = jobNotificationKey(job);
+    if (state.notifiedJobStates[key]) continue;
+    rememberJobNotification(job);
+    if (!state.jobNotificationBaselineReady || !jobNeedsBackgroundNotification(job)) continue;
+    const finishedAt = jobFinishedAtMs(job);
+    if (finishedAt && now - finishedAt > 5 * 60 * 1000) continue;
+    const title = job.status === "done" ? "작업 완료" : "작업 실패";
+    showNotification(title, `${job.title || "회계업무 작업"}\n${job.message || ""}`.trim());
+  }
+}
+
+function startJobNotificationMonitor() {
+  if (state.jobNotificationTimer) return;
+  state.jobNotificationBaselineReady = false;
+  const poll = async () => {
+    try {
+      const jobs = await refreshJobs();
+      notifyBackgroundJobs(jobs);
+      state.jobNotificationBaselineReady = true;
+    } catch (error) {
+      console.warn("background job notification poll failed", error);
+    }
+  };
+  poll();
+  state.jobNotificationTimer = setInterval(poll, JOB_NOTIFICATION_POLL_MS);
+}
+
+function stopJobNotificationMonitor() {
+  if (!state.jobNotificationTimer) return;
+  clearInterval(state.jobNotificationTimer);
+  state.jobNotificationTimer = null;
+  state.jobNotificationBaselineReady = false;
 }
 
 async function loadHealth() {
@@ -1134,7 +1295,7 @@ async function refreshJobs() {
   const jobs = await requestJson(`/api/jobs?limit=${RECENT_JOB_FETCH_LIMIT}`);
   if (!jobs.length) {
     els.jobsTable.innerHTML = '<tr><td colspan="5" class="empty-cell">작업 내역 없음</td></tr>';
-    return;
+    return jobs;
   }
   const failures = jobs.filter(isFailureLog).slice(0, RECENT_JOB_LIMIT);
   const successes = jobs.filter((job) => !isFailureLog(job)).slice(0, RECENT_JOB_LIMIT);
@@ -1142,6 +1303,7 @@ async function refreshJobs() {
     renderJobTableGroup("실패 작업", failures),
     renderJobTableGroup("성공/진행 작업", successes),
   ].join("");
+  return jobs;
 }
 
 function updateSelectionUi() {
@@ -1159,9 +1321,14 @@ function updateSelectionUi() {
   els.erpQueueButton.disabled = !erpExecutable;
   els.erpQueueButton.title = erpExecutable ? `선택 건 ${actionName}` : blockedReason;
   syncOneClickOutputTarget();
+  const completeExecutable = selectedInvoicesCanComplete();
   const retryExecutable = selectedInvoicesCanRetry();
+  els.completeInvoiceButton.hidden = !completeExecutable;
+  els.completeInvoiceButton.disabled = !completeExecutable;
+  els.completeInvoiceButton.title = completeExecutable ? "실제 작업을 다시 실행하지 않고 처리완료 상태로 표시합니다." : "";
+  els.retryInvoiceButton.hidden = !retryExecutable;
   els.retryInvoiceButton.disabled = !retryExecutable;
-  els.retryInvoiceButton.title = retryExecutable ? '오류 건을 대기중으로 되돌립니다.' : '오류 건만 재시도할 수 있습니다. 처리완료 건은 문서 세트의 기존 문서 출력으로 다시 출력하세요.';
+  els.retryInvoiceButton.title = retryExecutable ? "오류 건을 대기중으로 되돌립니다." : "";
   els.deleteInvoiceButton.disabled = count === 0;
   els.invoiceLogButton.disabled = count !== 1;
   els.invoiceSelectAll.checked =
@@ -1229,15 +1396,30 @@ function readinessText(data) {
 
 function regularReadinessText(data) {
   if (data.readiness_reason && !String(data.readiness_reason).includes("견적서")) return data.readiness_reason;
+  if (isZoomBillingInvoice(data) && zoomOutputSetReady(data)) return "문서 출력 가능";
   if (!(data.pdf_path || data.tax_invoice_pdf_path)) return "세금계산서 필요";
   const total = Number(data.total_sum || data.total_amount || data.amount || 0);
   if (!total) return "금액 확인 필요";
   return "ERP 입력 가능";
 }
 
+function isZoomBillingInvoice(data) {
+  const vendor = String(data?.vendor_name || data?.vendor || data?.customer_name || data?.subject || "").toLowerCase();
+  const rawText = JSON.stringify(data || {}).toLowerCase();
+  return vendor.includes("zoom") || rawText.includes("zoom workplace") || rawText.includes("zoom.us");
+}
+
+function zoomOutputSetReady(data) {
+  const outputSet = data?.output_docs || data?.data?.output_docs || {};
+  if (outputSet && outputSet.can_output) return true;
+  const docs = Array.isArray(outputSet.docs) ? outputSet.docs : [];
+  return docs.length > 0 && docs.every((doc) => String(doc.status || "") === "exists");
+}
+
 function canRunErp(invoice) {
   const data = detailData(invoice);
   if (invoiceTypeOf(invoice) === "regular" || invoiceTypeOf(data) === "regular") {
+    if (isZoomBillingInvoice(data)) return true;
     return regularReadinessText(data) === "ERP 입력 가능";
   }
   return Boolean(
@@ -1252,6 +1434,15 @@ function invoiceReadinessText(invoice) {
 
 function canRetryInvoice(invoice) {
   return String(invoice?.status || "") === "오류";
+}
+
+function canCompleteInvoice(invoice) {
+  return ["오류", "대기중"].includes(String(invoice?.status || ""));
+}
+
+function selectedInvoicesCanComplete() {
+  const selected = state.invoices.filter((item) => state.selectedInvoiceIds.has(item.id));
+  return selected.length > 0 && selected.length === state.selectedInvoiceIds.size && selected.every(canCompleteInvoice);
 }
 
 function selectedInvoicesCanRetry() {
@@ -1306,12 +1497,11 @@ function renderOutputSetPanel(outputSet, invoiceId) {
     ? "저장된 문서로 바로 출력할 수 있습니다."
     : (blockers.length ? `누락 문서: ${blockers.map((doc) => doc.label).join(", ")}` : "필수 문서가 준비되면 출력할 수 있습니다.");
   const printerOptions = [
-    ["pdf", "PDF"],
     ["pyeongtaek", "평택"],
     ["gimje", "김제"],
   ].map(([value, label]) => `<option value="${value}">${label}</option>`).join("");
   return `
-    <section id="outputSetPanel" class="output-set-panel" data-invoice-id="${escapeHtml(invoiceId || "")}">
+    <section id="outputSetPanel" class="output-set-panel" data-invoice-id="${escapeHtml(invoiceId || "")}" data-can-output="${canOutput ? "true" : "false"}">
       <div class="output-set-header">
         <div>
           <strong>문서 세트</strong>
@@ -1324,7 +1514,7 @@ function renderOutputSetPanel(outputSet, invoiceId) {
           <button class="button secondary" type="button" data-output-action="refresh">세트 상태 갱신</button>
           ${isPurchaseSet ? '<button class="button secondary" type="button" data-output-action="generate_expense_report">현금결의서 생성</button>' : ""}
           <button class="button primary" type="button" data-output-action="merged_pdf" ${canOutput ? "" : "disabled"}>통합본 PDF 저장</button>
-          <button class="button secondary admin-only" type="button" data-output-action="individual_pdf" disabled>개별 PDF 저장</button>
+          <button class="button secondary admin-only" type="button" data-output-action="individual_pdf" ${canOutput ? "" : "disabled"}>개별 PDF 저장</button>
           <button class="button secondary admin-only" type="button" data-output-action="print_individual" disabled>개별 출력</button>
         </div>
       </div>
@@ -1356,9 +1546,10 @@ function selectedOutputDocKeys() {
 function updateOutputDocActionState(panel = document.querySelector("#outputSetPanel")) {
   if (!panel) return;
   const hasSelected = panel.querySelectorAll(".output-doc-select:checked").length > 0;
+  const canOutput = panel.dataset.canOutput === "true";
   panel.querySelectorAll('[data-output-action="individual_pdf"], [data-output-action="print_individual"]')
     .forEach((button) => {
-      button.disabled = !hasSelected;
+      button.disabled = !hasSelected && !canOutput;
     });
 }
 
@@ -1704,6 +1895,7 @@ function finishJob(source, event) {
   setBusy(false);
   const title = event.status === "done" ? "작업 완료" : "작업 실패";
   showNotification(title, event.message);
+  if (state.currentJobId) rememberJobNotification({ id: state.currentJobId, status: event.status });
   source.close();
   schedulePostJobRefresh();
 }
@@ -1780,15 +1972,19 @@ async function startErpQueue() {
     return;
   }
   const url = state.invoiceMode === "regular" ? "/api/jobs/regular-one-click" : "/api/jobs/purchase-one-click";
-  await startJob(url, {
+  const requestBody = {
     invoice_ids: invoiceIds,
     output_target: currentOutputTarget(),
     processor: "WEB v1.0",
-  });
+  };
+  if (state.invoiceMode !== "regular" && invoiceIds.length === 1 && els.purchaseDetailBody?.querySelector("[data-analysis-field]")) {
+    requestBody.analysis = collectAnalysisForm();
+  }
+  await startJob(url, requestBody);
 }
 
 async function startOutputSet(action, options = {}) {
-  if (!setupReady()) {
+  if (action === "print_individual" && !setupReady()) {
     showView("setup");
     alert("필수 프로그램 점검 완료 후 문서 세트 출력을 실행할 수 있습니다.");
     return;
@@ -1796,6 +1992,10 @@ async function startOutputSet(action, options = {}) {
   const invoiceIds = [...state.selectedInvoiceIds];
   if (!invoiceIds.length) return;
   const printerKey = options.printerKey || document.querySelector("#outputPrinterKey")?.value || "pdf";
+  if (action === "print_individual" && printerKey === "pdf") {
+    alert("Microsoft Print to PDF는 개별 출력 대상이 아닙니다. PDF가 필요하면 개별 PDF 저장 또는 통합본 PDF 저장을 사용하세요.");
+    return;
+  }
   await startJob("/api/jobs/output-set", {
     invoice_ids: invoiceIds,
     action,
@@ -1885,12 +2085,33 @@ async function createManualPurchaseInvoice() {
   }
 }
 
-async function retrySelectedInvoices() {
+async function updateSelectedInvoiceStatus(action) {
   const invoiceIds = [...state.selectedInvoiceIds];
   if (!invoiceIds.length) return;
-  await Promise.all(invoiceIds.map((id) => requestJson(`/api/invoices/${id}/retry`, { method: "POST" })));
-  await refreshInvoices();
-  if (invoiceIds.length === 1) await loadInvoiceLogs(invoiceIds[0]);
+  if (action === "done" && !confirm(`선택한 ${invoiceIds.length}건을 처리완료로 표시할까요?\n실제 ERP/PDF 작업은 다시 실행되지 않습니다.`)) {
+    return;
+  }
+  setBusy(true);
+  try {
+    await Promise.all(invoiceIds.map((id) => requestJson(`/api/invoices/${id}/status`, {
+      method: "PATCH",
+      body: JSON.stringify({ action }),
+    })));
+    await refreshInvoices({ force: true });
+    if (invoiceIds.length === 1) await loadInvoiceLogs(invoiceIds[0]);
+  } catch (error) {
+    alert(error.message);
+  } finally {
+    setBusy(false);
+  }
+}
+
+async function retrySelectedInvoices() {
+  await updateSelectedInvoiceStatus("waiting");
+}
+
+async function completeSelectedInvoices() {
+  await updateSelectedInvoiceStatus("done");
 }
 
 async function deleteSelectedInvoices() {
@@ -2001,6 +2222,7 @@ els.demoButton.addEventListener("click", () => startJob("/api/jobs/demo"));
 els.refreshButton.addEventListener("click", refreshJobs);
 els.refreshInvoicesButton.addEventListener("click", refreshInvoices);
 els.erpQueueButton.addEventListener("click", startErpQueue);
+els.completeInvoiceButton?.addEventListener("click", completeSelectedInvoices);
 els.retryInvoiceButton.addEventListener("click", retrySelectedInvoices);
 els.deleteInvoiceButton.addEventListener("click", deleteSelectedInvoices);
 els.invoiceLogButton.addEventListener("click", loadSelectedInvoiceLogs);
@@ -2102,11 +2324,7 @@ els.purchaseDetailBody.addEventListener("click", async (event) => {
   }
   if (action === "individual_pdf" || action === "print_individual") {
     const selectedDocKeys = selectedOutputDocKeys();
-    if (!selectedDocKeys.length) {
-      alert("출력할 문서를 하나 이상 선택해 주세요.");
-      return;
-    }
-    await startOutputSet(action, { selectedDocKeys });
+    await startOutputSet(action, selectedDocKeys.length ? { selectedDocKeys } : {});
     return;
   }
   await startOutputSet(action);
@@ -2197,4 +2415,3 @@ async function bootstrap() {
 }
 
 bootstrap();
-

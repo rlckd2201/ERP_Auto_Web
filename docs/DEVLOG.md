@@ -1,3 +1,7 @@
+> **Historical record — not the current source of truth.**
+>
+> This file preserves earlier requirements, decisions, or verification. For current work, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first; actual code is authoritative (`web_v1/VERSION`: `1.0.228`).
+
 # Devlog
 
 ## 2026-05-14 WEB v1.0 fix95 cash expense Excel PDF export no-save
