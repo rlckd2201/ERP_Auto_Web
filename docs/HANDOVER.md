@@ -1,3 +1,8 @@
+> **Historical record — not the current source of truth.**
+>
+> This file preserves earlier requirements, decisions, or verification. For current work, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first; actual code is authoritative (`web_v1/VERSION`: `1.0.228`).
+> Current U+ state (2026-08-12): the exclusion statements below are historical. Current `tax_crawler/crawler_main.py` registers `UplusHandler` and eligible `edocu.uplus.co.kr` routing.
+
 # Handover
 
 Updated: 2026-05-07

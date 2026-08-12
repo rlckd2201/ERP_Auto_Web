@@ -3,10 +3,10 @@
 This project uses lightweight project-local memory files. Use them to preserve durable context without rereading the entire codebase every session.
 
 Default workflow:
-- Read `PROJECT_STATUS.md` first before starting project work, and update it before ending a meaningful work session.
-- Before code changes, quietly read `docs/AI_HANDOFF.md` and `PROJECT_STATE.md` if present.
+- Read root `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first before starting project work; keep them current during meaningful work.
+- Treat `PROJECT_STATUS.md`, `SESSION_STATE.md`, `docs/AI_WORK_MEMORY.md`, `DEVLOG.md`, `docs/AI_HANDOFF.md`, and `PROJECT_STATE.md` as historical references unless the current task requires them.
 - Before editing code, create a timestamped backup copy of the files that will be changed.
-- Read `DEVLOG.md`, `docs/FEATURE_LEDGER.md`, `docs/DECISIONS.md`, `docs/USER_FEEDBACK.md`, and `graphify-out/GRAPH_REPORT.md` only when the task needs that deeper context.
+- Read historical ledgers and `graphify-out/GRAPH_REPORT.md` only when the task needs deeper context; verify all conclusions against active code.
 - After meaningful code, behavior, architecture, or durable decision changes, update the relevant memory files briefly.
 - Skip memory updates for casual chat, one-off explanations, temporary checks, tiny typo-only edits, and unrelated non-project tasks.
 - Keep memory entries concise. Do not paste full conversations or large command output.

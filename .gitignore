@@ -24,3 +24,15 @@ support/support/
 # Timestamped local backup artifacts.
 *.backup_before_*
 *.WORKING_*
+
+# Codex local investigation, stage, check, and release artifacts.
+_codex*
+_serve*
+_verify*
+_rdp*
+_remote*
+_http*
+_patch*
+_repair*
+outputs/
+graphify-out/polluted_backup*/

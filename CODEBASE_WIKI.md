@@ -1,5 +1,35 @@
 # CODEBASE WIKI
 
+> Current baseline: 2026-08-12 / WEB-Agent `1.0.228`.
+> For live handoff state, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first.
+> Content below the current-baseline section is retained as a historical 2026-05 reference and is not authoritative when it differs from active code.
+
+## Current Baseline — 2026-08-12
+
+- `web_v1/backend/app.py` is the FastAPI orchestration/API root.
+- `web_v1/backend/worker.py` dispatches mail collection, purchase/regular ERP queueing, and output-set jobs.
+- `web_v1/backend/invoice_db.py` persists invoice state in SQLite under the configured `ERP_DB_DIR`.
+- `web_v1/backend/mail_collector.py` scans IMAP mail and calls active `tax_crawler` handlers; Zoom billing is handled by `web_v1/backend/zoom_billing.py`.
+- `web_v1/agent/erp_agent.py` runs ERP GUI, Excel, and printer work on the manager PC and uploads results to the server.
+- `web_v1/backend/erp_runner.py` dynamically imports the manager v6.2 source, so `manager_server` is an active runtime dependency.
+- `web_v1/backend/output_set.py` owns purchase, regular, and Zoom document-set preparation.
+- `web_v1/frontend` contains the static browser UI served by `app.py`.
+
+```text
+Browser -> FastAPI API/job store -> worker -> SQLite/mail/crawler
+                                  -> JSON Agent queue -> manager-PC Agent
+                                  -> ERP/Excel/printer -> PDF upload -> output set
+```
+
+Current rules:
+
+- Actual version comes from `web_v1/VERSION`; current value is `1.0.228`.
+- Operating-server orchestration and manager-PC GUI execution are intentionally separated.
+- Current `tax_crawler/crawler_main.py` registers U+ routing. Older U+ exclusion notes are historical policy records.
+- The ERP RFP is a target-state request for official ERP API/DB integration, not the current GUI-Agent implementation.
+- Graphify was regenerated on 2026-08-12 with `.graphifyignore`: 64 code files, 1,458 nodes, and 4,187 edges; historical source-path hits were verified as zero.
+
+## Historical Reference — 2026-05-22
 Updated: 2026-05-22
 
 This wiki is based on the current `graphify-out/GRAPH_REPORT.md`, direct Graphify navigation against the active graph, and spot checks of the active `web_v1` source. Graphify currently sees 1383 nodes, 4374 edges, and 36 communities, so use the graph for navigation, then verify behavior in the active source before editing.
