@@ -1,55 +1,50 @@
-# 회계업무 자동화 WEB v1.0
+# 회계업무 자동화 웹 시스템
 
-> **현재 기준: 2026-08-12 / WEB `1.0.228`**
+> 현재 통합 기준: 2026-08-13
 >
-> 이 저장소의 운영 구조는 **운영서버 + 담당자 PC Agent**입니다. 운영서버가
-> 메일 수집, 세금계산서/구매 문서 분석, SQLite 상태 관리 및 작업 큐를 담당하고,
-> 담당자 PC Agent가 K-System GUI, Excel, 프린터와 같은 Windows 로컬 작업을
-> 수행한 뒤 결과 PDF를 서버에 다시 전달합니다. `tax_crawler`는 포털별
-> 세금계산서 수집에 사용됩니다.
+> 이 저장소에는 배포와 데이터 경계가 다른 두 웹 제품이 공존합니다. 현재 통합
+> 브랜치의 `web_v1/VERSION`은 `1.0.164`입니다. 별도 원본 작업 폴더의
+> 미커밋 1.0.228 변경은 이 브랜치에 포함되지 않았습니다.
 
-## 현재 운영 구조
+## 제품 구분
+
+| 제품 | 역할 | 기본 포트 | 상태/저장소 |
+|---|---|---:|---|
+| `web_v1` | 메일 수집, 세금계산서·구매/정기 처리, 작업 큐와 문서 세트 | 8080 계열 기존 배포 설정 | `C:\ERP_DB` 기반 기존 WEB/Agent 데이터 |
+| `excel_voucher_web` | 수시결제 엑셀 업로드를 단일 ERP 전표로 처리 | 8081 | 별도 SQLite·업로드·Agent 큐 |
+
+두 제품은 `manager_server`의 K-System GUI 자동화 계보를 공유하지만 서버
+프로세스, 큐, 데이터 디렉터리, 포트와 릴리스 버전은 합치지 않습니다.
+
+## 구조
 
 ```text
-브라우저 → FastAPI 운영서버 → SQLite / 작업 큐 → 담당자 PC Agent
-                                         └→ K-System · Excel · 프린터 · PDF 결과 업로드
+web_v1 브라우저 -> web_v1 FastAPI/SQLite -> manager-PC Agent
+                                             -> K-System/Excel/프린터
+
+Excel 전표 브라우저 -> excel_voucher_web FastAPI/SQLite -> 172.17.30.243 Agent
+                                                        -> K-System/프린터/PDF
 ```
 
-- 서버 진입점: `web_v1/backend/__main__.py`
-- 서버 API/작업 조정: `web_v1/backend/app.py`
-- 담당자 PC 실행 Agent: `web_v1/agent/erp_agent.py`
-- 포털별 세금계산서 수집: `tax_crawler/`
-- 기존 K-System 자동화 연계: `manager_server/`
+- `web_v1/backend/app.py`: 기존 회계업무 API와 조정 서버
+- `web_v1/agent/erp_agent.py`: 기존 담당자 PC Agent
+- `tax_crawler/`: 포털별 세금계산서 수집
+- `excel_voucher_web/app/main.py`: 엑셀 전표 웹 서버
+- `excel_voucher_web/agent/agent_worker.py`: 엑셀 전표 전용 Agent
+- `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`: 공유 ERP GUI 구현
 
-정리일: 2026-08-12
+## 현재 통합 주의사항
 
-## 현재 개발 기준
+- 원격 `main`의 Excel 전표 라인은 2026-07-27에 210행 입력, 저장, 출력까지
+  완주했으며 `stable-2026-07-27-full-success` 태그가 기준선입니다.
+- `web_v1/backend/zoom_billing.py`는 존재하지만 이 브랜치의
+  `mail_collector.py`에는 연결되지 않았습니다. Zoom 자동수집을 이 통합
+  브랜치의 활성 기능으로 간주하지 마십시오.
+- ERP API/DB RFP는 향후 공식 연동 목표이며 현재 구현은 Windows GUI Agent
+  방식입니다.
+- 운영 검증은 두 제품을 각각 수행해야 합니다. 한 제품의 성공을 다른 제품의
+  E2E 증거로 사용하지 않습니다.
 
-- 활성 개발 대상: 회계업무 자동화 WEB v1.0
-- 활성 작업 루트: `web_v1`
-- 기존 데스크톱 UI는 과거 구조이지만 `manager_server`의 ERP 자동화 모듈은 Agent가 현재도 재사용한다.
-
-## 폴더 구성
-
-- web_v1: WEB v1.0 신규 개발 루트
-- manager_server: 담당자용 v6.2 ERP GUI 자동화 소스. `erp_runner.py`가 동적으로 불러오는 현재 런타임 의존성
-- manager_server/dist: 기존 담당자용 v6.2 실행파일 참고자료
-- tax_crawler: WEB v1.0 메일 수집기가 현재 사용하는 포털별 세금계산서 크롤러
-- tax_crawler/docs: 크롤러 문서
-- docs: 작업 메모 및 md 문서 모음
-- support: 설정, ERP 핸들러, 공통 양식, 핫픽스 파일
-
-## WEB v1.0 방향
-
-- 사용자는 웹 담당자 화면에서 필요한 기능을 선택한다.
-- 운영서버는 메일 수집, 크롤링, 분석, DB, 작업 큐와 문서 세트를 조정한다.
-- ERP GUI 입력, Excel 결의서 생성, 로컬 프린터 출력은 담당자 PC Agent가 수행한다.
-- 웹 화면에는 작업 진행률과 로그를 표시한다.
-- 작업 완료/실패 시 Chrome/Edge 브라우저 알림을 띄운다.
-- ERP/Excel/프린터 작업은 대상 Agent가 JSON 작업 큐에서 순차 처리한다.
-
-## 제외한 것
-
-- backup_* 파일/폴더
-- build, __pycache__, 테스트 출력 폴더
-- 과거 버전 exe/spec/py
+현재 인수인계는 루트 `SESSION.md`, `TODO.md`, `DECISIONS.md`,
+`DEBUG.md`를 먼저 읽고, Excel 전표의 상세 실행 이력은
+`excel_voucher_web/` 아래 문서를 확인합니다.

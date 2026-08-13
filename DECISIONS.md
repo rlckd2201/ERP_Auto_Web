@@ -1,37 +1,43 @@
 # Decisions
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
-## D-001 — actual code is the source of truth
+## D-001 — active source is authoritative
 
-When old Markdown, Graphify output, and current code disagree, verify the active root and follow current code. Update documentation; do not change runtime behavior merely to match stale documents.
+When Markdown, Graphify, preserved work copies, and current code disagree, follow the active branch's source. Version claims must match `web_v1/VERSION` in that branch.
 
 ## D-002 — preserve the operating-server/Agent split
 
-Current implementation keeps orchestration, mail, database, and document-set work on the operating server while manager-PC Agent handles ERP GUI, Excel COM, and local printing. The external ERP RFP is a future official-integration target and does not redefine the current architecture.
+`web_v1` keeps orchestration, mail, database, and document-set work on the operating server while a manager-PC Agent handles ERP GUI, Excel COM, and local printing. The ERP API/DB RFP is a future target and does not redefine current runtime behavior.
 
-## D-003 — no destructive cleanup
+## D-003 — keep the two web products separate
 
-Historical `_codex_*`, `_release_*`, `_hotfix_*`, ZIP, and backup artifacts are not deleted in this task. `.gitignore` and `.graphifyignore` exclude local investigation/stage copies without altering their contents.
+`web_v1` is the general accounting automation product. `excel_voucher_web` is the independently deployed workbook-to-voucher service on port 8081. They may share the Manager ERP implementation but do not share queues, storage, ports, or release versions.
 
-## D-004 — canonical session memory
+## D-004 — preserve the verified Manager baseline
 
-Use `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` as the compact current handoff. Older status, devlog, and AI-memory files remain historical references.
+Remote `main` contains the 2026-07-27 Excel-voucher baseline that completed 210 ERP rows through save and print. Keep tag `stable-2026-07-27-full-success` as the operational rollback point and do not replace the Manager source with the older reconciliation parent.
 
-## D-005 — behavior-preserving asset sources
+## D-005 — isolate integration from the dirty worktree
 
-- Restore setup `.cs/.exe` from Git HEAD; audited copies are byte-identical.
-- Keep the current 10,279-byte `zoom_billing.py`; it matches the newest preserved candidates.
-- Restore frontend static files from HEAD, `index.html` from fix210, and `app.js` from fix214 so later UI behavior is not reverted.
+Build the integration from remote `main` plus reconciliation commit `0fd4f46` in a separate branch. Do not stash, rebase, reset, or overwrite the user's dirty WEB/Agent 1.0.228 worktree.
 
-## D-006 — Graphify scope follows active source roots
+## D-006 — distinguish committed 1.0.164 from dirty 1.0.228
 
-Use `.graphifyignore` to exclude generated outputs, local investigations, release/check/stage copies, recursive support copies, and standalone audit utilities. The regenerated graph covers 64 active code files with zero historical source-path hits; preserve `graphify-out/GRAPH_REPORT.md`, `graph.json`, and `graph.html` as the tracked navigation outputs.
+The integrated branch contains `web_v1/VERSION` 1.0.164. The 1.0.228 value and its related backend, Agent, crawler, and deployment edits exist only in the separate dirty worktree and are not claimed as part of this branch.
 
-## D-007 — distinguish static verification from operational E2E
+## D-007 — do not activate an orphan Zoom module by assumption
 
-Syntax, imports referenced in source, DOM mappings, artifact presence, hashes, and graph scope are safe local checks. Starting schedulers or exercising ERP GUI, credentials, printers, and production-like queues requires a controlled deployment environment and remains explicitly unverified here.
+`web_v1/backend/zoom_billing.py` is retained from the reconciliation commit, but the integrated 1.0.164 `mail_collector.py` does not call it. The dirty 1.0.228 collector combines Zoom routing with broader mail retry/state changes. Integrate that behavior later as a reviewed unit with tests rather than copying an entangled hunk blindly.
 
-## D-008 — preserve concurrent remote work
+## D-008 — regenerate generated graphs after integration
 
-When `origin/main` advanced to `c20a96c`, do not force-push or rebase through the dirty WEB/Agent 1.0.228 worktree. Publish the focused reconciliation commit on `codex/reconcile-state-20260812`; integrate only after comparing the independently added `excel_voucher_web`, manager changes, current-state documents, and Graphify scope.
+Graphify output conflicts are resolved using the remote output only as a temporary cherry-pick choice. The final `GRAPH_REPORT.md`, `graph.json`, and `graph.html` must be regenerated from the combined tree; neither parent's generated graph is authoritative.
+
+## D-009 — canonical session memory
+
+Use root `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` for repository-wide handoff. Keep detailed Excel-voucher history under `excel_voucher_web/`; older root and crawler logs remain historical references.
+
+## D-010 — separate static verification from operational E2E
+
+Syntax, unit tests, assets, DOM mappings, hashes, and graph scope are local checks. Live schedulers, mailbox access, ERP GUI, credentials, printers, and production queues require controlled deployment environments and explicit operational validation.

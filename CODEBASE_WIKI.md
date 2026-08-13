@@ -1,33 +1,40 @@
 # CODEBASE WIKI
 
-> Current baseline: 2026-08-12 / WEB-Agent `1.0.228`.
+> Current integrated baseline: 2026-08-13 / committed `web_v1` `1.0.164` plus `excel_voucher_web`.
 > For live handoff state, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first.
 > Content below the current-baseline section is retained as a historical 2026-05 reference and is not authoritative when it differs from active code.
 
-## Current Baseline — 2026-08-12
+## Current Baseline — 2026-08-13
 
 - `web_v1/backend/app.py` is the FastAPI orchestration/API root.
 - `web_v1/backend/worker.py` dispatches mail collection, purchase/regular ERP queueing, and output-set jobs.
 - `web_v1/backend/invoice_db.py` persists invoice state in SQLite under the configured `ERP_DB_DIR`.
-- `web_v1/backend/mail_collector.py` scans IMAP mail and calls active `tax_crawler` handlers; Zoom billing is handled by `web_v1/backend/zoom_billing.py`.
+- `web_v1/backend/mail_collector.py` scans IMAP mail and calls active `tax_crawler` handlers. `zoom_billing.py` is present but is not imported on this integrated branch.
 - `web_v1/agent/erp_agent.py` runs ERP GUI, Excel, and printer work on the manager PC and uploads results to the server.
 - `web_v1/backend/erp_runner.py` dynamically imports the manager v6.2 source, so `manager_server` is an active runtime dependency.
 - `web_v1/backend/output_set.py` owns purchase, regular, and Zoom document-set preparation.
 - `web_v1/frontend` contains the static browser UI served by `app.py`.
+- `excel_voucher_web/app/main.py` is a separate FastAPI service for workbook-to-voucher jobs on port 8081.
+- `excel_voucher_web/agent/agent_worker.py` claims those jobs for the dedicated 172.17.30.243 automation PC.
 
 ```text
-Browser -> FastAPI API/job store -> worker -> SQLite/mail/crawler
-                                  -> JSON Agent queue -> manager-PC Agent
-                                  -> ERP/Excel/printer -> PDF upload -> output set
+web_v1 browser -> web_v1 FastAPI/job store -> mail/crawler/SQLite
+                                           -> manager-PC Agent -> ERP/Excel/print
+
+Excel voucher browser -> excel_voucher_web FastAPI/SQLite
+                       -> dedicated Agent -> ERP/print/PDF
 ```
 
 Current rules:
 
-- Actual version comes from `web_v1/VERSION`; current value is `1.0.228`.
+- The committed `web_v1` version comes from `web_v1/VERSION`; current value is `1.0.164`.
+- The dirty original worktree's 1.0.228 changes are a separate, unintegrated product line.
+- The two web products keep separate ports, queues, storage, and release versions.
 - Operating-server orchestration and manager-PC GUI execution are intentionally separated.
+- The Excel-voucher Manager baseline completed 210 rows through save and print on 2026-07-27; preserve tag `stable-2026-07-27-full-success`.
 - Current `tax_crawler/crawler_main.py` registers U+ routing. Older U+ exclusion notes are historical policy records.
 - The ERP RFP is a target-state request for official ERP API/DB integration, not the current GUI-Agent implementation.
-- Graphify was regenerated on 2026-08-12 with `.graphifyignore`: 64 code files, 1,458 nodes, and 4,187 edges; historical source-path hits were verified as zero.
+- Graphify was regenerated from the combined tree on 2026-08-13: 89 active code files, 1,889 nodes, 5,417 edges, and 34 reported communities. Historical/temporary source-path hits are zero.
 
 ## Historical Reference — 2026-05-22
 Updated: 2026-05-22

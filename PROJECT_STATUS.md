@@ -1,6 +1,6 @@
 > **Historical project log — not the current source of truth.**
 >
-> This file preserves past work, including unreconciled version references and mojibake. For current work, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first; actual code is authoritative (`web_v1/VERSION`: `1.0.228`).
+> This file preserves past work, including unreconciled version references and mojibake. For current work, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first; read `web_v1/VERSION` for the active branch version (integration baseline: `1.0.164`).
 
 # Project Status
 

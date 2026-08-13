@@ -1,6 +1,6 @@
 > **Historical record — not the current source of truth.**
 >
-> This file preserves earlier requirements, decisions, or verification. For current work, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first; actual code is authoritative (`web_v1/VERSION`: `1.0.228`).
+> This file preserves earlier requirements, decisions, or verification. For current work, read `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` first; read `web_v1/VERSION` for the active branch version (integration baseline: `1.0.164`).
 
 # Graph Report - 세금계산서 크롤링  (2026-04-30)
 

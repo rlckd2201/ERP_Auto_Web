@@ -1,52 +1,54 @@
 # Session
 
-Updated: 2026-08-12
+Updated: 2026-08-13
 
 ## Current objective
 
-Resolve important documentation, packaging, tracking, and Graphify inconsistencies without changing established runtime behavior.
+Integrate the 2026-08-12 repository reconciliation commit with the latest remote `main` while preserving both active products and the user's separate dirty WEB/Agent 1.0.228 worktree.
 
 ## Status
 
-Reconciliation is complete. Required served/imported artifacts are present, current-state documents match the active code baseline, and Graphify now excludes historical work copies.
+Repository integration and local verification are complete. The branch is based on remote `main` commit `c20a96c` and contains reconciliation commit `4200beb` (cherry-picked from `0fd4f46`). Source changes applied without conflict; the three generated Graphify conflicts were resolved by regeneration from the combined tree.
 
-## Current baseline
+## Integrated baseline
 
-- Active product root: `web_v1`.
-- Actual WEB/Agent version: `1.0.228`.
-- Architecture: operating-server FastAPI coordinator plus manager-PC Agent for ERP GUI, Excel, and printer work.
-- Active crawler package: `tax_crawler`; ERP execution dynamically reuses the manager v6.2 source under `manager_server`.
-- U+ routing is active. The ERP API/DB RFP describes a future target state, not the current GUI-Agent implementation.
-- The worktree still contains extensive unrelated user changes; they remain preserved and outside this task's release scope.
+- Product 1: `web_v1`, whose committed version on this branch is `1.0.164`.
+- Product 2: `excel_voucher_web`, a separate FastAPI/Agent service on port 8081 for uploaded cash-voucher workbooks.
+- Shared ERP GUI implementation: `manager_server/전표 자동화 프로그램(담당자용)_v6.2.py`.
+- The Excel-voucher line retains its verified 2026-07-27 baseline: 210 rows completed through ERP input, save, and print; tag `stable-2026-07-27-full-success` records that operational baseline.
+- `web_v1` continues to use `tax_crawler` and the operating-server/manager-PC Agent split.
+- The user's original dirty worktree reports WEB/Agent `1.0.228`; those uncommitted backend, Agent, crawler, and deployment changes are preserved but are not part of this integration branch.
+- `web_v1/backend/zoom_billing.py` is present, but this branch's `mail_collector.py` does not import it. The active Zoom wiring exists only in the separate dirty 1.0.228 worktree and must be integrated as a reviewed feature unit, not inferred from the standalone module.
 
-## Completed in this session
+## Completed in this integration
 
-- Restored the complete static frontend, preserving the newest verified `index.html` and `app.js` behavior.
-- Restored the required setup `.cs/.exe` artifacts from byte-identical Git content.
-- Included the verified `web_v1/backend/zoom_billing.py` imported by `mail_collector.py`.
-- Established `SESSION.md`, `TODO.md`, `DECISIONS.md`, and `DEBUG.md` as the compact current handoff; labeled older state documents as historical.
-- Corrected current architecture, version, U+ status, deployment prerequisites, and ERP RFP scope in documentation.
-- Added Graphify/local-artifact exclusions and regenerated the graph from 64 active code files.
+- Compared branch topology and all changed paths before writing.
+- Confirmed that the reconciliation and remote lines directly overlapped only in `.gitignore` and generated Graphify outputs.
+- Preserved the remote Manager and `excel_voucher_web` implementation without source conflict.
+- Merged the root ignore rules and retained subsystem-local runtime exclusions.
+- Corrected current-state documentation to describe both products and the actual committed `web_v1` version.
+- Preserved the original dirty worktree without stashing, rebasing, or overwriting it.
 
 ## Verification
 
-- Python compile passed for Zoom billing, mail collection, backend app/worker/output-set, Agent, and crawler entry modules.
-- JavaScript syntax passed for `app.js` and `admin_db.js`.
-- Frontend DOM mapping passed: all 84 static IDs referenced by `app.js` exist; four unmatched selectors are runtime-generated elements.
-- Required frontend/setup/Zoom assets and version `1.0.228` were confirmed.
-- Graphify regenerated to 1,458 nodes, 4,187 edges, and 32 communities; historical source-path hits are zero.
-- `git diff --check` passed for the task-owned changes.
+- Graphify regenerated from 89 active code files: 1,889 nodes, 5,417 edges, and 34 reported communities.
+- Graph source paths include `web_v1`, `excel_voucher_web`, `manager_server`, `tax_crawler`, and `support`; historical/temporary and absolute source-path hits are zero.
+- Python `compileall` passed for `web_v1`, `tax_crawler`, `excel_voucher_web`, and `manager_server`.
+- JavaScript syntax passed for both product frontends and the `web_v1` service worker/admin script.
+- `web_v1` required assets passed. All 84 static selector IDs exist; four additional selectors are confirmed runtime-generated elements.
+- The full `excel_voucher_web` regression suite passed: 186 tests.
+- `git diff --check` passed before final staging; final status/diff review remains part of publication.
 
-## Known verification boundary
+## Operational verification boundary
 
-A live FastAPI startup, installer HTTP download, manager-PC Agent queue, ERP GUI, printer, and real output-set end-to-end run was not performed because it can start schedulers or depend on deployment hosts, credentials, Windows GUI, printers, and `C:\ERP_DB`. Static dependencies and syntax are verified; operational E2E remains the next environment-level check.
+No live server, scheduler, mailbox, ERP GUI, printer, credentialed groupware connection, or production-like queue is started during repository integration. Those checks require controlled deployment hosts and remain separate from static/regression verification.
 
 ## Next start point
 
-If operational validation is required, start the server in a controlled deployment-compatible environment, verify `/health` and `/api/setup/user-pc-installer.exe`, then exercise one non-production Agent queue/output-set job before any new feature work.
+After repository verification and branch publication, validate the two products independently: first a non-production `web_v1` health/installer/Agent/output-set cycle, then one `excel_voucher_web` upload through the verified 172.17.30.243 Agent path. Do not combine their queues or ports.
 
 ## Release handoff
 
-- Focused reconciliation changes are published on `codex/reconcile-state-20260812`.
-- `origin/main` advanced independently to `c20a96c` during this work and includes a new `excel_voucher_web` subsystem plus manager-side changes.
-- Main was not force-pushed, and the dirty 1.0.228 worktree was not auto-stashed/rebased. Before integrating the branch into main, compare the two active product lines and regenerate Graphify from the chosen combined tree.
+- Integration branch: `codex/integrate-reconcile-20260813`.
+- Do not force-push `main` from the original dirty worktree.
+- Do not label this integrated branch as WEB/Agent 1.0.228; its committed `web_v1/VERSION` is 1.0.164.
