@@ -25,8 +25,8 @@ Updated: 2026-08-13
 - [x] Check JavaScript syntax for both frontends.
 - [x] Verify `web_v1` static DOM references and required setup assets.
 - [x] Run the `excel_voucher_web` regression suite (186 passed).
-- [ ] Run `git diff --check` and review staged paths.
-- [ ] Commit and push `codex/integrate-reconcile-20260813`.
+- [x] Run `git diff --check` and review staged paths.
+- [x] Commit and push `codex/integrate-reconcile-20260813` (`f190302`).
 
 ## P3 — operational verification
 

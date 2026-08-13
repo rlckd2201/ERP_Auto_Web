@@ -8,7 +8,7 @@ Integrate the 2026-08-12 repository reconciliation commit with the latest remote
 
 ## Status
 
-Repository integration and local verification are complete. The branch is based on remote `main` commit `c20a96c` and contains reconciliation commit `4200beb` (cherry-picked from `0fd4f46`). Source changes applied without conflict; the three generated Graphify conflicts were resolved by regeneration from the combined tree.
+Repository integration, local verification, and branch publication are complete. The branch is based on remote `main` commit `c20a96c` and contains reconciliation commit `4200beb` (cherry-picked from `0fd4f46`) plus integration commit `f190302`. Source changes applied without conflict; the three generated Graphify conflicts were resolved by regeneration from the combined tree.
 
 ## Integrated baseline
 
@@ -37,7 +37,7 @@ Repository integration and local verification are complete. The branch is based 
 - JavaScript syntax passed for both product frontends and the `web_v1` service worker/admin script.
 - `web_v1` required assets passed. All 84 static selector IDs exist; four additional selectors are confirmed runtime-generated elements.
 - The full `excel_voucher_web` regression suite passed: 186 tests.
-- `git diff --check` passed before final staging; final status/diff review remains part of publication.
+- `git diff --check` passed, only the intended 22 documentation/Graphify files were staged, and integration commit `f190302` was pushed successfully.
 
 ## Operational verification boundary
 
@@ -50,5 +50,7 @@ After repository verification and branch publication, validate the two products 
 ## Release handoff
 
 - Integration branch: `codex/integrate-reconcile-20260813`.
+- Published commit: `f190302` (`Integrate reconciliation with Excel voucher baseline`).
+- Pull-request URL: `https://github.com/rlckd2201/ERP_Auto_Web/pull/new/codex/integrate-reconcile-20260813`.
 - Do not force-push `main` from the original dirty worktree.
 - Do not label this integrated branch as WEB/Agent 1.0.228; its committed `web_v1/VERSION` is 1.0.164.
