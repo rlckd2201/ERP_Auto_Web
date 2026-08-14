@@ -1140,7 +1140,10 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             if not self._click_pdf_button(dlg):
                 self._set_pdf_export_error(final_path, "더존 미리보기의 PDF 버튼 클릭에 실패했습니다")
                 return None
-            if not self._click_print_execute_button(dlg):
+            # In the current WEHAGO preview the PDF button opens Save As
+            # directly. Older variants require a second "인쇄하기" click.
+            save_as_open = self._find_save_as_dialog(timeout=2)
+            if not save_as_open and not self._click_print_execute_button(dlg):
                 self._set_pdf_export_error(final_path, "더존 미리보기의 인쇄하기 버튼 클릭에 실패했습니다")
                 return None
 
@@ -1338,16 +1341,9 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         # enumerates descendants. Send the click to the control under the
         # known PDF-button point instead; this also leaves the user's cursor
         # and foreground window untouched.
-        try:
-            rect = dlg.rectangle()
-            self._post_dialog_click(dlg, 228, 202)
-            # This runs inside the 121 server's interactive session. It does
-            # not move or take over the operator PC's local pointer.
-            pyautogui.click(rect.left + 228, rect.top + 202)
+        if self._post_dialog_click(dlg, 228, 202):
             time.sleep(1)
             return True
-        except Exception:
-            pass
 
         deadline = time.time() + 8
         while time.time() < deadline:
@@ -1389,14 +1385,9 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         return False
 
     def _click_print_execute_button(self, dlg) -> bool:
-        try:
-            rect = dlg.rectangle()
-            self._post_dialog_click(dlg, 88, 94)
-            pyautogui.click(rect.left + 88, rect.top + 94)
+        if self._post_dialog_click(dlg, 88, 94):
             time.sleep(1)
             return True
-        except Exception:
-            pass
 
         try:
             for node in dlg.descendants():
@@ -1486,16 +1477,6 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             try:
                 wrap = self._find_save_as_dialog(timeout=0.5)
                 if wrap:
-                    try:
-                        wrap.set_focus()
-                    except Exception:
-                        pass
-                    
-                    import pyautogui
-                    for key in ('alt', 'ctrl', 'shift', 'win'):
-                        pyautogui.keyUp(key)
-                    time.sleep(0.3)
-
                     success = self._set_save_as_filename_text(wrap, str(final_path))
                     if not success:
                         self._cleanup_saveas_new_folders(final_path, started_at)
@@ -1687,6 +1668,10 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         return None
 
     def _set_save_as_filename_text(self, dlg, text: str) -> bool:
+        if self._set_save_as_filename_win32(dlg, text):
+            time.sleep(0.2)
+            return True
+
         try:
             dlg_rect = dlg.rectangle()
             edits = []
@@ -1741,6 +1726,39 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         return False
 
     @staticmethod
+    def _set_save_as_filename_win32(dlg, text: str) -> bool:
+        """Set the standard Save As filename without focus or cursor input."""
+        try:
+            import win32con
+            import win32gui
+
+            root_handle = int(dlg.handle)
+            edits = []
+
+            def collect(handle, _extra):
+                try:
+                    if (
+                        win32gui.IsWindowVisible(handle)
+                        and win32gui.GetClassName(handle).lower() == "edit"
+                    ):
+                        left, top, right, bottom = win32gui.GetWindowRect(handle)
+                        edits.append((top, left, right, bottom, int(handle)))
+                except Exception:
+                    pass
+                return True
+
+            win32gui.EnumChildWindows(root_handle, collect, None)
+            if not edits:
+                return False
+            edit_handle = sorted(edits, reverse=True)[0][-1]
+            win32gui.SendMessage(
+                edit_handle, win32con.WM_SETTEXT, 0, str(text)
+            )
+            return str(win32gui.GetWindowText(edit_handle) or "").strip() == str(text)
+        except Exception:
+            return False
+
+    @staticmethod
     def _paste_save_as_text(text: str) -> None:
         try:
             import win32clipboard
@@ -1759,6 +1777,9 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         pyautogui.write(str(text), interval=0.01)
 
     def _click_save_as_save_button(self, dlg) -> bool:
+        if self._click_save_as_save_button_win32(dlg):
+            return True
+
         save_markers = ("저장", "Save")
         blocked_markers = ("열기", "Open", "새 폴더", "New Folder")
 
@@ -1796,6 +1817,40 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                 pass
             time.sleep(0.25)
         return False
+
+    @staticmethod
+    def _click_save_as_save_button_win32(dlg) -> bool:
+        """Click the standard Save button by control ID/window message."""
+        try:
+            import win32con
+            import win32gui
+
+            root_handle = int(dlg.handle)
+            button_handle = int(win32gui.GetDlgItem(root_handle, 1) or 0)
+            if not button_handle or not win32gui.IsWindow(button_handle):
+                buttons = []
+
+                def collect(handle, _extra):
+                    try:
+                        title = str(win32gui.GetWindowText(handle) or "").strip()
+                        if (
+                            win32gui.IsWindowVisible(handle)
+                            and "button" in win32gui.GetClassName(handle).lower()
+                            and ("저장" in title or title.lower().startswith("save"))
+                        ):
+                            buttons.append(int(handle))
+                    except Exception:
+                        pass
+                    return True
+
+                win32gui.EnumChildWindows(root_handle, collect, None)
+                if not buttons:
+                    return False
+                button_handle = buttons[0]
+            win32gui.PostMessage(button_handle, win32con.BM_CLICK, 0, 0)
+            return True
+        except Exception:
+            return False
 
     def _focus_save_as_filename_field(self, dlg) -> bool:
         try:
