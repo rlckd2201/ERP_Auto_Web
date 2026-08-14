@@ -174,7 +174,9 @@ class WehagoPdfValidationTests(TestCase):
                 else (10, 500, 300, 520)
             ),
             SendMessage=Mock(side_effect=send_message),
-            GetWindowText=Mock(side_effect=lambda handle: written.get(handle, "")),
+            GetWindowText=Mock(
+                side_effect=lambda handle: Path(written.get(handle, "")).name
+            ),
             GetDlgItem=Mock(return_value=300),
             IsWindow=Mock(return_value=True),
             PostMessage=Mock(),

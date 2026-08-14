@@ -1754,7 +1754,12 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             win32gui.SendMessage(
                 edit_handle, win32con.WM_SETTEXT, 0, str(text)
             )
-            return str(win32gui.GetWindowText(edit_handle) or "").strip() == str(text)
+            current = str(win32gui.GetWindowText(edit_handle) or "").strip().strip('"')
+            target = str(text).strip().strip('"')
+            return current.casefold() in {
+                target.casefold(),
+                Path(target).name.casefold(),
+            }
         except Exception:
             return False
 
