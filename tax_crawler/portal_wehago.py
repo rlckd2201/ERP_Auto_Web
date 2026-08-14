@@ -1039,11 +1039,8 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                 try:
                     if hasattr(win, "is_visible") and not win.is_visible():
                         continue
-                    wrapper = win.wrapper_object()
-                    title = str(wrapper.window_text() or "").strip().lower()
+                    title = str(win.window_text() or "").strip().lower()
                     if any(hint in title for hint in title_hints):
-                        return True
-                    if self._looks_like_print_preview(wrapper):
                         return True
                 except Exception:
                     continue
