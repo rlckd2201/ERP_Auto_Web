@@ -16,6 +16,7 @@ import base64
 import hashlib
 import re
 import shutil
+import subprocess
 import time
 import winreg
 from pathlib import Path
@@ -473,7 +474,10 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         for attempt in range(1, total_attempts + 1):
             self._close_all_print_dialogs()
             if attempt > 1:
-                self._terminate_stale_duzon_print_helpers()
+                # The WEHAGO updater can need tens of seconds before the
+                # interactive print runtime is ready.  Killing it between
+                # retries creates an endless updater/restart loop.
+                self._ensure_wehago_print_runtime()
                 time.sleep(1.0)
 
             if not self._click_print(driver):
@@ -723,17 +727,26 @@ class WehagoHandler(BaseTaxInvoiceHandler):
     def _click_print(self, driver) -> bool:
         self._last_print_click_detail = ""
 
+        runtime = self._ensure_wehago_print_runtime()
+        runtime_detail = str(runtime.get("detail") or "").strip()
+        if runtime_detail:
+            self._last_print_click_detail = runtime_detail
+
         agent_probe = self._probe_local_print_agent(driver)
         if not agent_probe.get("reachable"):
             reason = str(agent_probe.get("error") or "connection failed").strip()
-            self._last_print_click_detail = (
+            self._last_print_click_detail += (
+                " / " if self._last_print_click_detail else ""
+            ) + (
                 "WEHAGO local print agent unavailable"
                 f" ({reason[:180]})"
             )
             return False
 
         probe_status = agent_probe.get("status")
-        self._last_print_click_detail = (
+        self._last_print_click_detail += (
+            " / " if self._last_print_click_detail else ""
+        ) + (
             "WEHAGO local print agent reachable"
             f" (HTTP {probe_status})"
         )
@@ -839,13 +852,13 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                 return False
 
         launch_steps = []
-        launch_ready = self._settle_print_launch(driver, timeout=8, steps=launch_steps)
+        launch_ready = self._settle_print_launch(driver, timeout=35, steps=launch_steps)
         if launch_ready:
             self._last_print_click_detail += f" / launch={' > '.join(launch_steps)}"
         else:
             launch_steps.append("preview-not-open")
-            self._terminate_stale_duzon_print_helpers()
-            launch_steps.append("stale-helper-reset")
+            runtime = self._ensure_wehago_print_runtime()
+            launch_steps.append(str(runtime.get("state") or "runtime-checked"))
             time.sleep(1.0)
             try:
                 driver.switch_to.default_content()
@@ -853,7 +866,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                 pass
             if search_and_click(selectors_print, timeout=3, reverse=True):
                 launch_steps.append("print-retry")
-                launch_ready = self._settle_print_launch(driver, timeout=8, steps=launch_steps)
+                launch_ready = self._settle_print_launch(driver, timeout=35, steps=launch_steps)
             else:
                 launch_steps.append("print-retry-button-not-found")
             self._last_print_click_detail += f" / launch={' > '.join(launch_steps)}"
@@ -861,6 +874,63 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         if len(driver.window_handles) > windows_before:
             driver.switch_to.window(driver.window_handles[-1])
         return launch_ready
+
+    @staticmethod
+    def _ensure_wehago_print_runtime() -> dict:
+        """Keep WEHAGO's interactive print runtime alive in the backend session."""
+        executable = Path(r"C:\Douzone\Wehago\WehagoPrint\WehagoPrint.exe")
+        if not executable.is_file():
+            return {
+                "state": "runtime-missing",
+                "detail": f"WEHAGO print runtime missing ({executable})",
+            }
+
+        try:
+            import psutil
+
+            executable_key = str(executable.resolve()).lower()
+            for proc in psutil.process_iter(["pid", "name", "exe"]):
+                try:
+                    name = str(proc.info.get("name") or "").lower()
+                    process_exe = str(proc.info.get("exe") or "").lower()
+                    if name == "wehagoprint.exe" and process_exe == executable_key:
+                        return {
+                            "state": "runtime-running",
+                            "detail": f"WEHAGO print runtime running (PID {proc.pid})",
+                        }
+                except Exception:
+                    continue
+        except Exception:
+            pass
+
+        try:
+            flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            process = subprocess.Popen(
+                [str(executable)],
+                cwd=str(executable.parent),
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                creationflags=flags,
+            )
+            deadline = time.time() + 5
+            while time.time() < deadline:
+                if process.poll() is not None:
+                    return {
+                        "state": "runtime-exited",
+                        "detail": f"WEHAGO print runtime exited (code {process.returncode})",
+                    }
+                time.sleep(0.25)
+            return {
+                "state": "runtime-started",
+                "detail": f"WEHAGO print runtime started (PID {process.pid})",
+            }
+        except Exception as exc:
+            return {
+                "state": "runtime-start-failed",
+                "detail": f"WEHAGO print runtime start failed ({exc!r})",
+            }
 
     @staticmethod
     def _probe_local_print_agent(driver, timeout: int = 5) -> dict:
