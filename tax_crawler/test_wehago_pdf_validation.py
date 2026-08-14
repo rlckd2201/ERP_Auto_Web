@@ -123,20 +123,75 @@ class WehagoPdfValidationTests(TestCase):
         gui.WindowFromPoint.assert_called_once_with((678, 355))
         self.assertEqual(3, gui.PostMessage.call_count)
 
-    def test_pdf_button_uses_server_coordinate_before_descendant_scan(self):
+    def test_pdf_button_uses_background_message_before_descendant_scan(self):
         handler = WehagoHandler.__new__(WehagoHandler)
         handler._post_dialog_click = Mock(return_value=True)
         dialog = Mock()
-        dialog.rectangle.return_value = SimpleNamespace(left=450, top=153)
 
-        with patch("portal_wehago.pyautogui.click") as click, patch(
-            "portal_wehago.time.sleep"
-        ):
+        with patch("portal_wehago.time.sleep"):
             clicked = handler._click_pdf_button(dialog)
 
         self.assertTrue(clicked)
-        click.assert_called_once_with(678, 355)
+        handler._post_dialog_click.assert_called_once_with(dialog, 228, 202)
         dialog.descendants.assert_not_called()
+
+    def test_pdf_button_skips_print_when_save_as_opens_directly(self):
+        handler = WehagoHandler.__new__(WehagoHandler)
+        dialog = Mock()
+        target = Path("invoice.pdf")
+        handler._wait_print_dialog = Mock(return_value=dialog)
+        handler._click_pdf_button = Mock(return_value=True)
+        handler._find_save_as_dialog = Mock(return_value=Mock())
+        handler._click_print_execute_button = Mock(return_value=True)
+        handler._save_pdf_dialog = Mock(return_value=target)
+        handler._close_print_dialog = Mock()
+        handler._close_all_print_dialogs = Mock()
+        handler._terminate_stale_duzon_print_helpers = Mock()
+
+        saved = handler._export_pdf_from_print_dialog(target)
+
+        self.assertEqual(target, saved)
+        handler._click_print_execute_button.assert_not_called()
+
+    def test_save_as_uses_win32_filename_and_save_button(self):
+        written = {}
+
+        def enum_children(_root, callback, extra):
+            callback(200, extra)
+            callback(201, extra)
+
+        def send_message(handle, _message, _wparam, value):
+            written[handle] = value
+
+        constants = SimpleNamespace(WM_SETTEXT=0x000C, BM_CLICK=0x00F5)
+        gui = SimpleNamespace(
+            EnumChildWindows=enum_children,
+            IsWindowVisible=Mock(return_value=True),
+            GetClassName=Mock(return_value="Edit"),
+            GetWindowRect=Mock(
+                side_effect=lambda handle: (10, 100, 300, 120)
+                if handle == 200
+                else (10, 500, 300, 520)
+            ),
+            SendMessage=Mock(side_effect=send_message),
+            GetWindowText=Mock(side_effect=lambda handle: written.get(handle, "")),
+            GetDlgItem=Mock(return_value=300),
+            IsWindow=Mock(return_value=True),
+            PostMessage=Mock(),
+        )
+        dialog = Mock(handle=100)
+        filename = r"C:\ERP_DB\downloads\invoice.pdf"
+
+        with patch.dict(
+            "sys.modules", {"win32con": constants, "win32gui": gui}
+        ):
+            set_ok = WehagoHandler._set_save_as_filename_win32(dialog, filename)
+            save_ok = WehagoHandler._click_save_as_save_button_win32(dialog)
+
+        self.assertTrue(set_ok)
+        self.assertTrue(save_ok)
+        gui.SendMessage.assert_called_once_with(201, constants.WM_SETTEXT, 0, filename)
+        gui.PostMessage.assert_called_once_with(300, constants.BM_CLICK, 0, 0)
 
     def test_preview_detection_uses_title_without_scanning_window_tree(self):
         handler = WehagoHandler.__new__(WehagoHandler)
