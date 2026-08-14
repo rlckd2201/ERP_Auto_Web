@@ -138,6 +138,23 @@ class WehagoPdfValidationTests(TestCase):
         click.assert_called_once_with(678, 355)
         dialog.descendants.assert_not_called()
 
+    def test_preview_detection_uses_title_without_scanning_window_tree(self):
+        handler = WehagoHandler.__new__(WehagoHandler)
+        preview = Mock()
+        preview.is_visible.return_value = True
+        preview.window_text.return_value = (
+            r"인쇄 기본 설정 / 미리보기 - C:\Douzone\Wehago\TX2A.drf"
+        )
+        desktop = Mock()
+        desktop.windows.return_value = [preview]
+
+        with patch("portal_wehago.Desktop", return_value=desktop):
+            detected = handler._print_preview_is_open()
+
+        self.assertTrue(detected)
+        preview.wrapper_object.assert_not_called()
+        preview.descendants.assert_not_called()
+
     def test_coordinate_permission_fallback_is_disabled(self):
         handler = WehagoHandler.__new__(WehagoHandler)
         driver = Mock()
