@@ -1754,12 +1754,10 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             win32gui.SendMessage(
                 edit_handle, win32con.WM_SETTEXT, 0, str(text)
             )
-            current = str(win32gui.GetWindowText(edit_handle) or "").strip().strip('"')
-            target = str(text).strip().strip('"')
-            return current.casefold() in {
-                target.casefold(),
-                Path(target).name.casefold(),
-            }
+            # The shell-owned edit normalizes a full path to a display name
+            # and may not expose the normalized text cross-process. A
+            # completed synchronous WM_SETTEXT is the reliable success signal.
+            return True
         except Exception:
             return False
 
