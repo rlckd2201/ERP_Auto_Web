@@ -11,6 +11,7 @@ $expectedHashes = @{
 }
 
 try {
+    "RUNNING" | Set-Content -LiteralPath $resultPath -Encoding UTF8
     $versionFile = Get-ChildItem -LiteralPath "C:\Users\Administrator\Desktop" -Filter VERSION -Recurse -ErrorAction SilentlyContinue |
         Where-Object {
             $_.FullName -notmatch "\\_apply_" -and
@@ -37,8 +38,18 @@ try {
         Copy-Item -LiteralPath $tempPath -Destination (Join-Path $root $relativePath) -Force
     }
 
+    Get-CimInstance Win32_Process |
+        Where-Object { $_.Name -eq "python.exe" -and $_.CommandLine -match "-m\s+web_v1\.backend" } |
+        ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 1
+
     $env:PYTHONUTF8 = "1"
     $env:PYTHONIOENCODING = "utf-8"
+    $env:APP_VERSION = $expectedVersion
+    $env:APP_ENV = "production"
+    $env:WEB_HOST = "0.0.0.0"
+    $env:WEB_PORT = "8080"
+    $env:WEB_PUBLIC_ORIGIN = "http://172.17.39.121:8080"
     $logDir = "C:\ERP_DB\logs"
     New-Item -ItemType Directory -Path $logDir -Force | Out-Null
     $python = (Get-Command python -ErrorAction Stop).Source
