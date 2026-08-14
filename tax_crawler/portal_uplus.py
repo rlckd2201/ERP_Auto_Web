@@ -39,6 +39,7 @@ class UplusPortalHandler:
             "ok": ok,
             "portal": "uplus",
             "pdf_path": raw.get("pdf_path"),
+            "source_document_id": raw.get("source_document_id"),
             "subject": raw.get("subject") or "",
             "data": data,
             "error": None if ok else (error or "U+ eDocu processing failed"),
