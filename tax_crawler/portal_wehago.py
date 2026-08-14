@@ -13,14 +13,17 @@ WEHAGO (더존비즈온) 세금계산서 핸들러
   - [인쇄] → PDF 자동 다운로드 (class=WSC_LUXButton)
 """
 import base64
+import hashlib
 import re
 import shutil
 import time
+import winreg
 from pathlib import Path
 
 import pyautogui
 from pywinauto import Desktop
 from pywinauto.findwindows import ElementNotFoundError
+from selenium.webdriver.common.action_chains import ActionChains
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.ui import WebDriverWait
@@ -41,6 +44,49 @@ class WehagoHandler(BaseTaxInvoiceHandler):
     def supports(self, url: str) -> bool:
         return str(url or "").lower().startswith(self.INVOICE_PREFIX)
 
+    def _prepare_browser_environment(self) -> None:
+        """Allow Chrome to reach WEHAGO's local Duzon print agents."""
+        policy_path = r"Software\Policies\Google\Chrome"
+        policy_names = (
+            "LocalNetworkAccessAllowedForUrls",
+            "LocalNetworkAllowedForUrls",
+            "LoopbackNetworkAllowedForUrls",
+        )
+        for policy_name in policy_names:
+            with winreg.CreateKeyEx(
+                winreg.HKEY_CURRENT_USER,
+                rf"{policy_path}\{policy_name}",
+                0,
+                winreg.KEY_SET_VALUE,
+            ) as key:
+                winreg.SetValueEx(
+                    key,
+                    "1",
+                    0,
+                    winreg.REG_SZ,
+                    "https://www.wehago.com",
+                )
+
+        # Chrome 142~152 blocks local/loopback requests unless the LNA
+        # permission has already been granted.  The allowlists above are the
+        # long-term setting; the temporary opt-out covers Chrome builds where
+        # that permission prompt is still shown before the per-origin policy
+        # takes effect.  This is scoped to Chrome's documented enterprise LNA
+        # policy and disappears automatically after the transition period.
+        with winreg.CreateKeyEx(
+            winreg.HKEY_CURRENT_USER,
+            policy_path,
+            0,
+            winreg.KEY_SET_VALUE,
+        ) as key:
+            winreg.SetValueEx(
+                key,
+                "LocalNetworkAccessRestrictionsTemporaryOptOut",
+                0,
+                winreg.REG_DWORD,
+                1,
+            )
+
     def _do_process(self, driver, url, mail_text, mail_date, result):
         # URL Base64 디코딩 우선 → 실패 시 메일 본문 키워드 매칭
         candidates = self._candidates_from_url(url) or self.build_candidate_nos(mail_text)
@@ -48,6 +94,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             result["error"] = "WEHAGO 법인명 식별 실패 (mail_text에 법인명 포함 필요)"
             return
 
+        self._grant_local_print_permissions(driver)
         driver.get(url)
         time.sleep(5)  # SPA 렌더링 대기
 
@@ -66,6 +113,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         tax_amount = 0
         supply_amount = 0
         items_raw = []
+        metadata_from_xml = False
         xml_snap = self.snapshot(".xml")
         if self._click_xml(driver):
             xml_file = self.wait_new_file(".xml", xml_snap, timeout=10)
@@ -80,6 +128,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                     tax_amount    = self._to_int(content.get("세액", "0"))
                     total_amount  = self._to_int(content.get("합계금액", "0"))
                     items_raw     = content.get("항목", [])
+                    metadata_from_xml = bool(supplier_name and buyer_name)
                     xml_file.unlink()
                 except Exception:
                     xml_file.unlink() if xml_file.exists() else None
@@ -114,21 +163,114 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             amount=str(total_amount),
             buyer_biz_no=buyer_biz_no,
         )
-        final_path = self.dedupe_path(self.download_dir / final_name)
+        source_document_id = self._document_id_from_url(url)
+        base_final_path = self.download_dir / final_name
+        final_path = base_final_path.with_name(
+            f"{base_final_path.stem}__WEHAGO_{source_document_id}{base_final_path.suffix}"
+        )
 
-        # 인쇄 버튼 → 더존 미리보기 → PDF 저장
-        if not self._click_print(driver):
-            result["error"] = "WEHAGO 인쇄 버튼 없음"
+        # A failed Seen-flag update or forwarded duplicate must not reopen the
+        # external print helper for a PDF that is already stored.
+        existing_pdf = self._existing_invoice_pdf(final_path, base_final_path)
+        if existing_pdf:
+            if not metadata_from_xml:
+                recovered = self._parse_saved_pdf_metadata(existing_pdf)
+                if recovered:
+                    supplier_name = recovered.get("supplier_name") or supplier_name
+                    buyer_name = recovered.get("buyer_name") or buyer_name
+                    buyer_biz_no = recovered.get("buyer_biz_no") or buyer_biz_no
+                    issue_date = recovered.get("issue_date") or issue_date
+                    supply_amount = recovered.get("supply_amount") or supply_amount
+                    tax_amount = recovered.get("tax_amount") or tax_amount
+                    total_amount = recovered.get("total_amount") or total_amount
+                    recovered_item = recovered.get("item_name") or "세금계산서"
+                    items = [{
+                        "name": recovered_item,
+                        "qty": 1,
+                        "inc_vat": total_amount,
+                        "account": "소모품비",
+                    }]
+                    corrected_name = self.build_pdf_filename(
+                        issue_date=issue_date,
+                        buyer=buyer_name or "사업장미상",
+                        supplier=supplier_name or "매입처",
+                        item=recovered_item,
+                        extra="",
+                        amount=str(total_amount),
+                        buyer_biz_no=buyer_biz_no,
+                    )
+                    corrected_base = self.download_dir / corrected_name
+                    corrected_path = corrected_base.with_name(
+                        f"{corrected_base.stem}__WEHAGO_{source_document_id}{corrected_base.suffix}"
+                    )
+                    existing_pdf = self._rename_saved_pdf(existing_pdf, corrected_path)
+            result.update({
+                "ok": True,
+                "pdf_path": str(existing_pdf),
+                "subject": f"[{buyer_name or '사업장미상'}] {supplier_name or '매입처'} 세금계산서 ({total_amount:,}원)",
+                "source_document_id": source_document_id,
+                "data": {
+                    "vendor_name": supplier_name or "",
+                    "site_name": buyer_name or "",
+                    "total_tax": tax_amount,
+                    "total_sum": total_amount,
+                    "items": items,
+                },
+            })
             return
 
-        pdf_file = self._export_pdf_from_print_dialog(final_path, timeout=30)
+        # 인쇄 버튼 → 더존 미리보기 → 네이티브 세금계산서 PDF 저장.
+        # Chrome Page.printToPDF는 WEHAGO 웹 화면 전체를 저장하므로 계산서로
+        # 인정하지 않는다. 네이티브 출력이 실패하면 메일을 재시도할 수 있도록
+        # 명시적으로 실패를 반환한다.
+        pdf_file, native_detail = self._export_native_pdf_with_retry(
+            driver,
+            final_path,
+            attempts=2,
+        )
         if not pdf_file:
-            result["error"] = "WEHAGO PDF 다운로드 실패"
+            result["error"] = (
+                "WEHAGO 네이티브 PDF 출력 실패: "
+                f"{native_detail or '더존 전용 인쇄 PDF를 생성하지 못했습니다'}"
+            )
             return
+
+        if not metadata_from_xml:
+            recovered = self._parse_saved_pdf_metadata(pdf_file)
+            if recovered:
+                supplier_name = recovered.get("supplier_name") or supplier_name
+                buyer_name = recovered.get("buyer_name") or buyer_name
+                buyer_biz_no = recovered.get("buyer_biz_no") or buyer_biz_no
+                issue_date = recovered.get("issue_date") or issue_date
+                supply_amount = recovered.get("supply_amount") or supply_amount
+                tax_amount = recovered.get("tax_amount") or tax_amount
+                total_amount = recovered.get("total_amount") or total_amount
+                recovered_item = recovered.get("item_name") or "세금계산서"
+                items = [{
+                    "name": recovered_item,
+                    "qty": 1,
+                    "inc_vat": total_amount,
+                    "account": "소모품비",
+                }]
+                corrected_name = self.build_pdf_filename(
+                    issue_date=issue_date,
+                    buyer=buyer_name or "사업장미상",
+                    supplier=supplier_name or "매입처",
+                    item=recovered_item,
+                    extra="",
+                    amount=str(total_amount),
+                    buyer_biz_no=buyer_biz_no,
+                )
+                corrected_base = self.download_dir / corrected_name
+                corrected_path = corrected_base.with_name(
+                    f"{corrected_base.stem}__WEHAGO_{source_document_id}{corrected_base.suffix}"
+                )
+                pdf_file = self._rename_saved_pdf(pdf_file, corrected_path)
 
         result.update({
             "ok": True,
             "pdf_path": str(pdf_file),
+            "source_document_id": source_document_id,
             "subject": f"[{buyer_name or '사업장미상'}] {supplier_name or '매입처'} 세금계산서 ({total_amount:,}원)",
             "data": {
                 "vendor_name": supplier_name or "",
@@ -138,6 +280,289 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                 "items":       items,
             },
         })
+
+    @staticmethod
+    def _grant_local_print_permissions(driver) -> None:
+        """Allow WEHAGO to call its local BMS/Duzon print agents on Chrome 142+."""
+        origin = "https://www.wehago.com"
+        for permission_name in (
+            "localNetworkAccess",
+            "localNetwork",
+            "loopbackNetwork",
+        ):
+            try:
+                driver.execute_cdp_cmd(
+                    "Browser.setPermission",
+                    {
+                        "permission": {"name": permission_name},
+                        "setting": "granted",
+                        "origin": origin,
+                    },
+                )
+            except Exception:
+                # Chrome versions before split LNA permissions may reject one
+                # of the newer names. Grant every name supported by that build.
+                continue
+
+    # ------------------------------------------------------------------
+    @staticmethod
+    def _document_id_from_url(url: str) -> str:
+        """Return WEHAGO's stable tax-invoice token, with a URL hash fallback."""
+        raw_url = str(url or "").strip()
+        try:
+            token = raw_url.rstrip("/").split("/")[-1]
+            padded = token + "=" * (-len(token) % 4)
+            decoded = base64.b64decode(padded).decode("utf-8", errors="ignore")
+            match = re.search(r"\b(TX[A-Za-z0-9_-]{6,})\b", decoded, re.IGNORECASE)
+            if match:
+                return match.group(1).upper()
+        except Exception:
+            pass
+        return "URL" + hashlib.sha1(raw_url.encode("utf-8", errors="ignore")).hexdigest()[:16].upper()
+
+    def _existing_invoice_pdf(self, canonical_path: Path, legacy_path: Path) -> Path | None:
+        candidates = [canonical_path, legacy_path]
+        try:
+            document_suffix = canonical_path.stem.rsplit("__WEHAGO_", 1)[-1]
+            if document_suffix and document_suffix != canonical_path.stem:
+                candidates.extend(self.download_dir.glob(f"*__WEHAGO_{document_suffix}.pdf"))
+            candidates.extend(
+                sorted(
+                    legacy_path.parent.glob(f"{legacy_path.stem}_*.pdf"),
+                    key=lambda path: path.stat().st_mtime if path.exists() else 0,
+                    reverse=True,
+                )
+            )
+        except Exception:
+            pass
+        for path in candidates:
+            try:
+                if not (
+                    path.exists()
+                    and path.is_file()
+                    and self._is_stable(path, interval=0.2)
+                ):
+                    continue
+                valid, reason = self._is_native_wehago_pdf(path)
+                if valid:
+                    return path
+                self._last_existing_pdf_rejection = f"{path.name}: {reason}"
+            except Exception:
+                continue
+        return None
+
+    @staticmethod
+    def _rename_saved_pdf(source_path: Path, target_path: Path) -> Path:
+        try:
+            source_path = Path(source_path)
+            target_path = Path(target_path)
+            if source_path.resolve() == target_path.resolve():
+                return source_path
+            target_path.parent.mkdir(parents=True, exist_ok=True)
+            if target_path.exists() and target_path.stat().st_size > 0:
+                return target_path
+            source_path.replace(target_path)
+            return target_path
+        except Exception:
+            return Path(source_path)
+
+    @staticmethod
+    def _assess_native_wehago_pdf(metadata: dict, text: str) -> tuple[bool, str]:
+        """Classify a WEHAGO PDF without accepting a browser-printed web page."""
+        metadata = metadata if isinstance(metadata, dict) else {}
+        producer = str(metadata.get("Producer") or metadata.get("producer") or "").strip()
+        creator = str(metadata.get("Creator") or metadata.get("creator") or "").strip()
+        producer_key = producer.lower()
+        creator_key = creator.lower()
+        compact = re.sub(r"\s+", "", str(text or ""))
+
+        if "skia/pdf" in producer_key or "chrome" in creator_key:
+            return False, f"Chrome 웹 화면 PDF 감지 (producer={producer or '-'}, creator={creator or '-'})"
+
+        browser_markers = (
+            "상태확인",
+            "국세청전송일자",
+            "신고상태전송성공",
+            "[확인]버튼",
+        )
+        if sum(marker in compact for marker in browser_markers) >= 2:
+            return False, "WEHAGO 상태/확인 웹 화면이 포함된 PDF"
+
+        if not (
+            "developer express" in producer_key
+            or "dxperience" in producer_key
+        ):
+            return False, f"더존 네이티브 PDF 생성기 불일치 (producer={producer or '-'})"
+
+        required_markers = (
+            "전자세금계산서",
+            "공급받는자보관용",
+            "작성일자",
+            "공급가액",
+            "세액",
+            "승인번호",
+            "관리번호",
+        )
+        missing = [marker for marker in required_markers if marker not in compact]
+        if missing:
+            return False, f"세금계산서 필수 표식 누락: {', '.join(missing)}"
+        return True, f"더존 네이티브 PDF 확인 (producer={producer})"
+
+    @classmethod
+    def _is_native_wehago_pdf(cls, pdf_path: Path) -> tuple[bool, str]:
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(str(pdf_path)) as pdf:
+                metadata = dict(pdf.metadata or {})
+                text = "\n".join((page.extract_text() or "") for page in pdf.pages)
+        except Exception as exc:
+            return False, f"PDF 파싱 실패: {exc!r}"
+        return cls._assess_native_wehago_pdf(metadata, text)
+
+    def _quarantine_rejected_wehago_pdf(self, pdf_path: Path, reason: str) -> Path | None:
+        """Preserve a rejected web-page PDF while clearing the canonical target."""
+        path = Path(pdf_path)
+        try:
+            if not path.exists() or not path.is_file():
+                return None
+            stamp = time.strftime("%Y%m%d_%H%M%S")
+            target = path.with_name(
+                f"{path.stem}__REJECTED_NON_NATIVE_{stamp}{path.suffix}"
+            )
+            sequence = 1
+            while target.exists():
+                target = path.with_name(
+                    f"{path.stem}__REJECTED_NON_NATIVE_{stamp}_{sequence}{path.suffix}"
+                )
+                sequence += 1
+            path.replace(target)
+            self._write_saveas_debug(
+                target,
+                f"rejected_non_native_pdf source={path.name} reason={reason}",
+            )
+            return target
+        except Exception as exc:
+            self._write_saveas_debug(
+                path,
+                f"rejected_non_native_pdf_quarantine_failed reason={reason} error={exc!r}",
+            )
+            return None
+
+    def _export_native_pdf_with_retry(
+        self,
+        driver,
+        final_path: Path,
+        attempts: int = 2,
+    ) -> tuple[Path | None, str]:
+        """Export and validate only the native Duzon/WEHAGO invoice PDF."""
+        errors = []
+        final_path = Path(final_path)
+
+        if final_path.exists():
+            valid, reason = self._is_native_wehago_pdf(final_path)
+            if valid:
+                return final_path, reason
+            rejected = self._quarantine_rejected_wehago_pdf(final_path, reason)
+            if rejected:
+                errors.append(f"기존 비정상 PDF 격리: {rejected.name} ({reason})")
+            else:
+                errors.append(f"기존 비정상 PDF 감지: {reason}")
+
+        total_attempts = max(1, int(attempts or 1))
+        for attempt in range(1, total_attempts + 1):
+            self._close_all_print_dialogs()
+            if attempt > 1:
+                self._terminate_stale_duzon_print_helpers()
+                time.sleep(1.0)
+
+            if not self._click_print(driver):
+                detail = str(getattr(self, "_last_print_click_detail", "") or "").strip()
+                errors.append(f"{attempt}차 인쇄 미리보기 실행 실패{': ' + detail if detail else ''}")
+                continue
+
+            candidate = self._export_pdf_from_print_dialog(final_path, timeout=30)
+            if not candidate:
+                detail = str(getattr(self, "_last_pdf_export_error", "") or "").strip()
+                errors.append(f"{attempt}차 네이티브 저장 실패{': ' + detail if detail else ''}")
+                continue
+
+            valid, reason = self._is_native_wehago_pdf(candidate)
+            if valid:
+                return Path(candidate), reason
+
+            rejected = self._quarantine_rejected_wehago_pdf(candidate, reason)
+            if rejected:
+                errors.append(f"{attempt}차 비정상 PDF 격리: {rejected.name} ({reason})")
+            else:
+                errors.append(f"{attempt}차 비정상 PDF 거부: {reason}")
+
+        errors.append("Chrome 웹 화면 PDF 대체 저장은 차단되었습니다")
+        return None, " / ".join(errors[-6:])
+
+    @staticmethod
+    def _parse_saved_pdf_metadata(pdf_path: Path) -> dict:
+        """Recover invoice metadata from the generated PDF when XML download fails."""
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(str(pdf_path)) as pdf:
+                text = "\n".join((page.extract_text() or "") for page in pdf.pages)
+        except Exception:
+            return {}
+
+        lines = [re.sub(r"\s+", " ", line).strip() for line in text.splitlines() if line.strip()]
+        merged = "\n".join(lines)
+        recovered = {}
+
+        for line in lines:
+            if "상 호" not in line or line.count("성명") < 2:
+                continue
+            match = re.search(
+                r"상\s*호\s+(.+?)\s+성명\s+.+?\s+상\s*호\s+(.+?)\s+성명(?:\s|$)",
+                line,
+            )
+            if match:
+                recovered["supplier_name"] = match.group(1).strip()
+                recovered["buyer_name"] = match.group(2).strip()
+                break
+
+        biz_match = re.search(
+            r"등록번호\s+([0-9-]{10,12}).*?등록번호\s+([0-9-]{10,12})",
+            merged,
+            re.DOTALL,
+        )
+        if biz_match:
+            recovered["supplier_biz_no"] = biz_match.group(1)
+            recovered["buyer_biz_no"] = biz_match.group(2)
+
+        date_amount_match = re.search(
+            r"작성일자\s+공급가액\s+세액\s+"
+            r"(\d{4})\s+(\d{1,2})\s+(\d{1,2})\s+([\d,]+)\s+([\d,]+)",
+            merged,
+        )
+        if date_amount_match:
+            year, month, day = date_amount_match.group(1, 2, 3)
+            supply_amount = int(date_amount_match.group(4).replace(",", ""))
+            tax_amount = int(date_amount_match.group(5).replace(",", ""))
+            recovered.update({
+                "issue_date": f"{int(year):04d}/{int(month):02d}/{int(day):02d}",
+                "supply_amount": supply_amount,
+                "tax_amount": tax_amount,
+                "total_amount": supply_amount + tax_amount,
+            })
+
+        for line in lines:
+            item_match = re.match(
+                r"^\d{1,2}\s+\d{1,2}\s+(.+?)\s+\S+\s+"
+                r"[\d,.]+\s+[\d,]+\s+[\d,]+\s+[\d,]+(?:\s|$)",
+                line,
+            )
+            if item_match:
+                recovered["item_name"] = item_match.group(1).strip()
+                break
+
+        return recovered
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -296,18 +721,31 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             return False
 
     def _click_print(self, driver) -> bool:
+        self._last_print_click_detail = ""
+
+        agent_probe = self._probe_local_print_agent(driver)
+        if not agent_probe.get("reachable"):
+            reason = str(agent_probe.get("error") or "connection failed").strip()
+            self._last_print_click_detail = (
+                "WEHAGO local print agent unavailable"
+                f" ({reason[:180]})"
+            )
+            return False
+
+        probe_status = agent_probe.get("status")
+        self._last_print_click_detail = (
+            "WEHAGO local print agent reachable"
+            f" (HTTP {probe_status})"
+        )
         selectors_print = [
-            "//button[normalize-space()='인쇄']",
-            "//button[contains(.,'인쇄')]",
-            "//button[contains(.,'출력')]",
-            "//a[contains(.,'인쇄')]",
-            "//a[contains(.,'출력')]",
-            "//span[contains(.,'인쇄')]",
-            "//*[contains(@title, '인쇄')]",
-            "//*[contains(@alt, '인쇄')]",
-            "//*[contains(@value, '인쇄')]",
-            "//button[contains(.,'PDF')]",
-            "//*[contains(@class, 'print')]",
+            "//button[normalize-space()='인쇄' or normalize-space()='출력']",
+            "//a[normalize-space()='인쇄' or normalize-space()='출력']",
+            "//span[normalize-space()='인쇄' or normalize-space()='출력']",
+            "//*[@role='button' and (normalize-space()='인쇄' or normalize-space()='출력')]",
+            "//*[contains(concat(' ', normalize-space(@class), ' '), ' WSC_LUXButton ') and "
+            "(normalize-space()='인쇄' or normalize-space()='출력')]",
+            "//*[self::input or self::img][contains(@title, '인쇄') or contains(@alt, '인쇄') "
+            "or contains(@value, '인쇄')]",
         ]
         selectors_confirm = [
             "//button[contains(.,'확인')]",
@@ -317,8 +755,41 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         ]
         windows_before = len(driver.window_handles)
 
+        def click_element(elem, selector):
+            try:
+                driver.execute_script(
+                    "arguments[0].scrollIntoView({block:'center', inline:'center'});",
+                    elem,
+                )
+            except Exception:
+                pass
+
+            try:
+                elem.click()
+            except Exception:
+                try:
+                    ActionChains(driver).move_to_element(elem).pause(0.2).click().perform()
+                except Exception:
+                    try:
+                        driver.execute_script("arguments[0].click();", elem)
+                    except Exception:
+                        return False
+
+            try:
+                tag = str(elem.tag_name or "")
+            except Exception:
+                tag = ""
+            try:
+                text = str(elem.text or elem.get_attribute("value") or "").strip()
+            except Exception:
+                text = ""
+            click_detail = (
+                f"WEHAGO click tag={tag or '?'} text={text or '?'} selector={selector}"
+            )
+            self._last_print_click_detail += f" / {click_detail}"
+            return True
+
         def search_and_click(selectors, timeout=10, reverse=False):
-            import time
             deadline = time.time() + timeout
             while time.time() < deadline:
                 for sel in selectors:
@@ -327,8 +798,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                         if reverse:
                             elems = list(reversed(elems))
                         for elem in elems:
-                            if elem.is_displayed():
-                                driver.execute_script("arguments[0].click();", elem)
+                            if elem.is_displayed() and click_element(elem, sel):
                                 return True
                     except Exception:
                         pass
@@ -343,8 +813,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                                 if reverse:
                                     elems = list(reversed(elems))
                                 for elem in elems:
-                                    if elem.is_displayed():
-                                        driver.execute_script("arguments[0].click();", elem)
+                                    if elem.is_displayed() and click_element(elem, sel):
                                         driver.switch_to.default_content()
                                         return True
                             driver.switch_to.default_content()
@@ -357,7 +826,6 @@ class WehagoHandler(BaseTaxInvoiceHandler):
 
         if not search_and_click(selectors_print, timeout=5):
             if self._click_confirm_button(driver, timeout=5, reverse=True) or search_and_click(selectors_confirm, timeout=2):
-                import time
                 time.sleep(1.5)
                 self._accept_alert(driver, timeout=1)
                 self._dismiss_notice_dialog(driver)
@@ -370,12 +838,146 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             else:
                 return False
 
-        import time
-        time.sleep(1)
-        self._allow_chrome_permission_popup(driver, timeout=12)
+        launch_steps = []
+        launch_ready = self._settle_print_launch(driver, timeout=8, steps=launch_steps)
+        if launch_ready:
+            self._last_print_click_detail += f" / launch={' > '.join(launch_steps)}"
+        else:
+            launch_steps.append("preview-not-open")
+            self._terminate_stale_duzon_print_helpers()
+            launch_steps.append("stale-helper-reset")
+            time.sleep(1.0)
+            try:
+                driver.switch_to.default_content()
+            except Exception:
+                pass
+            if search_and_click(selectors_print, timeout=3, reverse=True):
+                launch_steps.append("print-retry")
+                launch_ready = self._settle_print_launch(driver, timeout=8, steps=launch_steps)
+            else:
+                launch_steps.append("print-retry-button-not-found")
+            self._last_print_click_detail += f" / launch={' > '.join(launch_steps)}"
+
         if len(driver.window_handles) > windows_before:
             driver.switch_to.window(driver.window_handles[-1])
-        return True
+        return launch_ready
+
+    @staticmethod
+    def _probe_local_print_agent(driver, timeout: int = 5) -> dict:
+        """Probe WEHAGO's HTTPS loopback agent from the invoice origin."""
+        script = """
+            const done = arguments[arguments.length - 1];
+            const timeoutMs = arguments[0];
+            const controller = new AbortController();
+            const timer = setTimeout(() => controller.abort(), timeoutMs);
+            fetch('https://127.0.0.1:8233/DCloudClientAgent', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json; charset=utf-8'},
+                body: '{}',
+                signal: controller.signal,
+                cache: 'no-store'
+            }).then(async response => {
+                clearTimeout(timer);
+                let body = '';
+                try { body = await response.text(); } catch (_) {}
+                done({
+                    reachable: true,
+                    status: response.status,
+                    body: body.slice(0, 200)
+                });
+            }).catch(error => {
+                clearTimeout(timer);
+                done({reachable: false, error: String(error)});
+            });
+        """
+        previous_script_timeout = None
+        try:
+            previous_timeout = getattr(driver, "timeouts", None)
+            previous_script_timeout = (
+                getattr(previous_timeout, "script", None)
+                if previous_timeout is not None
+                else None
+            )
+            driver.set_script_timeout(max(1, timeout + 1))
+            result = driver.execute_async_script(script, int(timeout * 1000))
+            if isinstance(result, dict):
+                return result
+            return {"reachable": False, "error": "invalid probe response"}
+        except Exception as exc:
+            return {"reachable": False, "error": repr(exc)}
+        finally:
+            try:
+                if previous_script_timeout is not None:
+                    driver.set_script_timeout(previous_script_timeout)
+            except Exception:
+                pass
+
+    def _settle_print_launch(self, driver, timeout: int, steps: list[str]) -> bool:
+        """Handle the confirmations between the WEHAGO print click and preview."""
+        time.sleep(0.7)
+        if self._print_preview_is_open():
+            steps.append("preview-open")
+            return True
+
+        if self._accept_alert(driver, timeout=1):
+            steps.append("js-alert-accepted")
+            time.sleep(0.5)
+
+        if self._click_confirm_button(driver, timeout=2, reverse=True):
+            steps.append("web-confirm-clicked")
+            time.sleep(0.7)
+            if self._accept_alert(driver, timeout=1):
+                steps.append("post-confirm-alert-accepted")
+
+        if self._print_preview_is_open():
+            steps.append("preview-open")
+            return True
+
+        if self._allow_chrome_permission_popup(driver, timeout=timeout):
+            steps.append("external-app-prompt-handled")
+
+        deadline = time.time() + 4
+        while time.time() < deadline:
+            if self._print_preview_is_open():
+                steps.append("preview-open")
+                return True
+            time.sleep(0.4)
+        return False
+
+    def _export_browser_pdf(self, driver, final_path: Path) -> Path | None:
+        """Disabled: a Chrome print is the WEHAGO web page, not the invoice PDF."""
+        self._last_browser_pdf_error = (
+            "Chrome 웹 화면 PDF 대체 저장은 비활성화되었습니다. "
+            "더존 네이티브 인쇄 PDF만 허용됩니다."
+        )
+        return None
+
+    def _print_preview_is_open(self) -> bool:
+        title_hints = (
+            "duzon - printdialog",
+            "wehagoprint",
+            "인쇄 기본 설정 / 미리보기",
+            "print preview",
+            "tx2a.drf",
+        )
+        for backend in ("uia", "win32"):
+            try:
+                windows = Desktop(backend=backend).windows()
+            except Exception:
+                continue
+            for win in windows:
+                try:
+                    if hasattr(win, "is_visible") and not win.is_visible():
+                        continue
+                    wrapper = win.wrapper_object()
+                    title = str(wrapper.window_text() or "").strip().lower()
+                    if any(hint in title for hint in title_hints):
+                        return True
+                    if self._looks_like_print_preview(wrapper):
+                        return True
+                except Exception:
+                    continue
+        return False
 
     def _allow_chrome_permission_popup(self, driver, timeout: int = 8) -> bool:
         """
@@ -383,9 +985,23 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         WEHAGO 인쇄 버튼 이후 1회성 팝업이 뜨는 구조라, 브라우저 DOM이 아닌
         Chrome UI Automation 트리에서 탐색해야 한다.
         """
-        prompt_hints = ("wehago.com", "다른 앱", "서비스에 액세스", "권한")
+        prompt_hints = (
+            "wehago.com",
+            "다른 앱",
+            "서비스에 액세스",
+            "권한",
+            "애플리케이션",
+            "앱을 열",
+            "열도록 허용",
+            "duzon",
+            "wehagoprint",
+            "외부 프로토콜",
+        )
+        button_hints = ("허용", "allow", "열기", "open")
         deadline = time.time() + timeout
         while time.time() < deadline:
+            if self._print_preview_is_open():
+                return True
             try:
                 desktop = Desktop(backend="uia")
                 for win in desktop.windows():
@@ -408,15 +1024,20 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                         for btn in wrapper.descendants(control_type="Button"):
                             try:
                                 caption = (btn.window_text() or "").strip()
-                                if caption not in ("허용", "Allow", "열기", "Open"):
+                                normalized = caption.replace("&", "").strip().lower()
+                                if not any(hint in normalized for hint in button_hints):
                                     continue
                                 try:
                                     btn.set_focus()
                                     btn.click_input()
                                 except Exception:
                                     btn.invoke()
-                                time.sleep(1)
-                                return True
+                                deadline_after_click = time.time() + 4
+                                while time.time() < deadline_after_click:
+                                    if self._print_preview_is_open():
+                                        return True
+                                    time.sleep(0.4)
+                                break
                             except Exception:
                                 continue
                     except Exception:
@@ -424,50 +1045,36 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             except Exception:
                 pass
             time.sleep(0.4)
-        return self._allow_chrome_permission_popup_by_xy(driver)
+        if self._print_preview_is_open():
+            return True
+        return False
 
     def _allow_chrome_permission_popup_by_xy(self, driver, timeout: int = 8) -> bool:
-        """UIA? ? ?? ?? Chrome ?? ??? ?? ??? ??? ??."""
-        try:
-            pos = driver.get_window_position()
-            size = driver.get_window_size()
-        except Exception:
-            pos = {"x": 0, "y": 0}
-            size = {"width": 1920, "height": 1080}
-
-        origin_x = int(pos.get("x", 0))
-        origin_y = int(pos.get("y", 0))
-        width = int(size.get("width", 1920))
-        # Chrome 권한 버블은 주소창 아래 좌측에 뜨며, 버튼 중심은 대략
-        # 창 좌상단 기준 (400, 280)이다. 기존 좌표는 본문/체크박스 영역을 눌렀다.
-        candidates = [
-            (400, 280),
-            (395, 278),
-            (410, 280),
-            (386, 278),
-        ]
-        if width < 1000:
-            candidates = [(int(width * 0.42), 280), (int(width * 0.38), 278)] + candidates
-
-        for dx, dy in candidates:
-            try:
-                pyautogui.click(origin_x + dx, origin_y + dy)
-                time.sleep(0.8)
-                return True
-            except Exception:
-                pass
+        """Deprecated: coordinate clicks can hit page content, so never use them."""
         return False
 
     def _export_pdf_from_print_dialog(self, final_path, timeout: int = 30):
+        self._last_pdf_export_error = ""
+        self._last_duzon_dialog_error = ""
         dlg = self._wait_print_dialog(timeout=timeout)
         if not dlg:
+            detail = (
+                self._last_duzon_dialog_error
+                or "더존 인쇄 미리보기 창이 실행되지 않았습니다"
+            )
+            click_detail = str(getattr(self, "_last_print_click_detail", "") or "").strip()
+            if click_detail:
+                detail = f"{detail} / {click_detail}"
+            self._set_pdf_export_error(final_path, detail)
             return None
 
         saved = None
         try:
             if not self._click_pdf_button(dlg):
+                self._set_pdf_export_error(final_path, "더존 미리보기의 PDF 버튼 클릭에 실패했습니다")
                 return None
             if not self._click_print_execute_button(dlg):
+                self._set_pdf_export_error(final_path, "더존 미리보기의 인쇄하기 버튼 클릭에 실패했습니다")
                 return None
 
             saved = self._save_pdf_dialog(final_path, timeout=timeout)
@@ -478,67 +1085,230 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             # stale preview window.
             self._close_print_dialog(dlg)
             self._close_all_print_dialogs()
+            self._terminate_stale_duzon_print_helpers()
 
     def _wait_print_dialog(self, timeout: int = 20):
         deadline = time.time() + timeout
-        title_patterns = (
+        exception_count = 0
+        preview_title_patterns = (
             r".*인쇄 기본 설정 / 미리보기.*",
-            r".*Duzon - PrintDialog.*",
+            r".*인쇄.*미리보기.*",
+            r".*Print.*Preview.*",
+            r".*WehagoPrint.*미리보기.*",
+            r".*TX2A\.drf.*",
         )
 
         while time.time() < deadline:
+            handled_exception = False
             for backend in ("uia", "win32"):
-                for title_re in title_patterns:
-                    try:
-                        win = Desktop(backend=backend).window(title_re=title_re)
-                        if win.exists(timeout=0.5):
-                            wrap = win.wrapper_object()
+                try:
+                    win = Desktop(backend=backend).window(
+                        title_re=r".*Duzon - PrintDialog.*"
+                    )
+                    if win.exists(timeout=0.3):
+                        wrap = win.wrapper_object()
+                        if self._is_duzon_exception_dialog(wrap):
+                            exception_count += 1
+                            if exception_count > 2:
+                                self._last_duzon_dialog_error = (
+                                    "Duzon PrintDialog 오류가 반복되었습니다: "
+                                    "개체 참조가 개체의 인스턴스로 설정되지 않았습니다"
+                                )
+                                return None
+                            if not self._continue_duzon_exception_dialog(wrap):
+                                self._last_duzon_dialog_error = (
+                                    "Duzon PrintDialog 오류창의 계속 버튼 처리에 실패했습니다"
+                                )
+                                return None
+                            handled_exception = True
+                        elif self._looks_like_print_preview(wrap):
                             try:
                                 wrap.set_focus()
                             except Exception:
                                 pass
                             return wrap
+                except Exception:
+                    pass
+                if handled_exception:
+                    break
+            if handled_exception:
+                time.sleep(1.0)
+                continue
+
+            for backend in ("uia", "win32"):
+                for title_re in preview_title_patterns:
+                    try:
+                        win = Desktop(backend=backend).window(title_re=title_re)
+                        if not win.exists(timeout=0.4):
+                            continue
+                        wrap = win.wrapper_object()
+                        try:
+                            wrap.set_focus()
+                        except Exception:
+                            pass
+                        return wrap
                     except Exception:
                         continue
             time.sleep(0.4)
+        relevant_titles = self._relevant_desktop_window_titles()
+        if relevant_titles and not self._last_duzon_dialog_error:
+            self._last_duzon_dialog_error = (
+                "더존 인쇄 미리보기 창을 식별하지 못했습니다"
+                f" (감지 창: {' | '.join(relevant_titles)})"
+            )
         return None
 
-    def _click_pdf_button(self, dlg) -> bool:
+    @staticmethod
+    def _looks_like_print_preview(dlg) -> bool:
+        texts = []
         try:
-            for node in dlg.descendants():
-                try:
-                    txt = (node.window_text() or "").strip()
-                    if txt != "PDF":
-                        continue
-                    try:
-                        node.click_input()
-                    except Exception:
-                        try:
-                            node.invoke()
-                        except Exception:
-                            pass
-                    time.sleep(1)
-                    return True
-                except Exception:
-                    continue
+            texts.append(str(dlg.window_text() or ""))
         except Exception:
             pass
+        try:
+            nodes = dlg.descendants()
+        except Exception:
+            nodes = []
+        for node in nodes:
+            try:
+                value = str(node.window_text() or "").strip()
+                if value:
+                    texts.append(value)
+            except Exception:
+                continue
+        merged = " ".join(texts).lower()
+        has_preview_heading = "인쇄 기본 설정 / 미리보기" in merged
+        has_dr_viewer = "dr viewer" in merged
+        has_drf_document = "tx2a.drf" in merged
+        has_printer_selector = "프린터선택" in merged
+        has_legacy_controls = "인쇄하기" in merged and (
+            "pdf" in merged or has_printer_selector or "print" in merged
+        )
+        return (
+            has_preview_heading
+            or (has_dr_viewer and (has_printer_selector or has_drf_document))
+            or has_legacy_controls
+        )
+
+    @staticmethod
+    def _relevant_desktop_window_titles() -> list[str]:
+        titles = []
+        hints = ("duzon", "wehago", "인쇄", "미리보기", "print", "tx2a")
+        for backend in ("uia", "win32"):
+            try:
+                windows = Desktop(backend=backend).windows()
+            except Exception:
+                continue
+            for win in windows:
+                try:
+                    title = str(win.window_text() or "").strip()
+                except Exception:
+                    continue
+                lowered = title.lower()
+                if not title or not any(hint in lowered for hint in hints):
+                    continue
+                if title not in titles:
+                    titles.append(title[:160])
+                if len(titles) >= 8:
+                    return titles
+        return titles
+
+    @staticmethod
+    def _is_duzon_exception_dialog(dlg) -> bool:
+        hints = (
+            "처리되지 않은 예외",
+            "개체 참조가 개체의 인스턴스로 설정되지 않았습니다",
+            "unhandled exception",
+            "object reference not set to an instance of an object",
+        )
+        texts = []
+        try:
+            texts.append(str(dlg.window_text() or ""))
+        except Exception:
+            pass
+        try:
+            nodes = dlg.descendants()
+        except Exception:
+            nodes = []
+        for node in nodes:
+            try:
+                text = str(node.window_text() or "").strip()
+                if text:
+                    texts.append(text)
+            except Exception:
+                continue
+        merged = " ".join(texts).lower()
+        return any(hint.lower() in merged for hint in hints)
+
+    @staticmethod
+    def _continue_duzon_exception_dialog(dlg) -> bool:
+        try:
+            nodes = dlg.descendants(control_type="Button")
+        except Exception:
+            try:
+                nodes = dlg.descendants()
+            except Exception:
+                nodes = []
+
+        for node in nodes:
+            try:
+                caption = str(node.window_text() or "").strip()
+                normalized = caption.replace("&", "").lower()
+                if not (
+                    normalized.startswith("계속")
+                    or normalized.startswith("continue")
+                ):
+                    continue
+                try:
+                    node.click_input()
+                except Exception:
+                    node.invoke()
+                return True
+            except Exception:
+                continue
+
+        try:
+            rect = dlg.rectangle()
+            pyautogui.click(rect.right - 58, rect.bottom - 22)
+            return True
+        except Exception:
+            return False
+
+    def _click_pdf_button(self, dlg) -> bool:
+        deadline = time.time() + 8
+        while time.time() < deadline:
+            try:
+                for node in dlg.descendants():
+                    try:
+                        txt = (node.window_text() or "").strip()
+                        if txt != "PDF":
+                            continue
+                        try:
+                            node.click_input()
+                        except Exception:
+                            node.invoke()
+                        time.sleep(1)
+                        return True
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            time.sleep(0.4)
 
         # Duzon/WEHAGO 미리보기는 서버 환경에서 PDF 버튼이 UIA 텍스트로
         # 노출되지 않는 경우가 있어, 마지막 수단으로 창 기준 상대좌표를 쓴다.
         try:
             rect = dlg.rectangle()
             candidates = [
-                (280, 252),
-                (292, 252),
-                (270, 252),
-                (280, 242),
-                (292, 242),
-                (280, 264),
+                (228, 202),
+                (222, 202),
+                (235, 202),
+                (228, 194),
+                (228, 210),
             ]
             for dx, dy in candidates:
                 pyautogui.click(rect.left + dx, rect.top + dy)
-                time.sleep(0.5)
+                time.sleep(0.8)
                 return True
         except Exception:
             pass
@@ -568,10 +1338,10 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         try:
             rect = dlg.rectangle()
             candidates = [
+                (88, 94),
+                (98, 96),
+                (110, 105),
                 (110, 114),
-                (105, 110),
-                (120, 115),
-                (95, 112),
             ]
             for dx, dy in candidates:
                 pyautogui.click(rect.left + dx, rect.top + dy)
@@ -586,6 +1356,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         before_files = self.snapshot(".pdf")
         final_path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.time() + timeout
+        last_exception = None
 
         while time.time() < deadline:
             direct = self.wait_new_file(".pdf", before_files, timeout=1)
@@ -600,9 +1371,8 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                     return direct
 
             try:
-                dlg = Desktop(backend="win32").window(title="다른 이름으로 저장")
-                if dlg.exists(timeout=0.5):
-                    wrap = dlg.wrapper_object()
+                wrap = self._find_save_as_dialog(timeout=0.5)
+                if wrap:
                     try:
                         wrap.set_focus()
                     except Exception:
@@ -616,14 +1386,14 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                     success = self._set_save_as_filename_text(wrap, str(final_path))
                     if not success:
                         self._cleanup_saveas_new_folders(final_path, started_at)
-                        self._write_saveas_debug(final_path, "saveas_filename_set_failed")
+                        self._set_pdf_export_error(final_path, "PDF 저장창 파일명 입력에 실패했습니다")
                         return None
 
                     if not self._click_save_as_save_button(wrap):
                         # Do not press Enter here. If the file list has focus,
                         # Enter can open/create the selected "새 폴더" item.
                         self._cleanup_saveas_new_folders(final_path, started_at)
-                        self._write_saveas_debug(final_path, "saveas_save_button_not_clicked")
+                        self._set_pdf_export_error(final_path, "PDF 저장창의 저장 버튼 클릭에 실패했습니다")
                         return None
                     time.sleep(0.5)
 
@@ -639,8 +1409,8 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                             self._cleanup_saveas_new_folders(final_path, started_at)
                             return recovered
                         time.sleep(0.4)
-            except Exception:
-                pass
+            except Exception as exc:
+                last_exception = exc
             time.sleep(0.3)
 
         fallback = self.wait_new_file(".pdf", before_files, timeout=2)
@@ -661,7 +1431,34 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         self._cleanup_saveas_new_folders(final_path, started_at)
         if recovered:
             return recovered
+        detail = "PDF 저장창 또는 생성된 PDF 파일을 확인하지 못했습니다"
+        if last_exception is not None:
+            detail += f" ({last_exception!r})"
+        self._set_pdf_export_error(final_path, detail)
         return None
+
+    def _find_save_as_dialog(self, timeout: float = 0.5):
+        title_patterns = (
+            r".*다른 이름으로.*저장.*",
+            r".*다음 이름으로.*저장.*",
+            r".*프린터 출력.*저장.*",
+            r".*인쇄 출력.*저장.*",
+            r".*Save Print Output As.*",
+            r".*Save As.*",
+        )
+        for backend in ("win32", "uia"):
+            for title_re in title_patterns:
+                try:
+                    win = Desktop(backend=backend).window(title_re=title_re)
+                    if win.exists(timeout=timeout):
+                        return win.wrapper_object()
+                except Exception:
+                    continue
+        return None
+
+    def _set_pdf_export_error(self, final_path: Path, text: str) -> None:
+        self._last_pdf_export_error = str(text or "").strip()
+        self._write_saveas_debug(final_path, f"pdf_export_error={self._last_pdf_export_error}")
 
     def _recover_pdf_from_saveas_new_folders(self, final_path: Path, started_at: float):
         try:
@@ -783,7 +1580,11 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             for node in dlg.descendants():
                 try:
                     class_name = node.class_name() or ""
-                    if class_name != "Edit":
+                    try:
+                        control_type = str(node.element_info.control_type or "")
+                    except Exception:
+                        control_type = ""
+                    if class_name != "Edit" and control_type != "Edit":
                         continue
                     rect = node.rectangle()
                     if rect.top < dlg_rect.top + int(dlg_rect.height() * 0.50):
@@ -808,7 +1609,41 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                         continue
         except Exception:
             pass
+
+        # Some Windows "Save Print Output As" dialogs do not expose their
+        # filename Edit through UIA. Focus the lower filename field directly.
+        try:
+            rect = dlg.rectangle()
+            pyautogui.click(
+                rect.left + int(rect.width() * 0.55),
+                rect.bottom - 92,
+            )
+            time.sleep(0.2)
+            pyautogui.hotkey("ctrl", "a")
+            self._paste_save_as_text(str(text))
+            time.sleep(0.2)
+            return True
+        except Exception:
+            pass
         return False
+
+    @staticmethod
+    def _paste_save_as_text(text: str) -> None:
+        try:
+            import win32clipboard
+
+            win32clipboard.OpenClipboard()
+            try:
+                win32clipboard.EmptyClipboard()
+                win32clipboard.SetClipboardText(str(text), win32clipboard.CF_UNICODETEXT)
+            finally:
+                win32clipboard.CloseClipboard()
+            pyautogui.hotkey("ctrl", "v")
+            return
+        except Exception:
+            pass
+
+        pyautogui.write(str(text), interval=0.01)
 
     def _click_save_as_save_button(self, dlg) -> bool:
         save_markers = ("저장", "Save")
@@ -823,7 +1658,11 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                     try:
                         txt = (node.window_text() or "").strip()
                         class_name = node.class_name() or ""
-                        if "Button" not in class_name and class_name not in ("Button",):
+                        try:
+                            control_type = str(node.element_info.control_type or "")
+                        except Exception:
+                            control_type = ""
+                        if "Button" not in class_name and control_type != "Button":
                             continue
                         rect = node.rectangle()
                         if rect.top < min_top or rect.left < min_left:
@@ -940,6 +1779,8 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             r".*Duzon.*Print.*",
             r".*WehagoPrint.*",
             r".*TX2A\.drf.*",
+            r".*다음 이름으로 프린터 출력 저장.*",
+            r".*Save Print Output As.*",
         )
         for _ in range(2):
             closed_any = False
@@ -967,6 +1808,49 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                     pass
             if not closed_any:
                 break
+
+    @staticmethod
+    def _terminate_stale_duzon_print_helpers() -> None:
+        """Terminate only the external Duzon WEHAGO print helper processes."""
+        try:
+            import psutil
+
+            matched = []
+            for proc in psutil.process_iter(["pid", "name", "exe", "cmdline"]):
+                try:
+                    name = str(proc.info.get("name") or "").lower()
+                    exe = str(proc.info.get("exe") or "").lower()
+                    command = " ".join(proc.info.get("cmdline") or []).lower()
+                    process_text = f"{name} {exe} {command}".replace("/", "\\")
+                    is_wehago_print = (
+                        "\\douzone\\wehago\\wehagoprint" in process_text
+                        or (
+                            "douzone" in process_text
+                            and (
+                                "wehagoprint" in process_text
+                                or "printdialog" in process_text
+                            )
+                        )
+                    )
+                    if is_wehago_print:
+                        matched.append(proc)
+                except Exception:
+                    continue
+
+            for proc in matched:
+                try:
+                    for child in proc.children(recursive=True):
+                        child.kill()
+                except Exception:
+                    pass
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            if matched:
+                psutil.wait_procs(matched, timeout=3)
+        except Exception:
+            pass
 
     @staticmethod
     def _paste_text(text: str) -> None:

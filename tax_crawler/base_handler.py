@@ -62,6 +62,7 @@ class BaseTaxInvoiceHandler(ABC):
             "pdf_path": None, "subject": "", "data": {}, "error": None,
         }
         self._mail_subject = str(mail_subject or "")
+        self._prepare_browser_environment()
         driver = self._build_driver()
         try:
             self._do_process(driver, url, mail_text, mail_date, result)
@@ -86,6 +87,9 @@ class BaseTaxInvoiceHandler(ABC):
     def _do_process(self, driver, url, mail_text, mail_date, result: dict) -> None:
         """실제 크롤링 로직. result dict를 직접 채운다."""
 
+    def _prepare_browser_environment(self) -> None:
+        """포털별 Chrome 실행 전 환경 설정 훅."""
+
     # ------------------------------------------------------------------
     # 공통 유틸: 사업자번호 후보 조합
     # ------------------------------------------------------------------
@@ -105,13 +109,15 @@ class BaseTaxInvoiceHandler(ABC):
         options = Options()
         profile_dir = Path(
             self.config.get("PATH", "chrome_profile_dir", fallback=str(DEFAULT_CHROME_PROFILE))
-        )
+        ).resolve()
         profile_dir.mkdir(parents=True, exist_ok=True)
         options.add_argument(f"--user-data-dir={profile_dir}")
         options.add_argument("--profile-directory=Default")
         options.add_argument("--start-maximized")
         options.add_argument("--disable-popup-blocking")
         options.add_argument("--kiosk-printing")
+        options.add_argument("--no-first-run")
+        options.add_argument("--no-default-browser-check")
         options.add_experimental_option("excludeSwitches", ["enable-logging"])
         options.add_experimental_option("prefs", {
             "download.default_directory": str(self.download_dir),
@@ -122,7 +128,27 @@ class BaseTaxInvoiceHandler(ABC):
             "profile.default_content_setting_values.automatic_downloads": 1,
             "profile.default_content_settings.popups": 0,
         })
-        driver = webdriver.Chrome(service=self._get_chromedriver_service(), options=options)
+        try:
+            driver = webdriver.Chrome(
+                service=self._get_chromedriver_service(),
+                options=options,
+            )
+        except Exception as exc:
+            message = str(exc).lower()
+            retryable = any(marker in message for marker in (
+                "devtoolsactiveport",
+                "chrome failed to start",
+                "session not created",
+                "chrome not reachable",
+            ))
+            if not retryable:
+                raise
+            self._reset_stale_chrome_profile(profile_dir)
+            time.sleep(1.5)
+            driver = webdriver.Chrome(
+                service=self._get_chromedriver_service(),
+                options=options,
+            )
         try:
             driver.execute_cdp_cmd(
                 "Page.setDownloadBehavior",
@@ -131,6 +157,53 @@ class BaseTaxInvoiceHandler(ABC):
         except Exception:
             pass
         return driver
+
+    @staticmethod
+    def _reset_stale_chrome_profile(profile_dir: Path) -> None:
+        profile_text = str(profile_dir.resolve()).lower()
+        try:
+            import psutil
+
+            matched = []
+            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+                try:
+                    name = str(proc.info.get("name") or "").lower()
+                    command = " ".join(proc.info.get("cmdline") or []).lower()
+                    if name not in ("chrome.exe", "chrome"):
+                        continue
+                    if profile_text not in command:
+                        continue
+                    matched.append(proc)
+                except Exception:
+                    continue
+
+            for proc in matched:
+                try:
+                    for child in proc.children(recursive=True):
+                        child.kill()
+                except Exception:
+                    pass
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+            if matched:
+                psutil.wait_procs(matched, timeout=3)
+        except Exception:
+            pass
+
+        for name in (
+            "DevToolsActivePort",
+            "SingletonCookie",
+            "SingletonLock",
+            "SingletonSocket",
+        ):
+            try:
+                lock_path = profile_dir / name
+                if lock_path.is_file() or lock_path.is_symlink():
+                    lock_path.unlink()
+            except Exception:
+                pass
 
     @staticmethod
     def _get_chromedriver_service() -> Service:
