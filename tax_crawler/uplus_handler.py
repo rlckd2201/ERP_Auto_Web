@@ -1,6 +1,8 @@
 import time
 import os
 import re
+import sys
+import hashlib
 import configparser
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
@@ -34,7 +36,20 @@ class UplusEDocuHandler:
         self.download_dir = self.config.get("PATH", "download_dir", fallback=self.download_dir)
 
     def log(self, message: str):
-        print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}")
+        text = f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] {message}"
+        try:
+            print(text)
+        except UnicodeEncodeError:
+            # The operating server can launch Python with a legacy Windows
+            # stdout code page. Logging must never abort invoice processing.
+            stream = sys.stdout
+            encoding = getattr(stream, "encoding", None) or "ascii"
+            safe_text = text.encode(encoding, errors="backslashreplace").decode(encoding)
+            try:
+                stream.write(safe_text + "\n")
+                stream.flush()
+            except Exception:
+                pass
 
     def infer_and_build_nos(self, mail_text):
         clean_text = re.sub(r"\s+", "", mail_text)
@@ -164,7 +179,16 @@ class UplusEDocuHandler:
             except: pass
         return False
 
-    def build_pdf_filename_from_xml(self, xml_dict: dict) -> str:
+    def build_source_document_id(self, url: str, xml_dict: dict) -> str:
+        content_dict = xml_dict.get("내용", {}) if isinstance(xml_dict, dict) else {}
+        approval_no = re.sub(r"[^0-9A-Za-z_-]", "", str(content_dict.get("승인번호") or ""))
+        if approval_no:
+            return approval_no
+
+        raw_url = str(url or "")
+        return "URL" + hashlib.sha1(raw_url.encode("utf-8", errors="ignore")).hexdigest()[:16].upper()
+
+    def build_pdf_filename_from_xml(self, xml_dict: dict, source_document_id: str = "") -> str:
         def clean_text(text: str, max_len: int = 20) -> str:
             text = re.sub(r"[\r\n\t\f\v]+", "", str(text or ""))
             text = re.sub(r"\s+", "", text)
@@ -189,7 +213,11 @@ class UplusEDocuHandler:
         buyer_name = clean_text(buyer.get("상호") or "사업장미상", 20)
         total_amount = re.sub(r"[^0-9]", "", str(content_dict.get("합계금액") or content_dict.get("공급가액") or "0")) or "0"
 
-        return f"{issue_date}_{buyer_name}_{supplier_name}_{item_name}{extra}_{total_amount}원.pdf"
+        identity_suffix = ""
+        if source_document_id:
+            safe_id = clean_text(source_document_id, 40)
+            identity_suffix = f"__UPLUS_{safe_id}"
+        return f"{issue_date}_{buyer_name}_{supplier_name}_{item_name}{extra}_{total_amount}원{identity_suffix}.pdf"
 
     def process(self, payload):
         url, mail_text = payload.url, getattr(payload, "mail_text", "")
@@ -280,7 +308,8 @@ class UplusEDocuHandler:
             if not raw_pdf_path:
                 return {"ok": False, "message": "순정 PDF 다운로드 시간 초과"}
 
-            final_pdf_name = self.build_pdf_filename_from_xml(xml_dict)
+            source_document_id = self.build_source_document_id(url, xml_dict)
+            final_pdf_name = self.build_pdf_filename_from_xml(xml_dict, source_document_id)
             final_pdf_path = os.path.join(self.download_dir, final_pdf_name)
             
             time.sleep(2) 
@@ -347,6 +376,7 @@ class UplusEDocuHandler:
                 "subject": subject_text,
                 "data": client_data,
                 "url": url,
+                "source_document_id": source_document_id,
                 "xml_path": xml_path,
                 "pdf_path": final_pdf_path,
                 "xml_data": xml_dict
