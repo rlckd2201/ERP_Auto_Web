@@ -1,7 +1,8 @@
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 from portal_wehago import WehagoHandler
 
@@ -94,6 +95,33 @@ class WehagoPdfValidationTests(TestCase):
         self.assertFalse(handler._click_print(driver))
         driver.find_elements.assert_not_called()
         self.assertIn("local print agent unavailable", handler._last_print_click_detail)
+
+    def test_native_dialog_click_uses_background_window_message(self):
+        api = SimpleNamespace(MAKELONG=Mock(return_value=12345))
+        constants = SimpleNamespace(
+            WM_MOUSEMOVE=0x0200,
+            WM_LBUTTONDOWN=0x0201,
+            WM_LBUTTONUP=0x0202,
+            MK_LBUTTON=1,
+        )
+        gui = SimpleNamespace(
+            WindowFromPoint=Mock(return_value=456),
+            IsChild=Mock(return_value=True),
+            ScreenToClient=Mock(return_value=(11, 22)),
+            PostMessage=Mock(),
+        )
+        dialog = Mock(handle=123)
+        dialog.rectangle.return_value = SimpleNamespace(left=450, top=153)
+
+        with patch.dict(
+            "sys.modules",
+            {"win32api": api, "win32con": constants, "win32gui": gui},
+        ):
+            clicked = WehagoHandler._post_dialog_click(dialog, 228, 202)
+
+        self.assertTrue(clicked)
+        gui.WindowFromPoint.assert_called_once_with((678, 355))
+        self.assertEqual(3, gui.PostMessage.call_count)
 
     def test_coordinate_permission_fallback_is_disabled(self):
         handler = WehagoHandler.__new__(WehagoHandler)
