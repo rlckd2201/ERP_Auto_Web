@@ -2,7 +2,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import TestCase
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 from portal_wehago import WehagoHandler
 
@@ -192,8 +192,13 @@ class WehagoPdfValidationTests(TestCase):
 
         self.assertTrue(set_ok)
         self.assertTrue(save_ok)
-        gui.SendMessage.assert_called_once_with(201, constants.WM_SETTEXT, 0, filename)
-        gui.PostMessage.assert_called_once_with(300, constants.BM_CLICK, 0, 0)
+        gui.SendMessage.assert_has_calls(
+            [
+                call(201, constants.WM_SETTEXT, 0, filename),
+                call(300, constants.BM_CLICK, 0, 0),
+            ]
+        )
+        gui.PostMessage.assert_not_called()
 
     def test_preview_detection_uses_title_without_scanning_window_tree(self):
         handler = WehagoHandler.__new__(WehagoHandler)
