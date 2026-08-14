@@ -123,6 +123,21 @@ class WehagoPdfValidationTests(TestCase):
         gui.WindowFromPoint.assert_called_once_with((678, 355))
         self.assertEqual(3, gui.PostMessage.call_count)
 
+    def test_pdf_button_uses_server_coordinate_before_descendant_scan(self):
+        handler = WehagoHandler.__new__(WehagoHandler)
+        handler._post_dialog_click = Mock(return_value=True)
+        dialog = Mock()
+        dialog.rectangle.return_value = SimpleNamespace(left=450, top=153)
+
+        with patch("portal_wehago.pyautogui.click") as click, patch(
+            "portal_wehago.time.sleep"
+        ):
+            clicked = handler._click_pdf_button(dialog)
+
+        self.assertTrue(clicked)
+        click.assert_called_once_with(678, 355)
+        dialog.descendants.assert_not_called()
+
     def test_coordinate_permission_fallback_is_disabled(self):
         handler = WehagoHandler.__new__(WehagoHandler)
         driver = Mock()

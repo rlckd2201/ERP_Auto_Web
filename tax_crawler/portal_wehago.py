@@ -1192,10 +1192,6 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                                 return None
                             handled_exception = True
                         elif self._looks_like_print_preview(wrap):
-                            try:
-                                wrap.set_focus()
-                            except Exception:
-                                pass
                             return wrap
                 except Exception:
                     pass
@@ -1212,10 +1208,6 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                         if not win.exists(timeout=0.4):
                             continue
                         wrap = win.wrapper_object()
-                        try:
-                            wrap.set_focus()
-                        except Exception:
-                            pass
                         return wrap
                     except Exception:
                         continue
@@ -1349,9 +1341,16 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         # enumerates descendants. Send the click to the control under the
         # known PDF-button point instead; this also leaves the user's cursor
         # and foreground window untouched.
-        if self._post_dialog_click(dlg, 228, 202):
+        try:
+            rect = dlg.rectangle()
+            self._post_dialog_click(dlg, 228, 202)
+            # This runs inside the 121 server's interactive session. It does
+            # not move or take over the operator PC's local pointer.
+            pyautogui.click(rect.left + 228, rect.top + 202)
             time.sleep(1)
             return True
+        except Exception:
+            pass
 
         deadline = time.time() + 8
         while time.time() < deadline:
@@ -1393,9 +1392,14 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         return False
 
     def _click_print_execute_button(self, dlg) -> bool:
-        if self._post_dialog_click(dlg, 88, 94):
+        try:
+            rect = dlg.rectangle()
+            self._post_dialog_click(dlg, 88, 94)
+            pyautogui.click(rect.left + 88, rect.top + 94)
             time.sleep(1)
             return True
+        except Exception:
+            pass
 
         try:
             for node in dlg.descendants():
