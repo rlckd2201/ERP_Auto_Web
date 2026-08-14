@@ -1345,6 +1345,14 @@ class WehagoHandler(BaseTaxInvoiceHandler):
             return False
 
     def _click_pdf_button(self, dlg) -> bool:
+        # This DevExpress preview can block indefinitely while pywinauto
+        # enumerates descendants. Send the click to the control under the
+        # known PDF-button point instead; this also leaves the user's cursor
+        # and foreground window untouched.
+        if self._post_dialog_click(dlg, 228, 202):
+            time.sleep(1)
+            return True
+
         deadline = time.time() + 8
         while time.time() < deadline:
             try:
@@ -1385,6 +1393,10 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         return False
 
     def _click_print_execute_button(self, dlg) -> bool:
+        if self._post_dialog_click(dlg, 88, 94):
+            time.sleep(1)
+            return True
+
         try:
             for node in dlg.descendants():
                 try:
@@ -1420,6 +1432,36 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         except Exception:
             pass
         return False
+
+    @staticmethod
+    def _post_dialog_click(dlg, dx: int, dy: int) -> bool:
+        """Post a background click to a Duzon preview control."""
+        try:
+            import win32api
+            import win32con
+            import win32gui
+
+            rect = dlg.rectangle()
+            root_handle = int(dlg.handle)
+            screen_point = (int(rect.left + dx), int(rect.top + dy))
+            target_handle = int(win32gui.WindowFromPoint(screen_point) or root_handle)
+            if target_handle != root_handle and not win32gui.IsChild(
+                root_handle, target_handle
+            ):
+                target_handle = root_handle
+            client_x, client_y = win32gui.ScreenToClient(target_handle, screen_point)
+            packed = win32api.MAKELONG(client_x, client_y)
+            win32gui.PostMessage(target_handle, win32con.WM_MOUSEMOVE, 0, packed)
+            win32gui.PostMessage(
+                target_handle,
+                win32con.WM_LBUTTONDOWN,
+                win32con.MK_LBUTTON,
+                packed,
+            )
+            win32gui.PostMessage(target_handle, win32con.WM_LBUTTONUP, 0, packed)
+            return True
+        except Exception:
+            return False
 
     def _save_pdf_dialog(self, final_path, timeout: int = 30):
         started_at = time.time()
