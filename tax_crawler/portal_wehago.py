@@ -1852,7 +1852,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                 if not buttons:
                     return False
                 button_handle = buttons[0]
-            win32gui.PostMessage(button_handle, win32con.BM_CLICK, 0, 0)
+            win32gui.SendMessage(button_handle, win32con.BM_CLICK, 0, 0)
             return True
         except Exception:
             return False
