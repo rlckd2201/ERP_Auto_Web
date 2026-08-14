@@ -45,6 +45,9 @@ class WehagoPdfValidationTests(TestCase):
         handler = WehagoHandler.__new__(WehagoHandler)
         handler._close_all_print_dialogs = Mock()
         handler._terminate_stale_duzon_print_helpers = Mock()
+        handler._ensure_wehago_print_runtime = Mock(
+            return_value={"state": "runtime-running", "detail": "runtime ready"}
+        )
         handler._click_print = Mock(return_value=False)
         handler._export_pdf_from_print_dialog = Mock()
 
@@ -58,6 +61,7 @@ class WehagoPdfValidationTests(TestCase):
         self.assertIsNone(result)
         self.assertEqual(2, handler._click_print.call_count)
         handler._export_pdf_from_print_dialog.assert_not_called()
+        handler._terminate_stale_duzon_print_helpers.assert_not_called()
         self.assertIn("Chrome 웹 화면 PDF 대체 저장은 차단", detail)
 
     def test_existing_browser_pdf_is_not_reused(self):
@@ -79,6 +83,9 @@ class WehagoPdfValidationTests(TestCase):
 
     def test_print_click_stops_when_local_agent_is_unreachable(self):
         handler = WehagoHandler.__new__(WehagoHandler)
+        handler._ensure_wehago_print_runtime = Mock(
+            return_value={"state": "runtime-running", "detail": "runtime ready"}
+        )
         handler._probe_local_print_agent = Mock(
             return_value={"reachable": False, "error": "TypeError: Failed to fetch"}
         )
