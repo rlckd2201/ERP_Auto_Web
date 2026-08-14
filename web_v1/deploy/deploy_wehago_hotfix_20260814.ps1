@@ -2,11 +2,11 @@ $ErrorActionPreference = "Stop"
 
 $resultPath = "C:\Doc_center\wehago_deploy_result.txt"
 $expectedVersion = "1.0.228"
-$sourceCommit = "6bc9ce5"
+$sourceCommit = "3744341"
 $sourceBase = "https://raw.githubusercontent.com/rlckd2201/ERP_Auto_Web/$sourceCommit"
 $expectedHashes = @{
     "tax_crawler\base_handler.py" = "22b195b2ba9edbba058a37834d179987f18c92dd636e7267ab97ad9bc85fe660"
-    "tax_crawler\portal_wehago.py" = "bbaaf002fe74f4747eeb025b1a6e75c0222b44c3b92e55423ca621402fa703a3"
+    "tax_crawler\portal_wehago.py" = "612225301c3a7f3fe532eb274cdd5063c564aa35699e9d7ace662e579dbcd287"
 }
 
 function Stop-WebBackend {
