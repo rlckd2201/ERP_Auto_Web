@@ -1,6 +1,6 @@
 # Decisions
 
-Updated: 2026-08-12
+Updated: 2026-08-14
 
 ## D-001 — actual code is the source of truth
 
@@ -35,3 +35,15 @@ Syntax, imports referenced in source, DOM mappings, artifact presence, hashes, a
 ## D-008 — preserve concurrent remote work
 
 When `origin/main` advanced to `c20a96c`, do not force-push or rebase through the dirty WEB/Agent 1.0.228 worktree. Publish the focused reconciliation commit on `codex/reconcile-state-20260812`; integrate only after comparing the independently added `excel_voucher_web`, manager changes, current-state documents, and Graphify scope.
+
+## D-009 — WEHAGO accepts native PDFs only
+
+A WEHAGO result is valid only when its producer is Developer Express/DXperience and invoice identifiers are present. Chrome/Skia captures of the surrounding web page remain blocked even if they contain readable invoice text.
+
+## D-010 — server-session native controls are authoritative
+
+Do not depend on foreground RDP mouse control. Detect the Duzon preview by window title and use Win32 messages for the PDF, filename, and Save controls. Avoid recursive UI-tree enumeration of Chrome and the Duzon report viewer.
+
+## D-011 — a successful duplicate is not a collection failure
+
+When a retried mail produces and validates its native PDF but its invoice identity already exists, report it as a duplicate with zero failures. Do not create a second DB row solely to prove retry success.

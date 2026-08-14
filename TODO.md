@@ -1,6 +1,17 @@
 # TODO
 
-Updated: 2026-08-12
+Updated: 2026-08-14
+
+## P0 — WEHAGO native PDF incident
+
+- [x] Restore the target WEHAGO mail to retryable unread state and force live collection.
+- [x] Keep the Duzon print runtime alive and wait for its delayed preview.
+- [x] Detect the preview without scanning the Chrome UI tree.
+- [x] Drive PDF and Save As through server-session Win32 controls.
+- [x] Block Chrome/Skia web-page PDF fallback.
+- [x] Deploy to operating server 1.0.228 and complete a live retry with zero failures.
+- [x] Retrieve and compare the server PDF against the manual normal reference.
+- [ ] Observe the next genuinely new WEHAGO mail to confirm the new-row path; the repaired duplicate/replacement path is already verified.
 
 ## P0 — repository consistency
 

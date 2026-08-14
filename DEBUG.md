@@ -1,6 +1,6 @@
 # Debug
 
-Updated: 2026-08-12
+Updated: 2026-08-14
 
 ## I-001 — backend static frontend dependency was missing — resolved
 
@@ -44,3 +44,17 @@ Updated: 2026-08-12
 - Remote scope: new `excel_voucher_web`, extensive manager-side fixes, and overlapping AGENTS/Graphify outputs.
 - Containment: no force push, no automatic dirty-worktree rebase, and no user changes stashed or overwritten. The focused commit is published on `codex/reconcile-state-20260812`.
 - Next check: compare product ownership and graph scope before cherry-picking or merging into main.
+
+## I-008 — WEHAGO saved the surrounding web page — resolved
+
+- Symptom: the operating server produced a 156,339-byte Chrome/Skia PDF containing WEHAGO status controls instead of the tax invoice alone.
+- Expected reference: a 169,651-byte, one-page Developer Express PDF containing only the invoice.
+- Resolution: browser-PDF fallback is rejected; only the Duzon native print path can become canonical.
+
+## I-009 — WEHAGO native print/save timing and UI handling — resolved
+
+- The print runtime was killed before its delayed preview appeared; retries now keep it alive and wait longer.
+- Preview detection recursively scanned unrelated Chrome UI and missed the already-open title; detection is now title-only.
+- The PDF button opens Save As directly on the installed runtime; the obsolete second print click is skipped when that dialog exists.
+- Save As now receives the final path with synchronous `WM_SETTEXT` and confirms Save with synchronous `BM_CLICK`.
+- Verification: 12 WEHAGO unit tests pass. Production retry job `0f382cd4-db29-4225-980f-0f0930c22aa0` finished with zero failures. The server-created PDF is 169,685 bytes, Developer Express v15.1.7, one page, and is visually equivalent to the manual normal PDF.

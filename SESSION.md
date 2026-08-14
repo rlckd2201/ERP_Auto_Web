@@ -1,14 +1,24 @@
 # Session
 
-Updated: 2026-08-12
+Updated: 2026-08-14
 
 ## Current objective
 
-Resolve important documentation, packaging, tracking, and Graphify inconsistencies without changing established runtime behavior.
+Keep the 1.0.228 operating server reliable, with WEHAGO invoices saved only as native tax-invoice PDFs.
 
 ## Status
 
-Reconciliation is complete. Required served/imported artifacts are present, current-state documents match the active code baseline, and Graphify now excludes historical work copies.
+The WEHAGO incident is resolved and verified on `172.17.39.121`. The retry mail completes with zero failures, and the resulting PDF matches the manually saved native invoice.
+
+## WEHAGO incident resolution (2026-08-14)
+
+- Root cause: the crawler treated a late Duzon preview as absent, scanned the Chrome UI tree before checking the preview title, and mishandled the native Save As workflow.
+- Fix: keep `WehagoPrint.exe` alive, detect the preview by title, click the native PDF control in the server session, skip the obsolete extra print click when Save As opens directly, and use synchronous Win32 messages for filename/save controls.
+- Production deployment: 1.0.228 source commit `e0a8ebf`; verified deployment PID 11160 and SHA-256 `164fc90d2cbaa106cb5d01cff0d84f3762fd4a17f1121edeb23f73a786b8e5e6` for `portal_wehago.py`.
+- Live retry job `0f382cd4-db29-4225-980f-0f0930c22aa0`: target 1, failures 0, duplicate 34. The target invoice was correctly recognized as existing invoice ID 198.
+- Retrieved server PDF: 169,685 bytes, one page, Producer `Developer Express Inc. DXperience (tm) v15.1.7`, approval `20260810-41000096-48917566`, management ID `TX2026083821631`, SHA-256 `ea779d542a293ed4c7d263360e79924a662f5e657230292fd810d7e40f363afb`.
+- Manual-normal comparison: same producer, page count, identifiers, and extracted text length; no WEHAGO web-status markers; 2x rendered pixel RMS below 0.102 per channel.
+- Focused fixes and deployment updates are published through remote commit `9d9f9b6`.
 
 ## Current baseline
 
@@ -43,7 +53,7 @@ A live FastAPI startup, installer HTTP download, manager-PC Agent queue, ERP GUI
 
 ## Next start point
 
-If operational validation is required, start the server in a controlled deployment-compatible environment, verify `/health` and `/api/setup/user-pc-installer.exe`, then exercise one non-production Agent queue/output-set job before any new feature work.
+For WEHAGO, monitor the next genuinely new invoice and confirm it creates a new DB row rather than the expected duplicate path. The remaining broader Agent/ERP/output-set E2E boundary below is unrelated to this resolved incident.
 
 ## Release handoff
 
