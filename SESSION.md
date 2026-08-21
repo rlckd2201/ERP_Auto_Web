@@ -81,6 +81,7 @@ Observe the next 12:00 regular-due run and confirm that exactly one status email
 
 ## Release handoff
 
+- Cash-disbursement layout source plus current session records were committed as `9e14d83` and pushed to `origin/codex/expense-layout-20260821` because local `main` and `origin/main` are substantially diverged. No force push or dirty-worktree rebase was attempted.
 - Focused reconciliation changes are published on `codex/reconcile-state-20260812`.
-- `origin/main` advanced independently to `c20a96c` during this work and includes a new `excel_voucher_web` subsystem plus manager-side changes.
+- `origin/main` is currently `9d9f9b6` and includes the independently added `excel_voucher_web` subsystem plus manager-side changes.
 - Main was not force-pushed, and the dirty 1.0.228 worktree was not auto-stashed/rebased. Before integrating the branch into main, compare the two active product lines and regenerate Graphify from the chosen combined tree.
