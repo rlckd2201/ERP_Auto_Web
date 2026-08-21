@@ -1,6 +1,6 @@
 # Decisions
 
-Updated: 2026-08-14
+Updated: 2026-08-21
 
 ## D-001 — actual code is the source of truth
 
@@ -47,3 +47,23 @@ Do not depend on foreground RDP mouse control. Detect the Duzon preview by windo
 ## D-011 — a successful duplicate is not a collection failure
 
 When a retried mail produces and validates its native PDF but its invoice identity already exists, report it as a duplicate with zero failures. Do not create a second DB row solely to prove retry success.
+
+## D-012 — document authors come from authenticated user identity
+
+Cash-disbursement document authors must use the authenticated WEB user's display name (for example, `reum0009` resolves to `구름`). Machine/Agent identifiers such as `reum-reum` are routing identities and must not be shortened into document author names. Existing incorrectly generated reports require both metadata correction and PDF regeneration before printing.
+
+## D-013 — one canonical host owns the noon alert
+
+The regular-due noon status email is permitted only when alerting is explicitly enabled and the running hostname matches `WIN-2H29RFPBUMN`. Copied backend/Agent bundles must remain silent even when they retain mail settings. This prevents duplicate, stale-state `[누락]` messages without weakening the canonical server's check.
+
+## D-014 — historical author repair is recoverable and does not rerun ERP
+
+Before regenerating affected cash-disbursement PDFs, copy the prior reports to a timestamped backup. Correct only author metadata, regenerate through the already connected responsible Agent, preserve any pre-existing ERP error (notably `#205`), and print only the corrected cash-disbursement PDFs. Do not rerun ERP merely to fix a document author.
+
+## D-015 — cash-disbursement PDFs use the form's real A4 landscape bounds
+
+The Excel export helper must explicitly use A4 landscape and print area `$A$1:$R$20`, the actual cash-disbursement form. Do not inherit portrait orientation or include the template's unused rows 21–42, because either condition produces a small form with excessive blank paper. A historical PDF is not accepted for printing until the regenerated server file is one landscape page, has the canonical author, and passes rendered visual review.
+
+## D-016 — final printing follows server-file visual verification
+
+For layout corrections, first regenerate without printing, download the exact server PDFs, render and inspect them, then submit only the verified files. A successful generation job or landscape media box alone is insufficient; the printed form must visibly occupy the intended A4 area. Keep ERP status unchanged during this document-only cycle.

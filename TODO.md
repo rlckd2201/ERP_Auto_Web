@@ -1,6 +1,31 @@
 # TODO
 
-Updated: 2026-08-14
+Updated: 2026-08-21
+
+## P0 - expense-report author identity
+
+- [x] Correct `#206` and `#207` from `reum` to `구름`.
+- [x] Regenerate and individually save both cash-disbursement PDFs.
+- [x] Verify `작성자 구름`, one-page A4 rendering, and absence of `reum`.
+- [x] Print both corrected reports to the mapped Pyeongtaek printer and verify `2/2` spooler submissions.
+- [x] Implement backend authenticated-user ownership and regression tests so login IDs/display names resolve canonically and Agent IDs do not overwrite document authors.
+- [x] Deploy the corrected source on 121 and verify server health/source hashes after restart.
+- [x] Regenerate `#176`, `#179`, `#180`, and `#205`, verify canonical authors, preserve `#205`'s existing ERP error, and confirm four Pyeongtaek spooler submissions.
+
+## P0 - cash-disbursement PDF layout
+
+- [x] Identify forced portrait orientation in the Excel export helper.
+- [x] Identify the oversized `$A$1:$R$42` print area that included 22 empty rows and shrank the form.
+- [x] Deploy A4 landscape plus actual `$A$1:$R$20` print area to 121 and both generation Agents.
+- [x] Regenerate `#176`, `#179`, and `#180`; verify one-page `841.68 x 595.20` output, canonical authors, and clean visual layout.
+- [x] Print only the final three verified reports to Pyeongtaek and confirm `3/3` Windows spooler submissions.
+
+## P0 - duplicate noon regular-due email
+
+- [x] Identify the second `[누락]` message as a stale copied backend sender; the canonical 121 message uses the correct server URL/current state.
+- [x] Add an explicit-enable plus canonical-hostname guard and focused tests.
+- [x] Deploy the guard to 121/Agent-distributed sources.
+- [ ] Verify only one message arrives at the next 12:00 run.
 
 ## P0 — WEHAGO native PDF incident
 
@@ -34,11 +59,12 @@ Updated: 2026-08-14
 - [x] Run frontend JavaScript syntax and DOM-reference checks.
 - [x] Verify required frontend, installer, Zoom, version, and Graphify artifacts.
 - [x] Review diffs and update all compact session documents.
-- [ ] Run deployment-environment live E2E for FastAPI startup, installer download, Agent queue, ERP GUI/printer, and output-set completion.
+- [x] Run live FastAPI restart/health, Agent update/queue, Excel generation/upload, output-set, printer, and spooler verification.
+- [ ] Verify installer download and a controlled non-duplicating ERP GUI cycle when a safe test case is available.
 
 ## Remaining item acceptance condition
 
-Use a controlled deployment-compatible Windows host with the expected credentials, GUI, printer mappings, and `C:\ERP_DB`. Confirm `/health`, installer download, one non-production Agent claim/complete cycle, and one output-set result. Do not infer this from static checks.
+Remaining acceptance: confirm installer download and one safe ERP GUI cycle. `/health`, Agent claims, Excel generation/upload, output-set completion, and Pyeongtaek spooler submission are now live-verified.
 
 ## Repository integration
 

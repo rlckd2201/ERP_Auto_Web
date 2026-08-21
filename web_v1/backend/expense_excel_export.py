@@ -18,10 +18,13 @@ CELLS = {
     "footer": "B19",
 }
 
-EXTRA_CELLS = {
-    "settlement_amount": ("I8", "I28", "I29"),
-    "payee": ("N8", "N28"),
-}
+EXTRA_CELLS: dict[str, tuple[str, ...]] = {}
+
+# Excel constants are kept local so the helper does not depend on generated
+# win32com constants. The cash-withdrawal form is designed for A4 landscape.
+XL_LANDSCAPE = 2
+XL_PAPER_A4 = 9
+EXPENSE_PRINT_AREA = "$A$1:$R$20"
 
 
 def main() -> int:
@@ -89,6 +92,15 @@ def main() -> int:
             sheet.Activate()
         except Exception:
             pass
+        page_setup = sheet.PageSetup
+        page_setup.PrintArea = EXPENSE_PRINT_AREA
+        page_setup.Orientation = XL_LANDSCAPE
+        page_setup.PaperSize = XL_PAPER_A4
+        page_setup.Zoom = False
+        page_setup.FitToPagesWide = 1
+        page_setup.FitToPagesTall = 1
+        page_setup.CenterHorizontally = True
+        page_setup.CenterVertically = False
         sheet.ExportAsFixedFormat(0, str(output_pdf))
         if not output_pdf.exists() or output_pdf.stat().st_size <= 0:
             raise RuntimeError(f"PDF export produced no file: {output_pdf}")

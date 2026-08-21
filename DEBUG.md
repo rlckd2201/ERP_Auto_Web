@@ -1,6 +1,6 @@
 # Debug
 
-Updated: 2026-08-14
+Updated: 2026-08-21
 
 ## I-001 — backend static frontend dependency was missing — resolved
 
@@ -31,12 +31,11 @@ Updated: 2026-08-14
 - Symptom: the patch tool repeatedly hung while adding or updating Markdown in this Windows workspace.
 - Workaround: after confirming repeated failure, state/documentation files were written with explicit UTF-8 paths through PowerShell. Runtime source code was not edited through this workaround.
 
-## I-006 — deployment E2E not executed — open verification boundary
+## I-006 — deployment E2E boundary — partially resolved
 
-- Not run: live FastAPI startup, installer HTTP response, manager-PC Agent claim/complete, ERP GUI, local printer, and real output-set completion.
-- Reason: these paths can start schedulers or require deployment credentials, GUI state, printer mappings, and `C:\ERP_DB`.
-- Risk: environment-specific startup or integration failures remain possible despite successful static/syntax checks.
-- Next check: follow the exact sequence in `SESSION.md` on a controlled deployment-compatible host.
+- Live verified: FastAPI restart and `/health`, Agent bundle update, Agent claims, Excel report generation/upload, output-set creation, Pyeongtaek printing, and Windows spooler submission.
+- Still not rerun: installer download and ERP GUI entry. ERP was intentionally excluded to avoid duplicating completed accounting work.
+- Next safe check: installer response plus a controlled non-production ERP case.
 
 ## I-007 — origin/main advanced concurrently — isolated safely
 
@@ -58,3 +57,45 @@ Updated: 2026-08-14
 - The PDF button opens Save As directly on the installed runtime; the obsolete second print click is skipped when that dialog exists.
 - Save As now receives the final path with synchronous `WM_SETTEXT` and confirms Save with synchronous `BM_CLICK`.
 - Verification: 12 WEHAGO unit tests pass. Production retry job `0f382cd4-db29-4225-980f-0f0930c22aa0` finished with zero failures. The server-created PDF is 169,685 bytes, Developer Express v15.1.7, one page, and is visually equivalent to the manual normal PDF.
+
+## I-010 — cash-disbursement author used Agent login fragment — resolved
+
+- Symptom: `#206` and `#207` displayed `작성자 reum` instead of `작성자 구름`.
+- Root cause: one-click frontend payload hard-coded `processor: "WEB v1.0"`; server fallback derived `reum` from Agent ID `reum-reum`, which does not match auth user ID `reum0009`.
+- Operational repair: set both invoice processors/authors to `구름`, preserve prior PDFs as `pre_regen` backups, regenerate through the connected user-PC Agent, save individual PDFs, and print only the two corrected cash-disbursement documents.
+- Verification: both PDFs are one-page A4, extracted text contains `작성자 구름` and no `reum`, visual renders are clean, and print job `3ef76859-c824-421d-96fa-4ecb493e6d3f` reports `2/2` Windows spooler submissions.
+- Permanent resolution: authenticated WEB user identity is resolved to a canonical display name on the server; unique legacy prefixes remain supported, while Agent/machine IDs cannot become authors. The fix is deployed on 121 and the focused regression tests pass.
+
+## I-011 — duplicate 12:00 regular-due status messages — guard deployed, observation pending
+
+- Symptom: a correct `[정상]` message arrived around 12:00:10, followed by a stale `[누락]` message around 12:00:25 with old counts and a loopback history URL.
+- Evidence: the valid sender reported the current `https://172.17.39.121:8080/regular-due-history` state from PID 11160 on `WIN-2H29RFPBUMN`; the stale copy used `http://127.0.0.1:8080/regular-due-history` and obsolete waiting/completion data.
+- Fix deployed: regular-due alert sending requires explicit enablement and canonical hostname `WIN-2H29RFPBUMN`; wrong-host/default-disabled/enabled-host regression tests pass.
+- Boundary: observe the next real 12:00 run and confirm exactly one message.
+
+## I-012 — first corrected-source deployment reported a false test failure — resolved and deployed
+
+- Symptom: 121 returned `ok=false` with `test_login_binds_user_to_agent (...) ... ok` as the error text.
+- Root cause: Python `unittest -v` writes normal progress to stderr, and PowerShell with `ErrorActionPreference=Stop` converted that stream into a terminating native-command error.
+- Resolution: compile/tests now run through `cmd.exe /d /c ... 2>&1`; `$LASTEXITCODE` is the only success criterion. The first attempt restored all five backed-up source files before touching the backend process.
+- Final state: the corrected deploy completed at `2026-08-21T09:54:20`; six focused tests, import, database initialization, restart, and health all passed.
+
+## I-013 — historical author variants on four rows — resolved
+
+- Corrected: `#176=구름`, `#179=구름`, `#180=김기창`, and `#205=현시훈`; old reports were copied to `C:\ERP_DB\backups\document_actor_repair_20260821_095421`.
+- `#205` retained its existing ERP error and ERP was not rerun. The repair print queue verified four submissions.
+- Already-correct `#206` and `#207` remained `구름` and were excluded from duplicate repair printing.
+
+## I-014 — cash-disbursement PDF was portrait and undersized — resolved
+
+- Symptom: regenerated reports used portrait A4 with the wide form in the upper half. Changing only the media orientation produced landscape A4 but left the form too small.
+- Root causes: `expense_excel_export.py` forced `PageSetup.Orientation = 1`, and `PrintArea = "$A$1:$R$42"` included 22 blank rows although the form ends at row 20.
+- Resolution: set A4 landscape (`2`) and print area `$A$1:$R$20`, retain one-page fit, deploy to 121, and wait until `reum-reum` and `김기창-김기창` reported the new bundle hash.
+- Verification: final `#176`, `#179`, and `#180` PDFs are each one `841.68 x 595.20` page; rendered forms fill the intended landscape area and show authors `구름`, `구름`, and `김기창` without Agent-ID text.
+- Final output job `ab3d3fc6-8351-4586-9e91-2a0c9e206452` completed `3/3`, `gdi_a4_fit`, one A4 page each, no failures, Windows spooler verified three submissions.
+
+## I-015 — backend deployment process/health detection was too broad — resolved in deployment tooling
+
+- A stale listener PID and loopback HTTPS health request caused false deployment failures even while Uvicorn was starting correctly.
+- Deployment now targets only Python processes whose command line matches `-m web_v1.backend`, checks `https://172.17.39.121:8080/health`, and accepts the Uvicorn startup log only as a bounded fallback.
+- The final layout deployment restarted PID `10368` to PID `1984` and returned healthy version `1.0.228`.

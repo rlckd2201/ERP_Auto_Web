@@ -2,6 +2,7 @@
 graphify-out/
 outputs/
 __pycache__/
+tmp/
 
 # Historical copies, staging folders, and one-off local tools.
 _codex*
