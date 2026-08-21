@@ -21,8 +21,8 @@ CELLS = {
 EXTRA_CELLS: dict[str, tuple[str, ...]] = {}
 
 # Excel constants are kept local so the helper does not depend on generated
-# win32com constants. The cash-withdrawal form is designed for A4 landscape.
-XL_LANDSCAPE = 2
+# win32com constants. The cash-withdrawal form is printed on portrait A4.
+XL_PORTRAIT = 1
 XL_PAPER_A4 = 9
 EXPENSE_PRINT_AREA = "$A$1:$R$20"
 
@@ -94,7 +94,7 @@ def main() -> int:
             pass
         page_setup = sheet.PageSetup
         page_setup.PrintArea = EXPENSE_PRINT_AREA
-        page_setup.Orientation = XL_LANDSCAPE
+        page_setup.Orientation = XL_PORTRAIT
         page_setup.PaperSize = XL_PAPER_A4
         page_setup.Zoom = False
         page_setup.FitToPagesWide = 1

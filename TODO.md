@@ -14,11 +14,10 @@ Updated: 2026-08-21
 
 ## P0 - cash-disbursement PDF layout
 
-- [x] Identify forced portrait orientation in the Excel export helper.
 - [x] Identify the oversized `$A$1:$R$42` print area that included 22 empty rows and shrank the form.
-- [x] Deploy A4 landscape plus actual `$A$1:$R$20` print area to 121 and both generation Agents.
-- [x] Regenerate `#176`, `#179`, and `#180`; verify one-page `841.68 x 595.20` output, canonical authors, and clean visual layout.
-- [x] Print only the final three verified reports to Pyeongtaek and confirm `3/3` Windows spooler submissions.
+- [x] Confirm the required output direction is portrait and deploy portrait A4 plus actual `$A$1:$R$20` print area to 121 and both generation Agents.
+- [x] Regenerate `#176`, `#179`, and `#180`; verify one-page `595.20 x 841.68` portrait output and canonical authors.
+- [x] Stop additional printing after the direction correction; final regeneration completed with `print_skipped=true`.
 
 ## P0 - duplicate noon regular-due email
 

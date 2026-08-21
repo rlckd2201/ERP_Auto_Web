@@ -8,7 +8,7 @@ Keep the 1.0.228 operating server reliable: native WEHAGO PDFs, one canonical no
 
 ## Status
 
-The WEHAGO incident, global document-author defect, duplicate-noon-sender defect, and cash-disbursement PDF layout defect are deployed on `172.17.39.121`. Server health is good on version `1.0.228`; the final corrected reports for `#176`, `#179`, and `#180` were visually verified and submitted `3/3` to the Pyeongtaek printer.
+The WEHAGO incident, global document-author defect, duplicate-noon-sender defect, and cash-disbursement PDF layout defect are deployed on `172.17.39.121`. Server health is good on version `1.0.228`. Current cash-disbursement PDFs use portrait A4; `#176`, `#179`, and `#180` were regenerated without sending another print job.
 
 ## 2026-08-21 deployment and repair
 
@@ -16,11 +16,11 @@ The WEHAGO incident, global document-author defect, duplicate-noon-sender defect
 - The noon alert is live only when explicitly enabled on canonical host `WIN-2H29RFPBUMN`. The next real 12:00 run still needs observation to confirm that only one message arrives.
 - Main deployment completed at `09:54:20`; backup `C:\ERP_DB\backups\document_actor_fix_20260821_095410`, backend PID `7608`, import/database checks passed, and six focused tests passed.
 - Historical repair completed for `#176=구름`, `#179=구름`, `#180=김기창`, and `#205=현시훈`. Old reports were backed up; `#205` retained status `오류` and ERP was not rerun. Initial repair printing verified `4/4` spooler submissions.
-- PDF visual QA found two independent layout defects in `expense_excel_export.py`: `Orientation=1` forced portrait and print area `$A$1:$R$42` included 22 empty rows, shrinking the form.
-- Final global layout is `A4 landscape`, print area `$A$1:$R$20`, one page, width `841.68`, height `595.20`. Deployed helper SHA-256: `204F9052C2181F7E9814753184221B566C13DD1D22711B02CF32420E308BC1FB`; final backend PID `1984`.
+- PDF QA found that print area `$A$1:$R$42` included 22 empty rows and shrank the form. The user confirmed the required physical output direction is portrait, not landscape.
+- Final global layout is `A4 portrait`, print area `$A$1:$R$20`, one page, width `595.20`, height `841.68`. Deployed helper SHA-256: `1C1DE7EBD4DBA4EEE4221760DD7AAEF2388EECC88909A1255F7536008BF27C9F`; final backend PID `7360`.
 - Both generation agents (`reum-reum`, `김기창-김기창`) reported current bundle hash `0e098d8e0aae449d15667d2b161d67eba49bd8d70e4cfd7c795b5d0a718db608` before regeneration.
-- Final reports were regenerated without ERP, downloaded, rendered, and visually checked. Authors are `구름`, `구름`, and `김기창`; no machine/Agent ID text appears.
-- Final print job `ab3d3fc6-8351-4586-9e91-2a0c9e206452` completed at `10:21:39`: three one-page A4 files, `gdi_a4_fit`, Windows spooler verified `3/3`, no failures, printer `평택 프린터 (172.16.10.172)`.
+- The interim landscape print job `ab3d3fc6-8351-4586-9e91-2a0c9e206452` completed `3/3` but was superseded after the user clarified that portrait output is required.
+- Final portrait reports were regenerated without ERP or printing at `10:29:45`. Server validation passed for `#176`, `#179`, and `#180`: portrait one-page A4, authors `구름`, `구름`, and `김기창`, and `print_skipped=true`. No additional sheets were submitted after the direction correction.
 - `#205` remains `오류 / 현시훈 / 기존 ERP 처리 오류 유지`; `#206` and `#207` remain `처리완료 / 구름` and were not duplicated in the final layout pass.
 
 ## Expense-report correction (2026-08-14)
@@ -81,7 +81,7 @@ Observe the next 12:00 regular-due run and confirm that exactly one status email
 
 ## Release handoff
 
-- Cash-disbursement layout source plus current session records were committed as `9e14d83` and pushed to `origin/codex/expense-layout-20260821` because local `main` and `origin/main` are substantially diverged. No force push or dirty-worktree rebase was attempted.
+- Cash-disbursement layout source plus current session records are published on `origin/codex/expense-layout-20260821`; the branch tip is the final portrait correction. The earlier landscape state is superseded. No force push or dirty-worktree rebase was attempted.
 - Focused reconciliation changes are published on `codex/reconcile-state-20260812`.
 - `origin/main` is currently `9d9f9b6` and includes the independently added `excel_voucher_web` subsystem plus manager-side changes.
 - Main was not force-pushed, and the dirty 1.0.228 worktree was not auto-stashed/rebased. Before integrating the branch into main, compare the two active product lines and regenerate Graphify from the chosen combined tree.

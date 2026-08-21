@@ -60,10 +60,10 @@ The regular-due noon status email is permitted only when alerting is explicitly 
 
 Before regenerating affected cash-disbursement PDFs, copy the prior reports to a timestamped backup. Correct only author metadata, regenerate through the already connected responsible Agent, preserve any pre-existing ERP error (notably `#205`), and print only the corrected cash-disbursement PDFs. Do not rerun ERP merely to fix a document author.
 
-## D-015 — cash-disbursement PDFs use the form's real A4 landscape bounds
+## D-015 — cash-disbursement PDFs use portrait A4 and the form's real bounds
 
-The Excel export helper must explicitly use A4 landscape and print area `$A$1:$R$20`, the actual cash-disbursement form. Do not inherit portrait orientation or include the template's unused rows 21–42, because either condition produces a small form with excessive blank paper. A historical PDF is not accepted for printing until the regenerated server file is one landscape page, has the canonical author, and passes rendered visual review.
+The Excel export helper must explicitly use portrait A4 and print area `$A$1:$R$20`, the actual cash-disbursement form. Do not include the template's unused rows 21–42 because they shrink the form. Landscape output is not the required physical print direction. A regenerated server file must be one portrait page and retain the canonical author.
 
 ## D-016 — final printing follows server-file visual verification
 
-For layout corrections, first regenerate without printing, download the exact server PDFs, render and inspect them, then submit only the verified files. A successful generation job or landscape media box alone is insufficient; the printed form must visibly occupy the intended A4 area. Keep ERP status unchanged during this document-only cycle.
+For layout corrections, first regenerate without printing and validate the exact server PDFs. Do not submit test pages unless the user explicitly requests another print. A successful generation job alone is insufficient; orientation, page size, and author must match the requirement while ERP status remains unchanged.

@@ -86,16 +86,16 @@ Updated: 2026-08-21
 - `#205` retained its existing ERP error and ERP was not rerun. The repair print queue verified four submissions.
 - Already-correct `#206` and `#207` remained `구름` and were excluded from duplicate repair printing.
 
-## I-014 — cash-disbursement PDF was portrait and undersized — resolved
+## I-014 — cash-disbursement PDF was undersized; required direction clarified — resolved
 
-- Symptom: regenerated reports used portrait A4 with the wide form in the upper half. Changing only the media orientation produced landscape A4 but left the form too small.
-- Root causes: `expense_excel_export.py` forced `PageSetup.Orientation = 1`, and `PrintArea = "$A$1:$R$42"` included 22 blank rows although the form ends at row 20.
-- Resolution: set A4 landscape (`2`) and print area `$A$1:$R$20`, retain one-page fit, deploy to 121, and wait until `reum-reum` and `김기창-김기창` reported the new bundle hash.
-- Verification: final `#176`, `#179`, and `#180` PDFs are each one `841.68 x 595.20` page; rendered forms fill the intended landscape area and show authors `구름`, `구름`, and `김기창` without Agent-ID text.
-- Final output job `ab3d3fc6-8351-4586-9e91-2a0c9e206452` completed `3/3`, `gdi_a4_fit`, one A4 page each, no failures, Windows spooler verified three submissions.
+- Symptom: the form was small because the Excel print area included unused rows 21–42. An interim correction changed the document to landscape, but the user clarified that the required physical direction is portrait.
+- Root cause: `PrintArea = "$A$1:$R$42"` included 22 blank rows although the form ends at row 20. Landscape was an incorrect requirement assumption, not the desired final output.
+- Resolution: restore portrait A4 (`1`), keep corrected print area `$A$1:$R$20`, deploy to 121, and let both generation Agents update.
+- Verification: final `#176`, `#179`, and `#180` PDFs are each one `595.20 x 841.68` portrait page and preserve authors `구름`, `구름`, and `김기창` without Agent-ID text.
+- The interim landscape output job `ab3d3fc6-8351-4586-9e91-2a0c9e206452` was superseded. Final portrait regeneration completed with `print_skipped=true`; no additional paper was submitted.
 
 ## I-015 — backend deployment process/health detection was too broad — resolved in deployment tooling
 
 - A stale listener PID and loopback HTTPS health request caused false deployment failures even while Uvicorn was starting correctly.
 - Deployment now targets only Python processes whose command line matches `-m web_v1.backend`, checks `https://172.17.39.121:8080/health`, and accepts the Uvicorn startup log only as a bounded fallback.
-- The final layout deployment restarted PID `10368` to PID `1984` and returned healthy version `1.0.228`.
+- The final portrait deployment restarted the backend to PID `7360` and returned healthy version `1.0.228`.
