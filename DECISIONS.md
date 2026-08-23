@@ -1,6 +1,6 @@
 # Decisions
 
-Updated: 2026-08-21
+Updated: 2026-08-24
 
 ## D-001 — actual code is the source of truth
 
@@ -67,3 +67,7 @@ The Excel export helper must explicitly use portrait A4 and print area `$A$1:$R$
 ## D-016 — final printing follows server-file visual verification
 
 For layout corrections, first regenerate without printing and validate the exact server PDFs. Do not submit test pages unless the user explicitly requests another print. A successful generation job alone is insufficient; orientation, page size, and author must match the requirement while ERP status remains unchanged.
+
+## D-017 - the noon sender is a process-wide singleton
+
+Canonical hostname and explicit enablement remain necessary, but they are not sufficient when stale backends survive on the same server. The regular-due scheduler must acquire a non-blocking OS file lock in `C:\ERP_DB` before its thread starts. Only one canonical Common Startup link may launch the backend, and deployment must reject any additional 8080 listener. Sender host/PID headers and lock-owner status are retained as operational evidence.

@@ -22,6 +22,16 @@ if (-not $pythonCmd) {
     throw "Python command not found. Install Python 3.11 first."
 }
 
+$existingListeners = @(
+    Get-NetTCPConnection -State Listen -LocalPort 8080 -ErrorAction SilentlyContinue |
+        Select-Object -ExpandProperty OwningProcess -Unique
+)
+if ($existingListeners.Count -gt 0) {
+    $listenerText = ($existingListeners | Sort-Object) -join ", "
+    Write-Host "[WEB v1.0] Backend is already listening on port 8080. Startup skipped. PID: $listenerText"
+    exit 0
+}
+
 $LegacyConfig = Join-Path $RepoRoot "manager_server\config.ini"
 $SupportConfig = Join-Path $RepoRoot "support\config.ini"
 if (-not (Test-Path -LiteralPath $LegacyConfig) -and (Test-Path -LiteralPath $SupportConfig)) {

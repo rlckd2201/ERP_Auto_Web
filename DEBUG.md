@@ -1,6 +1,6 @@
 # Debug
 
-Updated: 2026-08-21
+Updated: 2026-08-24
 
 ## I-001 — backend static frontend dependency was missing — resolved
 
@@ -99,3 +99,12 @@ Updated: 2026-08-21
 - A stale listener PID and loopback HTTPS health request caused false deployment failures even while Uvicorn was starting correctly.
 - Deployment now targets only Python processes whose command line matches `-m web_v1.backend`, checks `https://172.17.39.121:8080/health`, and accepts the Uvicorn startup log only as a bounded fallback.
 - The final portrait deployment restarted the backend to PID `7360` and returned healthy version `1.0.228`.
+
+## I-016 - same-server orphan workers caused duplicate noon mail - resolved, observation pending
+
+- Symptom: the stale 12:00 message continued after the canonical-host guard was deployed.
+- Evidence: the message source identified sender PID `3836` on `WIN-2H29RFPBUMN` and a loopback history URL. The server had both `127.0.0.1:8080` and `0.0.0.0:8080` listeners.
+- Root cause: old multiprocessing workers survived their parent backends and retained inherited listener handles. PID `3836` referenced dead parent `1696`; PID `3748` referenced dead parent `10128`. An obsolete Common Startup link targeted the system-profile project copy.
+- Resolution: stop both orphan workers, move the obsolete link into a recoverable backup, create one canonical startup link, and require a cross-process file lock before the regular-due scheduler starts.
+- Verification: final exact-source deployment `2026-08-24T08:47:59` passed six focused tests and import/health checks. Backend PID `9940` is the sole port-8080 listener, owns `C:\ERP_DB\regular_due_sender.lock`, and reports `scheduler_started=true` plus `process_lock_acquired=true`.
+- Boundary: no test email was sent; the next real 12:00 delivery must contain exactly one message.

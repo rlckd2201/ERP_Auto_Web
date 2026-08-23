@@ -1,6 +1,6 @@
 # Session
 
-Updated: 2026-08-21
+Updated: 2026-08-24
 
 ## Current objective
 
@@ -8,7 +8,16 @@ Keep the 1.0.228 operating server reliable: native WEHAGO PDFs, one canonical no
 
 ## Status
 
-The WEHAGO incident, global document-author defect, duplicate-noon-sender defect, and cash-disbursement PDF layout defect are deployed on `172.17.39.121`. Server health is good on version `1.0.228`. Current cash-disbursement PDFs use portrait A4; `#176`, `#179`, and `#180` were regenerated without sending another print job.
+The duplicate-noon-sender repair is deployed on `172.17.39.121`. Server health is good on version `1.0.228`; backend PID `9940` is the only port-8080 listener and owns the cross-process regular-due sender lock. The next real 12:00 run remains the final operational observation.
+
+## 2026-08-24 duplicate-noon-sender repair
+
+- Mail source inspection tied the stale message to PID `3836` on `WIN-2H29RFPBUMN`, so the canonical-host check alone could not stop the duplicate.
+- The server contained two generations of orphaned multiprocessing workers. PID `3836` inherited a listener from dead parent `1696`; PID `3748` inherited the remaining `127.0.0.1:8080` listener from dead parent `10128`.
+- Both stale workers were stopped, the obsolete Common Startup link was moved recoverably to `C:\ERP_DB\backups\duplicate_due_fix_20260824_083859`, and one canonical startup link now targets the Administrator project.
+- The scheduler now acquires `C:\ERP_DB\regular_due_sender.lock` before starting. Status exposes its lock owner, and outgoing mail records sender host/PID headers for future attribution.
+- Final exact-source deployment completed at `2026-08-24T08:47:59`; backup `C:\ERP_DB\backups\duplicate_due_fix_20260824_084742`, backend PID `9940`, six focused tests passed, import passed, and the final listener set is only `0.0.0.0:8080 / PID 9940`.
+- No test email was sent. Acceptance remains observation of exactly one message at the next real noon run.
 
 ## 2026-08-21 deployment and repair
 
@@ -68,7 +77,7 @@ The WEHAGO incident, global document-author defect, duplicate-noon-sender defect
 - JavaScript syntax passed for `app.js` and `admin_db.js`.
 - Frontend DOM mapping passed: all 84 static IDs referenced by `app.js` exist; four unmatched selectors are runtime-generated elements.
 - Required frontend/setup/Zoom assets and version `1.0.228` were confirmed.
-- Graphify regenerated to 1,353 nodes, 3,767 edges, and 42 communities after the layout source change.
+- Graphify regenerated to 1,370 nodes, 3,801 edges, and 42 communities after the sender-lock change.
 - `git diff --check` passed for the task-owned changes.
 
 ## Known verification boundary
@@ -77,10 +86,11 @@ Live FastAPI restart/health, Agent self-update, Excel report generation, report 
 
 ## Next start point
 
-Observe the next 12:00 regular-due run and confirm that exactly one status email arrives. Also monitor the next genuinely new WEHAGO invoice and confirm that it creates a new DB row rather than taking the already-verified duplicate path.
+Observe the next 12:00 regular-due run and confirm that exactly one status email arrives from the canonical sender. Also monitor the next genuinely new WEHAGO invoice and confirm that it creates a new DB row rather than taking the already-verified duplicate path.
 
 ## Release handoff
 
+- The duplicate-noon-sender singleton repair is published on `origin/codex/regular-due-singleton-20260824`; it includes the focused runtime, startup protection, tests, and session records.
 - Cash-disbursement layout source plus current session records are published on `origin/codex/expense-layout-20260821`; the branch tip is the final portrait correction. The earlier landscape state is superseded. No force push or dirty-worktree rebase was attempted.
 - Focused reconciliation changes are published on `codex/reconcile-state-20260812`.
 - `origin/main` is currently `9d9f9b6` and includes the independently added `excel_voucher_web` subsystem plus manager-side changes.

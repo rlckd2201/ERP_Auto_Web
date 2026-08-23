@@ -1,6 +1,6 @@
 # TODO
 
-Updated: 2026-08-21
+Updated: 2026-08-24
 
 ## P0 - expense-report author identity
 
@@ -24,6 +24,8 @@ Updated: 2026-08-21
 - [x] Identify the second `[누락]` message as a stale copied backend sender; the canonical 121 message uses the correct server URL/current state.
 - [x] Add an explicit-enable plus canonical-hostname guard and focused tests.
 - [x] Deploy the guard to 121/Agent-distributed sources.
+- [x] Trace same-host orphan workers (`3836`, `3748`), remove their inherited loopback listeners, and replace the obsolete startup link.
+- [x] Deploy the cross-process sender lock and verify backend PID `9940` is the only 8080 listener and lock owner.
 - [ ] Verify only one message arrives at the next 12:00 run.
 
 ## P0 — WEHAGO native PDF incident
@@ -63,7 +65,7 @@ Updated: 2026-08-21
 
 ## Remaining item acceptance condition
 
-Remaining acceptance: confirm installer download and one safe ERP GUI cycle. `/health`, Agent claims, Excel generation/upload, output-set completion, and Pyeongtaek spooler submission are now live-verified.
+Remaining acceptance: confirm one regular-due message at the next real noon run, installer download, and one safe ERP GUI cycle. `/health`, regular-due lock ownership, Agent claims, Excel generation/upload, output-set completion, and Pyeongtaek spooler submission are live-verified.
 
 ## Repository integration
 

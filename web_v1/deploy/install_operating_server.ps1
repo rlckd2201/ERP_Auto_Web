@@ -178,6 +178,7 @@ REGULAR_AUTO_RESULT_SMTP_PORT=$regularAutoResultSmtpPort
 REGULAR_AUTO_RESULT_SMTP_USER=$regularAutoResultSmtpUser
 REGULAR_AUTO_RESULT_SMTP_PW=$regularAutoResultSmtpPw
 REGULAR_DUE_ALERT_ENABLED=1
+REGULAR_DUE_SENDER_HOST=WIN-2H29RFPBUMN
 REGULAR_DUE_ALERT_START_DATE=2026-06-01
 REGULAR_DUE_HISTORY_URL=https://${DefaultServerIp}:8080/regular-due-history
 REGULAR_DUE_ALERT_EMAIL=ds1501@dae-seung.co.kr
@@ -189,6 +190,20 @@ WORKER_GUI_CONCURRENCY=1
 "@ | Set-Content -Path $EnvPath -Encoding UTF8
 
 Write-Host "[WEB v1.0] .env written: $EnvPath"
+
+$CommonStartup = [Environment]::GetFolderPath("CommonStartup")
+$StartupLinkPath = Join-Path $CommonStartup "AccountingWebV1_start_operating_server.lnk"
+$PowerShellExe = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
+$StartupScript = Join-Path $RepoRoot "web_v1\deploy\start_operating_server.ps1"
+$Shell = New-Object -ComObject WScript.Shell
+$Shortcut = $Shell.CreateShortcut($StartupLinkPath)
+$Shortcut.TargetPath = $PowerShellExe
+$Shortcut.Arguments = "-NoProfile -ExecutionPolicy Bypass -File `"$StartupScript`""
+$Shortcut.WorkingDirectory = $RepoRoot
+$Shortcut.WindowStyle = 7
+$Shortcut.Save()
+Write-Host "[WEB v1.0] Startup shortcut written: $StartupLinkPath"
+
 Write-Host "[WEB v1.0] Install completed"
 Write-Host "[WEB v1.0] Start command:"
 Write-Host "powershell -ExecutionPolicy Bypass -File `"$RepoRoot\web_v1\deploy\start_operating_server.ps1`""
