@@ -115,6 +115,7 @@ class Settings:
     regular_auto_interval_seconds: int = _env_int("REGULAR_AUTO_INTERVAL_SECONDS", 60)
     regular_auto_scan_limit: int = _env_int("REGULAR_AUTO_SCAN_LIMIT", 200)
     regular_auto_max_batch: int = _env_int("REGULAR_AUTO_MAX_BATCH", 20)
+    regular_auto_zoom_retry_seconds: int = _env_int("REGULAR_AUTO_ZOOM_RETRY_SECONDS", 600)
     regular_auto_result_email: str = _env("REGULAR_AUTO_RESULT_EMAIL", "ds1501@dae-seung.co.kr")
     regular_auto_result_email_enabled: bool = _env_bool("REGULAR_AUTO_RESULT_EMAIL_ENABLED", True)
     regular_auto_result_from_name: str = _env("REGULAR_AUTO_RESULT_FROM_NAME", "회계처리프로그램")

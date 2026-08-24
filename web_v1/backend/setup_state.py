@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import random
+import re
 import sqlite3
 import smtplib
 import string
@@ -169,6 +170,72 @@ def authenticate_user(user_id: str, password: str) -> dict[str, Any] | None:
     if not row:
         return None
     return {"id": row["id"], "name": row["name"] or row["id"], "is_initial": bool(row["is_initial"])}
+
+
+def _processor_user_id_candidates(*values: Any) -> list[str]:
+    candidates: list[str] = []
+    seen: set[str] = set()
+    for value in values:
+        text = str(value or "").strip()
+        if not text:
+            continue
+        parts = [text, *re.split(r"[-\\/@\s]+", text)]
+        for part in parts:
+            candidate = str(part or "").strip()
+            key = candidate.casefold()
+            if candidate and key not in seen:
+                seen.add(key)
+                candidates.append(candidate)
+    return candidates
+
+
+def _document_author_name(value: Any) -> str:
+    name = str(value or "").strip()
+    return re.sub(r"\s*(?:책임매니저|매니저)\s*$", "", name).strip()
+
+
+def resolve_user_display_name(*values: Any) -> str:
+    init_auth_db()
+    candidates = _processor_user_id_candidates(*values)
+    if not candidates:
+        return ""
+    with get_conn() as conn:
+        rows = conn.execute("SELECT id, name FROM users").fetchall()
+    users = {
+        str(row["id"] or "").strip().casefold(): str(row["name"] or row["id"] or "").strip()
+        for row in rows
+        if str(row["id"] or "").strip()
+    }
+    names = {
+        _document_author_name(row["name"] or row["id"]).casefold(): _document_author_name(row["name"] or row["id"])
+        for row in rows
+        if _document_author_name(row["name"] or row["id"])
+    }
+    for candidate in candidates:
+        display_name = users.get(candidate.casefold())
+        if display_name:
+            return _document_author_name(display_name)
+    for candidate in candidates:
+        display_name = names.get(_document_author_name(candidate).casefold())
+        if display_name:
+            return display_name
+    for candidate in candidates:
+        key = candidate.casefold()
+        if len(key) < 4:
+            continue
+        prefix_matches = {
+            _document_author_name(display_name)
+            for user_id, display_name in users.items()
+            if user_id.startswith(key)
+        }
+        if len(prefix_matches) == 1:
+            return prefix_matches.pop()
+    ignored = {"web v1.0", "erp agent", "regular_auto", "unknown-agent"}
+    for value in values:
+        text = str(value or "").strip()
+        if text and text.casefold() not in ignored and not re.fullmatch(r"[A-Za-z0-9_.@\\/-]+", text):
+            return _document_author_name(text)
+    return ""
 
 
 def _password_reset_email(user_id: str) -> str:

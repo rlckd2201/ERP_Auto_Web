@@ -59,12 +59,14 @@ from .setup_state import (
     record_agent_heartbeat,
     request_password_reset_code,
     reset_password_with_code,
+    resolve_user_display_name,
     save_printer_mapping,
     setup_status,
     touch_agent_seen,
 )
 from .versioning import expected_agent_bundle_hash
 from .worker import JobWorker
+from .zoom_retry import zoom_expense_retry_wait_seconds
 
 logging.basicConfig(level=logging.INFO, format="[%(asctime)s] %(levelname)s %(message)s")
 
@@ -126,6 +128,11 @@ def _invoice_data(invoice: dict[str, Any] | None) -> dict[str, Any]:
     if isinstance(data, dict):
         merged.update(data)
     return merged
+
+
+def _invoice_is_zoom_billing(invoice: dict[str, Any] | None) -> bool:
+    data = _invoice_data(invoice)
+    return bool(data.get("zoom_billing")) or str(data.get("document_kind") or "").strip().lower() == "zoom_billing"
 
 
 def _edit_text(value: Any) -> str:
@@ -282,6 +289,31 @@ def _expense_report_exists(invoice: dict[str, Any] | None) -> bool:
     return bool(path and Path(path).exists())
 
 
+def _set_expense_report_author(
+    invoice: dict[str, Any],
+    *agent_identity_values: Any,
+) -> dict[str, Any]:
+    invoice_id = int(invoice.get("id") or 0)
+    data = _invoice_data(invoice)
+    author = resolve_user_display_name(
+        *agent_identity_values,
+        data.get("expense_author"),
+        data.get("processor"),
+        invoice.get("processor"),
+    )
+    if not invoice_id or not author:
+        return invoice
+    update_invoice_json(
+        invoice_id,
+        {
+            "processor": author,
+            "expense_author": author,
+        },
+        message=f"현금출금정산서 작성자 확정: {author}",
+    )
+    return get_invoice(invoice_id) or invoice
+
+
 def _invoice_output_set_ready(invoice: dict[str, Any] | None, expected_type: str = "") -> bool:
     invoice_type = str((invoice or {}).get("invoice_type") or "").lower()
     if not invoice:
@@ -335,6 +367,80 @@ def _queue_expense_report_after_erp(
         job_store.add_event(source_job_id, "erp", 98, f"현금출금결의서 자동 생성 큐 등록: #{invoice_id}")
     return True
 
+
+def _queue_zoom_expense_report_to_agent(
+    invoice: dict[str, Any],
+    *,
+    profile: dict[str, Any],
+    source_job_id: str = "",
+    document_author: str = "",
+    respect_retry_cooldown: bool = False,
+) -> Any:
+    if not invoice or not _invoice_is_zoom_billing(invoice):
+        return None
+    invoice_id = int(invoice.get("id") or 0)
+    if not invoice_id:
+        return None
+    if _expense_report_exists(invoice):
+        build_output_set_status(invoice, persist=True)
+        return None
+
+    data = _invoice_data(invoice)
+    existing_job_id = str(data.get("zoom_expense_report_job_id") or "").strip()
+    existing_job = job_store.get(existing_job_id) if existing_job_id else None
+    if existing_job and existing_job.status not in {"done", "error"}:
+        return existing_job
+    if respect_retry_cooldown and zoom_expense_retry_wait_seconds(
+        data,
+        settings.regular_auto_zoom_retry_seconds,
+    ) > 0:
+        return None
+
+    target_agent_id = str(profile.get("agent_id") or "").strip()
+    target_client_ip = str(profile.get("client_ip") or settings.regular_auto_agent_ip or "").strip()
+    if not target_agent_id or not target_client_ip:
+        add_invoice_log(invoice_id, "Zoom expense report queue skipped: missing user PC Agent identity", level="error", job_id=source_job_id)
+        return None
+    document_author = resolve_user_display_name(document_author) or "자동처리"
+    invoice = _set_expense_report_author(invoice, document_author)
+
+    job = job_store.create(
+        JobCreateRequest(
+            job_type="expense_report",
+            title=f"Zoom expense report generation #{invoice_id}",
+            payload={
+                "invoice_id": invoice_id,
+                "source_job_id": source_job_id,
+                "zoom_billing": True,
+                "regular_auto": True,
+                "processor": document_author,
+                "document_author": document_author,
+                "target_agent_id": target_agent_id,
+                "target_client_ip": target_client_ip,
+            },
+        )
+    )
+    queue_path = write_expense_report_queue(
+        job.id,
+        invoice,
+        target_agent_id=target_agent_id,
+        target_client_ip=target_client_ip,
+    )
+    update_invoice_json(
+        invoice_id,
+        {
+            "zoom_expense_report_job_id": job.id,
+            "zoom_expense_report_queued_at": datetime.now().isoformat(timespec="seconds"),
+            "regular_auto_target_client_ip": target_client_ip,
+            "regular_auto_skip_signature": "",
+            "regular_auto_skip_reason": "",
+            "regular_auto_skip_detail": "",
+        },
+        message=f"Zoom expense report queued to user PC Agent: {job.id}",
+    )
+    job_store.add_event(job.id, "erp", 72, f"Zoom expense report generation requested on user PC: #{invoice_id}")
+    add_invoice_log(invoice_id, f"Zoom expense report generation requested on user PC Agent ({queue_path})", level="info", job_id=job.id)
+    return job
 
 def _output_print_task(job_id: str) -> dict[str, Any]:
     path = queue_dir() / f"output_print_{job_id}.json"
@@ -620,6 +726,8 @@ def _regular_auto_candidate_invoices() -> list[tuple[dict[str, Any], set[str]]]:
         if not invoice_id or str(invoice.get("status") or "") != WAITING:
             continue
         data = _invoice_data(invoice)
+        if _invoice_is_zoom_billing(invoice):
+            continue
         if str(data.get("regular_auto_completed_at") or data.get("regular_auto_output_printed_at") or "").strip():
             _regular_auto_mark_skip(invoice, "already_completed", f"invoice #{invoice_id}")
             blocked_keys.update(_regular_auto_dedupe_keys(invoice))
@@ -644,6 +752,39 @@ def _regular_auto_candidate_invoices() -> list[tuple[dict[str, Any], set[str]]]:
     return selected
 
 
+def _regular_auto_zoom_output_invoices(profile: dict[str, Any]) -> list[dict[str, Any]]:
+    limit = max(1, min(int(settings.regular_auto_scan_limit or 200), 200))
+    summaries = list_invoices(mode="regular", limit=limit)
+    selected: list[dict[str, Any]] = []
+    max_batch = max(1, int(settings.regular_auto_max_batch or 20))
+    for item in reversed(summaries):
+        if len(selected) >= max_batch:
+            break
+        invoice = get_invoice(int(item.get("id") or 0))
+        if not invoice or not _invoice_is_zoom_billing(invoice):
+            continue
+        invoice_id = int(invoice.get("id") or 0)
+        if not invoice_id or str(invoice.get("status") or "") != WAITING:
+            continue
+        data = _invoice_data(invoice)
+        if str(data.get("regular_auto_completed_at") or data.get("regular_auto_output_printed_at") or "").strip():
+            continue
+        if not _expense_report_exists(invoice):
+            _queue_zoom_expense_report_to_agent(
+                invoice,
+                profile=profile,
+                respect_retry_cooldown=True,
+            )
+            continue
+        output_status = build_output_set_status(invoice, persist=True)
+        if not bool(output_status.get("can_output")):
+            reason = str(output_status.get("message") or output_status.get("blockers") or "청구서/현금출금결의서 준비 필요")
+            _regular_auto_mark_skip(invoice, "zoom_output_not_ready", reason)
+            continue
+        selected.append(invoice)
+    return selected
+
+
 def _queue_regular_auto_job() -> Any:
     global _regular_auto_last_job_id
     if not settings.regular_auto_enabled:
@@ -659,6 +800,47 @@ def _queue_regular_auto_job() -> Any:
         printer_name = _regular_auto_printer_name(profile, printer_key)
         if not printer_name:
             return None
+        zoom_output_invoices = _regular_auto_zoom_output_invoices(profile)
+        if zoom_output_invoices:
+            invoice_ids = [int(invoice["id"]) for invoice in zoom_output_invoices]
+            job = job_store.create(
+                JobCreateRequest(
+                    job_type="output_set",
+                    title=f"Zoom 청구서/현금출금결의서 평택 출력 {len(invoice_ids)}건",
+                    payload={
+                        "invoice_ids": invoice_ids,
+                        "action": "print_individual",
+                        "printer_key": printer_key,
+                        "printer_name": printer_name,
+                        "processor": "REGULAR_AUTO",
+                        "target_agent_id": str(profile.get("agent_id") or ""),
+                        "target_client_ip": str(settings.regular_auto_agent_ip or "").strip(),
+                        "existing_only": False,
+                        "one_click_existing_only": False,
+                        "regular_auto": True,
+                        "regular_auto_output": True,
+                        "output_target": printer_key,
+                        "output_action": "print_individual",
+                    },
+                )
+            )
+            _regular_auto_last_job_id = job.id
+            for invoice in zoom_output_invoices:
+                update_invoice_json(
+                    int(invoice["id"]),
+                    {
+                        "regular_auto_zoom_output_queued_at": datetime.now().isoformat(timespec="seconds"),
+                        "regular_auto_zoom_output_job_id": job.id,
+                        "regular_auto_target_client_ip": str(settings.regular_auto_agent_ip or "").strip(),
+                        "regular_auto_printer_key": printer_key,
+                        "regular_auto_skip_signature": "",
+                        "regular_auto_skip_reason": "",
+                        "regular_auto_skip_detail": "",
+                    },
+                    message=f"Zoom 청구서/현금출금결의서 평택 출력 큐 등록: {job.id}",
+                )
+            worker.submit(job)
+            return job
         selected = _regular_auto_candidate_invoices()
         if not selected:
             return None
@@ -1712,6 +1894,15 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
             refreshed_invoice = get_invoice(invoice_id)
             if refreshed_invoice:
                 build_output_set_status(refreshed_invoice, persist=True)
+                if _invoice_is_zoom_billing(refreshed_invoice):
+                    update_invoice_json(
+                        invoice_id,
+                        {
+                            "zoom_expense_report_last_error_at": "" if ok else datetime.now().isoformat(timespec="seconds"),
+                            "zoom_expense_report_last_error": "" if ok else message[:1000],
+                            "zoom_expense_report_last_error_job_id": "" if ok else job_id,
+                        },
+                    )
             add_invoice_log(invoice_id, message, level="info" if ok else "error", job_id=job_id)
         if job_store.get(job_id):
             job_store.set_result(job_id, dict(payload))

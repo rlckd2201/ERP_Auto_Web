@@ -71,3 +71,7 @@ For layout corrections, first regenerate without printing and validate the exact
 ## D-017 - the noon sender is a process-wide singleton
 
 Canonical hostname and explicit enablement remain necessary, but they are not sufficient when stale backends survive on the same server. The regular-due scheduler must acquire a non-blocking OS file lock in `C:\ERP_DB` before its thread starts. Only one canonical Common Startup link may launch the backend, and deployment must reject any additional 8080 listener. Sender host/PID headers and lock-owner status are retained as operational evidence.
+
+## D-018 - Excel paper-size selection is opportunistic; the PDF contract is authoritative
+
+Printer drivers can reject Excel's `PageSetup.PaperSize` setter even when the template can still export. Cash-disbursement generation must therefore keep portrait orientation, `$A$1:$R$20`, and one-page fit, tolerate only the paper-size setter failure, and enforce the final contract by vector-normalizing the exported file to one exact portrait-A4 page. Automatic Zoom retries use a 600-second cooldown so a persistent workstation/driver fault cannot create a failure job every minute; explicit user requests bypass that cooldown.

@@ -4,11 +4,21 @@ Updated: 2026-08-24
 
 ## Current objective
 
-Keep the 1.0.228 operating server reliable: native WEHAGO PDFs, one canonical noon alert, canonical document authors, and correctly scaled cash-disbursement PDFs.
+Keep the 1.0.228 operating server reliable: native WEHAGO PDFs, one canonical noon alert, canonical document authors, and resilient portrait-A4 cash-disbursement PDFs.
 
 ## Status
 
-The duplicate-noon-sender repair is deployed on `172.17.39.121`. Server health is good on version `1.0.228`; backend PID `9940` is the only port-8080 listener and owns the cross-process regular-due sender lock. The next real 12:00 run remains the final operational observation.
+The Zoom Excel-PDF repair is deployed on `172.17.39.121`. Server health is good on version `1.0.228`; backend PID `7484` is the only port-8080 listener and owns the cross-process regular-due sender lock. Zoom `#212` generated its missing report and completed one `2/2` Pyeongtaek output job. The next real 12:00 run remains the final operational observation.
+
+## 2026-08-24 Zoom expense-report recovery
+
+- Zoom `#212` was not blocked behind Etech. Its automatically queued expense-report jobs repeatedly failed because the active Excel printer driver rejected `PageSetup.PaperSize = xlPaperA4` with COM error `-2146827284`.
+- Excel page setup now treats that driver-specific setter as optional, preserves portrait orientation, print area `$A$1:$R$20`, and one-page fit, then vector-normalizes any non-A4 result to exact portrait A4.
+- Automatic Zoom generation retries are limited to one attempt per 600 seconds after a queue/failure timestamp; manual requests remain immediate.
+- Local and operating-server verification passed 11 focused tests. Deployment completed at `2026-08-24T09:51:02`; backup `C:\ERP_DB\backups\zoom_expense_fix_20260824_095043`, backend PID `7484`, bundle hash `5c25d508c1471269ad3230704e860a979ec2c89c897b2c94cca228ce26ffa536`.
+- Target Agent `DESKTOP-55LQ6BN-TEST` reported that exact bundle hash before the live retry.
+- Generation job `5064f4ad-67e8-48c3-82d3-9918e03c5f62` completed at 09:55:22. The server report is 31,746 bytes, SHA-256 `E884180C886685DB3D420BB50445AFFA0BE7F741773B034F2D845368BA0B2ED2`, one exact `595.28 x 841.89` portrait-A4 page, and the rendered form has no clipping or overlap.
+- Output job `2477e07e-9807-4464-b091-330910d4302c` completed at 09:56:25: the Zoom billing PDF and cash-disbursement PDF were each submitted once to `평택 프린터 (172.16.10.172)`, with `2/2` success and two verified Windows spooler submissions. Invoice `#212` is now complete.
 
 ## 2026-08-24 duplicate-noon-sender repair
 
@@ -77,7 +87,7 @@ The duplicate-noon-sender repair is deployed on `172.17.39.121`. Server health i
 - JavaScript syntax passed for `app.js` and `admin_db.js`.
 - Frontend DOM mapping passed: all 84 static IDs referenced by `app.js` exist; four unmatched selectors are runtime-generated elements.
 - Required frontend/setup/Zoom assets and version `1.0.228` were confirmed.
-- Graphify regenerated to 1,370 nodes, 3,801 edges, and 42 communities after the sender-lock change.
+- Graphify regenerated to 1,384 nodes, 3,828 edges, and 42 communities after the Zoom resilience change.
 - `git diff --check` passed for the task-owned changes.
 
 ## Known verification boundary
@@ -91,6 +101,7 @@ Observe the next 12:00 regular-due run and confirm that exactly one status email
 ## Release handoff
 
 - The duplicate-noon-sender singleton repair is published on `origin/codex/regular-due-singleton-20260824`; it includes the focused runtime, startup protection, tests, and session records.
+- The Zoom Excel-PDF resilience and retry-throttling repair is published on `origin/codex/zoom-expense-a4-20260824` with the focused source, tests, and session records.
 - Cash-disbursement layout source plus current session records are published on `origin/codex/expense-layout-20260821`; the branch tip is the final portrait correction. The earlier landscape state is superseded. No force push or dirty-worktree rebase was attempted.
 - Focused reconciliation changes are published on `codex/reconcile-state-20260812`.
 - `origin/main` is currently `9d9f9b6` and includes the independently added `excel_voucher_web` subsystem plus manager-side changes.

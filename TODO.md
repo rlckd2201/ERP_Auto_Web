@@ -2,6 +2,15 @@
 
 Updated: 2026-08-24
 
+## P0 - Zoom expense-report generation failure
+
+- [x] Identify Zoom `#212` as an Excel `PageSetup.PaperSize` COM failure rather than a queue dependency on Etech.
+- [x] Continue export when the active printer driver rejects the A4 setter and normalize the resulting PDF to exact portrait A4.
+- [x] Limit failed automatic Zoom retries to one attempt per 600 seconds while leaving manual requests immediate.
+- [x] Pass 11 focused tests locally and on the operating server, then deploy to backend PID `7484` and update target Agent `DESKTOP-55LQ6BN-TEST`.
+- [x] Complete live generation job `5064f4ad-67e8-48c3-82d3-9918e03c5f62` and visually verify the one-page A4 report.
+- [x] Complete one Pyeongtaek output job `2477e07e-9807-4464-b091-330910d4302c` with the two required files and `2/2` spooler success.
+
 ## P0 - expense-report author identity
 
 - [x] Correct `#206` and `#207` from `reum` to `구름`.

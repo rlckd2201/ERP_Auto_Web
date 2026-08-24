@@ -25,6 +25,67 @@ EXTRA_CELLS: dict[str, tuple[str, ...]] = {}
 XL_PORTRAIT = 1
 XL_PAPER_A4 = 9
 EXPENSE_PRINT_AREA = "$A$1:$R$20"
+A4_WIDTH_POINTS = 595.2756
+A4_HEIGHT_POINTS = 841.8898
+
+
+def configure_page_setup(page_setup: object) -> list[str]:
+    warnings: list[str] = []
+    page_setup.PrintArea = EXPENSE_PRINT_AREA
+    page_setup.Orientation = XL_PORTRAIT
+
+    current_paper_size = None
+    try:
+        current_paper_size = int(page_setup.PaperSize)
+    except Exception:
+        pass
+    if current_paper_size != XL_PAPER_A4:
+        try:
+            page_setup.PaperSize = XL_PAPER_A4
+        except Exception as exc:
+            warnings.append(
+                "Excel could not apply A4 through the active printer driver; "
+                f"the template paper size will be used and the PDF will be normalized to A4: {exc}"
+            )
+
+    page_setup.Zoom = False
+    page_setup.FitToPagesWide = 1
+    page_setup.FitToPagesTall = 1
+    page_setup.CenterHorizontally = True
+    page_setup.CenterVertically = False
+    return warnings
+
+
+def normalize_pdf_to_portrait_a4(output_pdf: Path) -> bool:
+    import fitz
+
+    source = fitz.open(str(output_pdf))
+    try:
+        if source.page_count != 1:
+            raise RuntimeError(f"expense report must contain one page, got {source.page_count}")
+        rect = source.load_page(0).rect
+        already_a4 = (
+            float(rect.height) > float(rect.width)
+            and abs(float(rect.width) - A4_WIDTH_POINTS) <= 3.0
+            and abs(float(rect.height) - A4_HEIGHT_POINTS) <= 3.0
+        )
+        if already_a4:
+            return False
+
+        normalized_path = output_pdf.with_name(f"{output_pdf.stem}.__a4{output_pdf.suffix or '.pdf'}")
+        normalized_path.unlink(missing_ok=True)
+        normalized = fitz.open()
+        try:
+            page = normalized.new_page(width=A4_WIDTH_POINTS, height=A4_HEIGHT_POINTS)
+            page.show_pdf_page(page.rect, source, 0, keep_proportion=True)
+            normalized.save(str(normalized_path), garbage=4, deflate=True)
+        finally:
+            normalized.close()
+    finally:
+        source.close()
+
+    normalized_path.replace(output_pdf)
+    return True
 
 
 def main() -> int:
@@ -93,17 +154,12 @@ def main() -> int:
         except Exception:
             pass
         page_setup = sheet.PageSetup
-        page_setup.PrintArea = EXPENSE_PRINT_AREA
-        page_setup.Orientation = XL_PORTRAIT
-        page_setup.PaperSize = XL_PAPER_A4
-        page_setup.Zoom = False
-        page_setup.FitToPagesWide = 1
-        page_setup.FitToPagesTall = 1
-        page_setup.CenterHorizontally = True
-        page_setup.CenterVertically = False
+        for warning in configure_page_setup(page_setup):
+            print(f"warning: {warning}", file=sys.stderr)
         sheet.ExportAsFixedFormat(0, str(output_pdf))
         if not output_pdf.exists() or output_pdf.stat().st_size <= 0:
             raise RuntimeError(f"PDF export produced no file: {output_pdf}")
+        normalize_pdf_to_portrait_a4(output_pdf)
         try:
             workbook.Saved = True
         except Exception:

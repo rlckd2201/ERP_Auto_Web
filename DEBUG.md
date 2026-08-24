@@ -108,3 +108,11 @@ Updated: 2026-08-24
 - Resolution: stop both orphan workers, move the obsolete link into a recoverable backup, create one canonical startup link, and require a cross-process file lock before the regular-due scheduler starts.
 - Verification: final exact-source deployment `2026-08-24T08:47:59` passed six focused tests and import/health checks. Backend PID `9940` is the sole port-8080 listener, owns `C:\ERP_DB\regular_due_sender.lock`, and reports `scheduler_started=true` plus `process_lock_acquired=true`.
 - Boundary: no test email was sent; the next real 12:00 delivery must contain exactly one message.
+
+## I-017 - Zoom #212 repeatedly failed during Excel PDF export - resolved and live-verified
+
+- Symptom: Zoom `#212` remained waiting while a new expense-report job failed about every minute; Etech `#213` had already completed independently.
+- Root cause: the target PC's active Excel printer driver rejected `PageSetup.PaperSize = 9` with COM error `-2146827284`. The exception aborted export before the missing cash-disbursement PDF could be uploaded.
+- Resolution: isolate page setup, tolerate the paper-size setter failure, preserve portrait/print-area/fit settings, normalize non-A4 output to exact portrait A4 with PyMuPDF, and throttle automatic retries to 600 seconds.
+- Deployment: the first attempt safely rolled back because PowerShell treated normal `unittest -v` stderr as a terminating error. The corrected deployment passed all 11 tests, restarted the sole backend from PID `9940` to `7484`, retained the regular-due process lock, and updated Agent `DESKTOP-55LQ6BN-TEST` to bundle hash `5c25d508c1471269ad3230704e860a979ec2c89c897b2c94cca228ce26ffa536`.
+- Verification: generation job `5064f4ad-67e8-48c3-82d3-9918e03c5f62` completed; the PDF is one exact `595.28 x 841.89` portrait-A4 page with clean rendering. Output job `2477e07e-9807-4464-b091-330910d4302c` submitted the billing PDF and report once each to the Pyeongtaek printer and returned `2/2` success with two spooler confirmations. Invoice `#212` is complete.
