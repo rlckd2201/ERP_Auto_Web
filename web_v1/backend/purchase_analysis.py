@@ -990,7 +990,15 @@ def _ai_parse(tax_path: str, quote_path: str, fast_data: dict[str, Any]) -> dict
         tls_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
         client = genai.Client(
             api_key=api_key,
-            http_options={"client_args": {"verify": tls_context}},
+            http_options={
+                "timeout": 60_000,
+                "retry_options": {
+                    "attempts": 2,
+                    "initial_delay": 1,
+                    "max_delay": 5,
+                },
+                "client_args": {"verify": tls_context},
+            },
         )
         prompt = """
 세금계산서와 견적서를 함께 분석해 JSON만 반환하세요.

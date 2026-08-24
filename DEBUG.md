@@ -132,4 +132,5 @@ Updated: 2026-08-24
 - Root cause: `_ai_parse` passed the original Korean Windows path directly to `client.files.upload`; the maintained SDK uses that filename in an ASCII-constrained HTTP header.
 - Fix: copy the unchanged PDF bytes to temporary `tax_invoice.pdf` and `quote.pdf` paths, upload those copies, and retain remote-file deletion plus client cleanup in `finally`.
 - Regression coverage: success and forced-generation-failure tests verify ASCII upload names, exact copied bytes, local temporary-file cleanup, remote Gemini-file deletion, and client closure.
+- Retry containment: SDK defaults could retry five times per call, and the first live verifier wrapped that with three more attempts. The production client now limits each request to 60 seconds and two total SDK attempts; the verifier uses the production function once.
 - Comparison boundary: the new key received 404 for `gemini-2.5-flash` because it is unavailable to new users. Historical stored results are the only 2.5-era baseline; `#207` has subsequent manual edits.

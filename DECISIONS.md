@@ -87,3 +87,7 @@ If the requested historical model is no longer callable, report that boundary an
 ## D-021 - Gemini uploads use disposable ASCII filenames
 
 Keep original Korean document paths and filenames unchanged in ERP storage, but copy the two upload inputs into a bounded temporary directory as `tax_invoice.pdf` and `quote.pdf`. Upload only those copies, remove the temporary directory on every exit path, and delete every successfully created remote Gemini file in `finally`.
+
+## D-022 - Gemini request retries are bounded once
+
+The SDK request timeout is 60 seconds and its total attempt count is 2, with a one-second initial delay and five-second maximum delay. Callers must not add another retry loop around `_ai_parse`; a failed bounded request falls back to the fast parser so a transient provider outage cannot hold the purchase workflow indefinitely.

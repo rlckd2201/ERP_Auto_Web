@@ -98,6 +98,8 @@ class PurchaseGeminiSdkTests(unittest.TestCase):
         self.assertEqual(result["vendor_name"], "테스트상사")
         client = _FakeClient.instances[0]
         self.assertIn("verify", client.http_options["client_args"])
+        self.assertEqual(client.http_options["timeout"], 60_000)
+        self.assertEqual(client.http_options["retry_options"]["attempts"], 2)
         self.assertEqual([Path(path).name for path in client.files.uploaded], ["tax_invoice.pdf", "quote.pdf"])
         self.assertTrue(all(Path(path).name.isascii() for path in client.files.uploaded))
         self.assertEqual(client.files.uploaded_contents, [b"tax-pdf", b"quote-pdf"])
