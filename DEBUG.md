@@ -116,3 +116,12 @@ Updated: 2026-08-24
 - Resolution: isolate page setup, tolerate the paper-size setter failure, preserve portrait/print-area/fit settings, normalize non-A4 output to exact portrait A4 with PyMuPDF, and throttle automatic retries to 600 seconds.
 - Deployment: the first attempt safely rolled back because PowerShell treated normal `unittest -v` stderr as a terminating error. The corrected deployment passed all 11 tests, restarted the sole backend from PID `9940` to `7484`, retained the regular-due process lock, and updated Agent `DESKTOP-55LQ6BN-TEST` to bundle hash `5c25d508c1471269ad3230704e860a979ec2c89c897b2c94cca228ce26ffa536`.
 - Verification: generation job `5064f4ad-67e8-48c3-82d3-9918e03c5f62` completed; the PDF is one exact `595.28 x 841.89` portrait-A4 page with clean rendering. Output job `2477e07e-9807-4464-b091-330910d4302c` submitted the billing PDF and report once each to the Pyeongtaek printer and returned `2/2` success with two spooler confirmations. Invoice `#212` is complete.
+
+## I-018 - Gemini SDK failed TLS on the first production deployment - resolved
+
+- Symptom: the first Gemini 3.7 deployment reached its SDK model check but failed with `CERTIFICATE_VERIFY_FAILED: unable to get local issuer certificate` on the operating server.
+- Containment: the deployment script restored all changed source/environment files and restarted the prior healthy backend as PID `7740`; backup `C:\ERP_DB\backups\gemini37_20260824_114141` remains available.
+- Root cause: the production network's certificate chain is trusted by Windows but was not available through the SDK's default Python CA path.
+- Resolution: create a `truststore.SSLContext` and pass it as the `google-genai` client's HTTP verification context. Certificate verification remains enabled.
+- Final verification: deployment backup `C:\ERP_DB\backups\gemini37_20260824_115520`; 13 tests passed; SDK lookup returned `models/gemini-3.7-flash`; live JSON generation succeeded; backend PID/listener `8568` passed HTTPS health and owns the regular-due process lock.
+- Graph boundary: `graphify update .` was run after code changes, but Graphify refused the unexpectedly smaller regeneration. Do not force it; rebuild from a clean, reconciled source tree before replacing tracked graph outputs.

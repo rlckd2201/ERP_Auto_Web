@@ -106,3 +106,18 @@ Observe the next 12:00 regular-due run and confirm that exactly one status email
 - Focused reconciliation changes are published on `codex/reconcile-state-20260812`.
 - `origin/main` is currently `9d9f9b6` and includes the independently added `excel_voucher_web` subsystem plus manager-side changes.
 - Main was not force-pushed, and the dirty 1.0.228 worktree was not auto-stashed/rebased. Before integrating the branch into main, compare the two active product lines and regenerate Graphify from the chosen combined tree.
+
+## Gemini purchase-analysis upgrade (2026-08-24)
+
+- Purchase-document AI analysis now uses the maintained `google-genai` SDK with configurable model `gemini-3.7-flash`; the legacy `google-generativeai` path was removed.
+- The rotated API key exists only in the operating server's backend `.env`. It is not stored in source, tests, session documents, or Git history.
+- The operating-server certificate chain required Windows trust-store integration. `truststore.SSLContext` is now supplied to the SDK so the production network can validate Google's endpoint.
+- The first deployment attempt failed its SDK model probe with `CERTIFICATE_VERIFY_FAILED`, restored the source/environment backup automatically, and restarted the prior healthy backend.
+- Final deployment completed at `2026-08-24T11:55:49`; backup `C:\ERP_DB\backups\gemini37_20260824_115520`, backend PID `8568`, and sole listener PID `8568`.
+- Production verification passed: 13 focused tests, SDK model lookup `models/gemini-3.7-flash`, a live JSON generation request, external HTTPS `/health`, and regular-due scheduler/process-lock ownership.
+- Focused source commits `019f2a8` and `c6ec23f` are published on `origin/codex/zoom-expense-a4-20260824`.
+- `graphify update .` was attempted after the code change but declined to replace the existing graph because the regenerated node count shrank unexpectedly. Existing graph outputs were left for a later clean-tree rebuild.
+
+## Next exact starting point
+
+Observe the next purchase case that contains items the fast parser cannot classify and confirm its saved analysis records `analysis_ai_model=gemini-3.7-flash`. Also confirm the next real 12:00 regular-due run sends exactly one status email.

@@ -75,3 +75,7 @@ Canonical hostname and explicit enablement remain necessary, but they are not su
 ## D-018 - Excel paper-size selection is opportunistic; the PDF contract is authoritative
 
 Printer drivers can reject Excel's `PageSetup.PaperSize` setter even when the template can still export. Cash-disbursement generation must therefore keep portrait orientation, `$A$1:$R$20`, and one-page fit, tolerate only the paper-size setter failure, and enforce the final contract by vector-normalizing the exported file to one exact portrait-A4 page. Automatic Zoom retries use a 600-second cooldown so a persistent workstation/driver fault cannot create a failure job every minute; explicit user requests bypass that cooldown.
+
+## D-019 - Gemini configuration stays external and uses the maintained SDK
+
+Purchase analysis uses `google-genai`, reads both API key and model from environment-backed settings, and defaults the model to `gemini-3.7-flash`. Secrets must remain in the operating server's `.env` and must not enter source, tests, logs, or session documents. On the Windows operating server, Google API clients use a `truststore.SSLContext` so certificate validation follows the Windows trust store; certificate verification is never disabled.

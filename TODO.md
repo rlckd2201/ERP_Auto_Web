@@ -11,6 +11,15 @@ Updated: 2026-08-24
 - [x] Complete live generation job `5064f4ad-67e8-48c3-82d3-9918e03c5f62` and visually verify the one-page A4 report.
 - [x] Complete one Pyeongtaek output job `2477e07e-9807-4464-b091-330910d4302c` with the two required files and `2/2` spooler success.
 
+## P0 - Gemini purchase-document analysis
+
+- [x] Rotate the production Gemini API key without adding it to source or Git.
+- [x] Migrate purchase analysis from `google-generativeai` to the maintained `google-genai` SDK.
+- [x] Make the model configurable and set production to `gemini-3.7-flash`.
+- [x] Use the Windows certificate store for Google API TLS validation on the operating server.
+- [x] Pass 13 focused tests, SDK model lookup, live JSON generation, backend health, sole-listener, and scheduler-lock verification.
+- [ ] Observe the next genuinely AI-required purchase document and confirm its persisted analysis model is `gemini-3.7-flash`.
+
 ## P0 - expense-report author identity
 
 - [x] Correct `#206` and `#207` from `reum` to `구름`.
