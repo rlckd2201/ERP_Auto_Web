@@ -20,7 +20,8 @@ Updated: 2026-08-24
 - [x] Pass 13 focused tests, SDK model lookup, live JSON generation, backend health, sole-listener, and scheduler-lock verification.
 - [x] Compare three existing tax/quote pairs against the historical 2.5-era results; 3.7 matched all totals and corrected the `#159` package/order quantity ambiguity.
 - [x] Copy Korean-named PDFs to ASCII temporary upload names inside `_ai_parse`, guarantee local/remote cleanup, and add success/failure regression tests.
-- [ ] Deploy the filename fix and run one existing sample through the exact production function without writing analysis back to the invoice DB.
+- [x] Deploy the filename fix and run Korean-named `#208` through the exact production function without writing analysis back to the invoice DB.
+- [ ] Add a deterministic non-zero discount-line case and define whether the discount is allocated across goods or retained as an explicit adjustment.
 - [ ] Observe the next genuinely AI-required purchase document and confirm its persisted analysis model is `gemini-3.7-flash`.
 
 ## P0 - expense-report author identity

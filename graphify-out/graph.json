@@ -2429,54 +2429,54 @@
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L214",
-      "id": "tax_crawler_crawler_main_rationale_214",
       "community": 14,
-      "norm_label": "?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba??url(?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6fe1\u110a\u116f\u11bd\u1108\u1162\u11af file:// \u5bc3\u110a\u1166\u11ab\u110c\u116e\u11b3) ??pdf ?\u112f\u1109\u1173\u11ae\u6fe1\u110a\u116f\u11bc\u1107\u1164\u11b5 ??\u5bc3\u1100\u1168\u11af\u1102\u1162\u11a8 dict \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.      \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5\u5a9b?"
+      "norm_label": "?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba??url(?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6fe1\u110a\u116f\u11bd\u1108\u1162\u11af file:// \u5bc3\u110a\u1166\u11ab\u110c\u116e\u11b3) ??pdf ?\u112f\u1109\u1173\u11ae\u6fe1\u110a\u116f\u11bc\u1107\u1164\u11b5 ??\u5bc3\u1100\u1168\u11af\u1102\u1162\u11a8 dict \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.      \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5\u5a9b?",
+      "id": "tax_crawler_crawler_main_rationale_214"
     },
     {
       "label": "KT \uf9ce\ubdbf\uc52a \uf9cf\ub086\uaf6d??PDF \uf9e3\u2464?\u745c??\u0080?\u03bd\ube2f\u6028?file:// URI \uf9cf\u2478\uc909 \u8adb\uc111\uc19a.     ?\uc495\u3049 ?\uba2e\ub497 \uf9e3\u2464??\ub6af\uc52a\uf9cf\ub086\ubfc9 'KT emai",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L266",
-      "id": "tax_crawler_crawler_main_rationale_266",
       "community": 14,
-      "norm_label": "kt \u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 \u7d10\u1101\u1175\u11b1\u1101\u116b\u11b0??pdf \u6ce55?\u745c??\u0080?\u03bd\u1107\u1174\u11ae\u6028?file:// uri \u7d10(5)\u110c\u116e\u11b4 \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.     ?\u110a\u116f\u11bc\u3049 ?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9\u7d10\u1101\u1175\u11b1\u1108\u116d\u11c0 'kt emai"
+      "norm_label": "kt \u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 \u7d10\u1101\u1175\u11b1\u1101\u116b\u11b0??pdf \u6ce55?\u745c??\u0080?\u03bd\u1107\u1174\u11ae\u6028?file:// uri \u7d10(5)\u110c\u116e\u11b4 \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5.     ?\u110a\u116f\u11bc\u3049 ?\u1106\u1164\u11b9\u1103\u1170\u11b6 \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9\u7d10\u1101\u1175\u11b1\u1108\u116d\u11c0 'kt emai",
+      "id": "tax_crawler_crawler_main_rationale_266"
     },
     {
       "label": "Save tax-invoice XML attachments and return file:// URIs.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L311",
-      "id": "tax_crawler_crawler_main_rationale_311",
       "community": 14,
-      "norm_label": "save tax-invoice xml attachments and return file:// uris."
+      "norm_label": "save tax-invoice xml attachments and return file:// uris.",
+      "id": "tax_crawler_crawler_main_rationale_311"
     },
     {
       "label": "\uf9ce\ubdbf\uc52a HTML \u8e42\uba83\u0426?\uba2f\uaf4c ?\uba78\ud211\u6028\uafa9\uad9b???\u044b\uaf6d \uf9cd\uacf9\uac95\uf9cd?\u7570\ubdbf\ud167.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L340",
-      "id": "tax_crawler_crawler_main_rationale_340",
       "community": 14,
-      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 html \u8e42\u1106\u1167\u11ba\u0446?\u1106\u1164\u11ba\u1101\u116a\u11ab ?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba???\u044b\u1101\u116b\u11b0 \u7559\u1100\u1169\u11c0\u1100\u1166\u11b0\u7559?\u7570\u1107\u1170\u11ae\u1110\u1166\u11c2."
+      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 html \u8e42\u1106\u1167\u11ba\u0446?\u1106\u1164\u11ba\u1101\u116a\u11ab ?\u1106\u1167\u11af\u1110\u116d\u11a8\u6028\u1101\u116d\u11b4\u1100\u116f\u11ba???\u044b\u1101\u116b\u11b0 \u7559\u1100\u1169\u11c0\u1100\u1166\u11b0\u7559?\u7570\u1107\u1170\u11ae\u1110\u1166\u11c2.",
+      "id": "tax_crawler_crawler_main_rationale_340"
     },
     {
       "label": "?\ub300\ucc13??\uf9ce\ubdbf\ub586\uf9de\u0080?\uba2f\uaf4c NTS_eTaxInvoice.html \uf9e3\u2464??\ub6af\uc52a??\uf9e1\uc5a0\ube18 ?\u0080????     file:// URI \u8adb\uc111\uc19a. ?\ub181\uc45d\uf9ce",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L390",
-      "id": "tax_crawler_crawler_main_rationale_390",
       "community": 14,
-      "norm_label": "?\u1103\u1162\u110d\u1175\u11ae??\u786b\u1107\u1170\u11ae\u1104\u1164\u11a9\u540f\u0080?\u1106\u1164\u11ba\u1101\u116a\u11ab nts_etaxinvoice.html \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9??\u674e\u110b\u1164\u11af\u1107\u1173\u11b3 ?\u0080????     file:// uri \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5. ?\u1102\u1169\u11b0\u110a\u116d\u11bc\u786b"
+      "norm_label": "?\u1103\u1162\u110d\u1175\u11ae??\u786b\u1107\u1170\u11ae\u1104\u1164\u11a9\u540f\u0080?\u1106\u1164\u11ba\u1101\u116a\u11ab nts_etaxinvoice.html \u6ce55??\u1104\u116e\u11ba\u110a\u1175\u11a9??\u674e\u110b\u1164\u11af\u1107\u1173\u11b3 ?\u0080????     file:// uri \u8adb\u1109\u1164\u11b8\u1109\u1169\u11b5. ?\u1102\u1169\u11b0\u110a\u116d\u11bc\u786b",
+      "id": "tax_crawler_crawler_main_rationale_390"
     },
     {
       "label": "\uf9ce\ubdbf\uc52a ?\uc10f\ub58a????yymmdd ?\ubea4\ub587.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\crawler_main.py",
       "source_location": "L439",
-      "id": "tax_crawler_crawler_main_rationale_439",
       "community": 14,
-      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 ?\u1109\u1164\u11b6\u1104\u1164\u11ad????yymmdd ?\u1108\u1163\u11b3\u1104\u1164\u11aa."
+      "norm_label": "\u786b\u1107\u1170\u11ae\u110a\u1175\u11a9 ?\u1109\u1164\u11b6\u1104\u1164\u11ad????yymmdd ?\u1108\u1163\u11b3\u1104\u1164\u11aa.",
+      "id": "tax_crawler_crawler_main_rationale_439"
     },
     {
       "label": "portal_autoever.py",
@@ -4904,180 +4904,180 @@
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L49",
-      "id": "tax_crawler_portal_wehago_rationale_49",
       "community": 1,
-      "norm_label": "allow chrome to reach wehago's local duzon print agents."
+      "norm_label": "allow chrome to reach wehago's local duzon print agents.",
+      "id": "tax_crawler_portal_wehago_rationale_49"
     },
     {
       "label": "Allow WEHAGO to call its local BMS/Duzon print agents on Chrome 142+.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L287",
-      "id": "tax_crawler_portal_wehago_rationale_287",
       "community": 1,
-      "norm_label": "allow wehago to call its local bms/duzon print agents on chrome 142+."
+      "norm_label": "allow wehago to call its local bms/duzon print agents on chrome 142+.",
+      "id": "tax_crawler_portal_wehago_rationale_287"
     },
     {
       "label": "Return WEHAGO's stable tax-invoice token, with a URL hash fallback.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L311",
-      "id": "tax_crawler_portal_wehago_rationale_311",
       "community": 1,
-      "norm_label": "return wehago's stable tax-invoice token, with a url hash fallback."
+      "norm_label": "return wehago's stable tax-invoice token, with a url hash fallback.",
+      "id": "tax_crawler_portal_wehago_rationale_311"
     },
     {
       "label": "Classify a WEHAGO PDF without accepting a browser-printed web page.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L372",
-      "id": "tax_crawler_portal_wehago_rationale_372",
       "community": 1,
-      "norm_label": "classify a wehago pdf without accepting a browser-printed web page."
+      "norm_label": "classify a wehago pdf without accepting a browser-printed web page.",
+      "id": "tax_crawler_portal_wehago_rationale_372"
     },
     {
       "label": "Preserve a rejected web-page PDF while clearing the canonical target.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L425",
-      "id": "tax_crawler_portal_wehago_rationale_425",
       "community": 1,
-      "norm_label": "preserve a rejected web-page pdf while clearing the canonical target."
+      "norm_label": "preserve a rejected web-page pdf while clearing the canonical target.",
+      "id": "tax_crawler_portal_wehago_rationale_425"
     },
     {
       "label": "Export and validate only the native Duzon/WEHAGO invoice PDF.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L459",
-      "id": "tax_crawler_portal_wehago_rationale_459",
       "community": 1,
-      "norm_label": "export and validate only the native duzon/wehago invoice pdf."
+      "norm_label": "export and validate only the native duzon/wehago invoice pdf.",
+      "id": "tax_crawler_portal_wehago_rationale_459"
     },
     {
       "label": "Recover invoice metadata from the generated PDF when XML download fails.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L509",
-      "id": "tax_crawler_portal_wehago_rationale_509",
       "community": 1,
-      "norm_label": "recover invoice metadata from the generated pdf when xml download fails."
+      "norm_label": "recover invoice metadata from the generated pdf when xml download fails.",
+      "id": "tax_crawler_portal_wehago_rationale_509"
     },
     {
       "label": "WEHAGO URL\uc758 Base64 \ud1a0\ud070\uc5d0\uc11c \uc0ac\uc5c5\uc790\ubc88\ud638(10\uc790\ub9ac) \ucd94\ucd9c.         \uc608: .../eTaxMail/VFgyMDI2MDQ2OTQ",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L574",
-      "id": "tax_crawler_portal_wehago_rationale_574",
       "community": 1,
-      "norm_label": "wehago url\u110b\u1174 base64 \u1110\u1169\u110f\u1173\u11ab\u110b\u1166\u1109\u1165 \u1109\u1161\u110b\u1165\u11b8\u110c\u1161\u1107\u1165\u11ab\u1112\u1169(10\u110c\u1161\u1105\u1175) \u110e\u116e\u110e\u116e\u11af.         \u110b\u1168: .../etaxmail/vfgymdi2mdq2otq"
+      "norm_label": "wehago url\u110b\u1174 base64 \u1110\u1169\u110f\u1173\u11ab\u110b\u1166\u1109\u1165 \u1109\u1161\u110b\u1165\u11b8\u110c\u1161\u1107\u1165\u11ab\u1112\u1169(10\u110c\u1161\u1105\u1175) \u110e\u116e\u110e\u116e\u11af.         \u110b\u1168: .../etaxmail/vfgymdi2mdq2otq",
+      "id": "tax_crawler_portal_wehago_rationale_574"
     },
     {
       "label": "visible text input \uc911 \ub9c8\uc9c0\ub9c9 = \ubaa8\ub2ec \uc785\ub825\ucc3d.         \ud655\uc778 \ud074\ub9ad \ud6c4 visible inputs \uc218\uac00 \uc904\uba74 \uc778\uc99d \uc131\uacf5.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L598",
-      "id": "tax_crawler_portal_wehago_rationale_598",
       "community": 1,
-      "norm_label": "visible text input \u110c\u116e\u11bc \u1106\u1161\u110c\u1175\u1106\u1161\u11a8 = \u1106\u1169\u1103\u1161\u11af \u110b\u1175\u11b8\u1105\u1167\u11a8\u110e\u1161\u11bc.         \u1112\u116a\u11a8\u110b\u1175\u11ab \u110f\u1173\u11af\u1105\u1175\u11a8 \u1112\u116e visible inputs \u1109\u116e\u1100\u1161 \u110c\u116e\u11af\u1106\u1167\u11ab \u110b\u1175\u11ab\u110c\u1173\u11bc \u1109\u1165\u11bc\u1100\u1169\u11bc."
+      "norm_label": "visible text input \u110c\u116e\u11bc \u1106\u1161\u110c\u1175\u1106\u1161\u11a8 = \u1106\u1169\u1103\u1161\u11af \u110b\u1175\u11b8\u1105\u1167\u11a8\u110e\u1161\u11bc.         \u1112\u116a\u11a8\u110b\u1175\u11ab \u110f\u1173\u11af\u1105\u1175\u11a8 \u1112\u116e visible inputs \u1109\u116e\u1100\u1161 \u110c\u116e\u11af\u1106\u1167\u11ab \u110b\u1175\u11ab\u110c\u1173\u11bc \u1109\u1165\u11bc\u1100\u1169\u11bc.",
+      "id": "tax_crawler_portal_wehago_rationale_598"
     },
     {
       "label": "Keep WEHAGO's interactive print runtime alive in the backend session.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L880",
-      "id": "tax_crawler_portal_wehago_rationale_880",
       "community": 1,
-      "norm_label": "keep wehago's interactive print runtime alive in the backend session."
+      "norm_label": "keep wehago's interactive print runtime alive in the backend session.",
+      "id": "tax_crawler_portal_wehago_rationale_880"
     },
     {
       "label": "Probe WEHAGO's HTTPS loopback agent from the invoice origin.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L937",
-      "id": "tax_crawler_portal_wehago_rationale_937",
       "community": 1,
-      "norm_label": "probe wehago's https loopback agent from the invoice origin."
+      "norm_label": "probe wehago's https loopback agent from the invoice origin.",
+      "id": "tax_crawler_portal_wehago_rationale_937"
     },
     {
       "label": "Handle the confirmations between the WEHAGO print click and preview.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L986",
-      "id": "tax_crawler_portal_wehago_rationale_986",
       "community": 1,
-      "norm_label": "handle the confirmations between the wehago print click and preview."
+      "norm_label": "handle the confirmations between the wehago print click and preview.",
+      "id": "tax_crawler_portal_wehago_rationale_986"
     },
     {
       "label": "Disabled: a Chrome print is the WEHAGO web page, not the invoice PDF.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1018",
-      "id": "tax_crawler_portal_wehago_rationale_1018",
       "community": 1,
-      "norm_label": "disabled: a chrome print is the wehago web page, not the invoice pdf."
+      "norm_label": "disabled: a chrome print is the wehago web page, not the invoice pdf.",
+      "id": "tax_crawler_portal_wehago_rationale_1018"
     },
     {
       "label": "Chrome \uc678\ubd80 \uc571 \uc2e4\ud589 \uad8c\ud55c \ud31d\uc5c5\uc5d0\uc11c '\ud5c8\uc6a9' \ubc84\ud2bc\uc744 \uc790\ub3d9 \ud074\ub9ad.         WEHAGO \uc778\uc1c4 \ubc84\ud2bc \uc774\ud6c4 1\ud68c\uc131 \ud31d\uc5c5\uc774 \ub728\ub294 \uad6c\uc870\ub77c,",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1050",
-      "id": "tax_crawler_portal_wehago_rationale_1050",
       "community": 1,
-      "norm_label": "chrome \u110b\u116c\u1107\u116e \u110b\u1162\u11b8 \u1109\u1175\u11af\u1112\u1162\u11bc \u1100\u116f\u11ab\u1112\u1161\u11ab \u1111\u1161\u11b8\u110b\u1165\u11b8\u110b\u1166\u1109\u1165 '\u1112\u1165\u110b\u116d\u11bc' \u1107\u1165\u1110\u1173\u11ab\u110b\u1173\u11af \u110c\u1161\u1103\u1169\u11bc \u110f\u1173\u11af\u1105\u1175\u11a8.         wehago \u110b\u1175\u11ab\u1109\u116b \u1107\u1165\u1110\u1173\u11ab \u110b\u1175\u1112\u116e 1\u1112\u116c\u1109\u1165\u11bc \u1111\u1161\u11b8\u110b\u1165\u11b8\u110b\u1175 \u1104\u1173\u1102\u1173\u11ab \u1100\u116e\u110c\u1169\u1105\u1161,"
+      "norm_label": "chrome \u110b\u116c\u1107\u116e \u110b\u1162\u11b8 \u1109\u1175\u11af\u1112\u1162\u11bc \u1100\u116f\u11ab\u1112\u1161\u11ab \u1111\u1161\u11b8\u110b\u1165\u11b8\u110b\u1166\u1109\u1165 '\u1112\u1165\u110b\u116d\u11bc' \u1107\u1165\u1110\u1173\u11ab\u110b\u1173\u11af \u110c\u1161\u1103\u1169\u11bc \u110f\u1173\u11af\u1105\u1175\u11a8.         wehago \u110b\u1175\u11ab\u1109\u116b \u1107\u1165\u1110\u1173\u11ab \u110b\u1175\u1112\u116e 1\u1112\u116c\u1109\u1165\u11bc \u1111\u1161\u11b8\u110b\u1165\u11b8\u110b\u1175 \u1104\u1173\u1102\u1173\u11ab \u1100\u116e\u110c\u1169\u1105\u1161,",
+      "id": "tax_crawler_portal_wehago_rationale_1050"
     },
     {
       "label": "Deprecated: coordinate clicks can hit page content, so never use them.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1120",
-      "id": "tax_crawler_portal_wehago_rationale_1120",
       "community": 1,
-      "norm_label": "deprecated: coordinate clicks can hit page content, so never use them."
+      "norm_label": "deprecated: coordinate clicks can hit page content, so never use them.",
+      "id": "tax_crawler_portal_wehago_rationale_1120"
     },
     {
       "label": "Post a background click to a Duzon preview control.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1430",
-      "id": "tax_crawler_portal_wehago_rationale_1430",
       "community": 1,
-      "norm_label": "post a background click to a duzon preview control."
+      "norm_label": "post a background click to a duzon preview control.",
+      "id": "tax_crawler_portal_wehago_rationale_1430"
     },
     {
       "label": "Microsoft Print to PDF sometimes ignores the target folder.         If the corr",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1623",
-      "id": "tax_crawler_portal_wehago_rationale_1623",
       "community": 1,
-      "norm_label": "microsoft print to pdf sometimes ignores the target folder.         if the corr"
+      "norm_label": "microsoft print to pdf sometimes ignores the target folder.         if the corr",
+      "id": "tax_crawler_portal_wehago_rationale_1623"
     },
     {
       "label": "Set the standard Save As filename without focus or cursor input.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1730",
-      "id": "tax_crawler_portal_wehago_rationale_1730",
       "community": 1,
-      "norm_label": "set the standard save as filename without focus or cursor input."
+      "norm_label": "set the standard save as filename without focus or cursor input.",
+      "id": "tax_crawler_portal_wehago_rationale_1730"
     },
     {
       "label": "Click the standard Save button by control ID/window message.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1826",
-      "id": "tax_crawler_portal_wehago_rationale_1826",
       "community": 1,
-      "norm_label": "click the standard save button by control id/window message."
+      "norm_label": "click the standard save button by control id/window message.",
+      "id": "tax_crawler_portal_wehago_rationale_1826"
     },
     {
       "label": "Terminate only the external Duzon WEHAGO print helper processes.",
       "file_type": "rationale",
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L1985",
-      "id": "tax_crawler_portal_wehago_rationale_1985",
       "community": 1,
-      "norm_label": "terminate only the external duzon wehago print helper processes."
+      "norm_label": "terminate only the external duzon wehago print helper processes.",
+      "id": "tax_crawler_portal_wehago_rationale_1985"
     },
     {
       "label": "portal_xml.py",
@@ -6127,7 +6127,7 @@
       "label": ".test_ai_parse_falls_back_without_api_key()",
       "file_type": "code",
       "source_file": "web_v1\\test_purchase_gemini_sdk.py",
-      "source_location": "L117",
+      "source_location": "L119",
       "id": "web_v1_test_purchase_gemini_sdk_purchasegeminisdktests_test_ai_parse_falls_back_without_api_key",
       "community": 11,
       "norm_label": ".test_ai_parse_falls_back_without_api_key()"
@@ -6136,7 +6136,7 @@
       "label": ".test_ai_parse_cleans_up_ascii_copies_when_generation_fails()",
       "file_type": "code",
       "source_file": "web_v1\\test_purchase_gemini_sdk.py",
-      "source_location": "L131",
+      "source_location": "L133",
       "id": "web_v1_test_purchase_gemini_sdk_purchasegeminisdktests_test_ai_parse_cleans_up_ascii_copies_when_generation_fails",
       "community": 11,
       "norm_label": ".test_ai_parse_cleans_up_ascii_copies_when_generation_fails()"
@@ -6146,9 +6146,9 @@
       "file_type": "rationale",
       "source_file": "web_v1\\test_purchase_gemini_sdk.py",
       "source_location": "L68",
-      "id": "web_v1_test_purchase_gemini_sdk_rationale_68",
       "community": 11,
-      "norm_label": "verify the maintained google genai sdk integration without network calls."
+      "norm_label": "verify the maintained google genai sdk integration without network calls.",
+      "id": "web_v1_test_purchase_gemini_sdk_rationale_68"
     },
     {
       "label": "test_regular_due_sender_guard.py",
@@ -8927,9 +8927,9 @@
       "file_type": "rationale",
       "source_file": "web_v1\\backend\\erp_runner.py",
       "source_location": "L885",
-      "id": "backend_erp_runner_rationale_885",
       "community": 7,
-      "norm_label": "the legacy ui module imports fitz at module load, but erp input does not use it"
+      "norm_label": "the legacy ui module imports fitz at module load, but erp input does not use it",
+      "id": "backend_erp_runner_rationale_885"
     },
     {
       "label": "expense_excel_export.py",
@@ -10339,7 +10339,7 @@
       "label": "analyze_purchase_documents()",
       "file_type": "code",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1047",
+      "source_location": "L1055",
       "id": "backend_purchase_analysis_analyze_purchase_documents",
       "community": 11,
       "norm_label": "analyze_purchase_documents()"
@@ -21176,11 +21176,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_49",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_49",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_49",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_49"
     },
     {
       "relation": "uses",
@@ -21188,11 +21188,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_287",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_287",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_287",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_287"
     },
     {
       "relation": "uses",
@@ -21200,11 +21200,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_311",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_311",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_311",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_311"
     },
     {
       "relation": "uses",
@@ -21212,11 +21212,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_372",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_372",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_372",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_372"
     },
     {
       "relation": "uses",
@@ -21224,11 +21224,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_425",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_425",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_425",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_425"
     },
     {
       "relation": "uses",
@@ -21236,11 +21236,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_459",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_459",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_459",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_459"
     },
     {
       "relation": "uses",
@@ -21248,11 +21248,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_509",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_509",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_509",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_509"
     },
     {
       "relation": "uses",
@@ -21260,11 +21260,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_574",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_574",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_574",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_574"
     },
     {
       "relation": "uses",
@@ -21272,11 +21272,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_598",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_598",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_598",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_598"
     },
     {
       "relation": "uses",
@@ -21284,11 +21284,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_880",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_880",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_880",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_880"
     },
     {
       "relation": "uses",
@@ -21296,11 +21296,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_937",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_937",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_937",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_937"
     },
     {
       "relation": "uses",
@@ -21308,11 +21308,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_986",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_986",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_986",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_986"
     },
     {
       "relation": "uses",
@@ -21320,11 +21320,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1018",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1018",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1018",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1018"
     },
     {
       "relation": "uses",
@@ -21332,11 +21332,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1050",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1050",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1050",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1050"
     },
     {
       "relation": "uses",
@@ -21344,11 +21344,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1120",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1120",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1120",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1120"
     },
     {
       "relation": "uses",
@@ -21356,11 +21356,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1430",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1430",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1430",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1430"
     },
     {
       "relation": "uses",
@@ -21368,11 +21368,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1623",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1623",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1623",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1623"
     },
     {
       "relation": "uses",
@@ -21380,11 +21380,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1730",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1730",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1730",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1730"
     },
     {
       "relation": "uses",
@@ -21392,11 +21392,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1826",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1826",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1826",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1826"
     },
     {
       "relation": "uses",
@@ -21404,11 +21404,11 @@
       "source_file": "tax_crawler\\portal_wehago.py",
       "source_location": "L32",
       "weight": 0.8,
-      "_src": "tax_crawler_portal_wehago_rationale_1985",
-      "_tgt": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_src": "tax_crawler_base_handler_basetaxinvoicehandler",
+      "_tgt": "tax_crawler_portal_wehago_rationale_1985",
+      "confidence_score": 0.5,
       "source": "tax_crawler_base_handler_basetaxinvoicehandler",
-      "target": "tax_crawler_portal_wehago_rationale_1985",
-      "confidence_score": 0.5
+      "target": "tax_crawler_portal_wehago_rationale_1985"
     },
     {
       "relation": "uses",
@@ -30140,11 +30140,11 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L7",
       "weight": 0.8,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler",
+      "_src": "tax_crawler_portal_wehago_wehagohandler",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests",
+      "confidence_score": 0.5,
       "source": "tax_crawler_portal_wehago_wehagohandler",
-      "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests",
-      "confidence_score": 0.5
+      "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests"
     },
     {
       "relation": "calls",
@@ -30393,8 +30393,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L80",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_existing_browser_pdf_is_not_reused",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_existing_invoice_pdf",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_existing_invoice_pdf",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_existing_browser_pdf_is_not_reused",
       "source": "tax_crawler_portal_wehago_wehagohandler_existing_invoice_pdf",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_existing_browser_pdf_is_not_reused"
     },
@@ -30429,8 +30429,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L20",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_accepts_native_developer_express_invoice",
-      "_tgt": "tax_crawler_portal_wehago_assess_native_wehago_pdf",
+      "_src": "tax_crawler_portal_wehago_assess_native_wehago_pdf",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_accepts_native_developer_express_invoice",
       "source": "tax_crawler_portal_wehago_assess_native_wehago_pdf",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_accepts_native_developer_express_invoice"
     },
@@ -30441,8 +30441,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L27",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_rejects_chrome_skia_web_page",
-      "_tgt": "tax_crawler_portal_wehago_assess_native_wehago_pdf",
+      "_src": "tax_crawler_portal_wehago_assess_native_wehago_pdf",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_rejects_chrome_skia_web_page",
       "source": "tax_crawler_portal_wehago_assess_native_wehago_pdf",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_rejects_chrome_skia_web_page"
     },
@@ -30573,8 +30573,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L56",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_native_retry_fails_without_browser_fallback",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_export_native_pdf_with_retry",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_export_native_pdf_with_retry",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_native_retry_fails_without_browser_fallback",
       "source": "tax_crawler_portal_wehago_wehagohandler_export_native_pdf_with_retry",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_native_retry_fails_without_browser_fallback"
     },
@@ -30813,8 +30813,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L95",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_print_click_stops_when_local_agent_is_unreachable",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_click_print",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_click_print",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_print_click_stops_when_local_agent_is_unreachable",
       "source": "tax_crawler_portal_wehago_wehagohandler_click_print",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_print_click_stops_when_local_agent_is_unreachable"
     },
@@ -30909,8 +30909,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L40",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_browser_pdf_export_is_disabled",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_export_browser_pdf",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_export_browser_pdf",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_browser_pdf_export_is_disabled",
       "source": "tax_crawler_portal_wehago_wehagohandler_export_browser_pdf",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_browser_pdf_export_is_disabled"
     },
@@ -30945,8 +30945,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L214",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_preview_detection_uses_title_without_scanning_window_tree",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_print_preview_is_open",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_print_preview_is_open",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_preview_detection_uses_title_without_scanning_window_tree",
       "source": "tax_crawler_portal_wehago_wehagohandler_print_preview_is_open",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_preview_detection_uses_title_without_scanning_window_tree"
     },
@@ -30993,8 +30993,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L224",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_coordinate_permission_fallback_is_disabled",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_allow_chrome_permission_popup_by_xy",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_allow_chrome_permission_popup_by_xy",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_coordinate_permission_fallback_is_disabled",
       "source": "tax_crawler_portal_wehago_wehagohandler_allow_chrome_permission_popup_by_xy",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_coordinate_permission_fallback_is_disabled"
     },
@@ -31137,8 +31137,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L151",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_pdf_button_skips_print_when_save_as_opens_directly",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_export_pdf_from_print_dialog",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_export_pdf_from_print_dialog",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_pdf_button_skips_print_when_save_as_opens_directly",
       "source": "tax_crawler_portal_wehago_wehagohandler_export_pdf_from_print_dialog",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_pdf_button_skips_print_when_save_as_opens_directly"
     },
@@ -31233,8 +31233,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L132",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_pdf_button_uses_background_message_before_descendant_scan",
-      "_tgt": "tax_crawler_portal_wehago_wehagohandler_click_pdf_button",
+      "_src": "tax_crawler_portal_wehago_wehagohandler_click_pdf_button",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_pdf_button_uses_background_message_before_descendant_scan",
       "source": "tax_crawler_portal_wehago_wehagohandler_click_pdf_button",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_pdf_button_uses_background_message_before_descendant_scan"
     },
@@ -31269,8 +31269,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L120",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_native_dialog_click_uses_background_window_message",
-      "_tgt": "tax_crawler_portal_wehago_post_dialog_click",
+      "_src": "tax_crawler_portal_wehago_post_dialog_click",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_native_dialog_click_uses_background_window_message",
       "source": "tax_crawler_portal_wehago_post_dialog_click",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_native_dialog_click_uses_background_window_message"
     },
@@ -31473,8 +31473,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L190",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_save_as_uses_win32_filename_and_save_button",
-      "_tgt": "tax_crawler_portal_wehago_set_save_as_filename_win32",
+      "_src": "tax_crawler_portal_wehago_set_save_as_filename_win32",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_save_as_uses_win32_filename_and_save_button",
       "source": "tax_crawler_portal_wehago_set_save_as_filename_win32",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_save_as_uses_win32_filename_and_save_button"
     },
@@ -31509,8 +31509,8 @@
       "source_file": "tax_crawler\\test_wehago_pdf_validation.py",
       "source_location": "L191",
       "weight": 1.0,
-      "_src": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_save_as_uses_win32_filename_and_save_button",
-      "_tgt": "tax_crawler_portal_wehago_click_save_as_save_button_win32",
+      "_src": "tax_crawler_portal_wehago_click_save_as_save_button_win32",
+      "_tgt": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_save_as_uses_win32_filename_and_save_button",
       "source": "tax_crawler_portal_wehago_click_save_as_save_button_win32",
       "target": "tax_crawler_test_wehago_pdf_validation_wehagopdfvalidationtests_test_save_as_uses_win32_filename_and_save_button"
     },
@@ -32242,9 +32242,9 @@
       "weight": 0.8,
       "_src": "tax_crawler_test_uplus_console_logging_uplusconsoleloggingtests",
       "_tgt": "tax_crawler_uplus_handler_uplusedocuhandler",
+      "confidence_score": 0.5,
       "source": "tax_crawler_test_uplus_console_logging_uplusconsoleloggingtests",
-      "target": "tax_crawler_uplus_handler_uplusedocuhandler",
-      "confidence_score": 0.5
+      "target": "tax_crawler_uplus_handler_uplusedocuhandler"
     },
     {
       "relation": "inherits",
@@ -32326,9 +32326,9 @@
       "weight": 0.8,
       "_src": "tax_crawler_test_uplus_identity_uplusinvoiceidentitytests",
       "_tgt": "tax_crawler_uplus_handler_uplusedocuhandler",
+      "confidence_score": 0.5,
       "source": "tax_crawler_test_uplus_identity_uplusinvoiceidentitytests",
-      "target": "tax_crawler_uplus_handler_uplusedocuhandler",
-      "confidence_score": 0.5
+      "target": "tax_crawler_uplus_handler_uplusedocuhandler"
     },
     {
       "relation": "calls",
@@ -34053,8 +34053,8 @@
       "source_file": "web_v1\\backend\\purchase_analysis.py",
       "source_location": "L1011",
       "weight": 1.0,
-      "_src": "backend_purchase_analysis_ai_parse",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakefilesservice_upload",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakefilesservice_upload",
+      "_tgt": "backend_purchase_analysis_ai_parse",
       "source": "web_v1_test_purchase_gemini_sdk_fakefilesservice_upload",
       "target": "backend_purchase_analysis_ai_parse"
     },
@@ -34065,8 +34065,8 @@
       "source_file": "web_v1\\backend\\purchase_analysis.py",
       "source_location": "L1037",
       "weight": 1.0,
-      "_src": "backend_purchase_analysis_ai_parse",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakefilesservice_delete",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakefilesservice_delete",
+      "_tgt": "backend_purchase_analysis_ai_parse",
       "source": "web_v1_test_purchase_gemini_sdk_fakefilesservice_delete",
       "target": "backend_purchase_analysis_ai_parse"
     },
@@ -34077,8 +34077,8 @@
       "source_file": "web_v1\\frontend\\app.js",
       "source_location": "L2173",
       "weight": 1.0,
-      "_src": "frontend_app_toggleinvoice",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakefilesservice_delete",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakefilesservice_delete",
+      "_tgt": "frontend_app_toggleinvoice",
       "source": "web_v1_test_purchase_gemini_sdk_fakefilesservice_delete",
       "target": "frontend_app_toggleinvoice"
     },
@@ -34125,8 +34125,8 @@
       "source_file": "web_v1\\backend\\purchase_analysis.py",
       "source_location": "L1012",
       "weight": 1.0,
-      "_src": "backend_purchase_analysis_ai_parse",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakemodelsservice_generate_content",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakemodelsservice_generate_content",
+      "_tgt": "backend_purchase_analysis_ai_parse",
       "source": "web_v1_test_purchase_gemini_sdk_fakemodelsservice_generate_content",
       "target": "backend_purchase_analysis_ai_parse"
     },
@@ -34161,8 +34161,8 @@
       "source_file": "web_v1\\test_zoom_expense_resilience.py",
       "source_location": "L64",
       "weight": 1.0,
-      "_src": "web_v1_test_zoom_expense_resilience_zoomexpenseresiliencetests_test_non_a4_pdf_is_normalized_to_one_portrait_a4_page",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "web_v1_test_zoom_expense_resilience_zoomexpenseresiliencetests_test_non_a4_pdf_is_normalized_to_one_portrait_a4_page",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "web_v1_test_zoom_expense_resilience_zoomexpenseresiliencetests_test_non_a4_pdf_is_normalized_to_one_portrait_a4_page"
     },
@@ -34173,8 +34173,8 @@
       "source_file": "web_v1\\backend\\approval_fetcher.py",
       "source_location": "L57",
       "weight": 1.0,
-      "_src": "backend_approval_fetcher_fetch_approval_documents",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_approval_fetcher_fetch_approval_documents",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_approval_fetcher_fetch_approval_documents"
     },
@@ -34185,8 +34185,8 @@
       "source_file": "web_v1\\backend\\compuzone_quote.py",
       "source_location": "L217",
       "weight": 1.0,
-      "_src": "backend_compuzone_quote_close_context",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_compuzone_quote_close_context",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_compuzone_quote_close_context"
     },
@@ -34197,8 +34197,8 @@
       "source_file": "web_v1\\backend\\expense_excel_export.py",
       "source_location": "L83",
       "weight": 1.0,
-      "_src": "backend_expense_excel_export_normalize_pdf_to_portrait_a4",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_expense_excel_export_normalize_pdf_to_portrait_a4",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_expense_excel_export_normalize_pdf_to_portrait_a4"
     },
@@ -34209,8 +34209,8 @@
       "source_file": "web_v1\\backend\\expense_excel_export.py",
       "source_location": "L174",
       "weight": 1.0,
-      "_src": "backend_expense_excel_export_main",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_expense_excel_export_main",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_expense_excel_export_main"
     },
@@ -34221,8 +34221,8 @@
       "source_file": "web_v1\\backend\\output_set.py",
       "source_location": "L669",
       "weight": 1.0,
-      "_src": "backend_output_set_generate_expense_report_pdf_plain",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_output_set_generate_expense_report_pdf_plain",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_output_set_generate_expense_report_pdf_plain"
     },
@@ -34233,8 +34233,8 @@
       "source_file": "web_v1\\backend\\output_set.py",
       "source_location": "L775",
       "weight": 1.0,
-      "_src": "backend_output_set_merge_pdfs",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_output_set_merge_pdfs",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_output_set_merge_pdfs"
     },
@@ -34245,8 +34245,8 @@
       "source_file": "web_v1\\backend\\purchase_analysis.py",
       "source_location": "L1041",
       "weight": 1.0,
-      "_src": "backend_purchase_analysis_ai_parse",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_purchase_analysis_ai_parse",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_purchase_analysis_ai_parse"
     },
@@ -34257,8 +34257,8 @@
       "source_file": "web_v1\\backend\\regular_due_monitor.py",
       "source_location": "L246",
       "weight": 1.0,
-      "_src": "backend_regular_due_monitor_acquire_scheduler_process_lock",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_regular_due_monitor_acquire_scheduler_process_lock",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_regular_due_monitor_acquire_scheduler_process_lock"
     },
@@ -34269,8 +34269,8 @@
       "source_file": "web_v1\\backend\\regular_due_monitor.py",
       "source_location": "L288",
       "weight": 1.0,
-      "_src": "backend_regular_due_monitor_release_scheduler_process_lock",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "backend_regular_due_monitor_release_scheduler_process_lock",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "backend_regular_due_monitor_release_scheduler_process_lock"
     },
@@ -34281,8 +34281,8 @@
       "source_file": "web_v1\\frontend\\app.js",
       "source_location": "L509",
       "weight": 1.0,
-      "_src": "frontend_app_clearloginandshowlogin",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "frontend_app_clearloginandshowlogin",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "frontend_app_clearloginandshowlogin"
     },
@@ -34293,8 +34293,8 @@
       "source_file": "web_v1\\frontend\\app.js",
       "source_location": "L1899",
       "weight": 1.0,
-      "_src": "frontend_app_finishjob",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "frontend_app_finishjob",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "frontend_app_finishjob"
     },
@@ -34305,8 +34305,8 @@
       "source_file": "web_v1\\frontend\\app.js",
       "source_location": "L1905",
       "weight": 1.0,
-      "_src": "frontend_app_connectevents",
-      "_tgt": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_src": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
+      "_tgt": "frontend_app_connectevents",
       "source": "web_v1_test_purchase_gemini_sdk_fakeclient_close",
       "target": "frontend_app_connectevents"
     },
@@ -34338,7 +34338,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\test_purchase_gemini_sdk.py",
-      "source_location": "L117",
+      "source_location": "L119",
       "weight": 1.0,
       "_src": "web_v1_test_purchase_gemini_sdk_purchasegeminisdktests",
       "_tgt": "web_v1_test_purchase_gemini_sdk_purchasegeminisdktests_test_ai_parse_falls_back_without_api_key",
@@ -34350,7 +34350,7 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\test_purchase_gemini_sdk.py",
-      "source_location": "L131",
+      "source_location": "L133",
       "weight": 1.0,
       "_src": "web_v1_test_purchase_gemini_sdk_purchasegeminisdktests",
       "_tgt": "web_v1_test_purchase_gemini_sdk_purchasegeminisdktests_test_ai_parse_cleans_up_ascii_copies_when_generation_fails",
@@ -35973,8 +35973,8 @@
       "source_file": "web_v1\\backend\\app.py",
       "source_location": "L3001",
       "weight": 1.0,
-      "_src": "backend_app_api_update_purchase_analysis",
-      "_tgt": "agent_erp_agent_agenttray_update",
+      "_src": "agent_erp_agent_agenttray_update",
+      "_tgt": "backend_app_api_update_purchase_analysis",
       "source": "agent_erp_agent_agenttray_update",
       "target": "backend_app_api_update_purchase_analysis"
     },
@@ -44109,8 +44109,8 @@
       "source_file": "web_v1\\backend\\approval_fetcher.py",
       "source_location": "L31",
       "weight": 1.0,
-      "_src": "runtimeerror",
-      "_tgt": "backend_approval_fetcher_check_playwright_runtime",
+      "_src": "backend_approval_fetcher_check_playwright_runtime",
+      "_tgt": "runtimeerror",
       "source": "backend_approval_fetcher_check_playwright_runtime",
       "target": "runtimeerror"
     },
@@ -44121,8 +44121,8 @@
       "source_file": "web_v1\\backend\\approval_fetcher.py",
       "source_location": "L43",
       "weight": 1.0,
-      "_src": "runtimeerror",
-      "_tgt": "backend_approval_fetcher_fetch_approval_documents",
+      "_src": "backend_approval_fetcher_fetch_approval_documents",
+      "_tgt": "runtimeerror",
       "source": "backend_approval_fetcher_fetch_approval_documents",
       "target": "runtimeerror"
     },
@@ -44685,8 +44685,8 @@
       "source_file": "web_v1\\backend\\expense_excel_export.py",
       "source_location": "L65",
       "weight": 1.0,
-      "_src": "backend_expense_excel_export_normalize_pdf_to_portrait_a4",
-      "_tgt": "runtimeerror",
+      "_src": "runtimeerror",
+      "_tgt": "backend_expense_excel_export_normalize_pdf_to_portrait_a4",
       "source": "runtimeerror",
       "target": "backend_expense_excel_export_normalize_pdf_to_portrait_a4"
     },
@@ -50805,8 +50805,8 @@
       "source_file": "web_v1\\backend\\zoom_retry.py",
       "source_location": "L14",
       "weight": 1.0,
-      "_src": "backend_zoom_retry_zoom_expense_retry_wait_seconds",
-      "_tgt": "backend_job_store_jobstore_get",
+      "_src": "backend_job_store_jobstore_get",
+      "_tgt": "backend_zoom_retry_zoom_expense_retry_wait_seconds",
       "source": "backend_job_store_jobstore_get",
       "target": "backend_zoom_retry_zoom_expense_retry_wait_seconds"
     },
@@ -53382,7 +53382,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1047",
+      "source_location": "L1055",
       "weight": 1.0,
       "_src": "web_v1_backend_purchase_analysis_py",
       "_tgt": "backend_purchase_analysis_analyze_purchase_documents",
@@ -53526,7 +53526,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1027",
+      "source_location": "L1035",
       "weight": 1.0,
       "_src": "backend_purchase_analysis_ai_parse",
       "_tgt": "backend_purchase_analysis_strip_vendor_name",
@@ -53538,7 +53538,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1077",
+      "source_location": "L1085",
       "weight": 1.0,
       "_src": "backend_purchase_analysis_analyze_purchase_documents",
       "_tgt": "backend_purchase_analysis_strip_vendor_name",
@@ -53598,7 +53598,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1066",
+      "source_location": "L1074",
       "weight": 1.0,
       "_src": "backend_purchase_analysis_analyze_purchase_documents",
       "_tgt": "backend_purchase_analysis_load_dictionary_rows",
@@ -53874,7 +53874,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1066",
+      "source_location": "L1074",
       "weight": 1.0,
       "_src": "backend_purchase_analysis_analyze_purchase_documents",
       "_tgt": "backend_purchase_analysis_process_items_with_db",
@@ -54042,7 +54042,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1067",
+      "source_location": "L1075",
       "weight": 1.0,
       "_src": "backend_purchase_analysis_analyze_purchase_documents",
       "_tgt": "backend_purchase_analysis_normalize_items",
@@ -54066,7 +54066,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1060",
+      "source_location": "L1068",
       "weight": 1.0,
       "_src": "backend_purchase_analysis_analyze_purchase_documents",
       "_tgt": "backend_purchase_analysis_fast_parse",
@@ -54090,7 +54090,7 @@
       "relation": "calls",
       "confidence": "EXTRACTED",
       "source_file": "web_v1\\backend\\purchase_analysis.py",
-      "source_location": "L1063",
+      "source_location": "L1071",
       "weight": 1.0,
       "_src": "backend_purchase_analysis_analyze_purchase_documents",
       "_tgt": "backend_purchase_analysis_ai_parse",

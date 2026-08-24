@@ -126,7 +126,7 @@ Updated: 2026-08-24
 - Final verification: deployment backup `C:\ERP_DB\backups\gemini37_20260824_115520`; 13 tests passed; SDK lookup returned `models/gemini-3.7-flash`; live JSON generation succeeded; backend PID/listener `8568` passed HTTPS health and owns the regular-due process lock.
 - Graph boundary: `graphify update .` was run after code changes, but Graphify refused the unexpectedly smaller regeneration. Do not force it; rebuild from a clean, reconciled source tree before replacing tracked graph outputs.
 
-## I-019 - Korean PDF filenames blocked the new Gemini file upload - fixed locally, deployment pending
+## I-019 - Korean PDF filenames blocked the new Gemini file upload - resolved and deployed
 
 - Symptom: read-only comparison of invoices `#159`, `#207`, and `#208` failed before generation with `UnicodeEncodeError: 'ascii' codec can't encode characters` in the SDK/httpx multipart header builder.
 - Root cause: `_ai_parse` passed the original Korean Windows path directly to `client.files.upload`; the maintained SDK uses that filename in an ASCII-constrained HTTP header.
@@ -134,3 +134,4 @@ Updated: 2026-08-24
 - Regression coverage: success and forced-generation-failure tests verify ASCII upload names, exact copied bytes, local temporary-file cleanup, remote Gemini-file deletion, and client closure.
 - Retry containment: SDK defaults could retry five times per call, and the first live verifier wrapped that with three more attempts. The production client now limits each request to 60 seconds and two total SDK attempts; the verifier uses the production function once.
 - Comparison boundary: the new key received 404 for `gemini-2.5-flash` because it is unavailable to new users. Historical stored results are the only 2.5-era baseline; `#207` has subsequent manual edits.
+- Deployment: backup `C:\ERP_DB\backups\gemini_filename_fix_20260824_135253`; 14 tests passed; Korean-named `#208` completed one read-only `_ai_parse` call through `gemini-3.7-flash`; temp cleanup passed; invoice state remained byte-for-byte equivalent for status, processor, analysis source/model, and items; backend PID `6568` is healthy and owns the sole listener/scheduler lock.

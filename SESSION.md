@@ -134,3 +134,15 @@ Observe the next purchase case that contains items the fast parser cannot classi
 ## Next exact starting point after comparison
 
 Deploy the ASCII temporary upload fix, then rerun one existing sample through the exact production function without saving its result to the invoice DB.
+
+## Gemini Korean-filename fix deployment (2026-08-24)
+
+- Final deployment completed at `2026-08-24T13:53:53`; backup `C:\ERP_DB\backups\gemini_filename_fix_20260824_135253`, backend PID/listener `6568`.
+- Fourteen focused tests passed on the operating server. Read-only production `_ai_parse` verification used Korean-named invoice `#208`, returned three items through `gemini-3.7-flash`, and matched supply `228,527`, tax `22,853`, and total `251,380`.
+- Verification confirmed one production-function call, complete temporary-directory cleanup, no invoice DB write, external HTTPS health, sole 8080 listener, and regular-due scheduler/process-lock ownership.
+- SDK calls are bounded to a 60-second request timeout and two total attempts. The verifier does not wrap `_ai_parse` in another retry loop.
+- Source and operational records are published on `origin/codex/gemini-filename-fix-20260824` through commits `bbed62c` and `c9954bb`; a final documentation/graph handoff commit follows this record.
+
+## Next exact starting point after deployment
+
+Observe the next genuinely unknown purchase item and confirm its saved row records `analysis_ai_model=gemini-3.7-flash`. Separately add a deterministic test case for a non-zero discount line such as `-6,730원`; the three historical comparison quotes only contained net-zero delivery adjustments.

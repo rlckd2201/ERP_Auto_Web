@@ -91,3 +91,5 @@ Keep original Korean document paths and filenames unchanged in ERP storage, but 
 ## D-022 - Gemini request retries are bounded once
 
 The SDK request timeout is 60 seconds and its total attempt count is 2, with a one-second initial delay and five-second maximum delay. Callers must not add another retry loop around `_ai_parse`; a failed bounded request falls back to the fast parser so a transient provider outage cannot hold the purchase workflow indefinitely.
+
+Production acceptance for document-upload changes uses an existing invoice through `_ai_parse` directly, never the persistence API. The check must prove the result model and totals, temporary-file cleanup, and unchanged invoice state before and after the call.
