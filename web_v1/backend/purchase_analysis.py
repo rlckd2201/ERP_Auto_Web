@@ -971,16 +971,19 @@ def _fast_parse(tax_path: str, quote_path: str, existing: dict[str, Any]) -> dic
 def _ai_parse(tax_path: str, quote_path: str, fast_data: dict[str, Any]) -> dict[str, Any] | None:
     fast_data["analysis_ai_attempted"] = True
     fast_data["analysis_ai_error"] = ""
+    fast_data["analysis_ai_model"] = settings.gemini_model
     api_key = settings.gemini_api_key
     if not api_key:
         message = "GEMINI_API_KEY missing"
         fast_data["analysis_ai_error"] = message
         fast_data["analysis_warning"] = message
         return None
+    client = None
+    files: list[Any] = []
     try:
-        import google.generativeai as genai
+        from google import genai
 
-        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
         prompt = """
 세금계산서와 견적서를 함께 분석해 JSON만 반환하세요.
 필드: site_name, buyer_biz_no, vendor_name, invoice_date, target_supply, total_tax, total_sum,
@@ -990,21 +993,22 @@ items[].name은 ERP 입력용 품목명으로 짧게 정리하세요. 브랜드,
 예: "[Canon] PIXMA TS3690 잉크젯복합기 (잉크포함) -1148112" -> name "잉크젯복합기", raw_desc는 원문 유지.
 부서는 알 수 없으면 빈 문자열로 두세요.
 """
-        model = genai.GenerativeModel("gemini-2.5-flash", generation_config={"response_mime_type": "application/json"})
-        files = [genai.upload_file(tax_path), genai.upload_file(quote_path)]
-        try:
-            response = model.generate_content([prompt, f"기본 파싱값: {json.dumps(fast_data, ensure_ascii=False)}"] + files)
-            parsed = json.loads(response.text)
-        finally:
-            for file in files:
-                try:
-                    file.delete()
-                except Exception:
-                    pass
+        for path in (tax_path, quote_path):
+            files.append(client.files.upload(file=path))
+        response = client.models.generate_content(
+            model=settings.gemini_model,
+            contents=[prompt, f"기본 파싱값: {json.dumps(fast_data, ensure_ascii=False)}", *files],
+            config={
+                "response_mime_type": "application/json",
+                "automatic_function_calling": {"disable": True},
+            },
+        )
+        parsed = json.loads(response.text)
         if isinstance(parsed, dict):
             parsed["analysis_source"] = "gemini"
             parsed["analysis_ai_attempted"] = True
             parsed["analysis_ai_error"] = ""
+            parsed["analysis_ai_model"] = settings.gemini_model
             if parsed.get("vendor_name"):
                 parsed["vendor_name"] = _strip_vendor_name(parsed.get("vendor_name"))
             return parsed
@@ -1012,6 +1016,17 @@ items[].name은 ERP 입력용 품목명으로 짧게 정리하세요. 브랜드,
         message = f"AI analysis failed, using fast parse: {exc}"
         fast_data["analysis_ai_error"] = message
         fast_data["analysis_warning"] = message
+    finally:
+        if client is not None:
+            for file in files:
+                try:
+                    client.files.delete(name=file.name)
+                except Exception:
+                    pass
+            try:
+                client.close()
+            except Exception:
+                pass
     return None
 
 

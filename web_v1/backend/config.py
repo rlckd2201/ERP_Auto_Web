@@ -100,6 +100,7 @@ class Settings:
     password_reset_smtp_pw: str = _env("PASSWORD_RESET_SMTP_PW", _env("EMAIL_PW"))
     password_reset_from: str = _env("PASSWORD_RESET_FROM", "admpdm@dae-seung.co.kr")
     gemini_api_key: str = _env("GEMINI_API_KEY")
+    gemini_model: str = _env("GEMINI_MODEL", "gemini-3.7-flash")
     print_target_pyeongtaek: str = _env("PRINT_TARGET_PYEONGTAEK")
     print_target_gimje: str = _env("PRINT_TARGET_GIMJE")
     print_target_pdf: str = _env("PRINT_TARGET_PDF", "Microsoft Print to PDF")
