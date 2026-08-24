@@ -48,8 +48,9 @@ class _FakeModelsService:
 class _FakeClient:
     instances: list["_FakeClient"] = []
 
-    def __init__(self, *, api_key: str) -> None:
+    def __init__(self, *, api_key: str, http_options: dict[str, object]) -> None:
         self.api_key = api_key
+        self.http_options = http_options
         self.files = _FakeFilesService()
         self.models = _FakeModelsService()
         self.closed = False
@@ -87,6 +88,7 @@ class PurchaseGeminiSdkTests(unittest.TestCase):
         self.assertEqual(result["analysis_ai_model"], "gemini-3.7-flash")
         self.assertEqual(result["vendor_name"], "테스트상사")
         client = _FakeClient.instances[0]
+        self.assertIn("verify", client.http_options["client_args"])
         self.assertEqual(client.files.uploaded, ["tax.pdf", "quote.pdf"])
         self.assertEqual(client.files.deleted, ["files/1", "files/2"])
         self.assertTrue(client.closed)

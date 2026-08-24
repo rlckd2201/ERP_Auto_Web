@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 import difflib
+import ssl
 from pathlib import Path
 from typing import Any
 
@@ -982,8 +983,13 @@ def _ai_parse(tax_path: str, quote_path: str, fast_data: dict[str, Any]) -> dict
     files: list[Any] = []
     try:
         from google import genai
+        import truststore
 
-        client = genai.Client(api_key=api_key)
+        tls_context = truststore.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        client = genai.Client(
+            api_key=api_key,
+            http_options={"client_args": {"verify": tls_context}},
+        )
         prompt = """
 세금계산서와 견적서를 함께 분석해 JSON만 반환하세요.
 필드: site_name, buyer_biz_no, vendor_name, invoice_date, target_supply, total_tax, total_sum,
