@@ -79,3 +79,11 @@ Printer drivers can reject Excel's `PageSetup.PaperSize` setter even when the te
 ## D-019 - Gemini configuration stays external and uses the maintained SDK
 
 Purchase analysis uses `google-genai`, reads both API key and model from environment-backed settings, and defaults the model to `gemini-3.7-flash`. Secrets must remain in the operating server's `.env` and must not enter source, tests, logs, or session documents. On the Windows operating server, Google API clients use a `truststore.SSLContext` so certificate validation follows the Windows trust store; certificate verification is never disabled.
+
+## D-020 - do not silently substitute a model in comparisons
+
+If the requested historical model is no longer callable, report that boundary and use clearly labeled historical outputs only when the source proves which model produced them. Do not replace `gemini-2.5-flash` with 3.6 or another model and present that as a 2.5 comparison. A fair live comparison keeps the same source PDFs, prompt, parser context, JSON mode, and temperature.
+
+## D-021 - Gemini uploads use disposable ASCII filenames
+
+Keep original Korean document paths and filenames unchanged in ERP storage, but copy the two upload inputs into a bounded temporary directory as `tax_invoice.pdf` and `quote.pdf`. Upload only those copies, remove the temporary directory on every exit path, and delete every successfully created remote Gemini file in `finally`.

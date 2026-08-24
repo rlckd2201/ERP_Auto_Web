@@ -121,3 +121,16 @@ Observe the next 12:00 regular-due run and confirm that exactly one status email
 ## Next exact starting point
 
 Observe the next purchase case that contains items the fast parser cannot classify and confirm its saved analysis records `analysis_ai_model=gemini-3.7-flash`. Also confirm the next real 12:00 regular-due run sends exactly one status email.
+
+## Gemini 2.5/3.7 sample comparison (2026-08-24)
+
+- Read-only comparison used purchase invoices `#159`, `#207`, and `#208` with identical tax/quote PDFs, prompt, fast-parse context, and JSON mode. No invoice row was updated.
+- The rotated key cannot call `gemini-2.5-flash`: all three requests returned 404 because the model is unavailable to new users. Historical stored Gemini results were used as the 2.5-era baseline because the pre-upgrade source hard-coded that model; `#207` includes later manual account edits and is not a pristine raw baseline.
+- `gemini-3.7-flash` succeeded for all three samples. Target supply, tax, grand total, and summed item supply matched exactly in every sample.
+- Material improvement: `#159` historically treated the RJ-45 `[100개]` package notation as quantity 100, while the quote's actual order quantity is 2; 3.7 returned quantity 2. `#207` still expanded each quantity-2 product into two quantity-1 rows. `#208` matched the historical result.
+- All three quotes contain delivery-fee and free-delivery rows that net to zero; 3.7 correctly omitted both adjustment rows from ERP items.
+- Critical deployment finding: `google-genai` file upload raises `UnicodeEncodeError` when a Korean source filename is placed in the multipart header. The comparison succeeded only after copying each source to an ASCII-named temporary PDF.
+
+## Next exact starting point after comparison
+
+Deploy the ASCII temporary upload fix, then rerun one existing sample through the exact production function without saving its result to the invoice DB.

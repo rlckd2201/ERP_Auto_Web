@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import json
 import sys
+import tempfile
 import types
 import unittest
+from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -18,10 +20,12 @@ class _FakeFile:
 class _FakeFilesService:
     def __init__(self) -> None:
         self.uploaded: list[str] = []
+        self.uploaded_contents: list[bytes] = []
         self.deleted: list[str] = []
 
     def upload(self, *, file: str) -> _FakeFile:
         self.uploaded.append(file)
+        self.uploaded_contents.append(Path(file).read_bytes())
         return _FakeFile(f"files/{len(self.uploaded)}")
 
     def delete(self, *, name: str) -> None:
@@ -77,11 +81,16 @@ class PurchaseGeminiSdkTests(unittest.TestCase):
         )
         fast_data = {"analysis_unknown_items": ["unknown"]}
 
-        with (
-            patch.object(purchase_analysis, "settings", fake_settings),
-            patch.dict(sys.modules, {"google": fake_google, "google.genai": fake_genai}),
-        ):
-            result = purchase_analysis._ai_parse("tax.pdf", "quote.pdf", fast_data)
+        with tempfile.TemporaryDirectory() as source_dir:
+            tax_path = Path(source_dir) / "세금계산서.pdf"
+            quote_path = Path(source_dir) / "컴퓨존_견적서.pdf"
+            tax_path.write_bytes(b"tax-pdf")
+            quote_path.write_bytes(b"quote-pdf")
+            with (
+                patch.object(purchase_analysis, "settings", fake_settings),
+                patch.dict(sys.modules, {"google": fake_google, "google.genai": fake_genai}),
+            ):
+                result = purchase_analysis._ai_parse(str(tax_path), str(quote_path), fast_data)
 
         self.assertIsNotNone(result)
         self.assertEqual(result["analysis_source"], "gemini")
@@ -89,7 +98,10 @@ class PurchaseGeminiSdkTests(unittest.TestCase):
         self.assertEqual(result["vendor_name"], "테스트상사")
         client = _FakeClient.instances[0]
         self.assertIn("verify", client.http_options["client_args"])
-        self.assertEqual(client.files.uploaded, ["tax.pdf", "quote.pdf"])
+        self.assertEqual([Path(path).name for path in client.files.uploaded], ["tax_invoice.pdf", "quote.pdf"])
+        self.assertTrue(all(Path(path).name.isascii() for path in client.files.uploaded))
+        self.assertEqual(client.files.uploaded_contents, [b"tax-pdf", b"quote-pdf"])
+        self.assertTrue(all(not Path(path).exists() for path in client.files.uploaded))
         self.assertEqual(client.files.deleted, ["files/1", "files/2"])
         self.assertTrue(client.closed)
         call = client.models.calls[0]
@@ -115,6 +127,37 @@ class PurchaseGeminiSdkTests(unittest.TestCase):
         self.assertIsNone(result)
         self.assertEqual(fast_data["analysis_ai_error"], "GEMINI_API_KEY missing")
         self.assertEqual(fast_data["analysis_ai_model"], "gemini-3.7-flash")
+
+    def test_ai_parse_cleans_up_ascii_copies_when_generation_fails(self) -> None:
+        fake_genai = types.ModuleType("google.genai")
+        fake_genai.Client = _FakeClient
+        fake_google = types.ModuleType("google")
+        fake_google.genai = fake_genai
+        fake_settings = SimpleNamespace(
+            gemini_api_key="test-key",
+            gemini_model="gemini-3.7-flash",
+        )
+        fast_data: dict[str, object] = {"analysis_unknown_items": ["unknown"]}
+
+        with tempfile.TemporaryDirectory() as source_dir:
+            tax_path = Path(source_dir) / "세금계산서.pdf"
+            quote_path = Path(source_dir) / "견적서.pdf"
+            tax_path.write_bytes(b"tax-pdf")
+            quote_path.write_bytes(b"quote-pdf")
+            with (
+                patch.object(purchase_analysis, "settings", fake_settings),
+                patch.dict(sys.modules, {"google": fake_google, "google.genai": fake_genai}),
+                patch.object(_FakeModelsService, "generate_content", side_effect=RuntimeError("generation failed")),
+            ):
+                result = purchase_analysis._ai_parse(str(tax_path), str(quote_path), fast_data)
+
+        self.assertIsNone(result)
+        self.assertIn("generation failed", str(fast_data["analysis_ai_error"]))
+        client = _FakeClient.instances[0]
+        self.assertEqual([Path(path).name for path in client.files.uploaded], ["tax_invoice.pdf", "quote.pdf"])
+        self.assertTrue(all(not Path(path).exists() for path in client.files.uploaded))
+        self.assertEqual(client.files.deleted, ["files/1", "files/2"])
+        self.assertTrue(client.closed)
 
 
 if __name__ == "__main__":

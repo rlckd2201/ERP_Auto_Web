@@ -3,7 +3,9 @@ from __future__ import annotations
 import json
 import re
 import difflib
+import shutil
 import ssl
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -999,17 +1001,23 @@ items[].name은 ERP 입력용 품목명으로 짧게 정리하세요. 브랜드,
 예: "[Canon] PIXMA TS3690 잉크젯복합기 (잉크포함) -1148112" -> name "잉크젯복합기", raw_desc는 원문 유지.
 부서는 알 수 없으면 빈 문자열로 두세요.
 """
-        for path in (tax_path, quote_path):
-            files.append(client.files.upload(file=path))
-        response = client.models.generate_content(
-            model=settings.gemini_model,
-            contents=[prompt, f"기본 파싱값: {json.dumps(fast_data, ensure_ascii=False)}", *files],
-            config={
-                "response_mime_type": "application/json",
-                "automatic_function_calling": {"disable": True},
-            },
-        )
-        parsed = json.loads(response.text)
+        with tempfile.TemporaryDirectory(prefix="gemini_purchase_") as temp_dir:
+            upload_paths = (
+                (tax_path, Path(temp_dir) / "tax_invoice.pdf"),
+                (quote_path, Path(temp_dir) / "quote.pdf"),
+            )
+            for source_path, upload_path in upload_paths:
+                shutil.copyfile(source_path, upload_path)
+                files.append(client.files.upload(file=str(upload_path)))
+            response = client.models.generate_content(
+                model=settings.gemini_model,
+                contents=[prompt, f"기본 파싱값: {json.dumps(fast_data, ensure_ascii=False)}", *files],
+                config={
+                    "response_mime_type": "application/json",
+                    "automatic_function_calling": {"disable": True},
+                },
+            )
+            parsed = json.loads(response.text)
         if isinstance(parsed, dict):
             parsed["analysis_source"] = "gemini"
             parsed["analysis_ai_attempted"] = True

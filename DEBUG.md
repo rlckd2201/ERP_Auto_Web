@@ -125,3 +125,11 @@ Updated: 2026-08-24
 - Resolution: create a `truststore.SSLContext` and pass it as the `google-genai` client's HTTP verification context. Certificate verification remains enabled.
 - Final verification: deployment backup `C:\ERP_DB\backups\gemini37_20260824_115520`; 13 tests passed; SDK lookup returned `models/gemini-3.7-flash`; live JSON generation succeeded; backend PID/listener `8568` passed HTTPS health and owns the regular-due process lock.
 - Graph boundary: `graphify update .` was run after code changes, but Graphify refused the unexpectedly smaller regeneration. Do not force it; rebuild from a clean, reconciled source tree before replacing tracked graph outputs.
+
+## I-019 - Korean PDF filenames blocked the new Gemini file upload - fixed locally, deployment pending
+
+- Symptom: read-only comparison of invoices `#159`, `#207`, and `#208` failed before generation with `UnicodeEncodeError: 'ascii' codec can't encode characters` in the SDK/httpx multipart header builder.
+- Root cause: `_ai_parse` passed the original Korean Windows path directly to `client.files.upload`; the maintained SDK uses that filename in an ASCII-constrained HTTP header.
+- Fix: copy the unchanged PDF bytes to temporary `tax_invoice.pdf` and `quote.pdf` paths, upload those copies, and retain remote-file deletion plus client cleanup in `finally`.
+- Regression coverage: success and forced-generation-failure tests verify ASCII upload names, exact copied bytes, local temporary-file cleanup, remote Gemini-file deletion, and client closure.
+- Comparison boundary: the new key received 404 for `gemini-2.5-flash` because it is unavailable to new users. Historical stored results are the only 2.5-era baseline; `#207` has subsequent manual edits.
