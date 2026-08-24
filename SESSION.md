@@ -129,7 +129,7 @@ Observe the next purchase case that contains items the fast parser cannot classi
 - `gemini-3.7-flash` succeeded for all three samples. Target supply, tax, grand total, and summed item supply matched exactly in every sample.
 - Material improvement: `#159` historically treated the RJ-45 `[100개]` package notation as quantity 100, while the quote's actual order quantity is 2; 3.7 returned quantity 2. `#207` still expanded each quantity-2 product into two quantity-1 rows. `#208` matched the historical result.
 - All three quotes contain delivery-fee and free-delivery rows that net to zero; 3.7 correctly omitted both adjustment rows from ERP items.
-- Critical deployment finding: `google-genai` file upload raises `UnicodeEncodeError` when a Korean source filename is placed in the multipart header. The comparison succeeded only after copying each source to an ASCII-named temporary PDF.
+- Critical deployment finding: `google-genai` file upload raises `UnicodeEncodeError` when a Korean source filename is placed in the multipart header. The comparison succeeded only after copying each source to an ASCII-named temporary PDF; the production repair and verification are recorded below.
 
 ## Next exact starting point after comparison
 
@@ -140,6 +140,7 @@ Deploy the ASCII temporary upload fix, then rerun one existing sample through th
 - Final deployment completed at `2026-08-24T13:53:53`; backup `C:\ERP_DB\backups\gemini_filename_fix_20260824_135253`, backend PID/listener `6568`.
 - Fourteen focused tests passed on the operating server. Read-only production `_ai_parse` verification used Korean-named invoice `#208`, returned three items through `gemini-3.7-flash`, and matched supply `228,527`, tax `22,853`, and total `251,380`.
 - Verification confirmed one production-function call, complete temporary-directory cleanup, no invoice DB write, external HTTPS health, sole 8080 listener, and regular-due scheduler/process-lock ownership.
+- A final browser check opened `https://172.17.39.121:8080/` and rendered the production UI. Port 8080 is HTTPS-only, so a plain HTTP probe returning an empty response is expected and is not a backend outage.
 - SDK calls are bounded to a 60-second request timeout and two total attempts. The verifier does not wrap `_ai_parse` in another retry loop.
 - Source and operational records are published on `origin/codex/gemini-filename-fix-20260824` through commits `bbed62c` and `c9954bb`; a final documentation/graph handoff commit follows this record.
 
