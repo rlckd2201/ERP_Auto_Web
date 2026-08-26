@@ -56,6 +56,11 @@ VENDOR_BIZ_NO_RULES: tuple[tuple[tuple[str, ...], str, str], ...] = (
 )
 
 Progress = Callable[[str], None]
+ERP_SAVE_CONFIRM_REQUIRED = "[ERP_SAVE_CONFIRM_REQUIRED]"
+
+
+def requires_erp_save_confirmation(invoice: dict[str, Any] | None) -> bool:
+    return bool(invoice) and ERP_SAVE_CONFIRM_REQUIRED in str((invoice or {}).get("last_error") or "")
 
 
 def _to_int(value: Any) -> int:
@@ -70,6 +75,48 @@ def _to_int(value: Any) -> int:
 
 def _clean_text(value: Any, fallback: str = "") -> str:
     return re.sub(r"\s+", " ", str(value or fallback).strip())
+
+
+def _purchase_dept_from_context(item: dict[str, Any], data: dict[str, Any]) -> str:
+    field_names = (
+        "dept",
+        "department",
+        "department_name",
+        "dept_name",
+        "부서",
+        "귀속부서",
+        "청구부서",
+    )
+    for source in (item, data):
+        for key in field_names:
+            value = _clean_text(source.get(key) if isinstance(source, dict) else "")
+            if value and value != "소모품":
+                return value
+
+    contexts: list[str] = []
+    for source in (item, data):
+        if not isinstance(source, dict):
+            continue
+        for key in ("approval_pdf_path", "approval_path", "approval_title", "title", "subject", "raw_desc", "name", "item_name"):
+            value = source.get(key)
+            if value:
+                contexts.append(str(value))
+        paths = source.get("approval_pdf_paths")
+        if isinstance(paths, list):
+            contexts.extend(str(path) for path in paths if path)
+
+    dept_tokens = ("팀", "부", "과", "실", "센터", "전산", "인사", "총무", "회계", "구매", "영업", "생산", "품질", "관리", "기술", "개발")
+    for context in contexts:
+        for match in re.finditer(r"\(([^()]{1,30})\)", str(context)):
+            candidate = _clean_text(match.group(1))
+            if not candidate or "공장" in candidate:
+                continue
+            if any(token in candidate for token in dept_tokens):
+                candidate = re.sub(r"\d+팀$", "팀", candidate)
+                if candidate.startswith("인사총무"):
+                    return "인사"
+                return candidate
+    return ""
 
 
 def _vendor_match_text(*values: Any) -> str:
@@ -454,7 +501,17 @@ def _purchase_summary_name(value: Any) -> str:
     return text
 
 
-def _purchase_summary_label(items: list[dict[str, Any]]) -> tuple[str, int]:
+def _purchase_quantity_label(items: list[dict[str, Any]]) -> str:
+    cleaned = [item for item in items if isinstance(item, dict)]
+    if not cleaned:
+        return "1EA"
+    if len(cleaned) == 1:
+        qty = max(1, _to_int(cleaned[0].get("qty") or cleaned[0].get("quantity") or 1))
+        return f"{qty}EA"
+    return f"{len(cleaned)}건"
+
+
+def _purchase_summary_label(items: list[dict[str, Any]]) -> tuple[str, str]:
     cleaned = [item for item in items if isinstance(item, dict)]
     if not cleaned:
         return "구매품", 1
@@ -491,8 +548,8 @@ def _purchase_summary_label(items: list[dict[str, Any]]) -> tuple[str, int]:
 
     if not labels:
         labels = ["구매품"]
-    qty = sum(max(1, _to_int(item.get("qty") or item.get("quantity") or 1)) for item in cleaned) or 1
-    return ", ".join(labels), qty
+    qty_label = _purchase_quantity_label(cleaned)
+    return ", ".join(labels), qty_label
 
 
 def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
@@ -589,7 +646,7 @@ def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
             "supply": supply,
             "account": account,
             "is_a": is_asset,
-            "dept": _clean_text(item.get("dept")),
+            "dept": _purchase_dept_from_context(item, data),
             "raw_desc": item.get("raw_desc") or "",
         }
         if inc_vat > max_inc_vat:
@@ -622,16 +679,17 @@ def build_purchase_erp_payload(invoice: dict[str, Any]) -> dict[str, Any]:
         label = representative.get("name") or "구매품"
         if len(supply_items) > 1:
             label = f"{label} 외 {len(supply_items) - 1}건"
-        qty = sum(max(1, _to_int(item.get("qty") or 1)) for item in supply_items)
+        qty_label = _purchase_quantity_label(supply_items)
         supply = sum(_to_int(item.get("supply")) for item in supply_items)
-        rows.append(f"소모품비\t\t{supply}\t0\t{site} {label}({supply:,} - {qty}EA) - {vendor}")
+        rows.append(f"소모품비\t\t{supply}\t0\t{site} {label}({supply:,} - {qty_label}) - {vendor}")
 
-    summary_label, total_qty = _purchase_summary_label(items)
-    slip_summary = f"{site} {summary_label}({target_supply:,} - {total_qty}EA) - {vendor}"
+    summary_label, total_qty_label = _purchase_summary_label(items)
+    slip_summary = f"{site} {summary_label}({target_supply:,} - {total_qty_label}) - {vendor}"
     rows.append(f"부가세대급금\t\t{total_tax}\t0\tV.A.T - {slip_summary}")
     rows.append(f"가지급금(업체)\t\t0\t{total_sum}\t{slip_summary}")
 
     data_for_erp = {
+        "invoice_type": "purchase",
         "pdf_path": pdf_path,
         "site_name": site,
         "vendor_name": vendor,

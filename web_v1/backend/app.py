@@ -24,15 +24,17 @@ from .agent_queue import claim_next_erp_task, update_erp_task
 from .approval_fetcher import fetch_approval_documents
 from .compuzone_quote import auto_attach_compuzone_quote
 from .config import WEB_ROOT, settings
+from .mail_collector import mail_collect_processed_history
 from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
-from .models import InvoiceIdsRequest, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
+from .models import InvoiceIdsRequest, InvoiceStatusUpdate, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .notifications import notify_regular_auto_result
 from .output_set import build_output_set_status, generate_expense_report_pdf
-from .regular_due_monitor import regular_due_history, regular_due_status, send_regular_due_report, start_regular_due_scheduler
+from .regular_due_monitor import regular_due_history, regular_due_status, send_regular_due_report, send_regular_due_vendor_alert_sample, start_regular_due_scheduler
 from .erp_queue import queue_dir, write_expense_report_queue
-from .erp_runner import build_regular_erp_payload
+from .erp_runner import build_regular_erp_payload, requires_erp_save_confirmation, _site_from_biz_no, _site_from_known_text
 from .purchase_analysis import (
+    ACCOUNT_CHOICES,
     _extract_amounts_from_tax,
     _extract_date,
     _extract_order_no_from_quote,
@@ -128,6 +130,58 @@ def _invoice_data(invoice: dict[str, Any] | None) -> dict[str, Any]:
     if isinstance(data, dict):
         merged.update(data)
     return merged
+
+
+def _resolve_purchase_site_name(invoice: dict[str, Any], payload: dict[str, Any]) -> str:
+    raw = invoice.get("raw") if isinstance(invoice.get("raw"), dict) else {}
+    raw_data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
+
+    for candidate in (
+        payload.get("site_name"),
+        raw_data.get("site_name"),
+        raw.get("site_name"),
+        invoice.get("site_name"),
+    ):
+        site = _site_from_known_text(candidate)
+        if site:
+            return site
+
+    for candidate in (
+        payload.get("buyer_biz_no"),
+        payload.get("buyer_business_no"),
+        payload.get("matched_biz_no"),
+        raw_data.get("buyer_biz_no"),
+        raw_data.get("buyer_business_no"),
+        raw_data.get("matched_biz_no"),
+        raw.get("buyer_biz_no"),
+        raw.get("buyer_business_no"),
+        raw.get("matched_biz_no"),
+        invoice.get("buyer_biz_no"),
+        invoice.get("buyer_business_no"),
+        invoice.get("matched_biz_no"),
+    ):
+        site = _site_from_biz_no(candidate)
+        if site:
+            return site
+
+    approval_paths = payload.get("approval_pdf_paths") or raw_data.get("approval_pdf_paths") or raw.get("approval_pdf_paths") or []
+    if isinstance(approval_paths, str):
+        approval_paths = [approval_paths]
+    for candidate in (
+        *approval_paths,
+        payload.get("pdf_path"),
+        raw_data.get("pdf_path"),
+        raw.get("pdf_path"),
+        invoice.get("pdf_path"),
+        payload.get("subject"),
+        raw.get("subject"),
+        invoice.get("subject"),
+    ):
+        site = _site_from_known_text(candidate)
+        if site:
+            return site
+
+    return str(payload.get("site_name") or raw_data.get("site_name") or raw.get("site_name") or invoice.get("site_name") or "").strip()
 
 
 def _invoice_is_zoom_billing(invoice: dict[str, Any] | None) -> bool:
@@ -330,6 +384,7 @@ def _queue_expense_report_after_erp(
     agent_id: str,
     target_client_ip: str,
     source_job_id: str,
+    document_author: str,
 ) -> bool:
     invoice = get_invoice(invoice_id)
     if not invoice or str(invoice.get("invoice_type") or "").lower() != "purchase":
@@ -341,6 +396,7 @@ def _queue_expense_report_after_erp(
     if not str(agent_id or "").strip() or not str(target_client_ip or "").strip():
         add_invoice_log(invoice_id, "ERP 완료 후 현금출금결의서 자동 생성 보류: 담당자 PC Agent 식별 정보 없음", level="error", job_id=source_job_id)
         return False
+    invoice = _set_expense_report_author(invoice, document_author)
 
     job = job_store.create(
         JobCreateRequest(
@@ -350,6 +406,8 @@ def _queue_expense_report_after_erp(
                 "invoice_id": invoice_id,
                 "source_job_id": source_job_id,
                 "auto_after_erp": True,
+                "processor": document_author,
+                "document_author": document_author,
                 "target_agent_id": agent_id,
                 "target_client_ip": target_client_ip,
             },
@@ -455,6 +513,10 @@ def _output_print_task(job_id: str) -> dict[str, Any]:
     return payload if isinstance(payload, dict) else {}
 
 
+def _output_print_file_key(invoice_id: Any, file_index: Any) -> str:
+    return f"{int(invoice_id or 0)}:{int(file_index or 0)}"
+
+
 def _job_time(value: Any) -> str:
     return value.isoformat(timespec="seconds") if hasattr(value, "isoformat") else ""
 
@@ -463,7 +525,7 @@ def _mail_collect_job_running(job: Any) -> bool:
     return bool(job and getattr(job, "status", "") not in {"done", "error"})
 
 
-def _queue_mail_collect_job(*, auto: bool) -> Any:
+def _queue_mail_collect_job(*, auto: bool, force_recent_scan: bool = False) -> Any:
     global _mail_collect_last_job_id
     with _mail_collect_scheduler_lock:
         current = job_store.get(_mail_collect_last_job_id) if _mail_collect_last_job_id else None
@@ -473,7 +535,7 @@ def _queue_mail_collect_job(*, auto: bool) -> Any:
             JobCreateRequest(
                 job_type="purchase_mail_collect",
                 title="구매 메일 자동 수집" if auto else "구매 메일 수집",
-                payload={"auto": auto},
+                payload={"auto": auto, "force_recent_scan": force_recent_scan},
             )
         )
         _mail_collect_last_job_id = job.id
@@ -497,6 +559,8 @@ def _mail_collect_status() -> dict[str, Any]:
         "saved_count": int(result.get("saved_count") or 0) if isinstance(result, dict) else 0,
         "duplicate_count": int(result.get("duplicate_count") or 0) if isinstance(result, dict) else 0,
         "failed_count": int(result.get("failed_count") or 0) if isinstance(result, dict) else 0,
+        "deferred_count": int(result.get("deferred_count") or 0) if isinstance(result, dict) else 0,
+        "ignored_count": int(result.get("ignored_count") or 0) if isinstance(result, dict) else 0,
         "auto_analyzed_count": int(result.get("auto_analyzed_count") or 0) if isinstance(result, dict) else 0,
         "errors": result.get("errors", []) if isinstance(result, dict) and isinstance(result.get("errors"), list) else [],
     }
@@ -1110,6 +1174,8 @@ $RequirementsPath = Join-Path $InstallRoot "web_v1\backend\requirements.txt"
 if (-not (Test-Path $RequirementsPath)) { throw "requirements.txt not found after setup copy: $RequirementsPath" }
 & $Python -m pip install -r $RequirementsPath
 if ($LASTEXITCODE -ne 0) { throw "Python package install failed. ExitCode=$LASTEXITCODE" }
+& $Python -c "import pyautogui, pyperclip, pywinauto, psutil, win32gui, win32con, win32print, fitz, PIL"
+if ($LASTEXITCODE -ne 0) { throw "Required Python package import verification failed." }
 
 Write-Host "[회계업무 WEB] WEB HTTPS 인증서를 신뢰 저장소에 등록합니다."
 $CertDir = "C:\ERP_DB\certs"
@@ -1364,6 +1430,30 @@ def client_ip(request: Request) -> str:
     return forwarded or (request.client.host if request.client else "")
 
 
+def _request_processor_name(
+    request: Request,
+    requested_processor: Any,
+    setup: dict[str, Any] | None = None,
+) -> str:
+    profile = setup if isinstance(setup, dict) else {}
+    if not profile.get("user_id"):
+        profile = latest_agent_profile(client_ip=client_ip(request)) or profile
+    processor = resolve_user_display_name(profile.get("user_id"), requested_processor)
+    if not processor:
+        raise HTTPException(
+            status_code=409,
+            detail="로그인 사용자와 담당자 PC 연결을 확인할 수 없습니다. 로그아웃 후 다시 로그인하세요.",
+        )
+    return processor
+
+
+def _completed_processor_name(*identity_values: Any, regular_auto: bool = False) -> str:
+    processor = resolve_user_display_name(*identity_values)
+    if processor:
+        return processor
+    return "자동처리" if regular_auto else "담당자 미확인"
+
+
 
 
 def _agent_update_notes() -> str:
@@ -1425,10 +1515,31 @@ def api_regular_due_check(
     if send:
         return send_regular_due_report(date or None, force=force)
     return regular_due_status(date or None)
+@app.post("/api/regular-due/vendor-alert/sample")
+def api_regular_due_vendor_alert_sample(
+    key: str = Query(default="kt", max_length=64),
+    to: str = Query(default="rlckd2201@gmail.com", max_length=200),
+    date: str = Query(default="", max_length=20),
+) -> dict[str, Any]:
+    try:
+        return send_regular_due_vendor_alert_sample(key, to, date or None)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except Exception as exc:
+        logging.exception("regular due vendor alert sample failed: %s", exc)
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 @app.get("/api/mail-collect/status")
 def api_mail_collect_status() -> dict[str, Any]:
     return _mail_collect_status()
+
+
+@app.get("/api/mail-collect/history")
+def api_mail_collect_history(
+    limit: int = Query(default=200, ge=1, le=1000),
+    q: str = Query(default="", max_length=200),
+) -> dict[str, Any]:
+    return {"items": mail_collect_processed_history(limit=limit, query=q)}
 
 
 @app.get("/api/regular-auto/status")
@@ -1650,7 +1761,9 @@ async def api_agent_next_task(request: Request) -> Any:
         if job_type == "expense_report":
             job_store.add_event(job_id, "erp", 80, f"담당자 PC Agent 현금출금결의서 생성 시작: {task.get('agent_id')}")
         elif job_type == "output_print":
-            job_store.add_event(job_id, "printing", 92, f"담당자 PC Agent 출력 시작: {task.get('agent_id')}")
+            retry_count = int(task.get("output_retry_count") or 0)
+            retry_note = f" / 재시도 {retry_count}회" if retry_count else ""
+            job_store.add_event(job_id, "printing", 92, f"담당자 PC Agent 출력 시작: {task.get('agent_id')}{retry_note}")
         else:
             job_store.add_event(job_id, "erp", 80, f"ERP Agent claimed task: {task.get('agent_id')}")
     return task
@@ -1665,6 +1778,28 @@ async def api_agent_job_event(job_id: str, request: Request) -> dict[str, Any]:
         status = "erp"
     progress = int(payload.get("progress") or 90)
     message = str(payload.get("message") or "")
+    completed_print_file = payload.get("completed_print_file")
+    if isinstance(completed_print_file, dict):
+        try:
+            completed_key = _output_print_file_key(
+                completed_print_file.get("invoice_id"),
+                completed_print_file.get("file_index"),
+            )
+            task = _output_print_task(job_id)
+            if str(task.get("job_type") or "") == "output_print":
+                completed_keys = {
+                    str(value).strip()
+                    for value in (task.get("completed_file_keys") or [])
+                    if str(value).strip()
+                }
+                completed_keys.add(completed_key)
+                update_erp_task(
+                    job_id,
+                    str(task.get("agent_status") or "claimed"),
+                    {"completed_file_keys": sorted(completed_keys)},
+                )
+        except Exception:
+            logging.exception("Failed to checkpoint output print file: job=%s", job_id)
     if job_store.get(job_id):
         job_store.add_event(job_id, status, progress, message)
     for invoice_id in payload.get("invoice_ids") or []:
@@ -1802,6 +1937,7 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
     touch_agent_seen(agent_id, client_ip=client_ip(request))
     message = str(payload.get("message") or ("ERP Agent completed" if ok else "ERP Agent failed"))
     successes = payload.get("successes") if isinstance(payload.get("successes"), list) else []
+    failures = payload.get("failures") if isinstance(payload.get("failures"), list) else []
     success_by_invoice_id = {
         int(item.get("invoice_id")): item
         for item in successes
@@ -1825,6 +1961,50 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
         regular_auto_output = bool(output_payload.get("regular_auto") or task_payload.get("regular_auto"))
         output_printer_key = str(output_payload.get("printer_key") or task_payload.get("printer_key") or "pyeongtaek")
         output_printer_name = str(output_payload.get("printer_name") or task_payload.get("printer_name") or "")
+        if not ok:
+            retry_count = int(task_payload.get("output_retry_count") or 0)
+            all_file_keys = {
+                _output_print_file_key(item.get("invoice_id"), item.get("file_index"))
+                for item in (task_payload.get("print_files") or [])
+                if isinstance(item, dict)
+            }
+            completed_file_keys = {
+                str(value).strip()
+                for value in (task_payload.get("completed_file_keys") or [])
+                if str(value).strip()
+            }
+            for success in successes:
+                if not isinstance(success, dict):
+                    continue
+                completed_file_keys.update(
+                    str(value).strip()
+                    for value in (success.get("printed_file_keys") or [])
+                    if str(value).strip()
+                )
+            remaining_file_keys = all_file_keys - completed_file_keys
+            if remaining_file_keys and retry_count < 2:
+                retry_message = (
+                    f"담당자 PC 출력 일부 실패: 완료 {len(completed_file_keys)}/{len(all_file_keys)}개, "
+                    f"미출력 {len(remaining_file_keys)}개를 자동 재시도합니다. ({retry_count + 1}/2)"
+                )
+                update_erp_task(
+                    job_id,
+                    "retry",
+                    {
+                        "output_retry_count": retry_count + 1,
+                        "completed_file_keys": sorted(completed_file_keys),
+                        "last_output_error": message,
+                        "last_output_failures": failures,
+                    },
+                )
+                if output_job:
+                    job_store.set_result(job_id, {"agent_print": dict(payload), "retry_scheduled": True})
+                    job_store.add_event(job_id, "printing", 95, retry_message)
+                if source_job_id and job_store.get(source_job_id):
+                    job_store.add_event(source_job_id, "printing", 99, retry_message)
+                for invoice_id in invoice_ids:
+                    add_invoice_log(invoice_id, retry_message, level="error", job_id=job_id)
+                return {"ok": True, "retry_scheduled": True, "remaining_files": len(remaining_file_keys)}
         for invoice_id in invoice_ids:
             add_invoice_log(invoice_id, message, level="info" if ok else "error", job_id=job_id)
             if ok:
@@ -1835,10 +2015,19 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
                     except Exception:
                         output_status = {}
                     if output_status.get("ready"):
+                        refreshed_data = _invoice_data(refreshed_invoice)
+                        output_processor = _completed_processor_name(
+                            output_payload.get("processor"),
+                            task_payload.get("processor"),
+                            refreshed_data.get("expense_author"),
+                            refreshed_data.get("processor"),
+                            refreshed_invoice.get("processor"),
+                            regular_auto=regular_auto_output,
+                        )
                         set_invoice_status(
                             invoice_id,
                             DONE,
-                            processor=normalize_processor(agent_id) or "ERP Agent",
+                            processor=output_processor,
                             job_id=job_id,
                             processed=True,
                         )
@@ -1945,8 +2134,34 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
             refreshed_invoice = get_invoice(invoice_id)
             if refreshed_invoice:
                 build_output_set_status(refreshed_invoice, persist=True)
-        display_processor = normalize_processor(agent_id) or "ERP Agent"
+        requested_processor = str(source_context.get("processor") or task_payload.get("processor") or "").strip()
+        current_invoice = get_invoice(invoice_id) or {}
+        current_data = _invoice_data(current_invoice)
+        regular_auto = bool(source_context.get("regular_auto") or task_payload.get("regular_auto"))
+        display_processor = _completed_processor_name(
+            requested_processor,
+            source_context.get("document_author"),
+            task_payload.get("document_author"),
+            current_data.get("expense_author"),
+            current_data.get("processor"),
+            current_invoice.get("processor"),
+            regular_auto=regular_auto,
+        )
         set_invoice_status(invoice_id, DONE if invoice_ok else ERROR, processor=display_processor, job_id=job_id, processed=invoice_ok, error="" if invoice_ok else message)
+        if invoice_ok:
+            identity_update = {"processor": display_processor}
+            is_purchase = str(current_invoice.get("invoice_type") or "").strip().lower() == "purchase"
+            if is_purchase:
+                identity_update["expense_author"] = display_processor
+            update_invoice_json(
+                invoice_id,
+                identity_update,
+                message=(
+                    f"현금출금정산서 작성자 확정: {display_processor}"
+                    if is_purchase
+                    else f"처리 담당자 확정: {display_processor}"
+                ),
+            )
         if invoice_ok and bool(source_context.get("regular_auto")):
             update_invoice_json(
                 invoice_id,
@@ -1964,6 +2179,7 @@ async def api_agent_job_complete(job_id: str, request: Request) -> dict[str, Any
                 agent_id=agent_id,
                 target_client_ip=str(task_payload.get("target_client_ip") or client_ip(request)).strip(),
                 source_job_id=job_id,
+                document_author=display_processor,
             )
     source_job = job_store.get(job_id)
     if ok and source_job and bool(source_job.payload.get("one_click")) and str(source_job.payload.get("one_click_mode") or "").lower() == "regular":
@@ -2247,9 +2463,8 @@ def create_demo_job() -> JobResponse:
 
 
 @app.post("/api/jobs/purchase-mail-collect", response_model=JobResponse, status_code=202)
-def create_purchase_mail_collect_job(request: Request) -> JobResponse:
-    require_setup_ready(request)
-    job = _queue_mail_collect_job(auto=False)
+def create_purchase_mail_collect_job() -> JobResponse:
+    job = _queue_mail_collect_job(auto=False, force_recent_scan=True)
     return job.to_response()
 
 
@@ -2258,7 +2473,29 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="원클릭 처리할 구매 건을 선택해야 합니다.")
     setup = require_setup_ready(request)
+    processor = _request_processor_name(request, body.processor, setup)
     output = _one_click_output_payload(body.output_target, setup)
+    # Guard before saving the browser-side analysis. update_invoice_json clears
+    # last_error, so doing this check afterwards could erase the post-save
+    # confirmation marker and allow a duplicate ERP voucher retry.
+    for raw_id in body.invoice_ids:
+        invoice_id = int(raw_id)
+        invoice = get_invoice(invoice_id)
+        if requires_erp_save_confirmation(invoice):
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    f"#{invoice_id}은 ERP 저장 명령 이후 출력에 실패한 건입니다. "
+                    "K-System에서 기존 전표가 저장됐는지 먼저 확인하십시오. "
+                    "확인 후 오류 건을 '대기 상태로 변경'해야 다시 처리할 수 있습니다."
+                ),
+            )
+    if len(body.invoice_ids) == 1 and isinstance(body.analysis, dict) and body.analysis.get("items"):
+        _apply_purchase_analysis_payload(
+            int(body.invoice_ids[0]),
+            dict(body.analysis),
+            message="구매 원클릭 ERP 입력 전 화면 값을 자동 저장했습니다.",
+        )
     ready_output_ids: list[int] = []
     erp_invoice_ids: list[int] = []
     for raw_id in body.invoice_ids:
@@ -2279,7 +2516,7 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
                     "action": output["action"],
                     "printer_key": output["printer_key"],
                     "printer_name": output["printer_name"],
-                    "processor": body.processor or "WEB v1.0",
+                    "processor": processor,
                     "target_agent_id": setup.get("agent_id") or "",
                     "target_client_ip": setup.get("client_ip") or client_ip(request),
                     "existing_only": True,
@@ -2297,7 +2534,7 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
                 "invoice_ids": body.invoice_ids,
                 "erp_invoice_ids": erp_invoice_ids,
                 "ready_output_invoice_ids": ready_output_ids,
-                "processor": body.processor or "WEB v1.0",
+                "processor": processor,
                 "target_agent_id": setup.get("agent_id") or "",
                 "target_client_ip": setup.get("client_ip") or client_ip(request),
                 "one_click": True,
@@ -2317,9 +2554,12 @@ def create_regular_one_click_job(body: InvoiceIdsRequest, request: Request) -> J
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="원클릭 처리할 정기 건을 선택해야 합니다.")
     setup = require_setup_ready(request)
+    processor = _request_processor_name(request, body.processor, setup)
     output = _one_click_output_payload(body.output_target, setup)
     ready_output_ids: list[int] = []
     erp_invoice_ids: list[int] = []
+    zoom_output_ids: set[int] = set()
+    zoom_block_reasons: list[str] = []
     for raw_id in body.invoice_ids:
         invoice_id = int(raw_id)
         invoice = get_invoice(invoice_id)
@@ -2329,26 +2569,55 @@ def create_regular_one_click_job(body: InvoiceIdsRequest, request: Request) -> J
             raise HTTPException(status_code=400, detail=f"정기 처리 대상이 아닌 계산서가 포함되어 있습니다: #{invoice_id}")
         if _invoice_output_set_ready(invoice, "regular"):
             ready_output_ids.append(invoice_id)
-            add_invoice_log(invoice_id, "기존 정기 문서 세트가 모두 준비되어 ERP 전표 생성 단계를 건너뜁니다.")
+            if _invoice_is_zoom_billing(invoice):
+                add_invoice_log(invoice_id, "Zoom 청구서 문서 세트가 준비되어 ERP 전표 생성 단계를 건너뜁니다.")
+            else:
+                add_invoice_log(invoice_id, "기존 정기 문서 세트가 모두 준비되어 ERP 전표 생성 단계를 건너뜁니다.")
+        elif _invoice_is_zoom_billing(invoice):
+            if not _expense_report_exists(invoice):
+                queued = _queue_zoom_expense_report_to_agent(
+                    invoice,
+                    profile={
+                        "agent_id": setup.get("agent_id") or "",
+                        "client_ip": setup.get("client_ip") or client_ip(request),
+                    },
+                    document_author=processor,
+                )
+                if queued:
+                    zoom_block_reasons.append(f"#{invoice_id}: Zoom expense report queued to user PC Agent; run one-click again after upload")
+                    continue
+            output_status = build_output_set_status(invoice, persist=True)
+            if bool(output_status.get("can_output")):
+                ready_output_ids.append(invoice_id)
+                zoom_output_ids.add(invoice_id)
+                add_invoice_log(invoice_id, "Zoom 청구서는 ERP 입력 없이 청구서/현금출금결의서 문서 세트를 생성해 출력합니다.")
+            else:
+                reason = str(output_status.get("message") or output_status.get("blockers") or "청구서/현금출금결의서 준비 필요")
+                zoom_block_reasons.append(f"#{invoice_id}: {reason}")
+                add_invoice_log(invoice_id, f"Zoom 청구서 문서 세트 생성 보류: {reason}", level="error")
         else:
             erp_invoice_ids.append(invoice_id)
     if not ready_output_ids and not erp_invoice_ids:
-        raise HTTPException(status_code=400, detail="처리할 정기 계산서를 찾지 못했습니다.")
+        detail = "처리할 정기 계산서를 찾지 못했습니다."
+        if zoom_block_reasons:
+            detail = "Zoom 청구서는 ERP 입력 대상이 아니며 문서세트 생성 조건이 아직 부족합니다. " + " / ".join(zoom_block_reasons)
+        raise HTTPException(status_code=400, detail=detail)
     if ready_output_ids and not erp_invoice_ids:
+        existing_only = not bool(zoom_output_ids)
         job = job_store.create(
             JobCreateRequest(
                 job_type="output_set",
-                title=f"기존 정기 문서 출력 {len(ready_output_ids)}건",
+                title=f"Zoom/정기 문서 출력 {len(ready_output_ids)}건" if zoom_output_ids else f"기존 정기 문서 출력 {len(ready_output_ids)}건",
                 payload={
                     "invoice_ids": ready_output_ids,
                     "action": output["action"],
                     "printer_key": output["printer_key"],
                     "printer_name": output["printer_name"],
-                    "processor": body.processor or "WEB v1.0",
+                    "processor": processor,
                     "target_agent_id": setup.get("agent_id") or "",
                     "target_client_ip": setup.get("client_ip") or client_ip(request),
-                    "existing_only": True,
-                    "one_click_existing_only": True,
+                    "existing_only": existing_only,
+                    "one_click_existing_only": existing_only,
                 },
             )
         )
@@ -2362,7 +2631,7 @@ def create_regular_one_click_job(body: InvoiceIdsRequest, request: Request) -> J
                 "invoice_ids": body.invoice_ids,
                 "erp_invoice_ids": erp_invoice_ids,
                 "ready_output_invoice_ids": ready_output_ids,
-                "processor": body.processor or "WEB v1.0",
+                "processor": processor,
                 "target_agent_id": setup.get("agent_id") or "",
                 "target_client_ip": setup.get("client_ip") or client_ip(request),
                 "one_click": True,
@@ -2380,7 +2649,8 @@ def create_regular_one_click_job(body: InvoiceIdsRequest, request: Request) -> J
 
 @app.post("/api/jobs/purchase-analyze", response_model=JobResponse, status_code=202)
 def create_purchase_analyze_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
-    require_setup_ready(request)
+    setup = require_setup_ready(request)
+    processor = _request_processor_name(request, body.processor, setup)
     if len(body.invoice_ids) != 1:
         raise HTTPException(status_code=400, detail="구매 분석은 1건씩 실행해야 합니다.")
     invoice_id = int(body.invoice_ids[0])
@@ -2388,7 +2658,7 @@ def create_purchase_analyze_job(body: InvoiceIdsRequest, request: Request) -> Jo
         JobCreateRequest(
             job_type="purchase_analyze",
             title=f"구매 분석 #{invoice_id}",
-            payload={"invoice_id": invoice_id},
+            payload={"invoice_id": invoice_id, "processor": processor},
         )
     )
     worker.submit(job)
@@ -2400,13 +2670,14 @@ def create_purchase_erp_input_job(body: InvoiceIdsRequest, request: Request) -> 
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="ERP 입력할 구매 건을 선택해야 합니다.")
     setup = require_setup_ready(request)
+    processor = _request_processor_name(request, body.processor, setup)
     job = job_store.create(
         JobCreateRequest(
             job_type="purchase_erp_input",
             title=f"구매 ERP 입력 실행 {len(body.invoice_ids)}건",
             payload={
                 "invoice_ids": body.invoice_ids,
-                "processor": body.processor or "WEB v1.0",
+                "processor": processor,
                 "target_agent_id": setup.get("agent_id") or "",
                 "target_client_ip": setup.get("client_ip") or client_ip(request),
             },
@@ -2421,6 +2692,7 @@ def create_regular_erp_input_job(body: InvoiceIdsRequest, request: Request) -> J
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="ERP 입력할 정기 건을 선택해야 합니다.")
     setup = require_setup_ready(request)
+    processor = _request_processor_name(request, body.processor, setup)
     for invoice_id in body.invoice_ids:
         invoice = get_invoice(int(invoice_id))
         if not invoice:
@@ -2433,7 +2705,7 @@ def create_regular_erp_input_job(body: InvoiceIdsRequest, request: Request) -> J
             title=f"정기 ERP 입력 실행 {len(body.invoice_ids)}건",
             payload={
                 "invoice_ids": body.invoice_ids,
-                "processor": body.processor or "WEB v1.0",
+                "processor": processor,
                 "target_agent_id": setup.get("agent_id") or "",
                 "target_client_ip": setup.get("client_ip") or client_ip(request),
             },
@@ -2447,14 +2719,61 @@ def create_regular_erp_input_job(body: InvoiceIdsRequest, request: Request) -> J
 def create_output_set_job(body: OutputSetRequest, request: Request) -> JobResponse:
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="출력 세트를 만들 건을 선택해야 합니다.")
-    setup = require_setup_ready(request)
+    setup = require_setup_ready(request) if body.action == "print_individual" else {}
+    processor = _request_processor_name(request, body.processor, setup)
     selected_doc_keys = [str(key).strip() for key in body.selected_doc_keys if str(key).strip()]
     printer_name = ""
     if body.action == "print_individual":
+        if body.printer_key == "pdf":
+            raise HTTPException(
+                status_code=400,
+                detail="Microsoft Print to PDF는 개별 출력 대상이 아닙니다. 개별 PDF 저장 또는 통합본 PDF 저장을 사용하세요.",
+            )
         mapping = setup.get("capabilities", {}).get("printer_mapping", {})
         printer_name = str(mapping.get(body.printer_key) or "").strip()
         if not printer_name:
             raise HTTPException(status_code=400, detail="선택한 출력 대상 프린터 매핑이 없습니다.")
+        normalized_printer_name = printer_name.casefold()
+        if "microsoft print to pdf" in normalized_printer_name:
+            raise HTTPException(
+                status_code=400,
+                detail="Microsoft Print to PDF는 개별 출력 대상이 아닙니다. 개별 PDF 저장 또는 통합본 PDF 저장을 사용하세요.",
+            )
+    target_profile = {
+        "agent_id": setup.get("agent_id") or "",
+        "client_ip": setup.get("client_ip") or settings.regular_auto_agent_ip or client_ip(request),
+        "user_id": setup.get("user_id") or "",
+    }
+    for raw_id in body.invoice_ids:
+        invoice = get_invoice(int(raw_id))
+        if not invoice or not _invoice_is_zoom_billing(invoice):
+            continue
+        if _expense_report_exists(invoice):
+            continue
+        if not setup:
+            setup = require_setup_ready(request)
+            target_profile = {
+                "agent_id": setup.get("agent_id") or "",
+                "client_ip": setup.get("client_ip") or settings.regular_auto_agent_ip or client_ip(request),
+                "user_id": setup.get("user_id") or "",
+            }
+        queued = _queue_zoom_expense_report_to_agent(
+            invoice,
+            profile=target_profile,
+            document_author=processor,
+        )
+        if queued:
+            job_store.add_event(
+                queued.id,
+                "erp",
+                75,
+                "Zoom expense report queued before output-set request",
+            )
+            return queued.to_response()
+        raise HTTPException(
+            status_code=409,
+            detail="Zoom expense report could not be queued to user PC Agent. Check the setup profile and Agent connection.",
+        )
     action_label = {
         "merged_pdf": "통합본 PDF 저장",
         "individual_pdf": "개별 PDF 저장",
@@ -2469,7 +2788,7 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
                 "action": body.action,
                 "printer_key": body.printer_key,
                 "printer_name": printer_name,
-                "processor": body.processor or "WEB v1.0",
+                "processor": processor,
                 "target_agent_id": setup.get("agent_id") or "",
                 "target_client_ip": setup.get("client_ip") or client_ip(request),
                 "existing_only": body.existing_only,
@@ -2802,6 +3121,10 @@ def api_analyze_purchase(invoice_id: int) -> dict[str, Any]:
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     ai_note = "AI 분석 사용" if analysis.get("analysis_ai_used") else ("AI 분석 시도 후 빠른 파싱 사용" if analysis.get("analysis_ai_attempted") else "학습 DB/빠른 파싱 사용")
+    if analysis.get("analysis_ai_used"):
+        learned_count = learn_dictionary_items(list(analysis.get("items") or []), include_system_adjustments=True)
+        if learned_count:
+            add_invoice_log(invoice_id, f"Gemini analysis learned dictionary updated: {learned_count}")
     updated = update_invoice_json(invoice_id, analysis, message=f"구매 세금계산서/견적서 분석 결과가 저장되었습니다. ({ai_note})")
     _start_purchase_approval_fetch_background(invoice_id, str(analysis.get("quote_path") or analysis.get("quote_pdf_path") or ""))
     reset_invoice(invoice_id)
@@ -2896,10 +3219,12 @@ def api_generate_expense_report(invoice_id: int, request: Request) -> dict[str, 
     if str(invoice.get("invoice_type") or "").lower() != "purchase":
         raise HTTPException(status_code=400, detail="구매 처리 건에만 현금출금결의서를 생성할 수 있습니다.")
     setup = require_setup_ready(request)
+    processor = _request_processor_name(request, "", setup)
     target_agent_id = str(setup.get("agent_id") or "").strip()
     target_client_ip = str(setup.get("client_ip") or client_ip(request)).strip()
     if not target_agent_id or not target_client_ip:
         raise HTTPException(status_code=409, detail="담당자 PC 필수 프로그램이 연결되어야 현금출금결의서를 생성할 수 있습니다.")
+    invoice = _set_expense_report_author(invoice, processor)
 
     job = job_store.create(
         JobCreateRequest(
@@ -2907,6 +3232,8 @@ def api_generate_expense_report(invoice_id: int, request: Request) -> dict[str, 
             title=f"현금출금결의서 생성 #{invoice_id}",
             payload={
                 "invoice_id": invoice_id,
+                "processor": processor,
+                "document_author": processor,
                 "target_agent_id": target_agent_id,
                 "target_client_ip": target_client_ip,
             },
@@ -2979,8 +3306,7 @@ def api_generate_expense_report(invoice_id: int, request: Request) -> dict[str, 
     return refreshed or {"ok": True, "invoice_id": invoice_id, "expense_report_pdf_path": path, "output_docs": output_docs}
 
 
-@app.patch("/api/invoices/{invoice_id}/purchase-analysis")
-def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdate) -> dict[str, Any]:
+def _apply_purchase_analysis_payload(invoice_id: int, payload: dict[str, Any], *, message: str) -> dict[str, Any]:
     invoice = get_invoice(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -2988,8 +3314,8 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
     raw = dict(invoice.get("raw") or {})
     data = raw.get("data") if isinstance(raw.get("data"), dict) else {}
     quote_path = data.get("quote_path") or raw.get("quote_path") or ""
-    approval_pdf_paths = request.approval_pdf_paths or data.get("approval_pdf_paths") or raw.get("approval_pdf_paths") or []
-    payload = request.model_dump()
+    approval_pdf_paths = payload.get("approval_pdf_paths") or data.get("approval_pdf_paths") or raw.get("approval_pdf_paths") or []
+    payload = dict(payload or {})
     date_digits = "".join(ch for ch in str(payload.get("invoice_date") or "") if ch.isdigit())
     if len(date_digits) >= 4 and int(date_digits[:4]) < 2020:
         repaired_date = extract_purchase_date_from_path(str(invoice.get("pdf_path") or raw.get("pdf_path") or data.get("pdf_path") or ""))
@@ -2997,7 +3323,21 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
             payload["invoice_date"] = repaired_date
     items = payload.get("items")
     if isinstance(items, list):
-        payload["items"] = _normalize_items_for_display(items)
+        manual_items: list[dict[str, Any]] = []
+        for source in items:
+            if not isinstance(source, dict):
+                continue
+            item = dict(source)
+            account = str(item.get("account") or "").strip()
+            if account in ACCOUNT_CHOICES:
+                item["account_manual"] = True
+                item["manual_account"] = True
+                item["account_source"] = "manual"
+                item["is_a"] = account != "소모품비"
+                if account == "소모품비":
+                    item["dept"] = "소모품"
+            manual_items.append(item)
+        payload["items"] = _normalize_items_for_display(manual_items)
     payload.update(
         {
             "quote_path": quote_path,
@@ -3007,14 +3347,15 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
             "erp_ready": bool(payload.get("items")),
         }
     )
+    payload["site_name"] = _resolve_purchase_site_name(invoice, payload)
     changed = before_snapshot != _purchase_edit_snapshot(payload)
     if not changed:
         refreshed = get_invoice(invoice_id) or invoice
         if isinstance(refreshed, dict):
             refreshed["output_docs"] = build_output_set_status(refreshed, persist=True)
         return refreshed
-    learned_count = learn_dictionary_items(list(payload.get("items") or []))
-    updated = update_invoice_json(invoice_id, payload, message="구매 분석 결과를 화면에서 수정 저장했습니다.")
+    learned_count = learn_dictionary_items(list(payload.get("items") or []), include_system_adjustments=True)
+    updated = update_invoice_json(invoice_id, payload, message=message)
     if learned_count:
         from .invoice_db import add_invoice_log
 
@@ -3022,6 +3363,15 @@ def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdat
     _start_purchase_approval_fetch_background(invoice_id, str(quote_path or ""))
     reset_invoice(invoice_id)
     return get_invoice(invoice_id) or updated or {"ok": True, "invoice_id": invoice_id}
+
+
+@app.patch("/api/invoices/{invoice_id}/purchase-analysis")
+def api_update_purchase_analysis(invoice_id: int, request: PurchaseAnalysisUpdate) -> dict[str, Any]:
+    return _apply_purchase_analysis_payload(
+        invoice_id,
+        request.model_dump(),
+        message="구매 분석 결과를 화면에서 수정 저장했습니다.",
+    )
 
 
 @app.patch("/api/invoices/{invoice_id}/regular-data")
@@ -3087,6 +3437,46 @@ def api_retry_invoice(invoice_id: int) -> dict[str, Any]:
     if not reset_invoice(invoice_id):
         raise HTTPException(status_code=404, detail="Invoice not found")
     return {"ok": True, "invoice_id": invoice_id, "status": WAITING}
+
+
+@app.patch("/api/invoices/{invoice_id}/status")
+def api_update_invoice_status(invoice_id: int, body: InvoiceStatusUpdate) -> dict[str, Any]:
+    invoice = get_invoice(invoice_id)
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    current_status = str(invoice.get("status") or "").strip()
+    if body.action == "done":
+        allowed_statuses = {ERROR, WAITING}
+        if current_status not in allowed_statuses:
+            raise HTTPException(status_code=409, detail="오류 또는 대기중 상태인 건만 수동으로 완료 처리할 수 있습니다.")
+    elif current_status != ERROR:
+        raise HTTPException(status_code=409, detail="오류 상태인 건만 대기중으로 변경할 수 있습니다.")
+
+    if body.action == "done":
+        target_status = DONE
+        changed = set_invoice_status(
+            invoice_id,
+            target_status,
+            processed=True,
+            log_message=f"관리자 수동 상태 변경: {current_status} → 처리완료",
+        )
+    else:
+        target_status = WAITING
+        changed = set_invoice_status(
+            invoice_id,
+            target_status,
+            processor="",
+            log_message="관리자 수동 상태 변경: 오류 → 대기중",
+        )
+    if not changed:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    refreshed = get_invoice(invoice_id)
+    return {
+        "ok": True,
+        "invoice_id": invoice_id,
+        "status": target_status,
+        "invoice": refreshed,
+    }
 
 
 @app.delete("/api/invoices/{invoice_id}")

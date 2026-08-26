@@ -1,7 +1,329 @@
+1.0.230
+- 구매 원클릭의 회계단위/전표관리단위/회계일은 고속 입력과 검증 생략 대상에서 제외했습니다.
+- 회계단위 선택과 핵심 필드 입력 뒤 K-System UI 연결을 다시 잡고 값을 검증합니다.
+- UI 연결 복구 또는 핵심값 검증 실패 시 그리드/저장 단계로 진행하지 않습니다.
+
+1.0.229
+
+- 일반 담당자 PC의 구매 ERP 입력에 전용 고속 프로필을 적용하고, 243PC 정기 자동처리의 기존 안정화 대기는 유지합니다.
+- 거래처 관리항목은 이전 행 팝업을 재사용하지 않으며 사업자번호가 정확히 일치하는 검색결과만 선택합니다.
+- RD Viewer·인쇄창·PDF 저장 실패를 즉시 오류로 전파하고, ERP 저장 여부 확인 전 동일 구매 건의 재처리를 차단합니다.
+
+1.0.228
+
+- WEHAGO 인쇄 실행 함수의 지역 time 모듈 참조 오류를 수정했습니다.
+- 네이티브 더존 인쇄창이 열리지 않을 때 Chrome PDF 대체 저장 단계가 정상 실행됩니다.
+
+1.0.227
+
+- WEHAGO 인쇄 첫 시도 전에 상주 인쇄 보조프로그램을 종료하지 않도록 변경하고, 첫 미리보기 실행이 실패한 경우에만 보조프로그램을 정리한 뒤 한 번 재시도합니다.
+- 더존 인쇄 미리보기가 끝내 실행되지 않아도 121 운영서버 Chrome에서 인증된 세금계산서 화면을 A4 PDF로 직접 저장하여 수신 목록 등록이 중단되지 않도록 보완합니다.
+
+1.0.226
+
+- WEHAGO 인쇄 버튼 클릭 후 웹 확인창, JavaScript 경고창, Chrome 외부 앱 실행 허용창을 처리한 뒤 더존 인쇄 미리보기가 실제로 실행됐는지 확인합니다.
+- 외부 앱 실행 허용 버튼의 문구가 `Duzon 열기`, `WehagoPrint 열기`처럼 표시되는 경우도 인식하며, 미리보기가 열리지 않았을 때만 인쇄 버튼을 한 번 재시도합니다.
+
+1.0.225
+
+- 대신아이씨티와 동양정보통신 세금계산서는 품목에 유지보수 또는 보수료 표식이 있는 경우에만 정기 수신 점검 건으로 인정합니다.
+- 같은 업체가 발행한 공사·설치 등 단건 세금계산서가 정기 유지보수 수신 건으로 잘못 표시되는 문제를 수정했습니다.
+
+1.0.224
+
+- 담당자 PC Agent 시작 시 현재 Agent가 사용하는 Python에서 누락된 필수 패키지를 자동 설치하고 다시 import하여 복구합니다.
+- 필수 프로그램 설치 및 Agent 시작 스크립트에서 `pywinauto`, `pywin32` 등 필수 모듈의 실제 import 성공 여부를 검증합니다.
+- 패키지 설치 또는 import가 실패하면 Agent를 정상 실행된 것처럼 시작하지 않고 명확한 설치 오류를 표시합니다.
+
+1.0.223
+
+- WEHAGO XML 다운로드가 일시 실패해도 생성된 세금계산서 PDF 본문에서 공급자, 공급받는자, 사업자번호, 작성일자, 금액, 품목을 다시 추출합니다.
+- HTML 기본문구가 섞여 `매입처(세금계산서)_보관용)`처럼 잘못 저장되던 파일명을 실제 세금계산서 정보로 자동 교정합니다.
+- WEHAGO 문서번호가 같은 기존 PDF를 파일명과 관계없이 찾아 중복 출력 없이 올바른 파일명으로 복구합니다.
+
+1.0.222
+
+- Chrome 142 이상에서 WEHAGO가 로컬 더존 인쇄 프로그램에 접근할 수 있도록 `wehago.com` 전용 로컬 네트워크 및 루프백 허용 정책을 자동 등록합니다.
+- 제목이 `Duzon - PrintDialog`인 실제 미리보기 창을 `인쇄 기본 설정 / 미리보기`, `DR Viewer`, `TX2A.drf` 표식으로 식별해 PDF 저장 단계로 진행하지 못하던 문제를 수정했습니다.
+- 동양정보통신 WEHAGO 링크 2건을 연속 실행하여 각각 275,000원 세금계산서 PDF가 정상 생성되는 것을 확인했습니다.
+- 실패한 WEHAGO 메일은 읽지 않음 상태를 유지하되 자동 재시도 간격을 단계적으로 늘리고, 수동 메일 수집은 즉시 재처리할 수 있습니다.
+
+1.0.221
+
+- 실패한 세금계산서 메일의 자동 재시도를 15분, 1시간, 6시간, 12시간 간격으로 제한하여 같은 WEHAGO 메일이 매분 반복 실행되지 않도록 수정했습니다.
+- 실패 메일은 읽지 않음 상태를 유지하고, 사용자가 실행한 수동 메일 수집은 재시도 대기시간과 관계없이 즉시 다시 처리합니다.
+- 메일 수집 결과와 상태 API에 자동 재시도 대기 건수를 추가했습니다.
+- WEHAGO 인쇄 버튼 실제 클릭과 더존 인쇄 미리보기 감지 보강 내용을 함께 포함했습니다.
+
+1.0.219
+
+- WEHAGO 세금계산서를 연속 저장할 때 이전 문서의 더존 인쇄 미리보기 및 PDF 저장 창을 문서마다 정리합니다.
+- `C:\Douzone\Wehago\WehagoPrint` 경로의 더존 인쇄 보조 프로세스만 종료하고 재실행하여 다음 문서의 미리보기가 열리지 않던 문제를 수정했습니다.
+- 일반 Chrome 및 다른 프로그램 프로세스는 종료하지 않습니다.
+
+1.0.218
+
+- 더존 예외창과 실제 `인쇄 기본 설정 / 미리보기` 창을 분리해 이전 PrintDialog를 PDF 미리보기로 잘못 선택하지 않습니다.
+- 더존 미리보기의 PDF 버튼을 최대 8초 기다리고, UIA에서 버튼이 보이지 않을 때 사용하는 창 기준 좌표를 현재 화면 배치에 맞게 보정했습니다.
+- 1.0.217의 자동화 Chrome 프로필 잠금 복구 로직을 함께 적용합니다.
+
+1.0.217
+
+- WEHAGO 자동화 Chrome이 공용 프로필 잠금 때문에 `DevToolsActivePort` 생성 전에 종료되면 해당 자동화 프로필을 점유한 Chrome만 정리하고 한 번 재시작합니다.
+- `Chrome failed to start`, `session not created`, `DevToolsActivePort` 오류를 일시 오류로 분류해 크롤러 전체 재시도도 수행합니다.
+- 일반 사용자가 실행한 다른 Chrome 프로필은 종료하지 않습니다.
+
+1.0.216
+
+- WEHAGO PDF 저장 중 `Duzon - PrintDialog` 예외창이 나타나면 `계속` 버튼을 자동 처리한 뒤 실제 인쇄 미리보기를 기다립니다.
+- Windows의 `다음 이름으로 프린터 출력 저장` 창을 감지하고 빈 파일 이름 입력란에 서버 PDF 경로를 입력한 뒤 저장합니다.
+- WEHAGO 문서번호 기반 PDF 중복 방지와 PDF 저장 단계별 상세 오류 기록을 함께 적용합니다.
+
+1.0.214
+
+- 오류뿐 아니라 대기중 건도 `완료로 표시`를 눌러 실제 ERP/PDF 작업 없이 처리완료 상태로 변경할 수 있습니다.
+- `대기 상태로 변경`은 기존처럼 오류 건에만 표시되며, 처리중/ERP대기/처리완료 건의 수동 완료 변경은 차단합니다.
+
+1.0.213
+
+- Preserve manually entered purchase departments during one-click ERP processing.
+- Mark screen account selections as manual values before normalization.
+
+1.0.211
+
+- 구매 메일 자동 수집이 Gmail 읽음 여부와 관계없이 마지막 UID 이후의 신규 메일을 한 번씩 확인하도록 변경했습니다.
+- `메일 수집` 버튼을 누르면 최근 48시간 메일을 강제 재검사하여 먼저 읽음 처리된 세금계산서도 복구할 수 있습니다.
+- 기존 처리 메일은 Message-ID 이력으로 중복 저장하지 않으며 상시 최근 후보 반복 검사는 사용하지 않습니다.
+
+1.0.210
+
+- 오류 건을 선택하면 `완료로 표시`와 `대기 상태로 변경` 버튼이 나타나도록 추가했습니다.
+- 수동 상태 변경은 ERP/PDF 작업을 실행하지 않으며 오류 문구를 지우고 변경 이력을 로그에 남깁니다.
+- 오류 상태가 아닌 건은 수동 상태 변경 API를 사용할 수 없도록 제한했습니다.
+
+1.0.209
+
+- 구매 ERP 완료 시 Agent ID가 현금출금정산서 작성자를 덮어쓰지 않고 로그인 계정의 사용자명을 저장하도록 변경했습니다.
+- 전체 담당자 계정을 실제 이름으로 변환하며 `arci=노양래`, `reum0009=구름`, `kimsanul=김산울`, `hah4627=현시훈`, `tuy1120=송명학`, `rlckd9646=김기창`으로 표시합니다.
+- 자동 생성, 수동 현금결의서 생성, Zoom 자동 생성 모두 작업 담당자의 실제 이름을 작성자로 확정합니다.
+- 현금출금정산서 생성 payload는 확정된 `expense_author`를 최우선으로 사용합니다.
+
+1.0.208
+
+- 담당자 PC PDF 출력은 브라우저/Adobe 저장 배율 대신 각 페이지를 A4 인쇄 가능 영역에 맞춰 1부씩 전송하도록 변경했습니다.
+- 인쇄 요청 후 스풀러 확인이 늦다는 이유로 같은 PDF를 다른 출력 방식으로 다시 전송하지 않도록 하여 중복 출력 가능성을 제거했습니다.
+- 현금출금결의서 Excel PDF 생성 시 A4 세로, 1페이지 맞춤과 인쇄영역을 고정했습니다.
+- 출력 큐 생성 시 동일한 PDF 경로는 한 번만 등록합니다.
+
+1.0.207
+
+- 개별 PDF 저장은 문서를 선택하지 않아도 준비된 문서 전체를 바로 저장할 수 있게 변경했습니다. 일부 문서만 저장할 때만 해당 문서를 체크하면 됩니다.
+- 통합본/개별 PDF 저장은 담당자 PC Agent 및 프린터 연결 여부와 무관하게 운영서버에서 실행합니다. 실제 프린터 출력만 Agent 연결을 요구합니다.
+
+1.0.206
+
+- 알림 허용됨 버튼을 실제 Windows 알림 테스트로 변경했습니다.
+- WEB 화면을 열어 둔 동안에는 직접 시작하지 않은 자동수집, ERP, 문서 출력 작업도 완료 또는 실패 시 10초 이내에 브라우저 알림으로 표시합니다. 메일 자동수집은 신규 수신 또는 오류가 있을 때만 알립니다.
+- 담당자 PC Agent가 문서 출력 결과를 Windows 트레이 알림으로도 표시합니다.
+
+1.0.205
+
+- 담당자 PC Agent가 전표를 출력한 뒤 세금계산서/명세서 출력 중 일시 실패하거나 중단되면, 이미 인쇄 확인된 전표는 다시 보내지 않고 남은 PDF만 최대 2회 자동 재시도합니다.
+- 출력 중 Agent 연결 확인 공백은 120초까지 허용하고, WEB 화면은 일시적인 Agent 연결 공백만으로 로그인 정보를 삭제하지 않습니다.
+- Agent가 출력 파일별 인쇄 확인을 서버 큐에 즉시 기록해, Agent가 중간에 종료되어도 2분 후 미확인 파일을 이어서 처리합니다.
+
+1.0.204
+
+- 처리 완료 기록이 남은 읽지 않은 메일은 크롤링과 PDF 저장을 다시 시도하지 않고 읽음 처리만 재시도합니다.
+- WEHAGO 세금계산서는 URL의 TX 문서번호를 PDF 파일명에 기록하고, 동일 문서 또는 기존 파일이 있으면 인쇄/PDF 저장 단계 전에 재사용합니다.
+
+1.0.203
+
+- 담당자 PC의 가지급금(업체) 등 거래처 관계항목 적요 셀은 같은 열의 아래쪽 좌표를 먼저 재시도하도록 보완했습니다.
+- 원클릭 문서 출력은 담당자 PC에서 PDF 뷰어를 열고 인쇄를 전송한 뒤 닫도록 변경했습니다.
+- 출력 완료 로그는 작업 시작과 구분하고, Windows 인쇄 큐 등록 확인 결과를 함께 남깁니다.
+
+1.0.202
+
+- 구매 메일 수집에서 최근 수신 후보 재검사 로직을 제거하고 읽지 않은 메일만 검사하도록 되돌렸습니다.
+- 수동 메일 수집 버튼도 최근 48/72시간 읽은 메일 강제 재검사를 실행하지 않도록 변경했습니다.
+
+1.0.201
+
+- 담당자 PC ERP 입력에서 거래처 관계항목이 필요한 행은 적요 셀 클릭 좌표를 여러 후보로 재시도하도록 보강했습니다.
+- 가지급금(업체) 등 거래처 팝업이 열리지 않으면 입력 성공으로 넘기지 않고 재시도/오류 처리합니다.
+- 담당자 PC 필수 프로그램 업데이트 감지 대상에 manager_server를 포함해 ERP 클릭 스크립트 변경도 자동 업데이트되도록 했습니다.
+
+1.0.200
+
+- Purchase analysis save now restores site_name to the actual plant/site from buyer business number instead of preserving company names such as (?)??.
+- Cash expense reports now use the tax invoice issue date as the ????.
+- Purchase ERP summaries for grouped mixed consumables now show item-count labels such as 8? instead of summing all quantities into 116EA.
+
+1.0.199
+
+- Purchase analysis save now treats account selections from the screen as manual corrections, so changing an item from fixed asset to supplies is preserved and learned.
+- Keyboard/mouse desktop sets are no longer mistaken for PC bodies just because the product text contains "desktop set".
+- Duplicate consumable lines with the same original item and unit amount are merged into a single quantity line in purchase analysis.
+
+1.0.198
+
+- Manual purchase mail collection now force-scans up to 7 days / 500 recent inbox mails, ignoring old processed-state skips so a missed Compuzone mail can be recovered.
+- Tax-invoice candidate detection now includes the mail sender header, catching Compuzone mails where the sender identifies the vendor but the subject/body does not.
+- Mail collection history now records sender information for skipped recent messages.
+
+1.0.197
+
+- Manual purchase mail collection no longer requires ??? PC setup, ERP installers, printers, or cash expense report templates; mail re-collection can run from the operating server by itself.
+- Keeps the 1.0.196 Compuzone recent-read-mail retry and mail-collect history endpoint.
+
+1.0.196
+
+- Purchase mail collection now re-checks recently received read mail for 72 hours by default, so already-read Compuzone tax invoice mails from the previous day are not silently missed.
+- Recent mail entries skipped as "not a tax invoice candidate", "no supported tax invoice target", or "outside recent window" are retryable after logic changes instead of being permanently skipped.
+- Added `/api/mail-collect/history` to inspect persistent mail collection state and skip reasons after server restarts.
+
+1.0.195
+
+- Regular one-click processing is now enabled for Zoom billing rows regardless of the list amount/status label; the backend decides whether to queue the user-PC Agent expense report or output the ready document set.
+- Keeps the Zoom manual output-set Agent queue fix and vendor missing-tax-invoice CC/template improvements.
+1.0.194
+
+- Enables regular one-click processing for Zoom billing rows when the billing PDF and cash expense report output set is already ready, even when the invoice amount field is zero.
+- Includes the Zoom user-PC Agent expense-report queue fixes from 1.0.193 and vendor missing-tax-invoice CC/template improvements.
+1.0.193
+
+- Zoom detailed output-set requests now queue cash expense report generation to the user PC Agent before output when the PDF is missing.
+- This covers manual detail-screen PDF save/print paths as well as one-click and automatic Zoom output flows.
+- Keeps vendor missing-tax-invoice emails addressed to the vendor contact with ds1501@dae-seung.co.kr on CC.
+1.0.192
+
+- Combines the Zoom billing expense-report Agent flow with the polished vendor missing-tax-invoice email template.
+- Zoom billing now queues cash expense report generation to the user PC Agent before output instead of trying to create it on the operating server.
+- Vendor missing-tax-invoice emails identify Daeseung Accounting Automation WEB, use a cleaner request layout, and CC ds1501@dae-seung.co.kr.
+1.0.191
+
+- Vendor missing-tax-invoice alert emails now clearly identify the sender as Daeseung Accounting Automation WEB and use a cleaner request layout.
+- The vendor alert sample endpoint sends the same polished template so the email format can be checked before sending to the vendor.
+1.0.190
+
+- Vendor missing-tax-invoice alert emails now send to the vendor contact and CC ds1501@dae-seung.co.kr so outbound notices can be confirmed from the internal mailbox.
+- Vendor alert API responses include the CC recipient used for the outgoing email.
+1.0.187
+
+- Zoom 청구서 현금출금결의서는 운영서버에서 Excel 양식이 없거나 Excel COM PDF 변환이 실패해도 WEB PDF fallback으로 생성됩니다.
+- Zoom 자동출력 큐 등록 시 처리중으로 표시하고, 진행 중인 출력 job은 중복 큐잉하지 않으며 30분 이상 멈춘 job만 재시도합니다.
+- Zoom 청구서 금액은 환율 계산 없이 PDF/DB에 들어온 표시 금액 그대로 현금출금결의서에 표기합니다.
+
+1.0.186
+
+- Zoom billing invoices are now queued as automatic Pyeongtaek output jobs instead of being marked as regular ERP-auto exclusions.
+- The Zoom output job allows generated cash expense reports, so automatic processing creates the billing PDF plus cash expense report set before printing.
+
+1.0.185
+
+- Excludes out-of-scope Unipost DaouData/SKUP invoices from automatic collection and marks the mail processed so it does not loop.
+- Purchase mail collection summary now reports ignored out-of-scope messages separately from saved, duplicate, and failed counts.
+
+1.0.184
+
+- Zoom 청구서가 USD로 들어온 경우 환율 계산을 요구하지 않고 외화금액을 그대로 현금출금결의서에 표기합니다.
+- 원화 청구서가 들어오면 기존처럼 원화 금액으로 현금출금결의서를 생성합니다.
+
+﻿1.0.183
+
+- Zoom 결제 완료 메일(계정 3007982863)의 PDF 첨부 청구서를 자동 수집합니다.
+- Zoom 청구서는 ERP 전표/전자결재 품의 대상에서 제외하고, 청구서 + 현금출금결의서 2개 문서 세트로 처리합니다.
+
+1.0.182
+
+- KT 업체 누락 알림 샘플 발송 API에서 메일 전송 실패 원인이 전역 내부 오류 문구로 가려지던 문제를 고쳤습니다.
+- 샘플 발송 실패 시 실제 SMTP/설정 오류가 응답에 표시되도록 보정했습니다.
+1.0.181
+
+- 정기 세금계산서 점검표의 마감 전 상태 문구를 `수신대기`에서 `수신예정`으로 바꿔, 이미 수신됐지만 미처리된 건처럼 보이는 혼선을 줄였습니다.
+- 업체별 세금계산서 담당자 연락처를 추가하고, 수신마감이 지난 누락 건만 담당 업체에 자동 안내 메일을 보내도록 했습니다.
+- 누락 업체 안내 메일은 업체/발행예정일/수신마감일 기준으로 중복 발송을 막고, KT 샘플 발송 확인용 API를 추가했습니다.
+1.0.180
+
+- Blocked Microsoft Print to PDF from the individual print path so Windows save dialogs no longer appear during physical document printing.
+- Removed PDF from the individual print target dropdown; PDF output should use the separate individual PDF save or merged PDF save buttons.
+
+1.0.179
+
+- 담당자 PC 개별 출력에서 한 PDF 출력이 실패해도 뒤 문서 출력을 계속 시도합니다.
+- 출력 결과 메시지에 성공/실패 파일 수를 표시해 구매 문서세트 중 어떤 문서가 실패했는지 확인하기 쉽게 했습니다.
+- Acrobat/Windows printto 실패 시 Edge/Chrome 기본 프린터 출력 fallback을 추가했습니다.
+1.0.178
+
+- PDF file printing now tries Adobe Acrobat/Reader directly before relying on the Windows PDF print association.
+- This avoids WinError 1155 failures on 담당자 PC when `.pdf` has no default print action or `printto` is broken.
+1.0.177
+
+- Purchase one-click now sends the currently visible analysis form values with the ERP request and saves them again on the server before queueing.
+- ERP voucher generation now reads purchase item department from dept/department/department_name/부서 fields and falls back to approval PDF names, preventing false "부서 지정 필요" errors when the screen already has a department.
+
+1.0.176
+
+- Purchase analysis now treats Korean HP desktop names such as "프로타워" as PC body items, forcing fixed-asset account "집기비품" and ERP item name "PC".
+- This prevents bad learned dictionary rows from keeping HP ProTower PC purchases as consumables.
+
+1.0.175
+
+- Purchase item name cleanup now collapses repeated item labels such as "PC PC" to "PC" before voucher generation.
+- HP ProTower/desktop PC body descriptions are normalized to the ERP item name "PC" while keeping the fixed-asset account classification.
+
+1.0.174
+
+- Purchase mail collection now checks unread mail plus recent inbox candidates, so already-read Compuzone tax invoice mails can still be collected.
+- Processed recent-mail candidates are recorded in a small state file to avoid repeatedly crawling the same read mail every minute.
+- Purchase mail collection summaries no longer show "failure 0" as a failure-like message; no-new-mail runs are reported as no new target.
+
+1.0.173
+
+- Regular due alert now keeps the current month cycle visible after invoices are received, instead of immediately rolling completed vendors to the next month as pending.
+- Quarterly vendors such as PPlus keep the latest completed due cycle visible until the next due cycle is actually reached.
+- By-day vendors such as Etebus allow a small issue-date grace window so near-10th invoices are not shown as date mismatches.
+1.0.172
+
+- Restored the cash expense report Excel template print layout instead of forcing a cropped print area.
+- Kept the lower-slot cleanup by removing writes to lower settlement/payee cells only, preventing stray bottom data without breaking the form.
+- Fixed P1/P2/P3/P4 factory footer detection so P3 factory prints 대승정밀㈜ instead of ㈜대승.
+1.0.171
+
+- Fixed cash expense report detail totals to rebalance small item-level rounding differences against the invoice total, preventing 1-won mismatches between detail lines and requested/settlement amount.
+- Fixed cash expense report Excel export to stop writing settlement/payee values into lower-slot cells and force the PDF print area to the upper form only, removing stray bottom data.
+1.0.170
+
+- Fixed the P Plus DLP quarterly due cycle. The expected invoice months are now 5/8/11/2 month-end for Mar-May, Jun-Aug, Sep-Nov, and Dec-Feb periods, instead of 3/6/9/12 month-end.
+- After the May 31 P Plus invoice is received, the regular due report now advances to the next Aug 31 cycle instead of showing Jun 30 as 22 days remaining.
+1.0.169
+
+- Fixed regular due vendor matching so short aliases such as KT are not matched inside unrelated raw invoice text.
+- Regular due email/history now matches invoices from supplier identity fields, file names, and item text, preventing an AhnLab invoice from appearing in the KT row.
+1.0.168
+
+- Added an explicit SmileEDI approval option for mail collection. It stays off unless SMILEEDI_AUTO_APPROVE=1 is set, so unapproved invoices are not approved by accident.
+- The mail collector now passes the approval option into the crawler, and the crawler applies it only to handlers that support approval before restoring the handler state.
+1.0.167
+
+- Restored UTF-8 BOM on install_operating_server.ps1 so Windows PowerShell 5.1 can parse Korean default values correctly during operating-server install.
+
+1.0.166
+
+- Setup recheck now polls the 담당자 PC setup status after 다시 점검 / 필수 프로그램 실행 / 설치 요청 and refreshes the screen automatically when checks complete.
+- Initial setup completion no longer requires a manual browser refresh before entering the 업무 화면.
+
+1.0.165
+
+- Purchase analysis now gives the learned dictionary and manual corrections highest priority. System defaults such as graphics-card normalization no longer override learned/manual account choices.
+- Manual analysis save now updates the learning DB even when an item originally came from a system adjustment.
+- Gemini-analyzed unknown purchase items are saved into the learning DB, and later human corrections overwrite that learned value.
+
 1.0.164
 
 - Purchase analysis now treats RTX/GTX/GeForce/Radeon/VGA graphics cards as consumable parts while normalizing the ERP item name to graphics-card item name.
-- The graphics-card rule now overrides old learned dictionary matches, so previously learned long model names no longer reappear after analysis.
+- The graphics-card rule only applies as a default for unknown items; learned dictionary and manual corrections keep priority.
 
 1.0.163
 

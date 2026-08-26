@@ -888,6 +888,10 @@ class ERPLoginBot:
                     def _elem_autoid(e):
                         try: return e.element_info.automation_id or ""
                         except: return ""
+
+                    fast_navigation = str(os.getenv("ERP_FAST_NAVIGATION", "0")).strip().lower() not in (
+                        "0", "false", "no", "off", ""
+                    )
                         
                     def _elem_name(e):
                         try: return e.window_text() or ""
@@ -1066,6 +1070,9 @@ class ERPLoginBot:
                         time.sleep(ERP_SETTLE_WAIT)
 
                         # 4. 전환 검증
+                        if fast_navigation:
+                            self.logger.info("  [MENU-FAST] 구매처리 빠른 경로: 반복 트리 탐색 생략")
+                            return True
                         self.logger.info("  [MENU-04] 왼쪽 트리에 '전표'가 보이는지 검증 시작")
                         for attempt in range(1, 3):
                             if _tree_has("전표"):
@@ -1119,7 +1126,7 @@ class ERPLoginBot:
                         return _slip_form_ready()
 
                     # Step 1~3: 실제 사용자 동선 그대로 메뉴 -> 왼쪽 회계관리>> -> 메뉴 내부 회계관리 타일 선택
-                    if not _tree_has("전표"):
+                    if fast_navigation or not _tree_has("전표"):
                         self.logger.info("  [MENU] 메뉴 버튼 -> 왼쪽 회계관리>> -> 메뉴 내부 회계관리 타일 선택 시작")
                         if _open_accounting_menu():
                             self.logger.info("  ✅ 회계관리 트리 전환 확인")
@@ -1130,27 +1137,35 @@ class ERPLoginBot:
                     # UIA가 왼쪽 트리를 못 읽는 현장이 반복되어, 여기서는 좌표 fallback을 기본 경로로 사용합니다.
                     opened_slip_form = False
                     self.logger.info("  [TREE-XY] 전표 -> 전표처리 -> 분개전표입력 좌표 클릭 시작")
-                    slip_menu_visible = _tree_has("분개전표입력")
-                    slip_process_visible = _tree_has("전표처리")
-
-                    if slip_menu_visible:
-                        self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표/전표처리 확장 클릭 스킵")
-                    else:
-                        if slip_process_visible:
-                            self.logger.info("  [TREE-XY] '전표처리'가 이미 보임. 전표 클릭 스킵")
-                        else:
-                            _click_rel(105, 107, "전표")
-                            time.sleep(ERP_CLICK_WAIT)
-
-                        if _tree_has("분개전표입력"):
-                            self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표처리 클릭 스킵")
-                        else:
-                            _click_rel(126, 137, "전표처리")
-                            time.sleep(ERP_CLICK_WAIT)
-
-                    if not _click_slip_menu_by_uia():
+                    if fast_navigation:
+                        _click_rel(105, 107, "전표")
+                        time.sleep(ERP_CLICK_WAIT)
+                        _click_rel(126, 137, "전표처리")
+                        time.sleep(ERP_CLICK_WAIT)
                         _click_rel(155, 166, "분개전표입력")
-                        self.logger.info("  [TREE-XY] 분개전표입력 좌표 클릭 전송")
+                        self.logger.info("  [TREE-FAST] 구매처리 좌표 경로 클릭 완료")
+                    else:
+                        slip_menu_visible = _tree_has("분개전표입력")
+                        slip_process_visible = _tree_has("전표처리")
+
+                        if slip_menu_visible:
+                            self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표/전표처리 확장 클릭 스킵")
+                        else:
+                            if slip_process_visible:
+                                self.logger.info("  [TREE-XY] '전표처리'가 이미 보임. 전표 클릭 스킵")
+                            else:
+                                _click_rel(105, 107, "전표")
+                                time.sleep(ERP_CLICK_WAIT)
+
+                            if _tree_has("분개전표입력"):
+                                self.logger.info("  [TREE-XY] '분개전표입력'이 이미 보임. 전표처리 클릭 스킵")
+                            else:
+                                _click_rel(126, 137, "전표처리")
+                                time.sleep(ERP_CLICK_WAIT)
+
+                        if not _click_slip_menu_by_uia():
+                            _click_rel(155, 166, "분개전표입력")
+                            self.logger.info("  [TREE-XY] 분개전표입력 좌표 클릭 전송")
 
                     opened_slip_form = _wait_slip_form_ready(
                         float(os.getenv("ERP_SLIP_OPEN_WAIT", "0.45") or "0.45")
@@ -1216,11 +1231,16 @@ class ERPLoginBot:
 
         fast_input = _env_flag("ERP_FAST_INPUT", "0")
         fast_field_verify = _env_flag("ERP_FAST_FIELD_VERIFY", "0")
+        stable_header_fields = _env_flag("ERP_STABLE_HEADER_FIELDS", "1")
         fast_management = _env_flag("ERP_FAST_MANAGEMENT", "0")
+        strict_vendor_selection = _env_flag("ERP_STRICT_VENDOR_SELECTION", "0")
         verbose_keysafe = _env_flag("ERP_VERBOSE_KEYSAFE", "0")
         verbose_management_clear = _env_flag("ERP_VERBOSE_MGMT_CLEAR", "0")
         quick_wait = 0.05 if fast_input else 0.10
-        critical_field_wait = max(0.12, float(os.getenv("ERP_CRITICAL_FIELD_WAIT", "0.18") or "0.18"))
+        critical_field_wait = max(
+            0.35 if stable_header_fields else 0.12,
+            float(os.getenv("ERP_CRITICAL_FIELD_WAIT", "0.45" if stable_header_fields else "0.18") or "0.45"),
+        )
         mgmt_key_default = "0.08" if fast_management else "0.16"
         mgmt_commit_default = "0.14" if fast_management else "0.26"
         mgmt_focus_default = "0.10" if fast_management else "0.20"
@@ -1251,6 +1271,17 @@ class ERPLoginBot:
                 )
             except Exception as e:
                 self.logger.warning(f"[FORM-SPEED] pyautogui 속도 설정 실패: {e}")
+        else:
+            try:
+                safe_pause = max(0.05, float(os.getenv("ERP_PYAUTOGUI_SAFE_PAUSE", "0.10") or "0.10"))
+                pyautogui.PAUSE = safe_pause
+                if hasattr(pyautogui, "MINIMUM_DURATION"):
+                    pyautogui.MINIMUM_DURATION = 0.10
+                if hasattr(pyautogui, "MINIMUM_SLEEP"):
+                    pyautogui.MINIMUM_SLEEP = 0.05
+                self.logger.info(f"[FORM-SPEED] stable pyautogui pause restored: {safe_pause}")
+            except Exception as e:
+                self.logger.warning(f"[FORM-SPEED] pyautogui 안정 속도 복구 실패: {e}")
 
         self.logger.info(f"[폼세팅] site={site_name} / date={invoice_date} / rows={row_count} / clipboard_rows={len(clipboard_rows)}")
         self._force_erp_window_maximized(main_win, "폼 좌표 입력 전 ERP 메인 창")
@@ -1291,13 +1322,113 @@ class ERPLoginBot:
         except Exception as e:
             self.logger.warning(f"  [신규] 클릭 실패: {e}")
 
-        def _safe_paste(text):
+        def _safe_paste(text, stable=False):
+            paste_wait = critical_field_wait if stable else (0.02 if fast_input else 0.04)
             pyperclip.copy(text)
-            time.sleep(0.02 if fast_input else 0.04)
+            time.sleep(paste_wait)
             pyautogui.hotkey('ctrl', 'v')
-            time.sleep(0.02 if fast_input else 0.04)
+            time.sleep(paste_wait)
 
         main_rect_cache = None
+
+        def _uia_disconnected(exc):
+            text = str(exc or "").lower()
+            return any(
+                token in text
+                for token in (
+                    "-2147220991",
+                    "이벤트에서 가입자를 불러낼 수 없습니다",
+                    "event subscriber",
+                    "rpc server is unavailable",
+                    "elementnotavailable",
+                )
+            )
+
+        def _reconnect_main_window(reason, timeout=4.0, required=True):
+            nonlocal main_win, main_rect_cache
+            candidate_pids = []
+            for pid in (
+                self.manager.erp_pids.get(self.corp_code, 0),
+                getattr(self.app, "process", 0),
+            ):
+                try:
+                    pid = int(pid or 0)
+                except Exception:
+                    pid = 0
+                if pid > 0 and pid not in candidate_pids:
+                    candidate_pids.append(pid)
+
+            process_exe = str(self.install_info.get("process_name") or "").lower().replace(".exe", "")
+            try:
+                for proc in psutil.process_iter(["pid", "name"]):
+                    name = str(proc.info.get("name") or "").lower()
+                    pid = int(proc.info.get("pid") or 0)
+                    if process_exe and process_exe in name and pid not in candidate_pids:
+                        candidate_pids.append(pid)
+            except Exception:
+                pass
+
+            title_tokens = [
+                str(self.corp_info.get("name") or "").strip(),
+                "K-System",
+                "대승",
+                "일강",
+                "제이엠",
+                "더원",
+            ]
+            last_error = ""
+            end_at = time.time() + max(0.5, float(timeout))
+            while time.time() < end_at:
+                for pid in list(candidate_pids):
+                    if not psutil.pid_exists(pid):
+                        continue
+                    try:
+                        pythoncom.CoInitialize()
+                        app = Application(backend="uia").connect(process=pid, timeout=1.0)
+                        windows = list(app.windows(visible_only=True))
+                        if not windows:
+                            windows = [app.top_window()]
+                        ranked = []
+                        for win in windows:
+                            try:
+                                title = str(win.window_text() or "")
+                                auto_id = str(win.element_info.automation_id or "")
+                                if not win.is_visible():
+                                    continue
+                                score = 100 if auto_id == "mainwindow" else 0
+                                if any(token and token in title for token in title_tokens):
+                                    score += 50
+                                if score:
+                                    ranked.append((score, win, title, auto_id))
+                            except Exception:
+                                continue
+                        if not ranked:
+                            continue
+                        ranked.sort(key=lambda item: item[0], reverse=True)
+                        _, win, title, auto_id = ranked[0]
+                        rect = win.rectangle()
+                        self.app = app
+                        self.manager.erp_pids[self.corp_code] = pid
+                        main_win = win
+                        main_rect_cache = rect
+                        self.logger.info(
+                            f"  [UIA-RECONNECT] {reason}: pid={pid}, title={title!r}, auto_id={auto_id!r}"
+                        )
+                        return True
+                    except Exception as exc:
+                        last_error = str(exc)
+                time.sleep(ERP_POLL_WAIT)
+
+            message = (
+                f"[ERP_UI_DISCONNECTED] {reason}: K-System 메인 창 UI 연결을 복구하지 못했습니다. "
+                "ERP 저장 전 작업을 중단합니다."
+            )
+            if last_error:
+                message += f" 원인: {last_error}"
+            self.logger.error(f"  [UIA-RECONNECT] {message}")
+            if required:
+                raise RuntimeError(message)
+            return False
 
         def _main_rect():
             nonlocal main_rect_cache
@@ -1305,6 +1436,10 @@ class ERPLoginBot:
                 main_rect_cache = main_win.rectangle()
                 return main_rect_cache
             except Exception as e:
+                if _uia_disconnected(e):
+                    _reconnect_main_window("좌표 입력 전 UI 연결 끊김", required=True)
+                    main_rect_cache = main_win.rectangle()
+                    return main_rect_cache
                 if main_rect_cache is not None:
                     self.logger.warning(f"  [UIA-FALLBACK] 메인 창 좌표 캐시 사용: {e}")
                     return main_rect_cache
@@ -1606,27 +1741,6 @@ class ERPLoginBot:
             self.logger.info(f"  [FORM-ANCHOR] {label} 입력칸 클릭: rel=({rel_x},{rel_y}), rect=({r.left},{r.top})-({r.right},{r.bottom})")
             time.sleep(ERP_FORM_WAIT)
 
-        def _type_anchor_field(label, text, fallback_xy, clear=True, enter=False, tab=False, date_mode=False):
-            ctrl = _input_right_of_label(label)
-            if ctrl:
-                _click_control(ctrl, label)
-            else:
-                self.logger.warning(f"  [FORM-ANCHOR] {label} 입력칸 미발견, 좌표 fallback 사용: {fallback_xy}")
-                _click_form_xy(*fallback_xy, label)
-            if clear:
-                pyautogui.hotkey('ctrl', 'a')
-                _release_modifiers(f"{label} Ctrl+A 후")
-                time.sleep(0.03)
-                pyautogui.press('backspace')
-                time.sleep(0.03)
-            _safe_paste(str(text or ""))
-            if enter:
-                pyautogui.press('enter')
-            if tab:
-                pyautogui.press('tab')
-            self.logger.info(f"  [FORM-ANCHOR] {label} 입력 완료: {text}")
-            _verify_anchor_field(label, text, fallback_xy, date_mode=date_mode)
-
         def _verify_anchor_field(label, expected, fallback_xy, date_mode=False):
             ctrl = _input_right_of_label(label) or _find_near_control(*fallback_xy, ("Edit", "ComboBox", "Text"))
             actual = _control_text(ctrl) if ctrl else ""
@@ -1645,6 +1759,8 @@ class ERPLoginBot:
             is_critical = label in ("전표관리단위", "회계일")
             if is_critical:
                 self.logger.info(f"  [FORM-STEP] {label} 입력 시작: {text}")
+                if stable_header_fields:
+                    _reconnect_main_window(f"{label} 입력 전", required=True)
             used_anchor = False
             coord_first = str(os.getenv("ERP_FORM_COORD_FIRST", "1")).strip().lower() not in ("0", "false", "no", "off")
             if coord_first:
@@ -1663,7 +1779,7 @@ class ERPLoginBot:
                 time.sleep(quick_wait)
                 pyautogui.press('backspace')
                 time.sleep(quick_wait)
-            _safe_paste(str(text or ""))
+            _safe_paste(str(text or ""), stable=bool(is_critical and stable_header_fields))
             if enter:
                 pyautogui.press('enter')
                 if is_critical:
@@ -1672,15 +1788,18 @@ class ERPLoginBot:
                 pyautogui.press('tab')
                 if is_critical:
                     time.sleep(critical_field_wait)
+            if is_critical and stable_header_fields:
+                _reconnect_main_window(f"{label} 입력 후", required=True)
+            must_verify = bool(is_critical and stable_header_fields)
             if used_anchor:
                 self.logger.info(f"  [FORM-ANCHOR] {label} input complete: {text}")
-                if is_critical and fast_field_verify:
+                if fast_field_verify and not must_verify:
                     self.logger.info(f"  [FORM-VERIFY] {label} fast verify skipped after stable wait: {text}")
                 else:
                     _verify_anchor_field(label, text, fallback_xy, date_mode=date_mode)
             else:
                 self.logger.info(f"  [FORM-FAST] {label} input complete: {text}")
-                if fast_field_verify:
+                if fast_field_verify and not must_verify:
                     self.logger.info(f"  [FORM-VERIFY] {label} fast verify skipped: {text}")
                 else:
                     _verify_field_xy(*fallback_xy, text, label, date_mode=date_mode)
@@ -1945,8 +2064,11 @@ class ERPLoginBot:
 
             lr = target_item.rectangle()
             pyautogui.click(lr.left + lr.width() // 2, lr.top + lr.height() // 2)
-            time.sleep(ERP_SETTLE_WAIT)
-            if fast_field_verify:
+            time.sleep(critical_field_wait if stable_header_fields else ERP_SETTLE_WAIT)
+            if stable_header_fields:
+                _reconnect_main_window("회계단위 선택 후", required=True)
+                _verify_acc_unit(key)
+            elif fast_field_verify:
                 self.logger.info(f"  [FORM-VERIFY] 회계단위 fast verify skipped: {key}")
             else:
                 _verify_acc_unit(key)
@@ -1958,6 +2080,25 @@ class ERPLoginBot:
             pyautogui.doubleClick(ax, ay, interval=0.05)
             self.logger.info(f"  [MGMT-XY] {label} 더블클릭: rel=({x},{y}), abs=({ax},{ay})")
             time.sleep(ERP_FORM_WAIT if wait is None else wait)
+
+        def _env_int(name, default):
+            try:
+                return int(float(str(os.getenv(name, str(default)) or str(default)).strip()))
+            except Exception:
+                return int(default)
+
+        def _env_int_list(name, default_values):
+            raw = str(os.getenv(name, "") or "").strip()
+            values = []
+            if raw:
+                for part in re.split(r"[,;\s]+", raw):
+                    if not part:
+                        continue
+                    try:
+                        values.append(int(float(part)))
+                    except Exception:
+                        pass
+            return values or list(default_values)
 
         def _value_text(value, comma=False):
             if value is None:
@@ -2161,7 +2302,6 @@ class ERPLoginBot:
                 or "AUTOEVER" in vendor_upper
             )
             vendor_target_biz_no = ""
-            vendor_search_name = vendor_name
             vendor_target_optional = False
             vendor_biz_digits = re.sub(r"[^0-9]", "", vendor_biz_no or "")
             raw_vendor_biz_no = vendor_biz_no
@@ -2171,7 +2311,7 @@ class ERPLoginBot:
                 )
                 vendor_biz_no = ""
                 vendor_biz_digits = ""
-            override_vendor_name, override_biz_no = _vendor_biz_no_override(
+            _override_vendor_name, override_biz_no = _vendor_biz_no_override(
                 vendor_name,
                 raw_vendor_biz_no,
                 vendor_biz_no,
@@ -2199,22 +2339,16 @@ class ERPLoginBot:
             is_autoever_biz_no = vendor_biz_digits == "1048153190" or "1048153190" in vendor_probe_digits
             if override_biz_no:
                 vendor_target_biz_no = override_biz_no
-                vendor_search_name = override_vendor_name or vendor_name
             elif is_kt_vendor:
                 vendor_target_biz_no = "102-81-42945"
-                vendor_search_name = "케이티"
                 vendor_target_optional = True
             elif is_autoever_vendor or is_autoever_biz_no:
                 vendor_target_biz_no = "104-81-53190"
-                vendor_search_name = "현대오토에버시스템즈"
                 vendor_target_optional = True
             elif len(vendor_biz_digits) == 10:
                 vendor_target_biz_no = f"{vendor_biz_digits[:3]}-{vendor_biz_digits[3:5]}-{vendor_biz_digits[5:]}"
             elif "동양정보통신" in compact_vendor:
                 vendor_target_biz_no = "402-81-23213"
-                vendor_search_name = "동양정보통신"
-            vendor_target_digits = re.sub(r"[^0-9]", "", vendor_target_biz_no or "")
-            is_special_vendor_keyboard = len(vendor_target_digits) == 10
 
             self.logger.info(
                 f"  [MGMT-XY] {row_no}행 관리항목 조건판정: raw_account={account_name}, "
@@ -2241,8 +2375,14 @@ class ERPLoginBot:
                         for win in Desktop(backend="uia").windows():
                             try:
                                 title = win.window_text() or ""
-                                if "거래처" in title:
-                                    return win
+                                if "거래처" not in title:
+                                    continue
+                                try:
+                                    if hasattr(win, 'is_visible') and not win.is_visible():
+                                        continue
+                                except Exception:
+                                    pass
+                                return win
                             except Exception:
                                 pass
                     except Exception:
@@ -2321,137 +2461,136 @@ class ERPLoginBot:
                 except Exception:
                     return False
 
-            def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
+            def _wait_vendor_popup_closed(timeout=1.2):
+                end_at = time.time() + timeout
+                while time.time() < end_at:
+                    if not _find_vendor_popup(timeout=0.05):
+                        return True
+                    time.sleep(0.05)
+                return not bool(_find_vendor_popup(timeout=0.05))
+
+            def _close_existing_vendor_popup(label):
+                popup = _find_vendor_popup(timeout=0.12)
+                if not popup:
+                    return True
+                self.logger.warning(f"  [MGMT-XY] {label}: 이전 행 거래처 팝업 감지, 현재 행 입력 전 닫기")
+                try:
+                    popup.set_focus()
+                except Exception:
+                    pass
+                pyautogui.press('esc')
+                if _wait_vendor_popup_closed(timeout=0.70):
+                    return True
+                pyautogui.press('esc')
+                return _wait_vendor_popup_closed(timeout=0.50)
+
+            def _find_exact_vendor_result(popup, target_biz_no):
+                target_digits = re.sub(r"[^0-9]", "", target_biz_no or "")
+                if len(target_digits) != 10:
+                    return None
+                try:
+                    popup_rect = popup.rectangle()
+                    min_result_y = popup_rect.top + max(65, int(popup_rect.height() * 0.15))
+                    candidates = []
+                    for cell in popup.descendants():
+                        try:
+                            control_type = str(cell.element_info.control_type or "")
+                            if control_type in {"Edit", "ComboBox", "Button"}:
+                                continue
+                            cell_text = str(cell.window_text() or "").strip()
+                            if re.sub(r"[^0-9]", "", cell_text) != target_digits:
+                                continue
+                            rect = cell.rectangle()
+                            if rect.top < min_result_y or rect.width() <= 0 or rect.height() <= 0:
+                                continue
+                            candidates.append((rect.top, rect.left, cell))
+                        except Exception:
+                            pass
+                    if candidates:
+                        candidates.sort(key=lambda item: (item[0], item[1]))
+                        return candidates[0][2]
+                except Exception:
+                    pass
+                return None
+
+            def _input_vendor_by_business_no_exact(x, y, label, target_biz_no):
+                if not _close_existing_vendor_popup(label):
+                    self.logger.warning(f"  [MGMT-XY] {label}: 이전 거래처 팝업을 닫지 못해 현재 행 입력 중단")
+                    return False
+
                 popup = None
-                popup = _find_vendor_popup(timeout=0.70)
-                if popup:
-                    self.logger.info(f"  [MGMT-XY] {label}: vendor popup already opened; skip popup-open click")
                 for open_try in range(2):
-                    if popup:
-                        break
                     _double_click_form_xy(x, y, f"{label} 팝업 열기", wait=vendor_popup_open_wait)
-                    time.sleep(0.75 if open_try == 0 else ERP_FORM_WAIT + 0.65)
-                    popup = _find_vendor_popup(timeout=0.80 if open_try == 0 else 3.5)
+                    popup = _find_vendor_popup(timeout=0.80 if open_try == 0 else 1.50)
                     if popup:
-                        self.logger.info(f"  [MGMT-XY] {label}: vendor popup opened after click {open_try + 1}; stopping extra clicks")
                         break
                 if not popup:
-                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업을 열지 못해 PASS")
+                    self.logger.warning(f"  [MGMT-XY] {label}: 현재 행 거래처 팝업 열기 실패")
                     return False
-                # ERP vendor popup opens with the search text box focused.
-                # Do not call popup.set_focus(); it can move focus to the
-                # window/grid, so the business-number paste disappears and
-                # navigation confirms a wrong row.
-                self.logger.info(
-                    f"  [MGMT-XY] {label}: vendor popup opened; relation cell untouched, keeping default search-box focus"
-                )
-                time.sleep(max(0.45, mgmt_focus_wait))
 
-                # ERP 거래처 팝업은 UIA/검색칸 추정이 불안정해 확인된 사업자번호 키보드 흐름을 사용합니다.
-                # 순서: 검색칸 전체선택 -> 사업자번호 붙여넣기 -> Tab 4 -> Down 5 -> Up 1 -> Tab 3 -> Enter 2.
-                pyautogui.hotkey('ctrl', 'a')
-                _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
-                time.sleep(max(0.18, mgmt_key_wait))
-                _paste_text_fast(target_biz_no, f"{label} 거래처 사업자번호")
-                time.sleep(max(0.55, vendor_popup_open_wait))
-                self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 붙여넣기: {target_biz_no}")
-                pyautogui.press('tab', presses=4, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('down', presses=5, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('up', presses=1, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('tab', presses=3, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('enter', presses=2, interval=0.12)
-                time.sleep(ERP_FORM_WAIT)
-                self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 키보드 시퀀스 확정(Enter 2회): {target_biz_no}")
+                try:
+                    popup.set_focus()
+                except Exception:
+                    pass
+                _select_vendor_popup_business_filter(popup)
+                if not _input_vendor_popup_search_text(popup, target_biz_no):
+                    self.logger.warning(f"  [MGMT-XY] {label}: 사업자번호 검색칸 입력 실패")
+                    pyautogui.press('esc')
+                    return False
+                self.logger.info(f"  [MGMT-XY] {label}: 거래처 사업자번호 검색: {target_biz_no}")
+
+                result_cell = None
+                result_timeout = max(0.60, float(os.getenv("ERP_VENDOR_RESULT_TIMEOUT_SEC", "1.50") or "1.50"))
+                end_at = time.time() + result_timeout
+                while time.time() < end_at:
+                    result_cell = _find_exact_vendor_result(popup, target_biz_no)
+                    if result_cell is not None:
+                        break
+                    time.sleep(0.08)
+                if result_cell is None:
+                    self.logger.warning(f"  [MGMT-XY] {label}: 정확히 일치하는 사업자번호 검색결과 없음: {target_biz_no}")
+                    pyautogui.press('esc')
+                    _wait_vendor_popup_closed(timeout=0.50)
+                    return False
+
+                rect = result_cell.rectangle()
+                pick_x = rect.left + max(2, rect.width() // 2)
+                pick_y = rect.top + max(2, rect.height() // 2)
+                pyautogui.doubleClick(pick_x, pick_y, interval=0.05)
+                time.sleep(mgmt_commit_wait)
+                if _find_vendor_popup(timeout=0.10):
+                    pyautogui.press('enter')
+                if not _wait_vendor_popup_closed(timeout=1.00):
+                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 선택 후 팝업이 닫히지 않아 확정 실패")
+                    return False
+                self.logger.info(f"  [MGMT-XY] {label}: 정확한 거래처 선택 검증 완료: {target_biz_no}")
                 return True
 
             def _input_vendor_value_xy(x, y, label):
                 if not vendor_name and not vendor_target_biz_no:
-                    return
-                if is_special_vendor_keyboard and vendor_target_biz_no:
-                    if _input_vendor_by_business_no_keyboard(x, y, label, vendor_target_biz_no):
-                        return
-                    if vendor_name:
-                        self.logger.warning(
-                            f"  [MGMT-XY] {label}: 사업자번호 팝업 진입 실패, 기존 거래처명 입력 fallback: {vendor_name}"
-                        )
-                        _input_value_xy(x, y, vendor_name, label, enter_count=1, clear=True)
-                    return
+                    return False
                 if vendor_target_biz_no:
-                    target_biz_no = vendor_target_biz_no
-                    _input_value_xy(x, y, target_biz_no, label, enter_count=0, clear=True)
-                    pyautogui.press('enter')
-                    time.sleep(ERP_FORM_WAIT)
-                    picked = False
-                    popup_seen = False
-                    try:
-                        target_digits = re.sub(r"[^0-9]", "", target_biz_no)
-                        for _popup_try in range(12):
-                            for win in Desktop(backend="uia").windows():
-                                try:
-                                    title = win.window_text() or ""
-                                    if "거래처" not in title:
-                                        continue
-                                    popup_seen = True
-                                    win_rect = win.rectangle()
-                                    for cell in win.descendants():
-                                        try:
-                                            cell_text = (cell.window_text() or "").strip()
-                                            cell_digits = re.sub(r"[^0-9]", "", cell_text)
-                                            if (
-                                                target_biz_no not in cell_text
-                                                and cell_text != target_biz_no
-                                                and (not target_digits or target_digits not in cell_digits)
-                                                and cell_digits != target_digits
-                                            ):
-                                                continue
-                                            rect = cell.rectangle()
-                                            row_y = rect.top + rect.height() // 2
-                                            row_x = min(max(win_rect.left + 90, win_rect.left + 20), win_rect.right - 20)
-                                            pyautogui.click(row_x, row_y)
-                                            time.sleep(ERP_CLICK_WAIT)
-                                            pyautogui.doubleClick(row_x, row_y, interval=0.05)
-                                            time.sleep(ERP_CLICK_WAIT)
-                                            pyautogui.press('enter')
-                                            picked = True
-                                            self.logger.info(
-                                                f"  [MGMT-XY] {label}: 거래처 사업자번호 {target_biz_no} 행 선택"
-                                            )
-                                            break
-                                        except Exception:
-                                            pass
-                                    if picked:
-                                        break
-                                except Exception:
-                                    pass
-                            if picked or popup_seen:
-                                break
-                            time.sleep(0.15)
-                    except Exception as e:
-                        self.logger.warning(f"  [MGMT-XY] {label}: 거래처 사업자번호 행 탐색 실패: {e}")
-                    if not picked:
-                        if vendor_target_optional:
-                            self.logger.warning(
-                                f"  [MGMT-XY] {label}: special vendor business no {target_biz_no} not found; PASS"
-                            )
-                            if popup_seen:
-                                pyautogui.press('esc')
-                            time.sleep(ERP_FORM_WAIT)
-                            return
+                    if _input_vendor_by_business_no_exact(x, y, label, vendor_target_biz_no):
+                        return True
+                    if vendor_target_optional and not strict_vendor_selection:
                         self.logger.warning(
-                            f"  [MGMT-XY] {label}: 거래처 사업자번호 {target_biz_no} 미검출, 사업자번호 입력 후 Enter fallback"
+                            f"  [MGMT-XY] {label}: 정확 거래처 선택 실패, optional PASS: {vendor_target_biz_no}"
                         )
-                        pyautogui.press('enter')
-                    time.sleep(ERP_FORM_WAIT)
-                    return
+                        return True
+                    self.logger.warning(
+                        f"  [MGMT-XY] {label}: 정확 거래처 선택 실패, 관계항목 입력 재시도 필요: {vendor_target_biz_no}"
+                    )
+                    return False
                 _input_value_xy(x, y, vendor_name, label, enter_count=1, clear=True)
+                return True
+
+            if ("vendor_vat" in plan or "vendor" in plan) and not (vendor_name or vendor_target_biz_no):
+                raise RuntimeError(f"{row_no}행 거래처 관계항목 입력값 없음")
 
             if account_key == "부가세대급금" and corp == "일강":
                 if "vendor_vat" in plan:
-                    _input_vendor_value_xy(1118, 797, f"{row_no}행 거래처")
+                    if not _input_vendor_value_xy(1118, 797, f"{row_no}행 거래처"):
+                        raise RuntimeError(f"{row_no}행 거래처 관계항목 입력 실패")
                 if "supply" in plan and supply_amount:
                     _input_value_xy(1118, 817, supply_amount, f"{row_no}행 공급가액", enter_count=0, clear=True)
                 if "date" in plan:
@@ -2459,7 +2598,7 @@ class ERPLoginBot:
                 if "business" in plan and business_query:
                     _input_value_xy(1118, 857, business_query, f"{row_no}행 사업자번호", enter_count=1, clear=True)
                 self.logger.info(f"  [MGMT-XY] {row_no}행 일강 부가세대급금 관리항목 입력 완료")
-                return
+                return True
 
             if "project" in plan:
                 # 일강 집기비품: 거래처 다음 줄(프로젝트코드)에 "일반"을 입력합니다.
@@ -2469,10 +2608,12 @@ class ERPLoginBot:
                 _input_value_xy(1118, 797, invoice_date, f"{row_no}행 거래일/관리일", enter_count=0, clear=True)
 
             if "vendor_vat" in plan and (vendor_name or vendor_target_biz_no):
-                _input_vendor_value_xy(1118, 817, f"{row_no}행 거래처")
+                if not _input_vendor_value_xy(1118, 817, f"{row_no}행 거래처"):
+                    raise RuntimeError(f"{row_no}행 거래처 관계항목 입력 실패")
 
             if "vendor" in plan and (vendor_name or vendor_target_biz_no):
-                _input_vendor_value_xy(1118, 797, f"{row_no}행 거래처")
+                if not _input_vendor_value_xy(1118, 797, f"{row_no}행 거래처"):
+                    raise RuntimeError(f"{row_no}행 거래처 관계항목 입력 실패")
 
             if "supply" in plan and supply_amount:
                 _input_value_xy(1118, 837, supply_amount, f"{row_no}행 공급가액", enter_count=0, clear=True)
@@ -2481,10 +2622,29 @@ class ERPLoginBot:
                 _input_value_xy(1118, 857, business_query, f"{row_no}행 사업자번호", enter_count=1, clear=True)
 
             self.logger.info(f"  [MGMT-XY] {row_no}행 관리항목 입력 완료")
+            return True
 
         def _fill_management_items_by_coord():
             erp_rows = form_data.get('erp_clipboard_rows') or []
             rows_to_fill = max(0, int(form_data.get('erp_row_count') or len(erp_rows) or row_count))
+            summary_base_y = _env_int("ERP_MGMT_SUMMARY_Y_BASE", 231)
+            summary_row_height = _env_int("ERP_MGMT_ROW_HEIGHT", 20)
+            summary_x_candidates = _env_int_list("ERP_MGMT_SUMMARY_X_CANDIDATES", [970, 930, 1010, 890, 1070])
+            # ERP form rows can be rendered a few pixels lower on another PC.
+            # Try the same summary column slightly below before moving sideways.
+            summary_y_offsets = _env_int_list("ERP_MGMT_SUMMARY_Y_OFFSETS", [0, 4, 8, -4, -8])
+            summary_click_candidates = [
+                (x, y_offset)
+                for x in summary_x_candidates
+                for y_offset in summary_y_offsets
+            ]
+            summary_open_attempts = max(
+                1,
+                _env_int(
+                    "ERP_MGMT_SUMMARY_OPEN_ATTEMPTS",
+                    min(10, max(1, len(summary_click_candidates))),
+                ),
+            )
             self.logger.info(f"  [MGMT-XY] 행별 적요/관리항목 좌표 입력 시작: rows={rows_to_fill}")
 
             for idx in range(rows_to_fill):
@@ -2496,7 +2656,37 @@ class ERPLoginBot:
                 if not plan:
                     self.logger.info(f"  [MGMT-XY] {row_no}행 스킵: account={account_key}, corp={corp}, 입력 불필요")
                     continue
-                summary_y = 231 + (idx * 20)
+                summary_y = summary_base_y + (idx * summary_row_height)
+                if plan == ["vendor"]:
+                    last_error = None
+                    filled = False
+                    for attempt in range(summary_open_attempts):
+                        x, y_offset = summary_click_candidates[attempt % len(summary_click_candidates)]
+                        _double_click_form_xy(
+                            x,
+                            summary_y + y_offset,
+                            f"{row_no}행 적요/관계항목 열기 시도 {attempt + 1}",
+                            wait=mgmt_summary_open_wait,
+                        )
+                        time.sleep(mgmt_summary_open_wait)
+                        try:
+                            if _fill_management_for_current_row(row_no, account_name):
+                                filled = True
+                                break
+                        except Exception as e:
+                            last_error = e
+                            self.logger.warning(
+                                f"  [MGMT-XY] {row_no}행 거래처 관계항목 입력 재시도 {attempt + 1}/{summary_open_attempts}: {e}"
+                            )
+                            try:
+                                pyautogui.press('esc')
+                            except Exception:
+                                pass
+                            time.sleep(max(0.20, mgmt_key_wait))
+                    if not filled:
+                        _fail_form(f"{row_no}행 {account_key} 관계항목 입력 실패: {last_error}")
+                    time.sleep(mgmt_key_wait)
+                    continue
                 _double_click_form_xy(970, summary_y, f"{row_no}행 적요", wait=mgmt_summary_open_wait)
                 time.sleep(mgmt_summary_open_wait)
                 _fill_management_for_current_row(row_no, account_name)
@@ -2520,7 +2710,46 @@ class ERPLoginBot:
             self.logger.warning(f"  [PRINT] 프로세스 감지 시간초과: {process_name}")
             return False
 
+        def _wait_rd_viewer_ready(timeout_sec=10):
+            end_at = time.time() + max(0.2, float(timeout_sec))
+            title_re = re.compile(r"(Report Designer Viewer|RD Viewer|Designer Viewer)", re.I)
+            while time.time() < end_at:
+                viewer_pids = set()
+                try:
+                    for proc in psutil.process_iter(['pid', 'name']):
+                        if str(proc.info.get('name') or '').lower() == 'rdviewer_u.exe':
+                            viewer_pids.add(int(proc.info.get('pid') or 0))
+                except Exception:
+                    pass
+                for backend in ("uia", "win32"):
+                    try:
+                        for win in Desktop(backend=backend).windows():
+                            title = str(win.window_text() or "").strip()
+                            pid = int(getattr(win.element_info, 'process_id', 0) or 0)
+                            if not title_re.search(title) and pid not in viewer_pids:
+                                continue
+                            try:
+                                if hasattr(win, 'is_visible') and not win.is_visible():
+                                    continue
+                            except Exception:
+                                pass
+                            try:
+                                win.set_focus()
+                            except Exception:
+                                pass
+                            self.logger.info(f"  [PRINT] RD Viewer 준비 확인: title={title or '-'}, pid={pid or '-'}")
+                            return True
+                    except Exception:
+                        pass
+                time.sleep(ERP_CLICK_WAIT)
+            self.logger.warning("  [PRINT] RD Viewer 창/프로세스 감지 시간초과")
+            return False
+
         def _click_print_button():
+            if _env_flag("ERP_FAST_NAVIGATION", "0"):
+                _click_form_xy(812, 80, "전표출력", wait=ERP_SETTLE_WAIT)
+                self.logger.info("  [PRINT] 구매처리 빠른 경로 전표출력 좌표 클릭")
+                return True
             try:
                 for el in main_win.descendants():
                     try:
@@ -2703,7 +2932,11 @@ class ERPLoginBot:
             return closed
 
         def _save_pdf_output_dialog(save_path):
-            dialog = _wait_pdf_save_dialog(timeout_sec=15)
+            save_dialog_timeout = max(
+                1.0,
+                float(os.getenv("ERP_PDF_SAVE_DIALOG_TIMEOUT_SEC", "15") or "15"),
+            )
+            dialog = _wait_pdf_save_dialog(timeout_sec=save_dialog_timeout)
             if not dialog:
                 return False
 
@@ -2777,9 +3010,14 @@ class ERPLoginBot:
                     self.logger.warning(f"  [PRINT] PDF Save As hotkey path failed: {e}")
                     return False
 
-                if _wait_pdf_created(timeout_sec=6):
+                created_timeout = max(
+                    1.0,
+                    float(os.getenv("ERP_PDF_CREATED_TIMEOUT_SEC", "6") or "6"),
+                )
+                if _wait_pdf_created(timeout_sec=created_timeout):
                     return True
-                for _ in range(3):
+                save_retries = max(0, int(os.getenv("ERP_PDF_SAVE_RETRIES", "3") or "3"))
+                for _ in range(save_retries):
                     try:
                         pyautogui.press("enter")
                     except Exception:
@@ -2903,7 +3141,11 @@ class ERPLoginBot:
                 self.logger.info("  [PRINT] 출력안함 선택. Ctrl+P/인쇄를 진행하지 않습니다.")
                 return False
 
-            dialog = _wait_print_dialog(timeout_sec=10)
+            dialog_timeout = max(
+                1.0,
+                float(os.getenv("ERP_PRINT_DIALOG_TIMEOUT_SEC", "10") or "10"),
+            )
+            dialog = _wait_print_dialog(timeout_sec=dialog_timeout)
             if not dialog:
                 return False
 
@@ -2940,7 +3182,18 @@ class ERPLoginBot:
                     item_count = 0
 
             selected = False
+            try:
+                combo.select(target)
+                time.sleep(ERP_FORM_WAIT)
+                current_name = combo.window_text() or ""
+                if _print_target_matches(current_name, target):
+                    selected = True
+                    self.logger.info(f"  [PRINT] 프린터 직접 선택 성공: {current_name}")
+            except Exception:
+                pass
             for idx in range(max(0, item_count)):
+                if selected:
+                    break
                 try:
                     combo.select(idx)
                 except:
@@ -2982,21 +3235,32 @@ class ERPLoginBot:
             return True
 
         def _save_and_open_print_dialog():
+            save_attempted = False
             try:
                 self.logger.info("  [SAVE] Ctrl+S 저장 시작")
                 pyautogui.hotkey('ctrl', 's')
-                time.sleep(ERP_PRINT_SAVE_WAIT)
+                save_attempted = True
+                save_wait = max(
+                    0.30,
+                    float(os.getenv("ERP_PRINT_SAVE_WAIT", str(ERP_PRINT_SAVE_WAIT)) or ERP_PRINT_SAVE_WAIT),
+                )
+                time.sleep(save_wait)
                 pyautogui.press('enter')
                 self.logger.info("  [SAVE] 저장 알림 닫기용 Enter 전송 완료")
                 time.sleep(ERP_SETTLE_WAIT)
 
                 self.logger.info("  [PRINT] 전표출력 버튼 클릭 시작")
                 _click_print_button()
-
-                if _wait_process_by_name("rdviewer_u.exe", timeout_sec=10):
-                    time.sleep(ERP_PRINT_VIEWER_WAIT)
-                else:
-                    time.sleep(ERP_PRINT_VIEWER_WAIT)
+                viewer_timeout = max(
+                    1.0,
+                    float(os.getenv("ERP_PRINT_VIEWER_TIMEOUT_SEC", "10") or "10"),
+                )
+                if not _wait_rd_viewer_ready(timeout_sec=viewer_timeout):
+                    self.logger.warning("  [PRINT] RD Viewer 미검출, 전표출력 1회 재클릭")
+                    _click_print_button()
+                    if not _wait_rd_viewer_ready(timeout_sec=viewer_timeout):
+                        raise RuntimeError("전표출력 후 RD Viewer가 열리지 않았습니다.")
+                time.sleep(ERP_PRINT_VIEWER_WAIT)
 
                 choice = _ask_print_target()
                 if not choice:
@@ -3008,14 +3272,25 @@ class ERPLoginBot:
                 time.sleep(ERP_BLOCK_WAIT)
                 self.logger.info("  [PRINT] 인쇄 프린터 선택창 호출 완료")
                 printed = _select_printer_in_dialog(choice)
-                if printed:
-                    time.sleep(ERP_SETTLE_WAIT)
-                    _close_rd_viewer(timeout_sec=8)
+                if not printed:
+                    raise RuntimeError("RD Viewer 인쇄창 또는 PDF 저장을 완료하지 못했습니다.")
+                time.sleep(ERP_SETTLE_WAIT)
+                _close_rd_viewer(timeout_sec=8)
+                return True
             except Exception as e:
-                self.logger.warning(f"  [SAVE/PRINT] 자동 저장/출력 흐름 실패: {e}")
+                message = str(e) or e.__class__.__name__
+                if save_attempted:
+                    message = (
+                        "[ERP_SAVE_CONFIRM_REQUIRED] ERP 저장 명령 이후 출력 단계가 실패했습니다. "
+                        "K-System에서 기존 전표 저장 여부를 확인한 뒤 재처리해야 합니다. "
+                        f"원인: {message}"
+                    )
+                self.logger.error(f"  [SAVE/PRINT] 자동 저장/출력 흐름 실패: {message}")
+                raise RuntimeError(message) from e
 
         def _setup_by_coordinates_only():
             nonlocal main_rect_cache
+            _reconnect_main_window("신규 폼 입력 전", required=True)
             self._force_erp_window_maximized(main_win, "좌표 전용 폼 세팅 전 ERP 메인 창")
             main_rect_cache = None
             self.logger.info("  [FORM-XY] 좌표 전용 폼 세팅 시작")

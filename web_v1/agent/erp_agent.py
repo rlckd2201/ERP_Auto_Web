@@ -1,9 +1,10 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import argparse
 import configparser
 import ctypes
 import hashlib
+import importlib
 import json
 import os
 import platform
@@ -54,7 +55,24 @@ DEFAULT_CONFIGS = [
     PROJECT_ROOT / "manager_server" / "config.ini",
     PROJECT_ROOT / "support" / "config.ini",
 ]
-REQUIRED_PACKAGES = ["pyautogui", "pyperclip", "pywinauto", "psutil", "win32gui", "win32con", "win32print"]
+REQUIRED_PACKAGES = [
+    "pyautogui",
+    "pyperclip",
+    "pywinauto",
+    "psutil",
+    "win32gui",
+    "win32con",
+    "win32print",
+    "fitz",
+    "PIL",
+]
+PACKAGE_INSTALL_NAMES = {
+    "fitz": "pymupdf",
+    "PIL": "pillow",
+    "win32gui": "pywin32",
+    "win32con": "pywin32",
+    "win32print": "pywin32",
+}
 ERP_BASE_DIR = Path(os.getenv("ERP_BASE_DIR", r"C:\Users\Public\AppData\Local\Younglimwon\KSystem ver.5 Genuine"))
 ERP_OUTPUT_DIR = Path(os.getenv("ERP_OUTPUT_DIR", r"C:\ERP_DB\erp_outputs"))
 AGENT_CONFIG_PATH = Path(os.getenv("ERP_AGENT_CONFIG_PATH", r"C:\ERP_DB\agent_config.json"))
@@ -72,14 +90,101 @@ EXPENSE_TEMPLATE_SOURCE_CANDIDATES = [
 REQUIRED_ERP_COMPANIES = ["대승", "대승정밀", "일강"]
 PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
-HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy")
+HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.161"
+AGENT_BUNDLE_VERSION = "1.0.230"
 _MUTEX_HANDLE: Any = None
+
+ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
+    {
+        "ERP_FAST_INPUT",
+        "ERP_FAST_FIELD_VERIFY",
+        "ERP_STABLE_HEADER_FIELDS",
+    }
+)
 
 
 def now_text() -> str:
     return datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _erp_task_runtime_profile(task: dict[str, Any]) -> tuple[str, dict[str, str]]:
+    """Return task-scoped ERP timing and safety defaults."""
+    source_context = task.get("source_job_payload") if isinstance(task.get("source_job_payload"), dict) else {}
+    is_regular_auto = bool(task.get("regular_auto") or source_context.get("regular_auto"))
+    if is_regular_auto:
+        return "regular-auto", {
+            "ERP_FAST_MANAGEMENT": "1",
+            "ERP_MGMT_KEY_WAIT": "0.10",
+            "ERP_MGMT_COMMIT_WAIT": "0.18",
+            "ERP_MGMT_FOCUS_WAIT": "0.12",
+            "ERP_MGMT_CLICK_WAIT": "0.14",
+            "ERP_MGMT_CLIPBOARD_WAIT": "0.04",
+            "ERP_MGMT_SUMMARY_OPEN_WAIT": "0.42",
+            "ERP_MGMT_AFTER_GRID_PASTE_WAIT": "0.50",
+        }
+
+    job_type = str(task.get("job_type") or "").strip().lower()
+    one_click_mode = str(source_context.get("one_click_mode") or task.get("one_click_mode") or "").strip().lower()
+    invoices = task.get("invoices") if isinstance(task.get("invoices"), list) else []
+    is_purchase = (
+        job_type in {"purchase_erp_input", "purchase_one_click"}
+        or one_click_mode == "purchase"
+        or any(
+            str(item.get("invoice_type") or "").strip().lower() == "purchase"
+            for item in invoices
+            if isinstance(item, dict)
+        )
+    )
+    if not is_purchase:
+        return "", {}
+
+    # Interactive purchase work runs on the requesting user's normal PC.
+    # The slow 243 PC uses the separate regular-auto profile above.
+    return "purchase-interactive", {
+        "ERP_FAST_INPUT": "0",
+        "ERP_FAST_FIELD_VERIFY": "0",
+        "ERP_STABLE_HEADER_FIELDS": "1",
+        "ERP_CRITICAL_FIELD_WAIT": "0.45",
+        "ERP_FAST_MANAGEMENT": "1",
+        "ERP_FAST_NAVIGATION": "1",
+        "ERP_STRICT_VENDOR_SELECTION": "1",
+        "ERP_MGMT_KEY_WAIT": "0.06",
+        "ERP_MGMT_COMMIT_WAIT": "0.10",
+        "ERP_MGMT_FOCUS_WAIT": "0.07",
+        "ERP_MGMT_CLICK_WAIT": "0.08",
+        "ERP_MGMT_CLIPBOARD_WAIT": "0.02",
+        "ERP_MGMT_SUMMARY_OPEN_WAIT": "0.30",
+        "ERP_MGMT_AFTER_GRID_PASTE_WAIT": "0.35",
+        "ERP_VENDOR_POPUP_OPEN_WAIT": "0.35",
+        "ERP_NEW_FORM_WAIT": "0.35",
+        "ERP_SLIP_OPEN_WAIT": "0.60",
+        "ERP_PRINT_SAVE_WAIT": "0.80",
+        "ERP_PRINT_VIEWER_TIMEOUT_SEC": "4.0",
+        "ERP_PRINT_DIALOG_TIMEOUT_SEC": "4.0",
+        "ERP_PDF_SAVE_DIALOG_TIMEOUT_SEC": "6.0",
+        "ERP_PDF_CREATED_TIMEOUT_SEC": "4.0",
+        "ERP_PDF_SAVE_RETRIES": "1",
+        "ERP_AGENT_PROGRESS_THROTTLE_SEC": "4.0",
+    }
+
+
+def _apply_erp_runtime_profile(profile: dict[str, str]) -> dict[str, str | None]:
+    """Apply task settings while forcing safety-critical purchase values."""
+    previous: dict[str, str | None] = {}
+    for key, value in profile.items():
+        previous[key] = os.environ.get(key)
+        if key in ERP_RUNTIME_PROFILE_FORCE_KEYS or key not in os.environ:
+            os.environ[key] = value
+    return previous
+
+
+def _restore_erp_runtime_profile(previous: dict[str, str | None]) -> None:
+    for key, old_value in previous.items():
+        if old_value is None:
+            os.environ.pop(key, None)
+        else:
+            os.environ[key] = old_value
 
 
 def log(message: str) -> None:
@@ -385,6 +490,10 @@ def _safe_print_filename(value: str, fallback: str) -> str:
     return name[:140] or fallback
 
 
+def _output_print_file_key(invoice_id: int, file_index: int) -> str:
+    return f"{int(invoice_id)}:{int(file_index)}"
+
+
 def _download_output_print_file(
     server: str,
     job_id: str,
@@ -411,12 +520,425 @@ def _download_output_print_file(
     return target
 
 
-def _print_pdf_to_printer(path: Path, printer_name: str) -> None:
+def _pdf_print_app_candidates() -> list[Path]:
+    roots = [
+        os.getenv("ProgramFiles"),
+        os.getenv("ProgramFiles(x86)"),
+        os.getenv("LOCALAPPDATA"),
+    ]
+    rels = [
+        r"Adobe\Acrobat DC\Acrobat\Acrobat.exe",
+        r"Adobe\Acrobat Reader DC\Reader\AcroRd32.exe",
+        r"Adobe\Acrobat Reader\Reader\AcroRd32.exe",
+    ]
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        if not root:
+            continue
+        for rel in rels:
+            path = Path(root) / rel
+            key = str(path).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+    return candidates
+
+
+def _print_pdf_with_direct_app(path: Path, printer_name: str) -> str:
+    errors: list[str] = []
+    wait_seconds = float(
+        os.getenv(
+            "ERP_AGENT_PDF_PRINT_LAUNCH_WAIT_SECONDS",
+            os.getenv("ERP_AGENT_PDF_PRINT_WAIT_SECONDS", "0.8"),
+        )
+        or "0.8"
+    )
+    creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    for exe in _pdf_print_app_candidates():
+        try:
+            proc = subprocess.Popen(
+                [str(exe), "/t", str(path), printer_name],
+                cwd=str(path.parent),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                close_fds=True,
+                creationflags=creationflags,
+            )
+            time.sleep(max(wait_seconds, 0.5))
+            code = proc.poll()
+            if code not in (None, 0):
+                errors.append(f"{exe.name}: exit {code}")
+                continue
+            return str(exe)
+        except Exception as exc:
+            errors.append(f"{exe.name}: {exc}")
+    if errors:
+        raise RuntimeError("; ".join(errors))
+    raise RuntimeError("Adobe/Reader PDF print app not found")
+
+
+def _printer_spooler_snapshot(printer_name: str) -> tuple[bool, set[int], str]:
+    """Return the current local Windows spooler job ids for the selected printer."""
+    try:
+        import win32print
+
+        handle = win32print.OpenPrinter(printer_name)
+        try:
+            jobs = win32print.EnumJobs(handle, 0, 512, 1) or []
+        finally:
+            win32print.ClosePrinter(handle)
+        job_ids = {
+            int(job.get("JobId") or 0)
+            for job in jobs
+            if isinstance(job, dict) and int(job.get("JobId") or 0) > 0
+        }
+        return True, job_ids, ""
+    except Exception as exc:
+        return False, set(), str(exc) or exc.__class__.__name__
+
+
+def _wait_for_new_printer_job(
+    printer_name: str,
+    before_job_ids: set[int],
+    *,
+    timeout_seconds: float,
+) -> tuple[bool, list[int], str]:
+    """Wait until the Windows spooler exposes a job created after an output request."""
+    end_at = time.monotonic() + max(0.5, timeout_seconds)
+    last_error = ""
+    while time.monotonic() < end_at:
+        available, job_ids, error = _printer_spooler_snapshot(printer_name)
+        if not available:
+            last_error = error
+            break
+        new_job_ids = sorted(job_ids - before_job_ids)
+        if new_job_ids:
+            return True, new_job_ids, ""
+        time.sleep(0.20)
+    return False, [], last_error
+
+
+class _PdfPrintSubmissionError(RuntimeError):
+    def __init__(self, message: str, *, may_have_printed: bool) -> None:
+        super().__init__(message)
+        self.may_have_printed = bool(may_have_printed)
+
+
+def _fit_pdf_page_to_printable_area(
+    source_width: int,
+    source_height: int,
+    target_width: int,
+    target_height: int,
+) -> tuple[int, int, int, int]:
+    if min(source_width, source_height, target_width, target_height) <= 0:
+        raise ValueError("PDF/프린터 출력 영역 크기가 올바르지 않습니다.")
+    scale = min(target_width / source_width, target_height / source_height)
+    width = max(1, int(round(source_width * scale)))
+    height = max(1, int(round(source_height * scale)))
+    left = max(0, (target_width - width) // 2)
+    top = max(0, (target_height - height) // 2)
+    return left, top, left + width, top + height
+
+
+def _printer_devmode(printer_name: str, *, landscape: bool):
+    import win32con
+    import win32print
+
+    handle = win32print.OpenPrinter(printer_name)
+    try:
+        info = win32print.GetPrinter(handle, 2)
+        devmode = info.get("pDevMode") if isinstance(info, dict) else None
+        if devmode is None:
+            raise RuntimeError("프린터 DEVMODE를 읽을 수 없습니다.")
+        devmode.Orientation = (
+            win32con.DMORIENT_LANDSCAPE if landscape else win32con.DMORIENT_PORTRAIT
+        )
+        devmode.PaperSize = win32con.DMPAPER_A4
+        devmode.Copies = 1
+        devmode.Scale = 100
+        devmode.Fields |= (
+            win32con.DM_ORIENTATION
+            | win32con.DM_PAPERSIZE
+            | win32con.DM_COPIES
+            | win32con.DM_SCALE
+        )
+        if hasattr(devmode, "Nup"):
+            devmode.Nup = 1
+            devmode.Fields |= win32con.DM_NUP
+        result = win32print.DocumentProperties(
+            0,
+            handle,
+            printer_name,
+            devmode,
+            devmode,
+            win32con.DM_IN_BUFFER | win32con.DM_OUT_BUFFER,
+        )
+        if result < 0:
+            raise RuntimeError(f"프린터 용지 설정 적용 실패: {result}")
+        return devmode
+    finally:
+        win32print.ClosePrinter(handle)
+
+
+def _print_pdf_with_gdi_fit(path: Path, printer_name: str) -> dict[str, Any]:
+    import fitz
+    import win32con
+    import win32gui
+    import win32ui
+    from PIL import Image, ImageWin
+
+    document = None
+    dc = None
+    document_started = False
+    page_started = False
+    submitted_pages = 0
+    try:
+        document = fitz.open(str(path))
+        if document.page_count <= 0:
+            raise RuntimeError("PDF에 출력할 페이지가 없습니다.")
+        first_rect = document.load_page(0).rect
+        devmode = _printer_devmode(
+            printer_name,
+            landscape=float(first_rect.width) > float(first_rect.height),
+        )
+        hdc = win32gui.CreateDC("WINSPOOL", printer_name, devmode)
+        if not hdc:
+            raise RuntimeError("프린터 출력 장치를 열 수 없습니다.")
+        dc = win32ui.CreateDCFromHandle(hdc)
+        target_width = int(dc.GetDeviceCaps(win32con.HORZRES) or 0)
+        target_height = int(dc.GetDeviceCaps(win32con.VERTRES) or 0)
+        printer_dpi = max(
+            int(dc.GetDeviceCaps(win32con.LOGPIXELSX) or 0),
+            int(dc.GetDeviceCaps(win32con.LOGPIXELSY) or 0),
+            200,
+        )
+        render_dpi = min(printer_dpi, 300)
+        job_id = int(dc.StartDoc(f"Accounting WEB - {path.name}") or 0)
+        document_started = True
+        for page_index in range(document.page_count):
+            page = document.load_page(page_index)
+            pixmap = page.get_pixmap(dpi=render_dpi, alpha=False)
+            image = Image.frombytes("RGB", (pixmap.width, pixmap.height), pixmap.samples)
+            destination = _fit_pdf_page_to_printable_area(
+                image.width,
+                image.height,
+                target_width,
+                target_height,
+            )
+            dc.StartPage()
+            page_started = True
+            ImageWin.Dib(image).draw(dc.GetHandleOutput(), destination)
+            dc.EndPage()
+            page_started = False
+            submitted_pages += 1
+        dc.EndDoc()
+        document_started = False
+        return {
+            "method": "gdi_a4_fit",
+            "application": "Windows GDI",
+            "spooler_verified": True,
+            "spooler_status": "submitted",
+            "spooler_job_ids": [job_id] if job_id > 0 else [],
+            "page_count": document.page_count,
+            "paper": "A4",
+            "copies": 1,
+            "scale": "fit",
+        }
+    except Exception as exc:
+        may_have_printed = bool(document_started or page_started or submitted_pages)
+        if dc is not None and document_started:
+            try:
+                dc.AbortDoc()
+            except Exception:
+                pass
+        message = str(exc) or exc.__class__.__name__
+        raise _PdfPrintSubmissionError(message, may_have_printed=may_have_printed) from exc
+    finally:
+        if document is not None:
+            try:
+                document.close()
+            except Exception:
+                pass
+        if dc is not None:
+            try:
+                dc.DeleteDC()
+            except Exception:
+                pass
+
+
+
+def _browser_pdf_print_app_candidates() -> list[Path]:
+    roots = [
+        os.getenv("ProgramFiles"),
+        os.getenv("ProgramFiles(x86)"),
+        os.getenv("LOCALAPPDATA"),
+    ]
+    rels = [
+        r"Microsoft\Edge\Application\msedge.exe",
+        r"Google\Chrome\Application\chrome.exe",
+    ]
+    candidates: list[Path] = []
+    seen: set[str] = set()
+    for root in roots:
+        if not root:
+            continue
+        for rel in rels:
+            path = Path(root) / rel
+            key = str(path).lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            if path.exists() and path.is_file():
+                candidates.append(path)
+    return candidates
+
+
+def _print_pdf_with_browser_default(path: Path, printer_name: str) -> dict[str, Any]:
+    import win32print
+
+    candidates = _browser_pdf_print_app_candidates()
+    if not candidates:
+        raise RuntimeError("Edge/Chrome PDF print app not found")
+    wait_seconds = float(os.getenv("ERP_AGENT_BROWSER_PRINT_WAIT_SECONDS", "12.0") or "12.0")
+    min_visible_seconds = float(os.getenv("ERP_AGENT_PDF_VIEWER_MIN_VISIBLE_SECONDS", "1.5") or "1.5")
+    profile_dir = Path(tempfile.gettempdir()) / "AccountingWeb" / "browser_print" / f"{int(time.time() * 1000)}"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    original_printer = ""
+    try:
+        try:
+            original_printer = str(win32print.GetDefaultPrinter() or "")
+        except Exception:
+            original_printer = ""
+        win32print.SetDefaultPrinter(printer_name)
+        creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        errors: list[str] = []
+        for exe in candidates:
+            try:
+                spooler_available, before_job_ids, spooler_error = _printer_spooler_snapshot(printer_name)
+                started_at = time.monotonic()
+                proc = subprocess.Popen(
+                    [
+                        str(exe),
+                        "--kiosk-printing",
+                        "--no-first-run",
+                        "--disable-extensions",
+                        f"--user-data-dir={profile_dir}",
+                        path.as_uri(),
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    close_fds=True,
+                    creationflags=creationflags,
+                )
+                if not spooler_available:
+                    time.sleep(min(max(wait_seconds, 2.0), 4.0))
+                    code = proc.poll()
+                    if code not in (None, 0):
+                        raise RuntimeError(f"{exe.name}: exit {code}")
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+                    return {
+                        "method": "browser",
+                        "application": str(exe),
+                        "spooler_verified": False,
+                        "spooler_status": f"unavailable: {spooler_error}",
+                        "spooler_job_ids": [],
+                    }
+                confirmed, job_ids, wait_error = _wait_for_new_printer_job(
+                    printer_name,
+                    before_job_ids,
+                    timeout_seconds=wait_seconds,
+                )
+                if confirmed:
+                    remaining_visible = min_visible_seconds - (time.monotonic() - started_at)
+                    if remaining_visible > 0:
+                        time.sleep(remaining_visible)
+                    try:
+                        proc.terminate()
+                    except Exception:
+                        pass
+                    return {
+                        "method": "browser",
+                        "application": str(exe),
+                        "spooler_verified": True,
+                        "spooler_status": "confirmed",
+                        "spooler_job_ids": job_ids,
+                    }
+                if wait_error:
+                    errors.append(f"{exe.name}: spooler query failed: {wait_error}")
+                else:
+                    errors.append(f"{exe.name}: Windows print spooler did not receive a new job")
+                try:
+                    proc.terminate()
+                except Exception:
+                    pass
+            except Exception as exc:
+                errors.append(f"{exe.name}: {exc}")
+        raise RuntimeError("; ".join(errors) if errors else "Browser PDF print failed")
+    finally:
+        if original_printer:
+            try:
+                win32print.SetDefaultPrinter(original_printer)
+            except Exception:
+                pass
+        try:
+            shutil.rmtree(profile_dir, ignore_errors=True)
+        except Exception:
+            pass
+
+def _print_pdf_to_printer_legacy(path: Path, printer_name: str) -> dict[str, Any]:
     if not printer_name:
         raise RuntimeError("출력 프린터가 비어 있습니다.")
     if not path.exists() or not path.is_file():
         raise RuntimeError(f"출력할 PDF가 없습니다: {path}")
     import win32print
+
+    try:
+        result = _print_pdf_with_browser_default(path, printer_name)
+        log(
+            "PDF browser print "
+            f"{('spooler confirmed' if result.get('spooler_verified') else 'requested (spooler unavailable)')}: "
+            f"{path.name} -> {printer_name} via {Path(str(result.get('application') or '')).name}"
+        )
+        return result
+    except Exception as exc:
+        browser_error = str(exc) or exc.__class__.__name__
+
+    direct_error = ""
+    try:
+        spooler_available, before_job_ids, spooler_error = _printer_spooler_snapshot(printer_name)
+        app_path = _print_pdf_with_direct_app(path, printer_name)
+        if not spooler_available:
+            return {
+                "method": "direct",
+                "application": app_path,
+                "spooler_verified": False,
+                "spooler_status": f"unavailable: {spooler_error}",
+                "spooler_job_ids": [],
+            }
+        confirmed, job_ids, wait_error = _wait_for_new_printer_job(
+            printer_name,
+            before_job_ids,
+            timeout_seconds=float(os.getenv("ERP_AGENT_PDF_SPOOL_VERIFY_SECONDS", "8.0") or "8.0"),
+        )
+        if confirmed:
+            result = {
+                "method": "direct",
+                "application": app_path,
+                "spooler_verified": True,
+                "spooler_status": "confirmed",
+                "spooler_job_ids": job_ids,
+            }
+            log(f"PDF direct print spooler confirmed: {path.name} -> {printer_name} via {Path(app_path).name}")
+            return result
+        direct_error = wait_error or "Windows print spooler did not receive a new job"
+    except Exception as exc:
+        direct_error = str(exc) or exc.__class__.__name__
 
     original_printer = ""
     try:
@@ -425,10 +947,32 @@ def _print_pdf_to_printer(path: Path, printer_name: str) -> None:
         original_printer = ""
     first_error = ""
     try:
+        spooler_available, before_job_ids, spooler_error = _printer_spooler_snapshot(printer_name)
         win32print.SetDefaultPrinter(printer_name)
         os.startfile(str(path), "print")
-        time.sleep(1.5)
-        return
+        if not spooler_available:
+            time.sleep(1.5)
+            return {
+                "method": "shell_print",
+                "application": "default PDF print handler",
+                "spooler_verified": False,
+                "spooler_status": f"unavailable: {spooler_error}",
+                "spooler_job_ids": [],
+            }
+        confirmed, job_ids, wait_error = _wait_for_new_printer_job(
+            printer_name,
+            before_job_ids,
+            timeout_seconds=float(os.getenv("ERP_AGENT_PDF_SPOOL_VERIFY_SECONDS", "8.0") or "8.0"),
+        )
+        if confirmed:
+            return {
+                "method": "shell_print",
+                "application": "default PDF print handler",
+                "spooler_verified": True,
+                "spooler_status": "confirmed",
+                "spooler_job_ids": job_ids,
+            }
+        first_error = wait_error or "Windows print spooler did not receive a new job"
     except Exception as exc:
         first_error = str(exc) or exc.__class__.__name__
     finally:
@@ -441,27 +985,114 @@ def _print_pdf_to_printer(path: Path, printer_name: str) -> None:
     try:
         import win32api
 
+        spooler_available, before_job_ids, spooler_error = _printer_spooler_snapshot(printer_name)
         win32api.ShellExecute(0, "printto", str(path), f'"{printer_name}"', str(path.parent), 0)
-        time.sleep(1.5)
-        return
+        if not spooler_available:
+            time.sleep(1.5)
+            return {
+                "method": "shell_printto",
+                "application": "PDF printto handler",
+                "spooler_verified": False,
+                "spooler_status": f"unavailable: {spooler_error}",
+                "spooler_job_ids": [],
+            }
+        confirmed, job_ids, wait_error = _wait_for_new_printer_job(
+            printer_name,
+            before_job_ids,
+            timeout_seconds=float(os.getenv("ERP_AGENT_PDF_SPOOL_VERIFY_SECONDS", "8.0") or "8.0"),
+        )
+        if confirmed:
+            return {
+                "method": "shell_printto",
+                "application": "PDF printto handler",
+                "spooler_verified": True,
+                "spooler_status": "confirmed",
+                "spooler_job_ids": job_ids,
+            }
+        second_error = wait_error or "Windows print spooler did not receive a new job"
     except Exception as exc:
         second_error = str(exc) or exc.__class__.__name__
-        raise RuntimeError(f"PDF 출력 실패: {path.name} / print={first_error} / printto={second_error}") from exc
+    raise RuntimeError(
+        f"PDF 출력 실패: {path.name} / browser={browser_error} / direct={direct_error} / "
+        f"print={first_error} / printto={second_error}"
+    )
 
 
-def run_output_print_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> None:
+def _print_pdf_to_printer(path: Path, printer_name: str) -> dict[str, Any]:
+    if not printer_name:
+        raise RuntimeError("출력 프린터가 비어 있습니다.")
+    if not path.exists() or not path.is_file():
+        raise RuntimeError(f"출력할 PDF가 없습니다: {path}")
+    try:
+        result = _print_pdf_with_gdi_fit(path, printer_name)
+        log(f"PDF A4 fit print submitted: {path.name} -> {printer_name}")
+        return result
+    except _PdfPrintSubmissionError as exc:
+        if exc.may_have_printed:
+            raise RuntimeError(
+                "PDF 출력 중 오류가 발생했습니다. 중복 출력을 막기 위해 재전송하지 않습니다: "
+                f"{path.name} / {exc}"
+            ) from exc
+        raise RuntimeError(f"PDF A4 맞춤 출력 시작 실패: {path.name} / {exc}") from exc
+
+
+def run_output_print_task(
+    server: str,
+    task: dict[str, Any],
+    agent_id: str,
+    verify: bool,
+    tray: AgentTray | None = None,
+) -> None:
     job_id = str(task.get("job_id") or "")
     printer_name = str(task.get("printer_name") or "").strip()
-    print_files = [item for item in task.get("print_files") or [] if isinstance(item, dict)]
+    all_print_files = [item for item in task.get("print_files") or [] if isinstance(item, dict)]
+    completed_file_keys = {
+        str(value).strip()
+        for value in (task.get("completed_file_keys") or [])
+        if str(value).strip()
+    }
+    print_files = [
+        item
+        for item in all_print_files
+        if _output_print_file_key(int(item.get("invoice_id") or 0), int(item.get("file_index") or 0)) not in completed_file_keys
+    ]
     invoice_ids: list[int] = []
     successes_by_invoice: dict[int, dict[str, Any]] = {}
     failures: list[dict[str, Any]] = []
-    log(f"output print task claimed: job={job_id}, files={len(print_files)}, printer={printer_name}")
+    for item in all_print_files:
+        invoice_id = int(item.get("invoice_id") or 0)
+        if invoice_id and invoice_id not in invoice_ids:
+            invoice_ids.append(invoice_id)
+    log(
+        f"output print task claimed: job={job_id}, files={len(print_files)}/{len(all_print_files)}, "
+        f"already_confirmed={len(completed_file_keys)}, printer={printer_name}"
+    )
     try:
         if not printer_name:
             raise RuntimeError("출력 프린터가 지정되지 않았습니다.")
-        if not print_files:
+        if not all_print_files:
             raise RuntimeError("출력할 문서 세트 PDF가 없습니다.")
+        if not print_files:
+            message = f"담당자 PC 출력 완료: {len(completed_file_keys)}/{len(all_print_files)}개 파일 (기확인 출력)"
+            _post(
+                server,
+                f"/api/agent/jobs/{job_id}/complete",
+                {
+                    "ok": True,
+                    "job_type": "output_print",
+                    "agent_id": agent_id,
+                    "invoice_ids": invoice_ids,
+                    "successes": [],
+                    "failures": [],
+                    "completed_at": now_text(),
+                    "message": message,
+                },
+                verify=verify,
+                timeout=20,
+            )
+            if tray:
+                tray.notify("회계업무 WEB 출력 완료", message)
+            return
         total = len(print_files)
         for index, item in enumerate(print_files, start=1):
             invoice_id = int(item.get("invoice_id") or 0)
@@ -477,7 +1108,7 @@ def run_output_print_task(server: str, task: dict[str, Any], agent_id: str, veri
                     "agent_id": agent_id,
                     "status": "printing",
                     "progress": min(98, progress_value),
-                    "message": f"담당자 PC 출력 전송: #{invoice_id} / {filename}",
+                    "message": f"담당자 PC PDF 열기/출력 시작: #{invoice_id} / {filename}",
                     "invoice_ids": [invoice_id] if invoice_id else [],
                 },
                 verify=verify,
@@ -485,12 +1116,43 @@ def run_output_print_task(server: str, task: dict[str, Any], agent_id: str, veri
             )
             try:
                 local_pdf = _download_output_print_file(server, job_id, invoice_id, file_index, filename, verify)
-                _print_pdf_to_printer(local_pdf, printer_name)
+                print_result = _print_pdf_to_printer(local_pdf, printer_name)
                 row = successes_by_invoice.setdefault(
                     invoice_id,
-                    {"invoice_id": invoice_id, "printed_files": [], "printer_name": printer_name},
+                    {"invoice_id": invoice_id, "printed_files": [], "printed_file_keys": [], "print_results": [], "printer_name": printer_name},
                 )
                 row["printed_files"].append(str(local_pdf))
+                row["printed_file_keys"].append(_output_print_file_key(invoice_id, file_index))
+                row["print_results"].append(print_result)
+                spooler_job_ids = ", ".join(str(value) for value in print_result.get("spooler_job_ids") or []) or "-"
+                if print_result.get("spooler_verified"):
+                    message = (
+                        f"담당자 PC PDF 열기/인쇄 큐 확인: #{invoice_id} / {filename} / "
+                        f"방법={print_result.get('method')} / JobId={spooler_job_ids}"
+                    )
+                else:
+                    message = (
+                        f"담당자 PC PDF 출력 요청 완료(스풀러 확인 불가): #{invoice_id} / {filename} / "
+                        f"방법={print_result.get('method')} / {print_result.get('spooler_status')}"
+                    )
+                _post(
+                    server,
+                    f"/api/agent/jobs/{job_id}/event",
+                    {
+                        "agent_id": agent_id,
+                        "status": "printing",
+                        "progress": min(99, progress_value + 1),
+                        "message": message,
+                        "invoice_ids": [invoice_id] if invoice_id else [],
+                        "completed_print_file": {
+                            "invoice_id": invoice_id,
+                            "file_index": file_index,
+                            "filename": filename,
+                        },
+                    },
+                    verify=verify,
+                    timeout=10,
+                )
             except Exception as exc:
                 failures.append(
                     {
@@ -500,12 +1162,36 @@ def run_output_print_task(server: str, task: dict[str, Any], agent_id: str, veri
                         "error": str(exc) or exc.__class__.__name__,
                     }
                 )
-                break
+                _post(
+                    server,
+                    f"/api/agent/jobs/{job_id}/event",
+                    {
+                        "agent_id": agent_id,
+                        "status": "error",
+                        "progress": min(98, progress_value),
+                        "message": f"담당자 PC 출력 실패 후 다음 문서 계속 진행: #{invoice_id} / {filename}",
+                        "invoice_ids": [invoice_id] if invoice_id else [],
+                    },
+                    verify=verify,
+                    timeout=10,
+                )
+                continue
         ok = not failures
+        printed_count = sum(len(row.get("printed_files") or []) for row in successes_by_invoice.values())
+        completed_count = len(completed_file_keys) + printed_count
+        spooler_verified_count = sum(
+            1
+            for row in successes_by_invoice.values()
+            for item in row.get("print_results") or []
+            if isinstance(item, dict) and item.get("spooler_verified")
+        )
+        spooler_unverified_count = printed_count - spooler_verified_count
         message = (
-            f"담당자 PC 출력 완료: {len(print_files)}개 파일 / {printer_name}"
+            f"담당자 PC 출력 완료: {completed_count}/{len(all_print_files)}개 파일 / {printer_name} / "
+            f"Windows 인쇄 큐 확인 {spooler_verified_count}개"
+            + (f" / 확인 불가 {spooler_unverified_count}개" if spooler_unverified_count else "")
             if ok
-            else f"담당자 PC 출력 실패: {failures[0].get('filename')} / {failures[0].get('error')}"
+            else f"담당자 PC 출력 일부 실패: 성공 {printed_count}개, 실패 {len(failures)}개 / 첫 실패: {failures[0].get('filename')} / {failures[0].get('error')}"
         )
         _post(
             server,
@@ -523,6 +1209,8 @@ def run_output_print_task(server: str, task: dict[str, Any], agent_id: str, veri
             verify=verify,
             timeout=20,
         )
+        if tray:
+            tray.notify("회계업무 WEB 출력 완료" if ok else "회계업무 WEB 출력 재시도", message)
     except Exception as exc:
         message = str(exc) or exc.__class__.__name__
         log(f"output print task failed: {message}")
@@ -543,6 +1231,8 @@ def run_output_print_task(server: str, task: dict[str, Any], agent_id: str, veri
                 verify=verify,
                 timeout=20,
             )
+            if tray:
+                tray.notify("회계업무 WEB 출력 실패", message)
         except Exception as report_exc:
             log(f"output print failure report failed: {report_exc}")
 
@@ -556,6 +1246,66 @@ def _package_check() -> list[dict[str, Any]]:
         except Exception as exc:
             rows.append({"name": name, "ok": False, "message": str(exc)})
     return rows
+
+
+def _repair_missing_packages() -> dict[str, Any]:
+    """Install missing runtime packages into the exact Python used by the Agent."""
+    missing = [item["name"] for item in _package_check() if not item["ok"]]
+    if not missing:
+        return {"attempted": False, "ok": True, "missing": []}
+
+    install_names = sorted({PACKAGE_INSTALL_NAMES.get(name, name) for name in missing})
+    python_exe = Path(sys.executable)
+    if python_exe.name.lower() == "pythonw.exe":
+        console_python = python_exe.with_name("python.exe")
+        if console_python.exists():
+            python_exe = console_python
+
+    command = [
+        str(python_exe),
+        "-m",
+        "pip",
+        "install",
+        "--disable-pip-version-check",
+        "--upgrade",
+        *install_names,
+    ]
+    log(f"repairing missing Python packages: {', '.join(missing)}")
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            timeout=300,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+        )
+        output = ((completed.stdout or "") + "\n" + (completed.stderr or "")).strip()
+        if output:
+            log("package repair output: " + output[-1500:])
+        importlib.invalidate_caches()
+        remaining = [item["name"] for item in _package_check() if not item["ok"]]
+        ok = completed.returncode == 0 and not remaining
+        log(
+            "package repair completed"
+            if ok
+            else f"package repair failed: remaining={remaining}, rc={completed.returncode}"
+        )
+        return {
+            "attempted": True,
+            "ok": ok,
+            "missing": missing,
+            "remaining": remaining,
+            "returncode": completed.returncode,
+        }
+    except Exception as exc:
+        log(f"package repair failed: {exc}")
+        return {
+            "attempted": True,
+            "ok": False,
+            "missing": missing,
+            "remaining": missing,
+            "error": str(exc),
+        }
 
 
 def _config_path() -> Path | None:
@@ -1180,23 +1930,11 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
     os.environ.setdefault("ERP_AGENT_FRESH_START", "1")
     source_context = task.get("source_job_payload") if isinstance(task.get("source_job_payload"), dict) else {}
     is_regular_auto_task = bool(task.get("regular_auto") or source_context.get("regular_auto"))
-    regular_auto_speed_defaults = {
-        "ERP_FAST_MANAGEMENT": "1",
-        "ERP_MGMT_KEY_WAIT": "0.10",
-        "ERP_MGMT_COMMIT_WAIT": "0.18",
-        "ERP_MGMT_FOCUS_WAIT": "0.12",
-        "ERP_MGMT_CLICK_WAIT": "0.14",
-        "ERP_MGMT_CLIPBOARD_WAIT": "0.04",
-        "ERP_MGMT_SUMMARY_OPEN_WAIT": "0.42",
-        "ERP_MGMT_AFTER_GRID_PASTE_WAIT": "0.50",
-    }
+    runtime_profile_name, runtime_defaults = _erp_task_runtime_profile(task)
     previous_speed_env: dict[str, str | None] = {}
-    if is_regular_auto_task:
-        for key, value in regular_auto_speed_defaults.items():
-            previous_speed_env[key] = os.environ.get(key)
-            if key not in os.environ:
-                os.environ[key] = value
-        log("regular auto ERP management timing profile applied")
+    if runtime_defaults:
+        previous_speed_env = _apply_erp_runtime_profile(runtime_defaults)
+        log(f"ERP runtime profile applied: {runtime_profile_name}")
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
 
@@ -1245,8 +1983,14 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
                     "[KEYSAFE]",
                     "[FORM-XY]",
                     "[FORM-FAST]",
+                    "[FORM-VERIFY]",
+                    "[FORM-STEP]",
                     "[FORM-GRID]",
                     "[MGMT-XY]",
+                    "[MENU-",
+                    "[TREE-",
+                    "[SAVE]",
+                    "[PRINT]",
                     "[DEBUG]",
                 )
                 if any(token in text for token in important_tokens) and not any(token in text for token in noisy_tokens):
@@ -1328,12 +2072,8 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
         close_after_task = is_regular_auto_task or os.getenv("ERP_AGENT_CLOSE_ERP_AFTER_TASK", "0").strip().lower() in {"1", "true", "yes", "y"}
         if close_after_task:
             _cleanup_erp_processes_after_task("regular_auto" if is_regular_auto_task else "env")
-        if is_regular_auto_task:
-            for key, old_value in previous_speed_env.items():
-                if old_value is None:
-                    os.environ.pop(key, None)
-                else:
-                    os.environ[key] = old_value
+        if runtime_defaults:
+            _restore_erp_runtime_profile(previous_speed_env)
 
 
 def run_expense_report_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> None:
@@ -1481,6 +2221,7 @@ def main() -> int:
     if not args.once and not args.preflight_only and not _acquire_single_instance(args.agent_id, args.server):
         log("another ERP Agent instance is already running; exiting")
         return 0
+    _repair_missing_packages()
     tray = AgentTray(args.server)
     if not args.once and not args.preflight_only and not args.no_tray:
         tray.start()
@@ -1546,7 +2287,7 @@ def main() -> int:
                         run_expense_report_task(args.server, task, args.agent_id, verify)
                     elif job_type == "output_print":
                         tray.update("Printing")
-                        run_output_print_task(args.server, task, args.agent_id, verify)
+                        run_output_print_task(args.server, task, args.agent_id, verify, tray)
                     else:
                         tray.update("ERP task")
                         run_task(args.server, task, args.agent_id, verify)
@@ -1563,5 +2304,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
