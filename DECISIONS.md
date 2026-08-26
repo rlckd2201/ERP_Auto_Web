@@ -1,6 +1,6 @@
 # Decisions
 
-Updated: 2026-08-24
+Updated: 2026-08-25
 
 ## D-001 — actual code is the source of truth
 
@@ -79,3 +79,61 @@ Printer drivers can reject Excel's `PageSetup.PaperSize` setter even when the te
 ## D-019 - Gemini configuration stays external and uses the maintained SDK
 
 Purchase analysis uses `google-genai`, reads both API key and model from environment-backed settings, and defaults the model to `gemini-3.7-flash`. Secrets must remain in the operating server's `.env` and must not enter source, tests, logs, or session documents. On the Windows operating server, Google API clients use a `truststore.SSLContext` so certificate validation follows the Windows trust store; certificate verification is never disabled.
+
+## D-020 - do not silently substitute a model in comparisons
+
+If the requested historical model is no longer callable, report that boundary and use clearly labeled historical outputs only when the source proves which model produced them. Do not replace `gemini-2.5-flash` with 3.6 or another model and present that as a 2.5 comparison. A fair live comparison keeps the same source PDFs, prompt, parser context, JSON mode, and temperature.
+
+## D-021 - Gemini uploads use disposable ASCII filenames
+
+Keep original Korean document paths and filenames unchanged in ERP storage, but copy the two upload inputs into a bounded temporary directory as `tax_invoice.pdf` and `quote.pdf`. Upload only those copies, remove the temporary directory on every exit path, and delete every successfully created remote Gemini file in `finally`.
+
+## D-022 - Gemini request retries are bounded once
+
+The SDK request timeout is 60 seconds and its total attempt count is 2, with a one-second initial delay and five-second maximum delay. Callers must not add another retry loop around `_ai_parse`; a failed bounded request falls back to the fast parser so a transient provider outage cannot hold the purchase workflow indefinitely.
+
+Production acceptance for document-upload changes uses an existing invoice through `_ai_parse` directly, never the persistence API. The check must prove the result model and totals, temporary-file cleanup, and unchanged invoice state before and after the call.
+
+## D-023 - management benefits use operating evidence plus disclosed assumptions
+
+The executive deck uses the current read-only invoice mix and date window for volume, but it does not present unmeasured handling times as observed facts. Regular `20 -> 5 minutes` and purchase `35 -> 8 minutes` are conservative pre-interview assumptions, shown directly on the calculation slide and in speaker notes. Future revisions replace those values only with measured operator data; the value case emphasizes deadline stability, error reduction, traceability, and search-time reduction rather than headcount removal.
+
+## D-024 - external-development cost is a planning range, not a quote
+
+Use official 2026 Korea AI Software Industry Association applied-SW wage data as the labor baseline, then account for analysis, UI/data/log implementation, ERP/portal/AI integration, testing, deployment, documentation, warranty, and integration risk. Present `KRW 55-80 million` initial build and `KRW 6-12 million` annual maintenance as a realistic planning range with VAT, infrastructure, and paid licenses separate. Actual procurement requires scoped vendor quotations.
+
+## D-025 - the executive deck shows business outcomes before operating detail
+
+Use a 12-slide flow of impact, automation scope, actual function/output evidence, simplified operator work, time/cost reduction, and replacement value. Exclude error-log and retry mechanics from the main deck. Feature slides use newly captured application content without browser chrome, and output claims use actual generated voucher/report files. Every title stays on one line; measured operating data and planning assumptions remain visibly separated.
+
+## D-026 - automation elapsed time is not labor time
+
+Count only the operator's active click and result-confirmation time after adoption; exclude unattended system processing because the operator can continue other work. For the executive floor calculation use one hands-on minute per case, 240 regular cases/year from completed-month production volume, 250 purchase cases/year from the user-supplied operating average, and the official 2026 minimum wage of KRW 10,320/hour. Treat external rebuild and outsourced-maintenance estimates as appendix replacement references, never as the current system's operating cost or direct ROI denominator.
+
+## D-027 - slide titles name the subject instead of stating the whole argument
+
+Use concise functional titles such as `원클릭 회계처리`, `연간 업무시간 절감`, and `운영 경제성 판단`. Do not repeat time/cost metrics in the system-summary slide; reserve quantitative evidence for its dedicated impact slides. Merge redundant overview slides before adding more pages.
+
+## D-028 - ERP retry requires proof that the prior save did not commit
+
+A missing voucher PDF does not prove that the ERP voucher itself was not saved. The current flow sends Ctrl+S before opening RD Viewer, and a later print failure can therefore leave a committed ERP voucher behind. Do not automatically retry or re-enter such a purchase job until K-System is checked for an existing voucher. Management-item completion must mean that the selected ERP relation value was read back and matched, not merely that a paste/Enter sequence was sent.
+
+## D-029 - purchase and regular ERP automation use separate runtime profiles
+
+Keep the slow-PC safeguards for `regular_auto` on the 243 PC. Apply the faster navigation, field-verification, management-item, progress, and output timeouts only to interactive purchase tasks on ordinary operator PCs. A fast path may skip redundant scans only when the existing final form-readiness check and fallback remain in place.
+
+## D-030 - vendor selection is exact and post-save output failure is a guarded state
+
+Every vendor relation row must close any stale popup, open the popup from the current row, and select a result whose normalized business number exactly matches the requested 10 digits. Never infer success from keyboard input alone. After Ctrl+S, failure to open RD Viewer, open the print dialog, or create the PDF must raise `[ERP_SAVE_CONFIRM_REQUIRED]`; automatic/direct retry is blocked until the operator checks K-System and explicitly resets the invoice.
+
+## D-031 - production deployment does not use a save-risk invoice as its acceptance test
+
+Deploy and verify source hashes, tests, HTTPS health, version, listener ownership, scheduler lock, Agent heartbeat, and bundle hash without running ERP input. When an earlier attempt may already have committed through Ctrl+S, first inspect K-System for the existing voucher. Validate live exact-vendor selection on the next safe new purchase case, not by replaying the risky invoice.
+
+## D-032 - critical ERP header fields never use the purchase global-fast path
+
+Purchase tasks may optimize menu navigation, progress posting, grid management, and output polling, but 회계단위, 전표관리단위, and 회계일 must retain stable key pacing and mandatory value read-back. After a field or dropdown transition, reconnect the active K-System main window before continuing if the UIA provider is invalid. A disconnected or unverifiable header is terminal before grid management and before Ctrl+S; cached screen coordinates are not sufficient proof that the ERP form is still valid. This narrows D-029: purchase speed improvements cannot include skipping verification of critical header fields.
+
+## D-033 - do not run a self-updating Agent against an editable mismatched worktree
+
+When the local source tree is newer than the production Agent bundle, stop only the exact Agent process before editing or verification. Otherwise its normal self-update can replace in-progress source and test files with the older server bundle. Restart the Agent only after production publishes the matching version and verify both version and bundle hash through setup status.

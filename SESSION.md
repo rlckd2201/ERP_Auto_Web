@@ -1,10 +1,10 @@
 # Session
 
-Updated: 2026-08-24
+Updated: 2026-08-25
 
 ## Current objective
 
-Keep the 1.0.228 operating server reliable: native WEHAGO PDFs, one canonical noon alert, canonical document authors, and resilient portrait-A4 cash-disbursement PDFs.
+Keep the 1.0.228 operating server reliable and maintain an evidence-backed executive/operator system overview deck.
 
 ## Status
 
@@ -121,3 +121,131 @@ Observe the next 12:00 regular-due run and confirm that exactly one status email
 ## Next exact starting point
 
 Observe the next purchase case that contains items the fast parser cannot classify and confirm its saved analysis records `analysis_ai_model=gemini-3.7-flash`. Also confirm the next real 12:00 regular-due run sends exactly one status email.
+
+## Gemini 2.5/3.7 sample comparison (2026-08-24)
+
+- Read-only comparison used purchase invoices `#159`, `#207`, and `#208` with identical tax/quote PDFs, prompt, fast-parse context, and JSON mode. No invoice row was updated.
+- The rotated key cannot call `gemini-2.5-flash`: all three requests returned 404 because the model is unavailable to new users. Historical stored Gemini results were used as the 2.5-era baseline because the pre-upgrade source hard-coded that model; `#207` includes later manual account edits and is not a pristine raw baseline.
+- `gemini-3.7-flash` succeeded for all three samples. Target supply, tax, grand total, and summed item supply matched exactly in every sample.
+- Material improvement: `#159` historically treated the RJ-45 `[100개]` package notation as quantity 100, while the quote's actual order quantity is 2; 3.7 returned quantity 2. `#207` still expanded each quantity-2 product into two quantity-1 rows. `#208` matched the historical result.
+- All three quotes contain delivery-fee and free-delivery rows that net to zero; 3.7 correctly omitted both adjustment rows from ERP items.
+- Critical deployment finding: `google-genai` file upload raises `UnicodeEncodeError` when a Korean source filename is placed in the multipart header. The comparison succeeded only after copying each source to an ASCII-named temporary PDF; the production repair and verification are recorded below.
+
+## Gemini Korean-filename fix deployment (2026-08-24)
+
+- Final deployment completed at `2026-08-24T13:53:53`; backup `C:\ERP_DB\backups\gemini_filename_fix_20260824_135253`, backend PID/listener `6568`.
+- Fourteen focused tests passed on the operating server. Read-only production `_ai_parse` verification used Korean-named invoice `#208`, returned three items through `gemini-3.7-flash`, and matched supply `228,527`, tax `22,853`, and total `251,380`.
+- Verification confirmed one production-function call, complete temporary-directory cleanup, no invoice DB write, external HTTPS health, sole 8080 listener, and regular-due scheduler/process-lock ownership.
+- A final browser check opened `https://172.17.39.121:8080/` and rendered the production UI. Port 8080 is HTTPS-only, so a plain HTTP probe returning an empty response is expected and is not a backend outage.
+- SDK calls are bounded to a 60-second request timeout and two total attempts. The verifier does not wrap `_ai_parse` in another retry loop.
+- Source and operational records are published on `origin/codex/gemini-filename-fix-20260824` through commit `959d548`.
+
+## Next exact starting point after deployment
+
+Observe the next genuinely unknown purchase item and confirm its saved row records `analysis_ai_model=gemini-3.7-flash`. Separately add a deterministic test case for a non-zero discount line such as `-6,730원`; the three historical comparison quotes only contained net-zero delivery adjustments.
+
+## Executive system PPT draft (2026-08-25)
+
+- Created a 14-slide executive-facing draft at `output/회계업무_자동화_WEB_시스템_소개_초안_v0.1.pptx`.
+- The deck covers the agenda, system overview, four concise feature slides using real operating screenshots, daily and exception operator manuals, a conservative time-saving calculation, annualized impact, and a realistic external-development estimate.
+- Read-only operating snapshot used in the draft: 100 invoices over 2026-05-12 through 2026-08-24; 73 regular, 27 purchase; 97 complete, 2 waiting, 1 error; 30,676 invoice-log rows.
+- Time model is explicitly labeled as a pre-interview assumption: regular 20 to 5 minutes, purchase 35 to 8 minutes. It yields 30.4 hours saved per 100 cases and about 105.7 hours, or 13.2 eight-hour workdays, annualized at the observed volume.
+- External-build planning range is `KRW 55-80 million` plus VAT/server/licenses, with annual maintenance `KRW 6-12 million`; the deck notes that this is a planning range based on 2026 KOSA applied-SW wage data, not a vendor quote.
+- Verification: `python-pptx` reopened all 14 slides, every slide contains a `[Sources]` speaker-note block, PowerPoint opened the deck and exported 14 PNGs at 1600x900, and all rendered slides were visually inspected at full size. The skill-provided `slides_test.py` could not run because its optional `numpy` dependency is absent.
+- Build and QA sources are retained in `output/system_overview_ppt_draft/`; no production code, database row, ERP job, email, or deployment state was changed.
+- Added generated `output/` to `.graphifyignore` and rebuilt Graphify after the expected removal of the draft-builder nodes: 1,383 nodes, 3,850 edges, and 42 communities.
+
+## Next exact starting point after PPT draft
+
+Collect executive/operator feedback on terminology, measured per-case handling time, preferred company branding, and whether the cost slide should remain in the main deck or move to an appendix. Apply those choices to v0.2 without changing the evidence snapshot unless a new measurement is supplied.
+
+## Executive system PPT revision v0.2 (2026-08-25)
+
+- Rebuilt the executive deck as 12 slides at `output/회계업무_자동화_WEB_시스템_소개_v0.2.pptx`; v0.1 remains preserved.
+- Replaced every reused/user-provided browser image with new clean captures that exclude Chrome tabs, address bar, and bookmarks: accounting mail, regular receipt history, and the live Compuzone quote.
+- Removed error-log/retry content and reframed the main story around usefulness, automatic document interpretation, ERP/document-set output, time reduction, direct labor savings, and external replacement value.
+- Added actual generated ERP voucher `#180` and cash-disbursement report `#180` as output evidence.
+- All slide titles render on one line. PowerPoint reopened the file and exported 12 slides at 1600x900; all slides were inspected individually and in a montage.
+- Final validation passed: valid PPTX ZIP, 12 slides, `[Sources]` notes on every slide, no title newline, and PowerPoint COM reopen count 12.
+
+## Next exact starting point after PPT v0.2
+
+Use measured operator handling times to replace the disclosed planning assumptions when available. Otherwise the deck is ready for executive review without any production-code or deployment change.
+
+## Executive system PPT revision v0.3 (2026-08-25)
+
+- Corrected the labor model so automation elapsed time is not counted as operator work; post-adoption hands-on time is one minute per case for click and result confirmation.
+- Regular volume uses completed June/July production months at 20 cases/month, or 240/year. Purchase volume uses the user-supplied operating average of 250/year, for 490/year total.
+- Revised annual impact: 225.8 hours before, 8.2 hands-on hours after, 217.7 hours or 96.4% saved.
+- Direct labor is now a floor based on the official 2026 minimum wage of KRW 10,320/hour: KRW 2,246,320/year.
+- External rebuild and outsourced-maintenance ranges were removed from main ROI and placed in an appendix as replacement-market references, not current operating costs.
+- Final deck: `output/회계업무_자동화_WEB_시스템_소개_v0.3.pptx`; 13 slides, all titles one line, all notes sourced, PowerPoint reopen/render verification passed.
+
+## Next exact starting point after PPT v0.3
+
+Obtain the actual annual cash operating/maintenance cost. Compare it with the KRW 2.246 million direct-labor floor; quantify deadline/error/continuity value only if management requires a fuller ROI.
+
+## Executive system PPT revision v0.4 (2026-08-25)
+
+- Removed the duplicated metric summary and merged system introduction/process into one `원클릭 회계처리` slide.
+- Reduced the deck from 13 to 12 slides. Slide 3 contains no time or cost metrics; those appear only on `연간 업무시간 절감` and `연간 인건비 절감`.
+- Replaced sentence-style titles with concise functional titles across the deck.
+- Simplified the cover metrics into four automation-scope labels: automatic receipt, AI analysis, ERP input, and document output.
+- Final deck: `output/회계업무_자동화_WEB_시스템_소개_v0.4.pptx`; valid 12-slide PPTX, all titles one line, all source notes present, PowerPoint reopen and 1600x900 render QA passed.
+
+## Next exact starting point after PPT v0.4
+
+Use v0.4 for executive review. Only revise operating-cost economics after the actual current annual cash operating cost is supplied.
+
+## Invoice #209 Compuzone diagnosis (2026-08-26)
+
+- Read-only production inspection covered invoice `#209` and both failed purchase jobs `d9cc4929-8e37-420c-9f35-09991cd3e310` and `f5f0b54e-441f-48d7-91c2-2718ed102f4c`.
+- The purchase payload correctly builds four rows: fixtures, supplies, input VAT, and `가지급금(업체)`. Compuzone's intended vendor lookup value is the correct supplier business number `106-81-83458`.
+- The management-item defect is state/focus validation: rows 3 and 4 reuse an already-open vendor popup, assume its default search-box focus, run a fixed keyboard sequence, and report completion without reading back the selected vendor.
+- The terminal job failure is separate: both runs sent Ctrl+S, then RD Viewer and the Windows print dialog timed out, so no ERP voucher PDF was created. The print helper swallowed the timeout and only the backend's missing-file check marked the job failed.
+
+## Next exact starting point after #209 diagnosis
+
+Before any retry, confirm in K-System whether either Ctrl+S created a saved voucher. If implementation is approved, make vendor selection row-scoped and read-back verified, make print/viewer failure fatal at its source, and apply an appropriate fast profile to purchase tasks without removing critical field checks.
+
+## Invoice #209 purchase ERP safety/performance fix (2026-08-26)
+
+- Preserved the pre-change files under `tmp/erp_purchase_fix_backup_20260826_091706`; SHA-256 verification matched every copied source.
+- Purchase tasks now use a dedicated interactive fast profile on ordinary operator PCs. The 243-PC `regular_auto` profile is unchanged.
+- Vendor management values are selected from a newly opened row-scoped popup by exact 10-digit business-number match. The prior blind `Tab/Down/Up/Enter` sequence was removed.
+- A failure after Ctrl+S now raises `[ERP_SAVE_CONFIRM_REQUIRED]`; the web API blocks a direct retry until an operator checks K-System and explicitly returns the invoice to waiting.
+- RD Viewer, print-dialog, and PDF-save failures are no longer reported as success. Progress-event chatter and redundant purchase-only UI scans were reduced.
+- Verification passed: Python compile, all 11 discovered `web_v1/test*.py` tests, and `graphify update .` (`1,405` nodes, `3,875` edges, `48` communities).
+- Version `1.0.229` was deployed at `2026-08-26T11:07:54`. Production backup: `C:\ERP_DB\backups\erp_purchase_fix_20260826_110738`; backend PID/listener: `3948`.
+- External HTTPS health, version, the regular-due scheduler/process lock, and the single 8080 listener all passed. The local ERP Agent restarted as PID `21168`; setup status reports ready, current/latest version `1.0.229`, and matching bundle hash `df297cc0601d8b314205d8367bb7446d7f706eef19b7cd6a7975b690fd9084d7`.
+
+## Next exact starting point after #209 fix
+
+Before retrying invoice `#209`, confirm in K-System that neither prior Ctrl+S attempt already created a voucher. Observe the first safe new purchase job to confirm the live K-System result grid exposes the exact business-number cell as expected; do not use #209 for this acceptance check.
+
+## Purchase fast-profile regression diagnosis (2026-08-26)
+
+- Production jobs `0be1a41e-5d97-4950-8454-e69fc8947972` and `f7e66896-2ec1-4746-b7fc-c427b659637f` retried invoice `#209` from Agent `송명학-송명학` at `172.17.30.15` after the 1.0.229 deployment.
+- The first run lost the K-System UI Automation connection immediately after the `회계일` click at `11:18:45`; the server received COM/UIA error `-2147220991` at `11:18:48`.
+- The second run passed header/grid entry but repeatedly reused the disconnected UIA wrapper, so the exact-vendor popup could not be found and the job failed before Ctrl+S.
+- The regression is the purchase profile's use of `ERP_FAST_INPUT=1` plus `ERP_FAST_FIELD_VERIFY=1`: it reduces global PyAutoGUI pacing and skips read-back of critical header fields, leaving no recovery boundary when K-System recreates or invalidates its UIA provider.
+- No further ERP run was started during diagnosis. The current development-PC Agent had no claimed task; the failing jobs ran on the separate operator PC.
+
+## Next exact starting point after fast-profile diagnosis
+
+After implementation approval, preserve fast menu/progress behavior but restore stable pacing and mandatory read-back for 회계단위, 전표관리단위, and 회계일. Reconnect the active K-System window after critical transitions; if reconnect/read-back fails, stop before grid management or Ctrl+S. Back up, test the COM/UIA invalidation path, deploy as 1.0.230, and do not use #209 for acceptance until its earlier saved-voucher risk is checked.
+
+## Purchase header/UIA recovery deployment (2026-08-26)
+
+- Preserved the 1.0.229 pre-change sources under `tmp/erp_header_stability_backup_20260826_114355`; production created `C:\ERP_DB\backups\erp_header_stability_20260826_120208` before replacement.
+- Version 1.0.230 removes purchase-task global fast input and verification skipping for 회계단위, 전표관리단위, and 회계일 while retaining the safe menu, progress, management, and output optimizations.
+- Critical header transitions now reconnect to the current K-System process/window and require value read-back. A disconnected UIA provider or unverifiable value raises a terminal error before management-grid work and before Ctrl+S.
+- The local self-updating Agent was stopped while source and production bundles differed, preventing another overwrite of the editable worktree. It was restarted only after the server published the exact 1.0.230 bundle.
+- Verification passed Python compilation, 13 discovered regression tests, `git diff --check`, and `graphify update .` (`1,414` nodes, `3,886` edges, `50` communities).
+- Production deployed at `2026-08-26T12:02:34`; backend/listener PID `8268`, scheduler and process lock active, version `1.0.230`, and Agent bundle hash `5eae04b11a38dcdcdd5741d11c29f7d5df5f878508761d05fef657d9141fd1e2` matched exactly.
+- Local Agent PID `26008` reports setup ready, version current/latest `1.0.230`, matching bundle hash, all required packages, ERP installations, templates, display, and printers ready.
+- No ERP job or invoice state was changed during deployment. Invoice #209 was not replayed; only scheduled purchase-mail collection jobs appeared after restart.
+
+## Next exact starting point after 1.0.230 deployment
+
+Check K-System for a voucher potentially created by #209's earlier pre-fix Ctrl+S attempt before any reset or retry. Use the next safe new purchase case for live acceptance of header read-back, exact vendor selection, and one-time document-set output.
