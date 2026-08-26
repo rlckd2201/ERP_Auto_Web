@@ -242,3 +242,18 @@ Updated: 2026-08-25
 - Live proof: two consecutive fresh-session #209 runs reported four clipboard rows and verified `컴퓨존` for rows 1, 3, and 4. The in-memory harness replaced the save call with `[DIRECT_STOP_BEFORE_SAVE]`; neither run sent Ctrl+S.
 - Deployment: 13 server tests passed; production backup `C:\ERP_DB\backups\erp_vendor_state_20260826_141624`; backend/listener PID `3976`; version `1.0.232`; scheduler and lock healthy; server and local Agent hash `22cab9b29207b627bcd751e435e37fa1237ec52a64fe11e28a81918239685d4e`; local Agent PID `25036` is ready.
 - Remaining safety boundary: inspect K-System before resetting #209 or #211 because older runs may have saved vouchers. Use the next new purchase case for full save/output acceptance.
+
+## I-033 - 송명학 PC fixed coordinates differ despite equal resolution - resolved in 1.0.233
+
+- Evidence: 송명학 Agent reports primary `DISPLAY1` at 1920x1080/125% and ERP `DISPLAY2` at 1920x1080/100% with virtual bounds `(-1920,-106)-(0,974)`. Previous #209 logs used maximized ERP bounds `(-1920,-106)-(0,926)` and absolute management clicks derived directly from that outer rectangle.
+- Root cause: fixed points were anchored to the mutable outer window rectangle. Mixed-DPI extended desktops, taskbars, RDP reconnects, and DWM frame bounds can keep resolution constant while changing the physical screen origin by several pixels.
+- Repair: re-enumerate the target monitor for each maximize phase, use its `rcWork` as the canonical canvas, record outer/client/work diagnostics, and calibrate form points from the live `cboAccUnit` center with a bounded 40-pixel correction.
+- Verification/deployment: three geometry/wiring tests passed locally and on the server. Version 1.0.233 backup `C:\ERP_DB\backups\erp_coord_fix_20260826_153351`; exact bundle hash `50beb2aa9f3693a547556f7ea8c1fa480373a5119e186dbf62f84a29540b85a2`.
+
+## I-034 - progress HTTP timeout blocked and failed ERP input - resolved in 1.0.234
+
+- Evidence: prior #209 ended with `HTTPSConnectionPool(... Read timed out, read timeout=10)` propagated as `FORM-XY` failure. The 1.0.233 acceptance run stopped updating immediately after `PID 3180` and did not heartbeat again while the job remained ERP-running.
+- Root cause: every logger message executed `_post(.../event)` synchronously on the same thread that drives K-System. A slow telemetry request therefore added up to ten seconds per log and its exception could escape into the ERP form logic.
+- Repair: `_ProgressEventDispatcher` sends progress through a bounded daemon queue with a two-second network timeout. Submit is non-blocking, overflow keeps the newest event, network exceptions stay local, and queued progress is discarded before the authoritative completion/error POST.
+- Regression coverage: slow HTTP, failed HTTP, late-progress rejection, two coordinate geometry cases, and runtime wiring all pass (6 tests). Production backup `C:\ERP_DB\backups\erp_coord_fix_20260826_154936`; version 1.0.234; backend PID `7508`; exact bundle hash `3fb9dfba25ec68add2c58ae5cbb39e5e398d1dc3739646ca5d715e51530bc71f`.
+- Live containment: #209 remains `ERP대기` with no ERP voucher PDF. Its old 1.0.233 Agent task is still claimed and the remote PC exposes no management/RDP port. Do not enqueue another task until the old Agent/K-System process is ended and K-System is checked for an existing voucher.

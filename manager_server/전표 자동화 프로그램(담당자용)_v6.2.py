@@ -415,13 +415,32 @@ def _monitor_summary(monitors):
     for item in monitors:
         parts.append(
             f"{item.get('device','?')} {item.get('width')}x{item.get('height')} "
-            f"scale={item.get('scale')} rect=({item.get('left')},{item.get('top')})-({item.get('right')},{item.get('bottom')})"
+            f"scale={item.get('scale')} rect=({item.get('left')},{item.get('top')})-({item.get('right')},{item.get('bottom')}) "
+            f"work=({item.get('work_left')},{item.get('work_top')})-({item.get('work_right')},{item.get('work_bottom')})"
         )
     return "; ".join(parts)
 
 
-def _detect_erp_target_monitor(logger=None):
+class _ERPScreenRect:
+    __slots__ = ("left", "top", "right", "bottom")
+
+    def __init__(self, left, top, right, bottom):
+        self.left = int(left)
+        self.top = int(top)
+        self.right = int(right)
+        self.bottom = int(bottom)
+
+    def width(self):
+        return self.right - self.left
+
+    def height(self):
+        return self.bottom - self.top
+
+
+def _detect_erp_target_monitor(logger=None, force_refresh=False):
     global _ERP_TARGET_MONITOR_CACHE
+    if force_refresh:
+        _ERP_TARGET_MONITOR_CACHE = None
     if _ERP_TARGET_MONITOR_CACHE:
         return _ERP_TARGET_MONITOR_CACHE
     if os.name != "nt":
@@ -497,10 +516,10 @@ def _detect_erp_target_monitor(logger=None):
     return _ERP_TARGET_MONITOR_CACHE
 
 
-def _move_window_to_erp_monitor(win, logger=None, label="ERP window"):
+def _move_window_to_erp_monitor(win, logger=None, label="ERP window", target_monitor=None):
     if not win or os.name != "nt":
         return None
-    target = _detect_erp_target_monitor(logger)
+    target = target_monitor or _detect_erp_target_monitor(logger)
     left = int(target.get("work_left", target["left"]))
     top = int(target.get("work_top", target["top"]))
     right = int(target.get("work_right", target["right"]))
@@ -543,6 +562,85 @@ def _move_window_to_erp_monitor(win, logger=None, label="ERP window"):
     return target
 
 
+def _window_client_screen_rect(win):
+    """Return the Win32 client area in physical screen pixels for diagnostics."""
+    if not win or os.name != "nt":
+        return None
+    try:
+        import ctypes
+        from ctypes import wintypes
+
+        class RECT(ctypes.Structure):
+            _fields_ = [("left", ctypes.c_long), ("top", ctypes.c_long), ("right", ctypes.c_long), ("bottom", ctypes.c_long)]
+
+        class POINT(ctypes.Structure):
+            _fields_ = [("x", ctypes.c_long), ("y", ctypes.c_long)]
+
+        hwnd = wintypes.HWND(int(win.handle))
+        rect = RECT()
+        if not ctypes.windll.user32.GetClientRect(hwnd, ctypes.byref(rect)):
+            return None
+        top_left = POINT(rect.left, rect.top)
+        bottom_right = POINT(rect.right, rect.bottom)
+        if not ctypes.windll.user32.ClientToScreen(hwnd, ctypes.byref(top_left)):
+            return None
+        if not ctypes.windll.user32.ClientToScreen(hwnd, ctypes.byref(bottom_right)):
+            return None
+        return _ERPScreenRect(top_left.x, top_left.y, bottom_right.x, bottom_right.y)
+    except Exception:
+        return None
+
+
+def _erp_coordinate_reference_rect(win, logger=None, monitor=None, log=False):
+    """Return a stable screen-pixel canvas for maximized ERP fixed coordinates."""
+    outer = win.rectangle()
+    outer_rect = _ERPScreenRect(outer.left, outer.top, outer.right, outer.bottom)
+    target = monitor or _detect_erp_target_monitor(logger)
+    if not target:
+        return outer_rect
+
+    work_rect = _ERPScreenRect(
+        target.get("work_left", target["left"]),
+        target.get("work_top", target["top"]),
+        target.get("work_right", target["right"]),
+        target.get("work_bottom", target["bottom"]),
+    )
+    center_x = (outer_rect.left + outer_rect.right) // 2
+    center_y = (outer_rect.top + outer_rect.bottom) // 2
+    on_target = target["left"] <= center_x < target["right"] and target["top"] <= center_y < target["bottom"]
+    edge_delta = max(
+        abs(outer_rect.left - work_rect.left),
+        abs(outer_rect.top - work_rect.top),
+        abs(outer_rect.right - work_rect.right),
+        abs(outer_rect.bottom - work_rect.bottom),
+    )
+    size_delta = max(
+        abs(outer_rect.width() - work_rect.width()),
+        abs(outer_rect.height() - work_rect.height()),
+    )
+    use_work_area = on_target and edge_delta <= 96 and size_delta <= 96
+    reference = work_rect if use_work_area else outer_rect
+
+    if log and logger:
+        client = _window_client_screen_rect(win)
+        client_text = "none"
+        if client:
+            client_text = (
+                f"({client.left},{client.top})-({client.right},{client.bottom}) "
+                f"size={client.width()}x{client.height()}"
+            )
+        logger.info(
+            "ERP coordinate canvas: "
+            f"source={'work-area' if use_work_area else 'window'}, "
+            f"outer=({outer_rect.left},{outer_rect.top})-({outer_rect.right},{outer_rect.bottom}), "
+            f"client={client_text}, "
+            f"work=({work_rect.left},{work_rect.top})-({work_rect.right},{work_rect.bottom}), "
+            f"outer_to_work_delta=({outer_rect.left - work_rect.left},{outer_rect.top - work_rect.top},"
+            f"{outer_rect.right - work_rect.right},{outer_rect.bottom - work_rect.bottom})"
+        )
+    return reference
+
+
 def _window_center_in_monitor(win, monitor):
     try:
         rect = win.rectangle()
@@ -570,7 +668,8 @@ class ERPLoginBot:
             time.sleep(0.15)
         except Exception as e:
             self.logger.warning(f"[{self.corp_code}] {label} 포커스 실패: {e}")
-        target_monitor = _detect_erp_target_monitor(self.logger)
+        # RDP and taskbar changes can alter rcWork without changing resolution.
+        target_monitor = _detect_erp_target_monitor(self.logger, force_refresh=True)
         ok = False
         try:
             try:
@@ -579,7 +678,12 @@ class ERPLoginBot:
                     time.sleep(0.15)
             except Exception:
                 pass
-            _move_window_to_erp_monitor(win, self.logger, f"[{self.corp_code}] {label}")
+            _move_window_to_erp_monitor(
+                win,
+                self.logger,
+                f"[{self.corp_code}] {label}",
+                target_monitor=target_monitor,
+            )
         except Exception:
             raise
         try:
@@ -607,13 +711,29 @@ class ERPLoginBot:
             )
             if target_monitor and not _window_center_in_monitor(win, target_monitor):
                 self.logger.warning(f"[{self.corp_code}] {label} is not on ERP target display after maximize; retry move/maximize")
-                _move_window_to_erp_monitor(win, self.logger, f"[{self.corp_code}] {label} retry")
+                _move_window_to_erp_monitor(
+                    win,
+                    self.logger,
+                    f"[{self.corp_code}] {label} retry",
+                    target_monitor=target_monitor,
+                )
                 win.maximize()
                 time.sleep(max(ERP_BLOCK_WAIT, 0.35))
                 if not _window_center_in_monitor(win, target_monitor):
                     raise RuntimeError(f"{label} failed to stay on the 1920x1080 100% ERP display")
-            if width < min(1600, screen_w - 80) or height < min(850, screen_h - 120):
-                self.logger.warning(f"[{self.corp_code}] {label} 창 크기가 좌표 자동입력 기준보다 작습니다. 좌표 오입력 위험이 있습니다.")
+            reference = _erp_coordinate_reference_rect(
+                win,
+                self.logger,
+                monitor=target_monitor,
+                log=True,
+            )
+            if reference.width() < min(1600, screen_w - 80) or reference.height() < min(850, screen_h - 120):
+                raise RuntimeError(
+                    f"{label} 좌표 기준 영역이 너무 작습니다: "
+                    f"{reference.width()}x{reference.height()}"
+                )
+        except RuntimeError:
+            raise
         except Exception as e:
             self.logger.warning(f"[{self.corp_code}] {label} 크기 확인 실패: {e}")
         return ok
@@ -1000,7 +1120,7 @@ class ERPLoginBot:
                         return False
 
                     def _click_rel(x, y, label):
-                        r = main_win.rectangle()
+                        r = _erp_coordinate_reference_rect(main_win, self.logger)
                         pyautogui.click(r.left + x, r.top + y)
                         self.logger.info(f"  [DEBUG] {label} 좌표 클릭 완료: rel=({x}, {y}), abs=({r.left + x}, {r.top + y})")
 
@@ -1038,8 +1158,9 @@ class ERPLoginBot:
                                             if _elem_name(el).strip() == "회계관리":
                                                 r = el.rectangle()
                                                 # 왼쪽 트리의 '회계관리 >>'가 아니라 메뉴 타일 영역만 허용합니다.
-                                                rel_left = r.left - main_win.rectangle().left
-                                                rel_top = r.top - main_win.rectangle().top
+                                                reference = _erp_coordinate_reference_rect(main_win, self.logger)
+                                                rel_left = r.left - reference.left
+                                                rel_top = r.top - reference.top
                                                 is_ds_accounting_tile = self.corp_code == "DS" and rel_left >= 60 and rel_top >= 120
                                                 is_legacy_accounting_tile = rel_left > 250
                                                 if is_ds_accounting_tile or is_legacy_accounting_tile:
@@ -1375,6 +1496,9 @@ class ERPLoginBot:
             time.sleep(paste_wait)
 
         main_rect_cache = None
+        form_coord_offset_x = 0
+        form_coord_offset_y = 0
+        form_coord_calibrated = False
 
         def _uia_disconnected(exc):
             text = str(exc or "").lower()
@@ -1451,7 +1575,7 @@ class ERPLoginBot:
                             continue
                         ranked.sort(key=lambda item: item[0], reverse=True)
                         _, win, title, auto_id = ranked[0]
-                        rect = win.rectangle()
+                        rect = _erp_coordinate_reference_rect(win, self.logger)
                         self.app = app
                         self.manager.erp_pids[self.corp_code] = pid
                         main_win = win
@@ -1478,23 +1602,29 @@ class ERPLoginBot:
         def _main_rect():
             nonlocal main_rect_cache
             try:
-                main_rect_cache = main_win.rectangle()
+                main_rect_cache = _erp_coordinate_reference_rect(main_win, self.logger)
                 return main_rect_cache
             except Exception as e:
                 if _uia_disconnected(e):
                     _reconnect_main_window("좌표 입력 전 UI 연결 끊김", required=True)
-                    main_rect_cache = main_win.rectangle()
+                    main_rect_cache = _erp_coordinate_reference_rect(main_win, self.logger)
                     return main_rect_cache
                 if main_rect_cache is not None:
                     self.logger.warning(f"  [UIA-FALLBACK] 메인 창 좌표 캐시 사용: {e}")
                     return main_rect_cache
                 raise
 
-        def _click_form_xy(x, y, label, wait=None):
+        def _form_point(x, y):
             r = _main_rect()
-            ax, ay = r.left + x, r.top + y
+            return r, r.left + x + form_coord_offset_x, r.top + y + form_coord_offset_y
+
+        def _click_form_xy(x, y, label, wait=None):
+            r, ax, ay = _form_point(x, y)
             pyautogui.click(ax, ay)
-            self.logger.info(f"  [FORM-XY] {label} 클릭: rel=({x},{y}), abs=({ax},{ay})")
+            self.logger.info(
+                f"  [FORM-XY] {label} 클릭: rel=({x},{y}), "
+                f"offset=({form_coord_offset_x},{form_coord_offset_y}), abs=({ax},{ay})"
+            )
             time.sleep(ERP_FORM_WAIT if wait is None else wait)
 
         def _release_modifiers(label="", wait=True):
@@ -1597,8 +1727,7 @@ class ERPLoginBot:
             return visible
 
         def _find_near_control(x, y, control_types):
-            r = main_win.rectangle()
-            tx, ty = r.left + x, r.top + y
+            _, tx, ty = _form_point(x, y)
             best = None
             best_score = 10 ** 12
             for ct in control_types:
@@ -1618,7 +1747,7 @@ class ERPLoginBot:
             return best
 
         def _find_acc_unit_combo():
-            r = main_win.rectangle()
+            r = _main_rect()
             best = None
             best_score = 10 ** 12
             for ctrl in _iter_visible("ComboBox"):
@@ -1626,7 +1755,7 @@ class ERPLoginBot:
                     cr = ctrl.rectangle()
                     aid = str(ctrl.element_info.automation_id or "")
                     text = _control_text(ctrl)
-                    score = abs(((cr.left + cr.right) // 2) - (r.left + 493)) + abs(((cr.top + cr.bottom) // 2) - (r.top + 124))
+                    score = abs(((cr.left + cr.right) // 2) - (r.left + 493 + form_coord_offset_x)) + abs(((cr.top + cr.bottom) // 2) - (r.top + 124 + form_coord_offset_y))
                     if aid == "cboAccUnit":
                         score -= 10000
                     if "공장" in text or "일강" in text or "제이엠" in text or "더원" in text:
@@ -1637,6 +1766,41 @@ class ERPLoginBot:
                 except:
                     pass
             return best
+
+        def _calibrate_form_coordinate_offset(reason="ERP form"):
+            nonlocal form_coord_offset_x, form_coord_offset_y, form_coord_calibrated
+            form_coord_offset_x = 0
+            form_coord_offset_y = 0
+            form_coord_calibrated = False
+            combo = _find_acc_unit_combo()
+            if not combo:
+                self.logger.warning(
+                    f"  [FORM-CALIBRATE] {reason}: 회계단위 기준점을 찾지 못해 작업영역 원점만 사용"
+                )
+                return False
+            rect = combo.rectangle()
+            reference = _main_rect()
+            actual_x = (rect.left + rect.right) // 2
+            actual_y = (rect.top + rect.bottom) // 2
+            offset_x = actual_x - (reference.left + 493)
+            offset_y = actual_y - (reference.top + 124)
+            max_offset = max(8, int(float(os.getenv("ERP_FORM_MAX_COORD_OFFSET", "40") or "40")))
+            if abs(offset_x) > max_offset or abs(offset_y) > max_offset:
+                _fail_form(
+                    f"ERP 폼 좌표 편차가 안전 범위를 벗어났습니다: "
+                    f"offset=({offset_x},{offset_y}), limit={max_offset}, "
+                    f"anchor=({rect.left},{rect.top})-({rect.right},{rect.bottom})"
+                )
+            form_coord_offset_x = offset_x
+            form_coord_offset_y = offset_y
+            form_coord_calibrated = True
+            self.logger.info(
+                f"  [FORM-CALIBRATE] {reason}: 회계단위 기준 좌표 보정 완료 "
+                f"offset=({offset_x},{offset_y}), "
+                f"anchor=({rect.left},{rect.top})-({rect.right},{rect.bottom}), "
+                f"canvas=({reference.left},{reference.top})-({reference.right},{reference.bottom})"
+            )
+            return True
 
         def _visible_acc_unit_items():
             order_set = {"P1공장", "P2공장", "P3공장", "P4공장", "D1공장", "D2공장", "D3공장", "일강 1공장", "일강 2공장", "제이엠", "더원"}
@@ -1781,8 +1945,9 @@ class ERPLoginBot:
         def _click_control(ctrl, label):
             r = ctrl.rectangle()
             pyautogui.click((r.left + r.right) // 2, (r.top + r.bottom) // 2)
-            rel_x = ((r.left + r.right) // 2) - main_win.rectangle().left
-            rel_y = ((r.top + r.bottom) // 2) - main_win.rectangle().top
+            reference = _main_rect()
+            rel_x = ((r.left + r.right) // 2) - reference.left
+            rel_y = ((r.top + r.bottom) // 2) - reference.top
             self.logger.info(f"  [FORM-ANCHOR] {label} 입력칸 클릭: rel=({rel_x},{rel_y}), rect=({r.left},{r.top})-({r.right},{r.bottom})")
             time.sleep(ERP_FORM_WAIT)
 
@@ -1856,7 +2021,7 @@ class ERPLoginBot:
             for ctrl in _label_candidates("계정과목"):
                 try:
                     r = ctrl.rectangle()
-                    if r.top > main_win.rectangle().top + 180:
+                    if r.top > _main_rect().top + 180:
                         header = ctrl
                         break
                 except:
@@ -1868,7 +2033,7 @@ class ERPLoginBot:
                 pyautogui.click(x, y)
                 self.logger.info(
                     f"  [FORM-ANCHOR] 그리드 첫 계정과목 셀 클릭: "
-                    f"rel=({x - main_win.rectangle().left},{y - main_win.rectangle().top}), "
+                    f"rel=({x - _main_rect().left},{y - _main_rect().top}), "
                     f"header=({r.left},{r.top})-({r.right},{r.bottom})"
                 )
                 time.sleep(ERP_FORM_WAIT)
@@ -1897,7 +2062,7 @@ class ERPLoginBot:
                 _click_form_xy(*fallback_xy, "grid first account cell")
                 return
 
-            main_rect = main_win.rectangle()
+            main_rect = _main_rect()
 
             def _text(ctrl):
                 try:
@@ -1998,8 +2163,7 @@ class ERPLoginBot:
             if add_clicks <= 0:
                 return
             if _env_flag("ERP_ADD_ROW_COORD_FIRST", "1"):
-                r = main_win.rectangle()
-                ax, ay = r.left + fallback_xy[0], r.top + fallback_xy[1]
+                _, ax, ay = _form_point(*fallback_xy)
                 for _ in range(add_clicks):
                     pyautogui.click(ax, ay)
                     time.sleep(ERP_CLICK_WAIT)
@@ -2017,7 +2181,7 @@ class ERPLoginBot:
                     if text != "행추가" and aid != "btnAddRow":
                         return None
                     rect = ctrl.rectangle()
-                    main_rect = main_win.rectangle()
+                    main_rect = _main_rect()
                     rel_x = (rect.left + rect.right) // 2 - main_rect.left
                     rel_y = (rect.top + rect.bottom) // 2 - main_rect.top
                     score = 0
@@ -2120,8 +2284,7 @@ class ERPLoginBot:
             self.logger.info(f"  [FORM-XY] 회계단위 좌표 선택 완료: {key}")
 
         def _double_click_form_xy(x, y, label, wait=None, interval=None):
-            r = _main_rect()
-            ax, ay = r.left + x, r.top + y
+            _, ax, ay = _form_point(x, y)
             click_interval = mgmt_double_click_interval if interval is None else max(0.12, float(interval))
             pyautogui.doubleClick(ax, ay, interval=click_interval)
             self.logger.info(
@@ -3348,6 +3511,7 @@ class ERPLoginBot:
             self._force_erp_window_maximized(main_win, "좌표 전용 폼 세팅 전 ERP 메인 창")
             main_rect_cache = None
             self.logger.info("  [FORM-XY] 좌표 전용 폼 세팅 시작")
+            _calibrate_form_coordinate_offset("신규 전표 폼")
             acc_unit_xy = (493, 124)
             slip_unit_xy = (692, 124)
             invoice_date_xy = (375, 149)

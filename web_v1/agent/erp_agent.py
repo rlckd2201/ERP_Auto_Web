@@ -8,6 +8,7 @@ import importlib
 import json
 import os
 import platform
+import queue
 import shutil
 import socket
 import subprocess
@@ -92,7 +93,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.232"
+AGENT_BUNDLE_VERSION = "1.0.234"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
@@ -424,6 +425,92 @@ def _agent_bundle_hash() -> str:
 
 def _post(server: str, path: str, payload: dict[str, Any], *, verify: bool, timeout: int = 20) -> requests.Response:
     return requests.post(f"{server.rstrip('/')}{path}", json=payload, verify=verify, timeout=timeout)
+
+
+class _ProgressEventDispatcher:
+    """Send noisy ERP progress events without blocking the desktop automation thread."""
+
+    def __init__(
+        self,
+        server: str,
+        job_id: str,
+        agent_id: str,
+        verify: bool,
+        *,
+        max_pending: int = 32,
+        request_timeout: int = 2,
+    ) -> None:
+        self.server = server
+        self.job_id = job_id
+        self.agent_id = agent_id
+        self.verify = verify
+        self.request_timeout = max(1, int(request_timeout))
+        self._queue: queue.Queue[dict[str, Any] | None] = queue.Queue(maxsize=max(1, int(max_pending)))
+        self._closed = threading.Event()
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"erp-progress-{job_id[:8] or 'job'}",
+            daemon=True,
+        )
+        self._thread.start()
+
+    def submit(self, payload: dict[str, Any]) -> None:
+        if self._closed.is_set():
+            return
+        event = dict(payload)
+        event.setdefault("agent_id", self.agent_id)
+        try:
+            self._queue.put_nowait(event)
+            return
+        except queue.Full:
+            pass
+        # Preserve current desktop automation over stale diagnostic chatter.
+        try:
+            self._queue.get_nowait()
+            self._queue.task_done()
+        except queue.Empty:
+            pass
+        try:
+            self._queue.put_nowait(event)
+        except queue.Full:
+            pass
+
+    def _run(self) -> None:
+        while True:
+            event = self._queue.get()
+            try:
+                if event is None:
+                    return
+                try:
+                    _post(
+                        self.server,
+                        f"/api/agent/jobs/{self.job_id}/event",
+                        event,
+                        verify=self.verify,
+                        timeout=self.request_timeout,
+                    )
+                except Exception as exc:
+                    log(f"ERP progress event skipped: {exc}")
+            finally:
+                self._queue.task_done()
+
+    def close(self, timeout: float = 3.0) -> None:
+        if self._closed.is_set():
+            return
+        self._closed.set()
+        # Completion/error reporting is authoritative. Drop stale queued progress
+        # so it cannot arrive after the final job status.
+        while True:
+            try:
+                self._queue.get_nowait()
+                self._queue.task_done()
+            except queue.Empty:
+                break
+        try:
+            self._queue.put_nowait(None)
+        except queue.Full:
+            pass
+        self._thread.join(timeout=max(0.0, float(timeout)))
 
 
 def _upload_erp_voucher(
@@ -1956,8 +2043,16 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
     job_id = str(task.get("job_id") or "")
     invoices = list(task.get("invoices") or [])
     invoice_ids = [int(item.get("id")) for item in invoices if str(item.get("id")).isdigit()]
+    progress_dispatcher = _ProgressEventDispatcher(server, job_id, agent_id, verify)
     log(f"ERP task claimed: job={job_id}, invoices={invoice_ids}")
-    _post(server, f"/api/agent/jobs/{job_id}/event", {"agent_id": agent_id, "status": "erp", "progress": 82, "message": "담당자 PC Agent ERP 입력 시작", "invoice_ids": invoice_ids}, verify=verify)
+    progress_dispatcher.submit(
+        {
+            "status": "erp",
+            "progress": 82,
+            "message": "담당자 PC Agent ERP 입력 시작",
+            "invoice_ids": invoice_ids,
+        }
+    )
     successes = []
     try:
         display = _display_check()
@@ -2020,18 +2115,13 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
                 log(message)
                 if not should_post_progress(message):
                     return
-                _post(
-                    server,
-                    f"/api/agent/jobs/{job_id}/event",
+                progress_dispatcher.submit(
                     {
-                        "agent_id": agent_id,
                         "status": "erp",
                         "progress": min(96, progress_value),
                         "message": message,
                         "invoice_ids": [invoice_id],
-                    },
-                    verify=verify,
-                    timeout=10,
+                    }
                 )
 
             result = run_invoice_erp_input(invoice, job_id=job_id, progress=progress)
@@ -2049,6 +2139,7 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
                 result["erp_pdf_upload_error"] = str(upload.get("error") or "unknown upload error")
                 progress(f"ERP 전표 PDF 서버 업로드 실패: {result['erp_pdf_upload_error']}", min(96, base_progress + 1))
             successes.append(result)
+        progress_dispatcher.close()
         _post(
             server,
             f"/api/agent/jobs/{job_id}/complete",
@@ -2065,6 +2156,7 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
     except Exception as exc:
         message = str(exc) or exc.__class__.__name__
         log(f"ERP task failed: {message}")
+        progress_dispatcher.close()
         try:
             _post(
                 server,
@@ -2082,6 +2174,7 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
         except Exception as report_exc:
             log(f"ERP failure report failed: {report_exc}")
     finally:
+        progress_dispatcher.close()
         close_after_task = is_regular_auto_task or os.getenv("ERP_AGENT_CLOSE_ERP_AFTER_TASK", "0").strip().lower() in {"1", "true", "yes", "y"}
         if close_after_task:
             _cleanup_erp_processes_after_task("regular_auto" if is_regular_auto_task else "env")

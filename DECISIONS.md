@@ -151,3 +151,11 @@ The popup may keep its default search focus and use the proven business-number k
 ## D-036 - purchase vouchers use task rows and a fresh ERP session as authoritative state
 
 K-System can replace the Windows clipboard during startup and a previous unsaved ERP window can leave navigation/focus state behind. Interactive purchase work therefore forces a fresh ERP process and reconstructs the grid clipboard from `erp_clipboard_rows` immediately before form entry. Declared and actual row counts must match. Purchase menu/new-form readiness waits are forced safety values, while the separate 243-PC `regular_auto` profile remains unchanged.
+
+## D-037 - ERP fixed coordinates use target work-area pixels plus a real form anchor
+
+Resolution equality does not imply coordinate equality on a mixed-DPI extended desktop. Fixed ERP points use the freshly enumerated 100% target monitor `rcWork` rectangle when the ERP window is maximized there. A small residual offset is derived from the live `cboAccUnit` control center and applied to form points only. Existing vendor popup keyboard behavior is not replaced with inferred textbox clicks.
+
+## D-038 - progress telemetry cannot control ERP desktop timing
+
+ERP UI actions are authoritative and must not wait for per-step HTTP logging. Progress events are best-effort through a bounded background queue with short request timeouts; stale queued events are discarded before the synchronous final completion/error report. A telemetry outage may reduce detail but cannot fail or slow the voucher input itself.

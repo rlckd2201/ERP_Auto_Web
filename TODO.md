@@ -188,3 +188,14 @@ Remaining acceptance: confirm one regular-due message at the next real noon run,
 - [x] Deploy 1.0.232 with hash-pinned backup/rollback and verify server health, scheduler lock, listener, Agent readiness, version, and exact bundle hash.
 - [ ] Check K-System for prior #209/#211 vouchers before any reset or retry.
 - [ ] Observe one new safe purchase case through one-time document-set output.
+
+## 송명학 PC 좌표/지연 보정 (2026-08-26)
+
+- [x] 송명학 PC의 실제 다중 모니터 좌표와 DPI 구성을 운영 Agent heartbeat에서 확인한다.
+- [x] ERP 고정좌표를 매 실행 갱신한 대상 모니터 작업영역 기준으로 계산한다.
+- [x] 신규 전표 폼의 실제 회계단위 컨트롤을 기준으로 작은 자리별 편차를 보정한다.
+- [x] 진행 로그 HTTP 전송을 ERP 키 입력/클릭 스레드에서 분리하고 느린/실패 HTTP 회귀 테스트를 추가한다.
+- [x] 운영 1.0.234를 백업·해시검증·6개 테스트·헬스체크와 함께 배포한다.
+- [ ] 송명학 PC에서 멈춘 1.0.233 Agent/K-System을 종료하고 Agent 1.0.234 재접속을 확인한다.
+- [ ] K-System에서 #209 기존 저장 전표 유무를 확인한 뒤 claimed 큐와 invoice 상태를 안전하게 정리한다.
+- [ ] 중복 위험이 없는 1건으로 실제 좌표 캔버스/앵커/거래처 입력/전표 PDF까지 최종 확인한다.

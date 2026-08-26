@@ -280,3 +280,18 @@ Before resetting or retrying invoice `#209`, check K-System for vouchers potenti
 ## Next exact starting point after 1.0.232 deployment
 
 Do not reset or retry #209 or #211 until K-System is checked for vouchers saved by their older Ctrl+S attempts. Observe the next genuinely new purchase job through ERP save and one-time document-set output; use its logs to confirm the live read-back messages for every vendor row.
+
+## 송명학 PC ERP 좌표/진행로그 보정 배포 (2026-08-26)
+
+- 로컬 변경 전 파일을 `tmp/erp_client_coord_backup_20260826_145136`에 보존했다.
+- 송명학 PC의 실제 구성은 주 모니터 1920x1080 125%, ERP용 보조 모니터 1920x1080 100%, 가상 원점 `(-1920,-106)`이다. 해상도는 같아도 Windows 작업영역/좌표 원점이 다른 것이 자리별 클릭 편차의 원인이다.
+- ERP 고정좌표 기준을 창 외곽선이 아니라 매 실행 새로 읽은 대상 모니터 `rcWork`로 통일하고, 신규 전표 폼의 실제 `cboAccUnit` 중심점으로 작은 잔여 편차를 보정한다. 거래처 팝업 키 순서와 검증된 입력 로직은 변경하지 않았다.
+- 1.0.233을 운영 배포했고 송명학 Agent가 동일 번들 해시를 수신한 것을 확인했다. 이어 #209 재실행에서 진행 로그 HTTP 지연이 ERP 입력 스레드에 전파되어 멈추는 별도 결함을 재현했다.
+- 1.0.234는 ERP 화면 입력과 진행 로그 전송을 제한된 비동기 큐로 분리했다. 로그 서버 지연/타임아웃은 화면 자동입력을 중단시키지 않고 완료/오류 보고만 동기 확정한다.
+- 운영 1.0.234 배포 시 좌표 3건과 비동기 로그 3건, 총 6건의 서버 테스트가 통과했다. 운영 백업은 `C:\ERP_DB\backups\erp_coord_fix_20260826_154936`, 백엔드 PID는 `7508`, 번들 해시는 `3fb9dfba25ec68add2c58ae5cbb39e5e398d1dc3739646ca5d715e51530bc71f`다.
+- 송명학 PC에서 1.0.233으로 시작된 #209 작업은 `PID 3180 확정` 이후 응답이 없고, 서버 재시작으로 메모리 Job도 사라졌다. 송명학 PC 원격관리 포트(135/445/3389/5985)는 운영서버와 개발PC 모두에서 닫혀 있어 원격 강제종료는 불가능하다. Invoice #209는 현재 `ERP대기`, ERP 전표 PDF는 없으며 큐 파일은 claimed 상태다.
+- Graphify는 `graphify update .`에서 기존보다 노드가 줄어드는 보호 경고(1,422 vs 1,424)로 갱신을 거부했다. 강제 갱신하지 않는다.
+
+## Next exact starting point after 1.0.234 deployment
+
+송명학 PC에서 멈춘 1.0.233 `pythonw.exe` Agent와 해당 K-System 세션을 종료한다. Agent를 다시 시작해 1.0.234/번들 해시 일치를 확인한 뒤, #209의 기존 전표 저장 여부를 K-System에서 먼저 확인하고 큐/상태를 정리한다. 중복 위험이 없을 때만 새 Job으로 한 번 재실행하고 `ERP coordinate canvas` 및 폼 앵커 보정 로그와 거래처 행 1/3/4 결과를 확인한다.
