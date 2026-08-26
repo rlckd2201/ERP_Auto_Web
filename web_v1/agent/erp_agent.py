@@ -92,7 +92,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.231"
+AGENT_BUNDLE_VERSION = "1.0.232"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
@@ -101,6 +101,17 @@ ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
         "ERP_FAST_FIELD_VERIFY",
         "ERP_FAST_MANAGEMENT",
         "ERP_STABLE_HEADER_FIELDS",
+        "ERP_AGENT_FRESH_START",
+        "ERP_MGMT_DOUBLE_CLICK_INTERVAL",
+        "ERP_MGMT_SUMMARY_OPEN_WAIT",
+        "ERP_VENDOR_POPUP_DETECT_TIMEOUT_SEC",
+        "ERP_VENDOR_SEARCH_WAIT_SEC",
+        "ERP_VENDOR_KEY_INTERVAL",
+        "ERP_VENDOR_ENTER_INTERVAL",
+        "ERP_VENDOR_VERIFY_TIMEOUT_SEC",
+        "ERP_VENDOR_SELECTION_ATTEMPTS",
+        "ERP_SLIP_OPEN_WAIT",
+        "ERP_NEW_FORM_WAIT",
     }
 )
 
@@ -150,8 +161,17 @@ def _erp_task_runtime_profile(task: dict[str, Any]) -> tuple[str, dict[str, str]
         "ERP_FAST_MANAGEMENT": "0",
         "ERP_FAST_NAVIGATION": "1",
         "ERP_STRICT_VENDOR_SELECTION": "1",
-        "ERP_NEW_FORM_WAIT": "0.35",
-        "ERP_SLIP_OPEN_WAIT": "0.60",
+        "ERP_AGENT_FRESH_START": "1",
+        "ERP_MGMT_DOUBLE_CLICK_INTERVAL": "0.20",
+        "ERP_MGMT_SUMMARY_OPEN_WAIT": "0.90",
+        "ERP_VENDOR_POPUP_DETECT_TIMEOUT_SEC": "4.0",
+        "ERP_VENDOR_SEARCH_WAIT_SEC": "1.0",
+        "ERP_VENDOR_KEY_INTERVAL": "0.18",
+        "ERP_VENDOR_ENTER_INTERVAL": "0.28",
+        "ERP_VENDOR_VERIFY_TIMEOUT_SEC": "3.0",
+        "ERP_VENDOR_SELECTION_ATTEMPTS": "3",
+        "ERP_NEW_FORM_WAIT": "0.80",
+        "ERP_SLIP_OPEN_WAIT": "3.00",
         "ERP_PRINT_SAVE_WAIT": "0.80",
         "ERP_PRINT_VIEWER_TIMEOUT_SEC": "4.0",
         "ERP_PRINT_DIALOG_TIMEOUT_SEC": "4.0",

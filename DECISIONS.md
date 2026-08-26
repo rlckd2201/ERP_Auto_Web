@@ -143,3 +143,11 @@ When the local source tree is newer than the production Agent bundle, stop only 
 Live inspection supersedes the exact-result portion of D-030: the vendor popup's visible result grid does not expose rows or cells through UI Automation, so an exact UIA result-cell scan cannot validate or select a vendor. Do not call `popup.set_focus()`, infer/click a search Edit, or scan UIA result cells. Close any stale popup, open the current row's popup, preserve its default search-box focus, and use the established business-number sequence `Ctrl+A / paste / Tab 4 / Down 5 / Up 1 / Tab 3 / Enter 2`. Purchase tasks retain conservative management timing; ordinary-PC speed optimization remains limited to safe navigation and does not alter the 243-PC regular profile.
 
 Direct acceptance may use an existing payload only when the save function is replaced with a hard pre-save stop and Ctrl+S is impossible. A visible final management value plus the pre-save stop is required evidence. This does not clear the duplicate-save risk from older runs that already sent Ctrl+S.
+
+## D-035 - a vendor key sequence is not success without management-value read-back
+
+The popup may keep its default search focus and use the proven business-number keyboard contract, but sending those keys is only an attempt. Success requires the popup to close and the current management panel's visible vendor Edit value to normalize to the expected vendor name. This rule applies equally to VAT and vendor-only rows. A mismatch or missing value retries only the vendor cell and is terminal after the bounded attempt count; it must not advance to save.
+
+## D-036 - purchase vouchers use task rows and a fresh ERP session as authoritative state
+
+K-System can replace the Windows clipboard during startup and a previous unsaved ERP window can leave navigation/focus state behind. Interactive purchase work therefore forces a fresh ERP process and reconstructs the grid clipboard from `erp_clipboard_rows` immediately before form entry. Declared and actual row counts must match. Purchase menu/new-form readiness waits are forced safety values, while the separate 243-PC `regular_auto` profile remains unchanged.

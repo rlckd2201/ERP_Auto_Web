@@ -175,3 +175,16 @@ Remaining acceptance: confirm one regular-due message at the next real noon run,
 - [x] Deploy 1.0.231 with production backup/rollback, server tests, health, scheduler lock, listener, Agent version, and exact bundle-hash verification.
 - [ ] Check K-System for vouchers from the older pre-1.0.229 Ctrl+S attempts before any #209 reset or retry.
 - [ ] Observe the next safe new purchase case through one-time document-set output.
+
+## Invoice #209 intermittent vendor hardening (2026-08-26)
+
+- [x] Inspect the latest #209 and #211 production logs without replaying either invoice.
+- [x] Apply the same bounded vendor selection retries to VAT and advance-payment rows.
+- [x] Require popup closure plus actual visible management-value read-back before success.
+- [x] Slow only the purchase row/popup/key transitions that were skipping focus; leave the 243-PC regular profile unchanged.
+- [x] Rebuild ERP grid text from authoritative task rows and force a fresh purchase ERP session.
+- [x] Extend purchase menu/new-form readiness waits for slow consecutive K-System launches.
+- [x] Pass compilation, 13 tests, focused diff checks, Graphify update, and two consecutive direct #209 pre-save runs.
+- [x] Deploy 1.0.232 with hash-pinned backup/rollback and verify server health, scheduler lock, listener, Agent readiness, version, and exact bundle hash.
+- [ ] Check K-System for prior #209/#211 vouchers before any reset or retry.
+- [ ] Observe one new safe purchase case through one-time document-set output.

@@ -37,6 +37,13 @@ class ErpTaskRuntimeProfileTests(unittest.TestCase):
         self.assertEqual(profile["ERP_FAST_FIELD_VERIFY"], "0")
         self.assertEqual(profile["ERP_STABLE_HEADER_FIELDS"], "1")
         self.assertEqual(profile["ERP_STRICT_VENDOR_SELECTION"], "1")
+        self.assertEqual(profile["ERP_AGENT_FRESH_START"], "1")
+        self.assertEqual(profile["ERP_MGMT_DOUBLE_CLICK_INTERVAL"], "0.20")
+        self.assertEqual(profile["ERP_MGMT_SUMMARY_OPEN_WAIT"], "0.90")
+        self.assertEqual(profile["ERP_VENDOR_KEY_INTERVAL"], "0.18")
+        self.assertEqual(profile["ERP_VENDOR_SELECTION_ATTEMPTS"], "3")
+        self.assertEqual(profile["ERP_NEW_FORM_WAIT"], "0.80")
+        self.assertEqual(profile["ERP_SLIP_OPEN_WAIT"], "3.00")
 
     def test_purchase_safety_profile_overrides_unsafe_ambient_values_and_restores_them(self) -> None:
         _, profile = _erp_task_runtime_profile(
@@ -44,17 +51,39 @@ class ErpTaskRuntimeProfileTests(unittest.TestCase):
         )
         with patch.dict(
             os.environ,
-            {"ERP_FAST_INPUT": "1", "ERP_FAST_FIELD_VERIFY": "1", "ERP_STABLE_HEADER_FIELDS": "0"},
+            {
+                "ERP_FAST_INPUT": "1",
+                "ERP_FAST_FIELD_VERIFY": "1",
+                "ERP_STABLE_HEADER_FIELDS": "0",
+                "ERP_AGENT_FRESH_START": "0",
+                "ERP_MGMT_DOUBLE_CLICK_INTERVAL": "0.01",
+                "ERP_VENDOR_KEY_INTERVAL": "0.01",
+                "ERP_VENDOR_SELECTION_ATTEMPTS": "1",
+                "ERP_SLIP_OPEN_WAIT": "0.10",
+                "ERP_NEW_FORM_WAIT": "0.10",
+            },
             clear=False,
         ):
             previous = _apply_erp_runtime_profile(profile)
             self.assertEqual(os.environ["ERP_FAST_INPUT"], "0")
             self.assertEqual(os.environ["ERP_FAST_FIELD_VERIFY"], "0")
             self.assertEqual(os.environ["ERP_STABLE_HEADER_FIELDS"], "1")
+            self.assertEqual(os.environ["ERP_AGENT_FRESH_START"], "1")
+            self.assertEqual(os.environ["ERP_MGMT_DOUBLE_CLICK_INTERVAL"], "0.20")
+            self.assertEqual(os.environ["ERP_VENDOR_KEY_INTERVAL"], "0.18")
+            self.assertEqual(os.environ["ERP_VENDOR_SELECTION_ATTEMPTS"], "3")
+            self.assertEqual(os.environ["ERP_SLIP_OPEN_WAIT"], "3.00")
+            self.assertEqual(os.environ["ERP_NEW_FORM_WAIT"], "0.80")
             _restore_erp_runtime_profile(previous)
             self.assertEqual(os.environ["ERP_FAST_INPUT"], "1")
             self.assertEqual(os.environ["ERP_FAST_FIELD_VERIFY"], "1")
             self.assertEqual(os.environ["ERP_STABLE_HEADER_FIELDS"], "0")
+            self.assertEqual(os.environ["ERP_AGENT_FRESH_START"], "0")
+            self.assertEqual(os.environ["ERP_MGMT_DOUBLE_CLICK_INTERVAL"], "0.01")
+            self.assertEqual(os.environ["ERP_VENDOR_KEY_INTERVAL"], "0.01")
+            self.assertEqual(os.environ["ERP_VENDOR_SELECTION_ATTEMPTS"], "1")
+            self.assertEqual(os.environ["ERP_SLIP_OPEN_WAIT"], "0.10")
+            self.assertEqual(os.environ["ERP_NEW_FORM_WAIT"], "0.10")
 
     def test_regular_auto_keeps_243_conservative_navigation(self) -> None:
         name, profile = _erp_task_runtime_profile(
@@ -114,6 +143,21 @@ class LegacyManagerSafetySourceTests(unittest.TestCase):
         self.assertIn("pyautogui.press('up', presses=1", self.source)
         self.assertIn("pyautogui.press('tab', presses=3", self.source)
         self.assertIn("pyautogui.press('enter', presses=2", self.source)
+        vendor_start = self.source.index("def _input_vendor_by_business_no_keyboard")
+        vendor_end = self.source.index("def _input_vendor_value_xy", vendor_start)
+        vendor_source = self.source[vendor_start:vendor_end]
+        self.assertIn("_wait_vendor_popup_closed", vendor_source)
+        self.assertIn("_wait_vendor_management_value", vendor_source)
+        self.assertIn("vendor_selection_attempts", vendor_source)
+        self.assertNotIn("click_input()", vendor_source)
+        self.assertNotIn("_input_vendor_popup_search_text", vendor_source)
+        self.assertIn('main_win.descendants(control_type="Edit")', self.source)
+        self.assertIn("actual_vendor = _wait_vendor_management_value", vendor_source)
+        self.assertIn("if actual_vendor:", vendor_source)
+        self.assertIn("ERP_MGMT_DOUBLE_CLICK_INTERVAL", self.source)
+        self.assertNotIn("pyautogui.doubleClick(ax, ay, interval=0.05)", self.source)
+        self.assertIn("authoritative_rows = form_data.get('erp_clipboard_rows')", self.source)
+        self.assertIn('original_clipboard = "\\r\\n".join(clipboard_rows)', self.source)
         input_value_start = self.source.index("def _input_vendor_value_xy")
         input_value_end = self.source.index("if (\"vendor_vat\" in plan", input_value_start)
         input_value_source = self.source[input_value_start:input_value_end]

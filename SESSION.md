@@ -265,3 +265,18 @@ Check K-System for a voucher potentially created by #209's earlier pre-fix Ctrl+
 ## Next exact starting point after 1.0.231 deployment
 
 Before resetting or retrying invoice `#209`, check K-System for vouchers potentially saved by the older pre-1.0.229 Ctrl+S attempts. The 1.0.231 direct run itself did not save. Observe the next safe purchase case through document-set output; do not re-run #209 unattended.
+
+## Invoice #209 intermittent vendor hardening and 1.0.232 deployment (2026-08-26)
+
+- Production evidence showed the remaining asymmetry: invoice `#209` failed before save when the VAT-row vendor popup did not open, while invoice `#211` passed vendor key entry but reached Ctrl+S before an output failure and therefore remains protected by `[ERP_SAVE_CONFIRM_REQUIRED]`.
+- Root causes were treating a sent keyboard sequence as success, retrying only vendor-only rows but not VAT rows, overly short click/key timing, and trusting the ambient Windows clipboard after K-System startup.
+- Purchase vendor selection now retries both VAT and advance-payment vendor cells, preserves popup default focus, waits for popup closure, and reads the visible management Edit value back. The expected normalized vendor name must match before the row can continue.
+- Purchase tasks force safe double-click/key intervals, a fresh ERP session, and longer menu/new-form readiness waits. The task's `erp_clipboard_rows` are rebuilt at form-entry time, so K-System clipboard changes cannot collapse a four-row voucher to one row. The 243-PC `regular_auto` profile is unchanged.
+- Local pre-change backup: `tmp/erp_vendor_state_backup_20260826_140100`. Two consecutive direct #209 runs with fresh ERP sessions preserved all four rows and verified `컴퓨존` in rows 1, 3, and 4; both stopped at `[DIRECT_STOP_BEFORE_SAVE]` and never sent Ctrl+S.
+- Verification passed Python compilation, 13 unit tests, focused `git diff --check`, and `graphify update .` (`1,424` nodes, `3,886` edges, `60` communities).
+- Production 1.0.232 deployed at `2026-08-26T14:16:44`; backup `C:\ERP_DB\backups\erp_vendor_state_20260826_141624`; backend/listener PID `3976`; scheduler and process lock active; bundle hash `22cab9b29207b627bcd751e435e37fa1237ec52a64fe11e28a81918239685d4e`.
+- Local Agent PID `25036` reports `ready=true`, version 1.0.232, and the exact server bundle hash. No production invoice or queue state was changed for acceptance.
+
+## Next exact starting point after 1.0.232 deployment
+
+Do not reset or retry #209 or #211 until K-System is checked for vouchers saved by their older Ctrl+S attempts. Observe the next genuinely new purchase job through ERP save and one-time document-set output; use its logs to confirm the live read-back messages for every vendor row.

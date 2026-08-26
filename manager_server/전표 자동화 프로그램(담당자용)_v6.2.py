@@ -1223,8 +1223,22 @@ class ERPLoginBot:
                 self.logger.error(f"[폼세팅] {msg}")
                 raise RuntimeError(msg)
         items_list   = form_data.get('items', [])
-        clipboard_rows = [line for line in str(original_clipboard or '').splitlines() if line.strip()]
-        row_count = int(form_data.get('erp_row_count') or len(clipboard_rows) or ((len(items_list) + 2) if items_list else 1))
+        authoritative_rows = form_data.get('erp_clipboard_rows') or []
+        if isinstance(authoritative_rows, (list, tuple)) and authoritative_rows:
+            clipboard_rows = [str(line).rstrip('\r\n') for line in authoritative_rows if str(line).strip()]
+            declared_row_count = int(form_data.get('erp_row_count') or len(clipboard_rows))
+            if declared_row_count != len(clipboard_rows):
+                raise RuntimeError(
+                    f"ERP 입력 행 불일치: declared={declared_row_count}, actual={len(clipboard_rows)}"
+                )
+            # K-System can replace the Windows clipboard while it starts.  The
+            # task payload is the source of truth, so rebuild the grid text at
+            # form-entry time instead of trusting the ambient clipboard.
+            original_clipboard = "\r\n".join(clipboard_rows)
+            row_count = len(clipboard_rows)
+        else:
+            clipboard_rows = [line for line in str(original_clipboard or '').splitlines() if line.strip()]
+            row_count = int(form_data.get('erp_row_count') or len(clipboard_rows) or ((len(items_list) + 2) if items_list else 1))
 
         def _env_flag(name, default="0"):
             return str(os.getenv(name, default)).strip().lower() not in ("0", "false", "no", "off", "")
@@ -1254,6 +1268,37 @@ class ERPLoginBot:
         mgmt_summary_open_wait = max(mgmt_click_wait, float(os.getenv("ERP_MGMT_SUMMARY_OPEN_WAIT", "0.55") or "0.55"))
         mgmt_after_grid_paste_wait = max(0.40, float(os.getenv("ERP_MGMT_AFTER_GRID_PASTE_WAIT", "0.70") or "0.70"))
         vendor_popup_open_wait = max(0.35, float(os.getenv("ERP_VENDOR_POPUP_OPEN_WAIT", "0.55") or "0.55"))
+        mgmt_double_click_interval = max(
+            0.12,
+            float(os.getenv("ERP_MGMT_DOUBLE_CLICK_INTERVAL", "0.18") or "0.18"),
+        )
+        vendor_popup_detect_timeout = max(
+            1.5,
+            float(os.getenv("ERP_VENDOR_POPUP_DETECT_TIMEOUT_SEC", "4.0") or "4.0"),
+        )
+        vendor_search_wait = max(
+            0.80,
+            float(os.getenv("ERP_VENDOR_SEARCH_WAIT_SEC", "1.0") or "1.0"),
+        )
+        vendor_key_interval = max(
+            0.12,
+            float(os.getenv("ERP_VENDOR_KEY_INTERVAL", "0.18") or "0.18"),
+        )
+        vendor_enter_interval = max(
+            0.18,
+            float(os.getenv("ERP_VENDOR_ENTER_INTERVAL", "0.28") or "0.28"),
+        )
+        vendor_verify_timeout = max(
+            1.0,
+            float(os.getenv("ERP_VENDOR_VERIFY_TIMEOUT_SEC", "3.0") or "3.0"),
+        )
+        try:
+            vendor_selection_attempts = max(
+                1,
+                int(float(os.getenv("ERP_VENDOR_SELECTION_ATTEMPTS", "3") or "3")),
+            )
+        except Exception:
+            vendor_selection_attempts = 3
 
         if fast_input:
             try:
@@ -2074,11 +2119,15 @@ class ERPLoginBot:
                 _verify_acc_unit(key)
             self.logger.info(f"  [FORM-XY] 회계단위 좌표 선택 완료: {key}")
 
-        def _double_click_form_xy(x, y, label, wait=None):
+        def _double_click_form_xy(x, y, label, wait=None, interval=None):
             r = _main_rect()
             ax, ay = r.left + x, r.top + y
-            pyautogui.doubleClick(ax, ay, interval=0.05)
-            self.logger.info(f"  [MGMT-XY] {label} 더블클릭: rel=({x},{y}), abs=({ax},{ay})")
+            click_interval = mgmt_double_click_interval if interval is None else max(0.12, float(interval))
+            pyautogui.doubleClick(ax, ay, interval=click_interval)
+            self.logger.info(
+                f"  [MGMT-XY] {label} 더블클릭: rel=({x},{y}), abs=({ax},{ay}), "
+                f"interval={click_interval:.2f}s"
+            )
             time.sleep(ERP_FORM_WAIT if wait is None else wait)
 
         def _env_int(name, default):
@@ -2311,7 +2360,7 @@ class ERPLoginBot:
                 )
                 vendor_biz_no = ""
                 vendor_biz_digits = ""
-            _override_vendor_name, override_biz_no = _vendor_biz_no_override(
+            override_vendor_name, override_biz_no = _vendor_biz_no_override(
                 vendor_name,
                 raw_vendor_biz_no,
                 vendor_biz_no,
@@ -2425,55 +2474,151 @@ class ERPLoginBot:
                 pyautogui.press('esc')
                 return _wait_vendor_popup_closed(timeout=0.50)
 
+            def _normalize_vendor_verify_name(value):
+                text = str(value or "").strip().lower()
+                text = re.sub(r"\([^)]*\)", "", text)
+                for token in ("주식회사", "유한회사", "합자회사", "합명회사", "㈜", "(주)"):
+                    text = text.replace(token, "")
+                return re.sub(r"[^0-9a-z가-힣]+", "", text)
+
+            def _vendor_value_matches(actual, expected):
+                actual_norm = _normalize_vendor_verify_name(actual)
+                expected_norm = _normalize_vendor_verify_name(expected)
+                if not actual_norm:
+                    return False
+                if not expected_norm:
+                    return True
+                return (
+                    actual_norm == expected_norm
+                    or (len(expected_norm) >= 2 and expected_norm in actual_norm)
+                    or (len(actual_norm) >= 2 and actual_norm in expected_norm)
+                )
+
+            def _visible_vendor_management_values(target_y):
+                values = []
+                try:
+                    if not _reconnect_main_window("거래처 관리항목 값 확인 전", timeout=2.0, required=False):
+                        return values
+                    main_rect = _main_rect()
+                    for ctrl in main_win.descendants(control_type="Edit"):
+                        try:
+                            rect = ctrl.rectangle()
+                            center_x = (rect.left + rect.right) // 2 - main_rect.left
+                            center_y = (rect.top + rect.bottom) // 2 - main_rect.top
+                            if not (980 <= center_x <= 1280 and abs(center_y - int(target_y)) <= 24):
+                                continue
+                            value = str(_control_text(ctrl) or "").strip()
+                            if value and value not in values:
+                                values.append(value)
+                        except Exception:
+                            pass
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-VERIFY] 거래처 관리항목 값 조회 실패: {exc}")
+                return values
+
+            def _wait_vendor_management_value(target_y, expected, label, timeout=None):
+                timeout = vendor_verify_timeout if timeout is None else max(0.2, float(timeout))
+                end_at = time.time() + timeout
+                last_values = []
+                while time.time() < end_at:
+                    last_values = _visible_vendor_management_values(target_y)
+                    for actual in last_values:
+                        if _vendor_value_matches(actual, expected):
+                            self.logger.info(
+                                f"  [MGMT-VERIFY] {label}: 거래처 관리항목 값 확인 완료: {actual}"
+                            )
+                            return actual
+                    time.sleep(0.15)
+                self.logger.warning(
+                    f"  [MGMT-VERIFY] {label}: 거래처 관리항목 값 불일치: "
+                    f"expected={expected or '-'}, visible={last_values or ['<empty>']}"
+                )
+                return ""
+
             def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
                 # Restore the proven K-System sequence.  The vendor popup opens
                 # with the search box focused; moving focus or clicking an
                 # inferred Edit control breaks that contract on this WPF grid.
-                if not _close_existing_vendor_popup(label):
-                    self.logger.warning(
-                        f"  [MGMT-XY] {label}: 이전 거래처 팝업을 닫지 못해 현재 행 입력 중단"
-                    )
-                    return False
-
-                popup = None
-                for open_try in range(2):
-                    _double_click_form_xy(x, y, f"{label} 팝업 열기", wait=vendor_popup_open_wait)
-                    time.sleep(0.75 if open_try == 0 else ERP_FORM_WAIT + 0.65)
-                    popup = _find_vendor_popup(timeout=0.80 if open_try == 0 else 3.5)
-                    if popup:
-                        self.logger.info(
-                            f"  [MGMT-XY] {label}: vendor popup opened after click "
-                            f"{open_try + 1}; keeping default search-box focus"
+                expected_vendor_name = override_vendor_name or vendor_name
+                for selection_try in range(vendor_selection_attempts):
+                    attempt_label = f"{label} {selection_try + 1}/{vendor_selection_attempts}"
+                    if not _close_existing_vendor_popup(attempt_label):
+                        self.logger.warning(
+                            f"  [MGMT-XY] {attempt_label}: 이전 거래처 팝업을 닫지 못함"
                         )
-                        break
-                if not popup:
-                    self.logger.warning(f"  [MGMT-XY] {label}: 거래처 팝업을 열지 못함")
-                    return False
+                        continue
 
-                time.sleep(max(0.45, mgmt_focus_wait))
-                pyautogui.hotkey('ctrl', 'a')
-                _release_modifiers(f"{label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
-                time.sleep(max(0.18, mgmt_key_wait))
-                _paste_text_fast(target_biz_no, f"{label} 거래처 사업자번호")
-                time.sleep(max(0.55, vendor_popup_open_wait))
-                self.logger.info(
-                    f"  [MGMT-XY] {label}: 거래처 사업자번호 붙여넣기: {target_biz_no}"
+                    # A popup can appear late on a slow PC.  Check immediately
+                    # before every row-cell click so a late popup is never
+                    # double-clicked by the next retry.
+                    popup = _find_vendor_popup(timeout=0.12)
+                    if not popup:
+                        _double_click_form_xy(
+                            x,
+                            y,
+                            f"{attempt_label} 팝업 열기",
+                            wait=vendor_popup_open_wait,
+                            interval=mgmt_double_click_interval,
+                        )
+                        popup = _find_vendor_popup(timeout=vendor_popup_detect_timeout)
+                    if not popup:
+                        self.logger.warning(
+                            f"  [MGMT-XY] {attempt_label}: 거래처 팝업을 열지 못함"
+                        )
+                        time.sleep(max(0.50, mgmt_commit_wait))
+                        continue
+
+                    self.logger.info(
+                        f"  [MGMT-XY] {attempt_label}: vendor popup opened; "
+                        "keeping default search-box focus"
+                    )
+                    time.sleep(max(0.65, mgmt_focus_wait))
+                    pyautogui.hotkey('ctrl', 'a')
+                    _release_modifiers(f"{attempt_label} 거래처 팝업 검색칸 Ctrl+A 후", wait=False)
+                    time.sleep(max(0.25, mgmt_key_wait))
+                    _paste_text_fast(target_biz_no, f"{attempt_label} 거래처 사업자번호")
+                    time.sleep(vendor_search_wait)
+                    self.logger.info(
+                        f"  [MGMT-XY] {attempt_label}: 거래처 사업자번호 붙여넣기: {target_biz_no}"
+                    )
+                    pyautogui.press('tab', presses=4, interval=vendor_key_interval)
+                    time.sleep(mgmt_commit_wait)
+                    pyautogui.press('down', presses=5, interval=vendor_key_interval)
+                    time.sleep(mgmt_commit_wait)
+                    pyautogui.press('up', presses=1, interval=vendor_key_interval)
+                    time.sleep(mgmt_commit_wait)
+                    pyautogui.press('tab', presses=3, interval=vendor_key_interval)
+                    time.sleep(mgmt_commit_wait)
+                    pyautogui.press('enter', presses=2, interval=vendor_enter_interval)
+                    time.sleep(max(1.0, ERP_FORM_WAIT))
+                    self.logger.info(
+                        f"  [MGMT-XY] {attempt_label}: 기존 거래처 키보드 시퀀스 전송"
+                        f"(Tab 4/Down 5/Up 1/Tab 3/Enter 2): {target_biz_no}"
+                    )
+
+                    if not _wait_vendor_popup_closed(timeout=max(2.0, vendor_verify_timeout)):
+                        self.logger.warning(
+                            f"  [MGMT-VERIFY] {attempt_label}: 키 입력 후 거래처 팝업이 닫히지 않음"
+                        )
+                        pyautogui.press('esc')
+                        _wait_vendor_popup_closed(timeout=1.0)
+                        time.sleep(max(0.50, mgmt_commit_wait))
+                        continue
+
+                    actual_vendor = _wait_vendor_management_value(
+                        y,
+                        expected_vendor_name,
+                        attempt_label,
+                    )
+                    if actual_vendor:
+                        return True
+                    time.sleep(max(0.50, mgmt_commit_wait))
+
+                self.logger.warning(
+                    f"  [MGMT-VERIFY] {label}: 거래처 입력 {vendor_selection_attempts}회 모두 실패: "
+                    f"biz_no={target_biz_no}, expected={expected_vendor_name or '-'}"
                 )
-                pyautogui.press('tab', presses=4, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('down', presses=5, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('up', presses=1, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('tab', presses=3, interval=0.08)
-                time.sleep(mgmt_key_wait)
-                pyautogui.press('enter', presses=2, interval=0.12)
-                time.sleep(ERP_FORM_WAIT)
-                self.logger.info(
-                    f"  [MGMT-XY] {label}: 기존 거래처 키보드 시퀀스 확정"
-                    f"(Tab 4/Down 5/Up 1/Tab 3/Enter 2): {target_biz_no}"
-                )
-                return True
+                return False
 
             def _input_vendor_value_xy(x, y, label):
                 if not vendor_name and not vendor_target_biz_no:
