@@ -249,3 +249,19 @@ After implementation approval, preserve fast menu/progress behavior but restore 
 ## Next exact starting point after 1.0.230 deployment
 
 Check K-System for a voucher potentially created by #209's earlier pre-fix Ctrl+S attempt before any reset or retry. Use the next safe new purchase case for live acceptance of header read-back, exact vendor selection, and one-time document-set output.
+
+## Invoice #209 vendor-popup restoration and deployment (2026-08-26)
+
+- Backed up 1.0.230 sources under `tmp/erp_vendor_restore_backup_20260826_132020` before modification.
+- Direct UIA inspection proved that the K-System vendor result grid exposes no rows or cells to UI Automation. The 1.0.229/1.0.230 exact-result scanner therefore could never find Compuzone even when the visible search result was correct.
+- Restored the proven popup-default-focus sequence: `Ctrl+A`, paste business number, `Tab 4`, `Down 5`, `Up 1`, `Tab 3`, `Enter 2`. Removed the active and dead search-Edit click/result-cell UIA paths. Previous-row popup closing and 1.0.230 header/UIA/save guards remain.
+- Purchase management items no longer use the over-fast management timing profile; fast menu navigation remains. The 243-PC `regular_auto` profile is unchanged.
+- Ran invoice `#209` directly through the product ERP function, bypassing the event queue. Rows 1, 3, and 4 completed their management inputs; the final visible row-4 `가지급금(업체)` value was `컴퓨존`. A harness replaced the save call and stopped at `[DIRECT_STOP_BEFORE_SAVE]`; Ctrl+S was never sent and the K-System test process was closed unsaved.
+- Verification passed Python compilation, 10 purchase-safety tests, 3 Gemini tests on the operating server, `git diff --check`, and `graphify update .` (`1,419` nodes, `3,886` edges, `55` communities).
+- The first deployment attempt timed out only on the cold `/api/regular-due/status` check and automatically rolled back to healthy 1.0.230. The second attempt allowed 60 seconds for that read-only status calculation and deployed 1.0.231 successfully.
+- Production backup: `C:\ERP_DB\backups\erp_vendor_restore_20260826_133229`; backend/listener PID `6160`; scheduler and process lock active. Local Agent PID `9688` is ready/current at 1.0.231 and exactly matches bundle hash `1ce3dbf32a0e363016cf0be9a8a10ace243ef36594db215815568449ea4697e9`.
+- A direct-test-only `manager_server/erp_ui_dump.txt` changed the local bundle hash; it was preserved as `tmp/direct_209_erp_ui_dump_20260826.txt`, after which local/server hashes matched. No production invoice or queue state was changed during deployment.
+
+## Next exact starting point after 1.0.231 deployment
+
+Before resetting or retrying invoice `#209`, check K-System for vouchers potentially saved by the older pre-1.0.229 Ctrl+S attempts. The 1.0.231 direct run itself did not save. Observe the next safe purchase case through document-set output; do not re-run #209 unattended.

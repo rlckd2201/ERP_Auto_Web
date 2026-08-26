@@ -32,7 +32,7 @@ class ErpTaskRuntimeProfileTests(unittest.TestCase):
         )
         self.assertEqual(name, "purchase-interactive")
         self.assertEqual(profile["ERP_FAST_NAVIGATION"], "1")
-        self.assertEqual(profile["ERP_FAST_MANAGEMENT"], "1")
+        self.assertEqual(profile["ERP_FAST_MANAGEMENT"], "0")
         self.assertEqual(profile["ERP_FAST_INPUT"], "0")
         self.assertEqual(profile["ERP_FAST_FIELD_VERIFY"], "0")
         self.assertEqual(profile["ERP_STABLE_HEADER_FIELDS"], "1")
@@ -106,11 +106,24 @@ class LegacyManagerSafetySourceTests(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.source = LEGACY_MANAGER.read_text(encoding="utf-8-sig")
 
-    def test_blind_vendor_keyboard_navigation_is_removed(self) -> None:
-        self.assertNotIn("vendor popup already opened; skip popup-open click", self.source)
-        self.assertNotIn("pyautogui.press('down', presses=5", self.source)
-        self.assertIn("정확한 거래처 선택 검증 완료", self.source)
+    def test_proven_vendor_keyboard_navigation_is_restored_without_textbox_click(self) -> None:
+        self.assertIn("def _input_vendor_by_business_no_keyboard", self.source)
+        self.assertIn("keeping default search-box focus", self.source)
+        self.assertIn("pyautogui.press('tab', presses=4", self.source)
+        self.assertIn("pyautogui.press('down', presses=5", self.source)
+        self.assertIn("pyautogui.press('up', presses=1", self.source)
+        self.assertIn("pyautogui.press('tab', presses=3", self.source)
+        self.assertIn("pyautogui.press('enter', presses=2", self.source)
+        input_value_start = self.source.index("def _input_vendor_value_xy")
+        input_value_end = self.source.index("if (\"vendor_vat\" in plan", input_value_start)
+        input_value_source = self.source[input_value_start:input_value_end]
+        self.assertIn("_input_vendor_by_business_no_keyboard", input_value_source)
+        self.assertNotIn("_input_vendor_by_business_no_exact", input_value_source)
         self.assertIn("이전 행 거래처 팝업 감지, 현재 행 입력 전 닫기", self.source)
+        self.assertNotIn("def _input_vendor_by_business_no_exact", self.source)
+        self.assertNotIn("def _input_vendor_popup_search_text", self.source)
+        self.assertNotIn("def _select_vendor_popup_business_filter", self.source)
+        self.assertNotIn("def _find_exact_vendor_result", self.source)
 
     def test_post_save_print_failure_is_fatal_and_marks_retry_guard(self) -> None:
         self.assertIn(ERP_SAVE_CONFIRM_REQUIRED, self.source)

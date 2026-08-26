@@ -163,3 +163,15 @@ Remaining acceptance: confirm one regular-due message at the next real noon run,
 - [x] Back up, verify, deploy 1.0.230, and confirm bundle hashes without replaying #209.
 - [ ] Check K-System for any voucher created by the earlier pre-1.0.229 Ctrl+S attempt before resetting or retrying #209.
 - [ ] Observe one safe new purchase case on an ordinary operator PC; confirm header read-back, exact vendor selection, and one-time document-set output.
+
+## Invoice #209 vendor-popup restoration (2026-08-26)
+
+- [x] Back up the 1.0.230 source/version files before modification.
+- [x] Inspect the live K-System vendor popup and prove that result rows/cells are not available through UI Automation.
+- [x] Remove the failed search-Edit click and exact-result UIA scan paths.
+- [x] Restore the proven default-focus keyboard sequence while retaining stale-popup closing and header/save guards.
+- [x] Disable purchase-only fast management timings while retaining fast menu navigation and leaving `regular_auto` unchanged.
+- [x] Run invoice #209 directly to a hard pre-save stop; confirm rows 1/3/4 complete and row-4 `가지급금(업체)` visibly contains `컴퓨존` without sending Ctrl+S.
+- [x] Deploy 1.0.231 with production backup/rollback, server tests, health, scheduler lock, listener, Agent version, and exact bundle-hash verification.
+- [ ] Check K-System for vouchers from the older pre-1.0.229 Ctrl+S attempts before any #209 reset or retry.
+- [ ] Observe the next safe new purchase case through one-time document-set output.

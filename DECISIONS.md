@@ -137,3 +137,9 @@ Purchase tasks may optimize menu navigation, progress posting, grid management, 
 ## D-033 - do not run a self-updating Agent against an editable mismatched worktree
 
 When the local source tree is newer than the production Agent bundle, stop only the exact Agent process before editing or verification. Otherwise its normal self-update can replace in-progress source and test files with the older server bundle. Restart the Agent only after production publishes the matching version and verify both version and bundle hash through setup status.
+
+## D-034 - K-System vendor selection uses the proven default-focus keyboard contract
+
+Live inspection supersedes the exact-result portion of D-030: the vendor popup's visible result grid does not expose rows or cells through UI Automation, so an exact UIA result-cell scan cannot validate or select a vendor. Do not call `popup.set_focus()`, infer/click a search Edit, or scan UIA result cells. Close any stale popup, open the current row's popup, preserve its default search-box focus, and use the established business-number sequence `Ctrl+A / paste / Tab 4 / Down 5 / Up 1 / Tab 3 / Enter 2`. Purchase tasks retain conservative management timing; ordinary-PC speed optimization remains limited to safe navigation and does not alter the 243-PC regular profile.
+
+Direct acceptance may use an existing payload only when the save function is replaced with a hard pre-save stop and Ctrl+S is impossible. A visible final management value plus the pre-save stop is required evidence. This does not clear the duplicate-save risk from older runs that already sent Ctrl+S.

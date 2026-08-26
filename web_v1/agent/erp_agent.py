@@ -92,13 +92,14 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.230"
+AGENT_BUNDLE_VERSION = "1.0.231"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
     {
         "ERP_FAST_INPUT",
         "ERP_FAST_FIELD_VERIFY",
+        "ERP_FAST_MANAGEMENT",
         "ERP_STABLE_HEADER_FIELDS",
     }
 )
@@ -146,17 +147,9 @@ def _erp_task_runtime_profile(task: dict[str, Any]) -> tuple[str, dict[str, str]
         "ERP_FAST_FIELD_VERIFY": "0",
         "ERP_STABLE_HEADER_FIELDS": "1",
         "ERP_CRITICAL_FIELD_WAIT": "0.45",
-        "ERP_FAST_MANAGEMENT": "1",
+        "ERP_FAST_MANAGEMENT": "0",
         "ERP_FAST_NAVIGATION": "1",
         "ERP_STRICT_VENDOR_SELECTION": "1",
-        "ERP_MGMT_KEY_WAIT": "0.06",
-        "ERP_MGMT_COMMIT_WAIT": "0.10",
-        "ERP_MGMT_FOCUS_WAIT": "0.07",
-        "ERP_MGMT_CLICK_WAIT": "0.08",
-        "ERP_MGMT_CLIPBOARD_WAIT": "0.02",
-        "ERP_MGMT_SUMMARY_OPEN_WAIT": "0.30",
-        "ERP_MGMT_AFTER_GRID_PASTE_WAIT": "0.35",
-        "ERP_VENDOR_POPUP_OPEN_WAIT": "0.35",
         "ERP_NEW_FORM_WAIT": "0.35",
         "ERP_SLIP_OPEN_WAIT": "0.60",
         "ERP_PRINT_SAVE_WAIT": "0.80",
