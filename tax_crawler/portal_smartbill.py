@@ -1335,92 +1335,59 @@ def _smartbill_current_ibtn_window_save_pdf(self, driver, final_path):
 SmartBillHandler._save_pdf = _smartbill_current_ibtn_window_save_pdf
 
 
-def _normalize_smartbill_pdf_layout(pdf_path: Path) -> Path:
-    """Fit the SmartBill invoice itself to one clean landscape A4 page.
+def _smartbill_print_full_a4_pdf_base64(driver) -> str:
+    """Print SmartBill exactly as a normal Chrome A4 portrait page.
 
-    Selenium's ``print_page()`` always creates a portrait A4 page.  SmartBill's
-    print preview is a wide invoice placed at the top of that page, so the
-    bottom half is blank and the result looks like a browser screenshot.  This
-    keeps the original vector text, lines and seals, clips only the occupied
-    print area, and fits it to landscape A4 with a small, even margin.
+    The header/footer intentionally mirrors Chrome's print output: date and
+    page title at the top, source URL and page number at the bottom.  Keeping
+    the full page is important because the blank lower area is part of the
+    original SmartBill print layout.
     """
-    try:
-        import fitz
-    except Exception as exc:
-        print(f"[smartbill] PDF layout normalization skipped: {exc}")
-        return pdf_path
+    header_template = """
+    <div style="font-size:8px;width:100%;padding:0 12px;box-sizing:border-box;color:#000;">
+      <span class="date"></span>
+      <span class="title" style="position:absolute;left:0;right:0;text-align:center;"></span>
+    </div>
+    """
+    footer_template = """
+    <div style="font-size:8px;width:100%;padding:0 12px;box-sizing:border-box;color:#000;">
+      <span class="url"></span>
+      <span style="float:right;"><span class="pageNumber"></span>/<span class="totalPages"></span></span>
+    </div>
+    """
+    result = driver.execute_cdp_cmd(
+        "Page.printToPDF",
+        {
+            "landscape": False,
+            "displayHeaderFooter": True,
+            "printBackground": True,
+            "scale": 1,
+            "paperWidth": 8.27,
+            "paperHeight": 11.69,
+            "marginTop": 0.4,
+            "marginBottom": 0.4,
+            "marginLeft": 0.4,
+            "marginRight": 0.4,
+            "pageRanges": "1",
+            "preferCSSPageSize": False,
+            "headerTemplate": header_template,
+            "footerTemplate": footer_template,
+        },
+    )
+    pdf_base64 = (result or {}).get("data")
+    if not pdf_base64:
+        raise RuntimeError("Chrome Page.printToPDF returned no PDF data")
+    return pdf_base64
 
-    source = None
-    normalized = None
-    temp_path = pdf_path.with_name(f"{pdf_path.stem}.__layout{pdf_path.suffix}")
-    try:
-        source = fitz.open(str(pdf_path))
-        if source.page_count <= 0:
-            return pdf_path
 
-        normalized = fitz.open()
-        a4_portrait = fitz.paper_rect("a4")
-        page_width = a4_portrait.height
-        page_height = a4_portrait.width
-        margin = 24.0
-        target = fitz.Rect(margin, margin, page_width - margin, page_height - margin)
+def _normalize_smartbill_pdf_layout(pdf_path: Path) -> Path:
+    """Compatibility hook that deliberately preserves the original full page.
 
-        for page_number, page in enumerate(source):
-            content_rects = []
-            content_rects.extend(fitz.Rect(word[:4]) for word in page.get_text("words"))
-            content_rects.extend(
-                fitz.Rect(drawing["rect"])
-                for drawing in page.get_drawings()
-                if drawing.get("rect") and not fitz.Rect(drawing["rect"]).is_empty
-            )
-            for image in page.get_images(full=True):
-                content_rects.extend(page.get_image_rects(image[0]))
-
-            content_rects = [rect & page.rect for rect in content_rects if not rect.is_empty]
-            if content_rects:
-                clip = fitz.Rect(content_rects[0])
-                for rect in content_rects[1:]:
-                    clip |= rect
-                clip = fitz.Rect(
-                    max(page.rect.x0, clip.x0 - 6),
-                    max(page.rect.y0, clip.y0 - 6),
-                    min(page.rect.x1, clip.x1 + 6),
-                    min(page.rect.y1, clip.y1 + 6),
-                )
-            else:
-                clip = page.rect
-
-            output_page = normalized.new_page(width=page_width, height=page_height)
-            output_page.show_pdf_page(
-                target,
-                source,
-                page_number,
-                clip=clip,
-                keep_proportion=True,
-            )
-
-        normalized.set_metadata(source.metadata)
-        normalized.save(str(temp_path), garbage=4, deflate=True)
-        normalized.close()
-        normalized = None
-        source.close()
-        source = None
-        temp_path.replace(pdf_path)
-        print(f"[smartbill] PDF layout normalized to landscape A4: {pdf_path}")
-        return pdf_path
-    except Exception as exc:
-        print(f"[smartbill] PDF layout normalization failed; original kept: {exc}")
-        try:
-            if temp_path.exists():
-                temp_path.unlink()
-        except Exception:
-            pass
-        return pdf_path
-    finally:
-        if normalized is not None:
-            normalized.close()
-        if source is not None:
-            source.close()
+    Older deployments cropped the invoice and enlarged it onto landscape A4.
+    That changed the SmartBill print artifact.  Do not crop, rotate, resize or
+    otherwise rewrite the PDF here.
+    """
+    return pdf_path
 
 
 def _smartbill_form_post_print_save_pdf(self, driver, final_path):
@@ -1605,8 +1572,8 @@ def _smartbill_form_post_print_save_pdf(self, driver, final_path):
         time.sleep(0.5)
 
     try:
-        print(f"[{self.portal_name}] print_page() pdf create")
-        pdf_base64 = driver.print_page()
+        print(f"[{self.portal_name}] Chrome A4 portrait PDF create")
+        pdf_base64 = _smartbill_print_full_a4_pdf_base64(driver)
         final_path.parent.mkdir(parents=True, exist_ok=True)
         with open(final_path, "wb") as f:
             f.write(base64.b64decode(pdf_base64))

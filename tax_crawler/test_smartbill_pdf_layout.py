@@ -5,62 +5,61 @@ from unittest.mock import Mock, patch
 
 import fitz
 
-from portal_smartbill import SmartBillHandler, _normalize_smartbill_pdf_layout
+from portal_smartbill import (
+    SmartBillHandler,
+    _normalize_smartbill_pdf_layout,
+    _smartbill_print_full_a4_pdf_base64,
+)
 
 
 class SmartBillPdfLayoutTests(TestCase):
-    def test_invoice_content_is_fitted_to_landscape_a4(self):
+    def test_original_portrait_page_is_not_rewritten_or_cropped(self):
         with TemporaryDirectory() as temp_dir:
             pdf_path = Path(temp_dir) / "smartbill.pdf"
             source = fitz.open()
-            page = source.new_page(width=612, height=792)
+            page = source.new_page(width=595.44, height=841.68)
+            page.insert_text((30, 20), "PRINT DATE / BUSINESS IS ON")
             page.draw_rect(fitz.Rect(30, 55, 515, 350), color=(0, 0, 0))
             page.insert_text((45, 90), "SMARTBILL TAX INVOICE")
             page.insert_text((45, 330), "TOTAL 275000")
+            page.insert_text((30, 820), "SOURCE URL / 1 OF 1")
             source.save(pdf_path)
             source.close()
+            original_bytes = pdf_path.read_bytes()
 
             result = _normalize_smartbill_pdf_layout(pdf_path)
 
             self.assertEqual(pdf_path, result)
-            normalized = fitz.open(pdf_path)
+            self.assertEqual(original_bytes, pdf_path.read_bytes())
+            preserved = fitz.open(pdf_path)
             try:
-                self.assertEqual(1, normalized.page_count)
-                page = normalized[0]
-                self.assertGreater(page.rect.width, page.rect.height)
-                self.assertAlmostEqual(841.89, page.rect.width, delta=1.0)
-                self.assertAlmostEqual(595.28, page.rect.height, delta=1.0)
+                self.assertEqual(1, preserved.page_count)
+                page = preserved[0]
+                self.assertLess(page.rect.width, page.rect.height)
+                self.assertAlmostEqual(595.44, page.rect.width, delta=0.1)
+                self.assertAlmostEqual(841.68, page.rect.height, delta=0.1)
                 self.assertIn("SMARTBILL TAX INVOICE", page.get_text())
-
-                content_rects = [fitz.Rect(word[:4]) for word in page.get_text("words")]
-                content_rects.extend(
-                    fitz.Rect(drawing["rect"])
-                    for drawing in page.get_drawings()
-                    if drawing.get("rect")
-                )
-                content = fitz.Rect(content_rects[0])
-                for rect in content_rects[1:]:
-                    content |= rect
-                self.assertGreater(content.width, 750)
-                self.assertLess(content.y0, 80)
-                self.assertGreater(content.y1, 500)
+                self.assertIn("SOURCE URL / 1 OF 1", page.get_text())
             finally:
-                normalized.close()
+                preserved.close()
 
-    def test_empty_pdf_keeps_original_file_readable(self):
-        with TemporaryDirectory() as temp_dir:
-            pdf_path = Path(temp_dir) / "empty.pdf"
-            source = fitz.open()
-            source.new_page(width=612, height=792)
-            source.save(pdf_path)
-            source.close()
+    def test_chrome_print_uses_full_a4_portrait_with_header_and_footer(self):
+        driver = Mock()
+        driver.execute_cdp_cmd.return_value = {"data": "encoded-pdf"}
 
-            _normalize_smartbill_pdf_layout(pdf_path)
+        result = _smartbill_print_full_a4_pdf_base64(driver)
 
-            normalized = fitz.open(pdf_path)
-            self.assertEqual(1, normalized.page_count)
-            self.assertGreater(normalized[0].rect.width, normalized[0].rect.height)
-            normalized.close()
+        self.assertEqual("encoded-pdf", result)
+        command, options = driver.execute_cdp_cmd.call_args.args
+        self.assertEqual("Page.printToPDF", command)
+        self.assertFalse(options["landscape"])
+        self.assertTrue(options["displayHeaderFooter"])
+        self.assertAlmostEqual(8.27, options["paperWidth"])
+        self.assertAlmostEqual(11.69, options["paperHeight"])
+        self.assertIn('class="date"', options["headerTemplate"])
+        self.assertIn('class="title"', options["headerTemplate"])
+        self.assertIn('class="url"', options["footerTemplate"])
+        self.assertIn('class="pageNumber"', options["footerTemplate"])
 
 
 class SmartBillReceiptApprovalTests(TestCase):
