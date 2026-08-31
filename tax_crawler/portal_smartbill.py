@@ -167,33 +167,203 @@ class SmartBillHandler(BaseTaxInvoiceHandler):
     def _handle_approval(self, driver) -> bool:
         """
         수신미승인 상태면 승인 처리를 진행하고,
-        최종적으로 '인쇄' 버튼이 렌더링되었는지 확인합니다.
+        실제 SmartBill 상태값이 미승인(I)에서 전환되었는지 확인합니다.
         """
         print(f"[{self.portal_name}] 수신승인 상태 확인")
 
-        self._accept_smartbill_dialogs(driver, rounds=2)
-        for _ in range(4):
-            if self._is_print_button_present(driver):
-                return True
-            if self._click_smartbill_text(driver, "수신승인", exclude=("수신거부",)):
-                print(f"[{self.portal_name}] 수신승인 버튼 클릭")
-                time.sleep(0.8)
-                # SmartBill shows two consecutive confirmations after approval.
-                self._accept_smartbill_dialogs(driver, rounds=2, force_enter=True)
-                time.sleep(1.0)
-                self._accept_smartbill_dialogs(driver, rounds=2, force_enter=True)
-                time.sleep(1.0)
-                self._accept_smartbill_dialogs(driver, rounds=4, force_enter=True)
-                time.sleep(1.0)
-                continue
-            time.sleep(1)
+        status = self._smartbill_receipt_status(driver)
+        print(f"[{self.portal_name}] 수신 상태값: {status or '확인불가'}")
+        if status and status != "I":
+            return self._is_print_button_present(driver)
 
-        for _ in range(15):
-            if self._is_print_button_present(driver):
-                return True
-            self._accept_smartbill_dialogs(driver, rounds=1)
+        if status != "I":
+            print(f"[{self.portal_name}] 수신 상태값을 확인할 수 없어 처리를 중단합니다.")
+            return False
+
+        if not self._click_smartbill_receipt_approval(driver):
+            print(f"[{self.portal_name}] 수신 미승인 상태이나 수신승인 버튼을 찾지 못했습니다.")
+            return False
+
+        print(f"[{self.portal_name}] 수신승인 버튼 클릭")
+        time.sleep(0.5)
+        if not self._click_smartbill_approval_modal_action(driver, "APPROVE", timeout=10):
+            print(f"[{self.portal_name}] 수신승인 확인 팝업을 처리하지 못했습니다.")
+            return False
+        print(f"[{self.portal_name}] 수신승인 확인 팝업 승인")
+
+        for _ in range(24):
+            status = self._smartbill_receipt_status(driver)
+            if status and status != "I":
+                print(f"[{self.portal_name}] 수신승인 완료 상태값: {status}")
+                self._close_smartbill_approval_modal(driver)
+                self._dismiss_verified_approval_stale_alert(driver)
+                status = self._smartbill_receipt_status(driver)
+                if not status or status == "I":
+                    print(f"[{self.portal_name}] 승인 팝업 종료 후 상태 재검증 실패: {status or '확인불가'}")
+                    return False
+                return self._is_print_button_present(driver)
             time.sleep(0.5)
+
+        print(f"[{self.portal_name}] 수신승인 후에도 상태값이 I로 유지되어 중단합니다.")
         return False
+
+    def _smartbill_receipt_status(self, driver) -> str:
+        """Return SmartBill's canonical receipt status from hdndtistatus."""
+
+        def read_current_context() -> str:
+            try:
+                elements = driver.find_elements(By.ID, "hdndtistatus")
+            except Exception:
+                return ""
+            for element in elements:
+                try:
+                    value = str(element.get_attribute("value") or "").strip().upper()
+                    if value:
+                        return value
+                except Exception:
+                    continue
+            return ""
+
+        try:
+            driver.switch_to.default_content()
+            status = read_current_context()
+            if status:
+                return status
+
+            frames = driver.find_elements(By.TAG_NAME, "iframe") + driver.find_elements(By.TAG_NAME, "frame")
+            for frame in frames:
+                try:
+                    driver.switch_to.default_content()
+                    driver.switch_to.frame(frame)
+                    status = read_current_context()
+                    if status:
+                        return status
+                except Exception:
+                    continue
+        except Exception:
+            return ""
+        finally:
+            try:
+                driver.switch_to.default_content()
+            except Exception:
+                pass
+        return ""
+
+    def _click_smartbill_receipt_approval(self, driver) -> bool:
+        """Click SmartBill's actual receipt-approval image, never matching page text."""
+        selectors = (
+            (By.ID, "btnApprove02"),
+            (By.ID, "btnApprove01"),
+            (By.CSS_SELECTOR, "img[alt='수신승인'][onclick*='fnApprove2_click']"),
+            (By.CSS_SELECTOR, "[onclick*=\"fnApprove2_click('APPROVE')\"]"),
+        )
+
+        def click_current_context() -> bool:
+            for by, selector in selectors:
+                try:
+                    elements = driver.find_elements(by, selector)
+                except Exception:
+                    continue
+                for element in elements:
+                    try:
+                        if not element.is_displayed():
+                            continue
+                        onclick = str(element.get_attribute("onclick") or "")
+                        label = str(element.get_attribute("alt") or element.get_attribute("value") or "")
+                        if "fnApprove2_click" not in onclick and label != "수신승인":
+                            continue
+                        driver.execute_script("arguments[0].scrollIntoView({block:'center'});", element)
+                        driver.execute_script("arguments[0].click();", element)
+                        return True
+                    except Exception:
+                        continue
+            return False
+
+        try:
+            driver.switch_to.default_content()
+            if click_current_context():
+                return True
+            frames = driver.find_elements(By.TAG_NAME, "iframe") + driver.find_elements(By.TAG_NAME, "frame")
+            for frame in frames:
+                try:
+                    driver.switch_to.default_content()
+                    driver.switch_to.frame(frame)
+                    if click_current_context():
+                        return True
+                except Exception:
+                    continue
+        except Exception:
+            return False
+        finally:
+            try:
+                driver.switch_to.default_content()
+            except Exception:
+                pass
+        return False
+
+    def _click_smartbill_approval_modal_action(self, driver, action: str, timeout: float = 10) -> bool:
+        """Click the exact APPROVE/OK action inside SmartBill's approval iframe."""
+        action = str(action or "").strip().upper()
+        if action not in {"APPROVE", "OK"}:
+            return False
+        xpath = f'//button[contains(@onclick, "fnConfirmClick(\'{action}\')")]'
+        deadline = time.monotonic() + max(0.1, float(timeout))
+
+        while time.monotonic() < deadline:
+            try:
+                driver.switch_to.default_content()
+                frames = driver.find_elements(By.TAG_NAME, "iframe") + driver.find_elements(By.TAG_NAME, "frame")
+                for frame in frames:
+                    try:
+                        driver.switch_to.default_content()
+                        driver.switch_to.frame(frame)
+                        buttons = driver.find_elements(By.XPATH, xpath)
+                        for button in buttons:
+                            if not button.is_displayed():
+                                continue
+                            driver.execute_script("arguments[0].click();", button)
+                            return True
+                    except Exception:
+                        continue
+            except Exception:
+                pass
+            finally:
+                try:
+                    driver.switch_to.default_content()
+                except Exception:
+                    pass
+            time.sleep(0.25)
+        return False
+
+    def _close_smartbill_approval_modal(self, driver) -> None:
+        """Close the approved modal without invoking its unrelated OK-button side effects."""
+        try:
+            driver.switch_to.default_content()
+            driver.execute_script(
+                "if (typeof fnCloseModal === 'function') { fnCloseModal(); return true; } return false;"
+            )
+        except Exception as exc:
+            print(f"[{self.portal_name}] 수신승인 완료 팝업 닫기 무시: {exc}")
+        finally:
+            try:
+                driver.switch_to.default_content()
+            except Exception:
+                pass
+
+    def _dismiss_verified_approval_stale_alert(self, driver) -> bool:
+        """Dismiss SmartBill's stale pre-approval warning only after status became approved."""
+        try:
+            WebDriverWait(driver, 1).until(EC.alert_is_present())
+            alert = driver.switch_to.alert
+            message = str(alert.text or "")
+            if "수신미승인" not in message:
+                print(f"[{self.portal_name}] 승인 후 예상하지 못한 경고창: {message}")
+                return False
+            print(f"[{self.portal_name}] 승인 완료 후 잔여 미승인 경고창 닫기")
+            alert.dismiss()
+            return True
+        except Exception:
+            return False
 
     def _click_smartbill_text(self, driver, text: str, exclude=()) -> bool:
         xpaths = [
@@ -1347,6 +1517,9 @@ def _smartbill_form_post_print_save_pdf(self, driver, final_path):
         if (!dtiid || !dtiWday) {
           return {ok:false, reason:"dtiid/dtiWday not found", dtiid, dtiWday};
         }
+        if (!status || status.toUpperCase() === "I") {
+          return {ok:false, reason:"receipt not approved", status};
+        }
 
         let checked = document.getElementById("hdnCheckedIds") || form.elements["hdnCheckedIds"];
         if (!checked) {
@@ -1379,6 +1552,12 @@ def _smartbill_form_post_print_save_pdf(self, driver, final_path):
     time.sleep(1)
     close_alert()
 
+    receipt_status = self._smartbill_receipt_status(driver)
+    print(f"[{self.portal_name}] receipt status before print: {receipt_status or 'missing'}")
+    if not receipt_status or receipt_status == "I":
+        print(f"[{self.portal_name}] receipt is not approved; PDF print blocked")
+        return None
+
     try:
         main_handle = driver.current_window_handle
     except Exception:
@@ -1391,7 +1570,9 @@ def _smartbill_form_post_print_save_pdf(self, driver, final_path):
     if clicked:
         print(f"[{self.portal_name}] ibtnPrint clicked")
         time.sleep(1)
-        close_alert()
+        if close_alert():
+            print(f"[{self.portal_name}] unexpected approval dialog during print; PDF print blocked")
+            return None
         if not wait_and_switch_print_window(before_handles):
             print(f"[{self.portal_name}] click did not reach prt_prev, fallback to exact form POST")
             try:
