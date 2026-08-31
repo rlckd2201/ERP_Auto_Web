@@ -2,6 +2,7 @@ import io
 import sys
 from unittest import TestCase, mock
 
+from tax_crawler.base_handler import BaseTaxInvoiceHandler
 from support.uplus_handler import UplusEDocuHandler
 
 
@@ -17,4 +18,17 @@ class UplusConsoleLoggingTests(TestCase):
 
         output = raw.getvalue().decode("cp1252")
         self.assertIn("[202", output)
+        self.assertIn("\\u", output)
+
+    def test_base_crawler_console_is_safe_under_legacy_windows_encoding(self):
+        raw = io.BytesIO()
+        console = io.TextIOWrapper(raw, encoding="cp1252", errors="strict")
+
+        with mock.patch.object(sys, "stdout", console):
+            BaseTaxInvoiceHandler._configure_unicode_safe_console()
+            print("대신아이씨티 세금계산서")
+            console.flush()
+
+        self.assertEqual("backslashreplace", console.errors)
+        output = raw.getvalue().decode("cp1252")
         self.assertIn("\\u", output)

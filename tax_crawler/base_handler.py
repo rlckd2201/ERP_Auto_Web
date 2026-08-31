@@ -1,5 +1,6 @@
 import os
 import re
+import sys
 import time
 import configparser
 import unicodedata
@@ -43,6 +44,25 @@ class BaseTaxInvoiceHandler(ABC):
     def supports(self, url: str) -> bool:
         """이 핸들러가 처리 가능한 URL인지 반환."""
 
+    @staticmethod
+    def _configure_unicode_safe_console() -> None:
+        """Prevent legacy Windows stdout encodings from aborting crawling.
+
+        Some scheduled or helper processes still expose a cp1252 console.  A
+        Korean status message must never turn an otherwise valid invoice into
+        a crawler failure, so keep the current encoding but make unsupported
+        characters printable through backslash escapes.
+        """
+        for stream_name in ("stdout", "stderr"):
+            stream = getattr(sys, stream_name, None)
+            reconfigure = getattr(stream, "reconfigure", None)
+            if not callable(reconfigure):
+                continue
+            try:
+                reconfigure(errors="backslashreplace")
+            except (OSError, ValueError):
+                continue
+
     def process(self, url: str, mail_text: str = "", mail_date: str = "", mail_subject: str = "") -> dict:
         """
         통일 반환값:
@@ -55,6 +75,7 @@ class BaseTaxInvoiceHandler(ABC):
             "error": str | None,
         }
         """
+        self._configure_unicode_safe_console()
         if not mail_date:
             mail_date = time.strftime("%y%m%d")
         result = {
