@@ -650,6 +650,53 @@ def _window_center_in_monitor(win, monitor):
     except Exception:
         return False
 
+
+def _erp_form_anchor_offset_limits(
+    automation_id,
+    configured_limit,
+    exact_anchor_x_limit=None,
+    *,
+    control_type="",
+    anchor_width=0,
+    anchor_height=0,
+    offset_y=None,
+):
+    """Return conservative X/Y limits for ERP form anchor calibration."""
+    base_limit = max(8, int(configured_limit))
+    exact_anchor = str(automation_id or "").strip().lower() == "cboaccunit"
+    anonymous_account_unit = (
+        not str(automation_id or "").strip()
+        and str(control_type or "").strip().lower() == "combobox"
+        and 150 <= int(anchor_width or 0) <= 180
+        and 24 <= int(anchor_height or 0) <= 32
+        and offset_y is not None
+        and abs(int(offset_y)) <= 8
+    )
+    if exact_anchor_x_limit is None:
+        exact_anchor_x_limit = int(
+            float(os.getenv("ERP_FORM_EXACT_ANCHOR_MAX_X_OFFSET", "120") or "120")
+        )
+    trusted_anchor = exact_anchor or anonymous_account_unit
+    x_limit = max(base_limit, max(8, int(exact_anchor_x_limit))) if trusted_anchor else base_limit
+    apply_form_x_offset = exact_anchor
+    return x_limit, base_limit, exact_anchor, anonymous_account_unit, apply_form_x_offset
+
+
+def _erp_form_applied_offsets(offset_x, offset_y, apply_form_x_offset):
+    """Apply a trusted account-unit X delta without moving any form row vertically."""
+    del offset_y
+    return (int(offset_x) if apply_form_x_offset else 0), 0
+
+
+def _erp_management_summary_click_candidates(x_candidates):
+    """Keep the proven row Y fixed; retries may vary only the summary column X."""
+    return [(int(x), 0) for x in x_candidates]
+
+
+def _erp_form_value_control_types(date_mode=False):
+    """Static labels are not valid accounting-date values."""
+    return ("Edit", "ComboBox") if date_mode else ("Edit", "ComboBox", "Text")
+
 class ERPLoginBot:
     def __init__(self, install_info: dict, corp_info: dict, corp_code: str, manager, logger: logging.Logger):
         self.install_info = install_info
@@ -1785,18 +1832,41 @@ class ERPLoginBot:
             offset_x = actual_x - (reference.left + 493)
             offset_y = actual_y - (reference.top + 124)
             max_offset = max(8, int(float(os.getenv("ERP_FORM_MAX_COORD_OFFSET", "40") or "40")))
-            if abs(offset_x) > max_offset or abs(offset_y) > max_offset:
+            try:
+                anchor_id = str(combo.element_info.automation_id or "")
+            except Exception:
+                anchor_id = ""
+            try:
+                anchor_control_type = str(combo.element_info.control_type or "")
+            except Exception:
+                anchor_control_type = ""
+            x_limit, y_limit, exact_anchor, anonymous_anchor, apply_form_x_offset = _erp_form_anchor_offset_limits(
+                anchor_id,
+                max_offset,
+                control_type=anchor_control_type,
+                anchor_width=rect.width(),
+                anchor_height=rect.height(),
+                offset_y=offset_y,
+            )
+            if abs(offset_x) > x_limit or abs(offset_y) > y_limit:
                 _fail_form(
                     f"ERP 폼 좌표 편차가 안전 범위를 벗어났습니다: "
-                    f"offset=({offset_x},{offset_y}), limit={max_offset}, "
+                    f"offset=({offset_x},{offset_y}), limit=({x_limit},{y_limit}), "
+                    f"anchor_id={anchor_id or 'unknown'}, exact={exact_anchor}, anonymous={anonymous_anchor}, "
+                    f"type={anchor_control_type or 'unknown'}, size={rect.width()}x{rect.height()}, "
                     f"anchor=({rect.left},{rect.top})-({rect.right},{rect.bottom})"
                 )
-            form_coord_offset_x = offset_x
-            form_coord_offset_y = offset_y
+            form_coord_offset_x, form_coord_offset_y = _erp_form_applied_offsets(
+                offset_x, offset_y, apply_form_x_offset
+            )
             form_coord_calibrated = True
             self.logger.info(
-                f"  [FORM-CALIBRATE] {reason}: 회계단위 기준 좌표 보정 완료 "
-                f"offset=({offset_x},{offset_y}), "
+                f"  [FORM-CALIBRATE] {reason}: 회계단위 기준 위치 확인 완료 "
+                f"measured=({offset_x},{offset_y}), applied=({form_coord_offset_x},{form_coord_offset_y}), "
+                f"scope={'form-x-only' if apply_form_x_offset else 'account-unit-only'}, "
+                f"limit=({x_limit},{y_limit}), anchor_id={anchor_id or 'unknown'}, "
+                f"exact={exact_anchor}, anonymous={anonymous_anchor}, "
+                f"type={anchor_control_type or 'unknown'}, size={rect.width()}x{rect.height()}, "
                 f"anchor=({rect.left},{rect.top})-({rect.right},{rect.bottom}), "
                 f"canvas=({reference.left},{reference.top})-({reference.right},{reference.bottom})"
             )
@@ -1881,7 +1951,7 @@ class ERPLoginBot:
             _fail_form(f"회계단위 선택 검증 실패: expected={expected}, actual={checks}")
 
         def _verify_field_xy(x, y, expected, label, date_mode=False):
-            ctrl = _find_near_control(x, y, ("Edit", "ComboBox", "Text"))
+            ctrl = _find_near_control(x, y, _erp_form_value_control_types(date_mode))
             actual = _control_text(ctrl) if ctrl else ""
             if date_mode:
                 expected_digits = re.sub(r"[^0-9]", "", str(expected or ""))
@@ -1952,7 +2022,10 @@ class ERPLoginBot:
             time.sleep(ERP_FORM_WAIT)
 
         def _verify_anchor_field(label, expected, fallback_xy, date_mode=False):
-            ctrl = _input_right_of_label(label) or _find_near_control(*fallback_xy, ("Edit", "ComboBox", "Text"))
+            ctrl = _input_right_of_label(label) or _find_near_control(
+                *fallback_xy,
+                _erp_form_value_control_types(date_mode),
+            )
             actual = _control_text(ctrl) if ctrl else ""
             if date_mode:
                 expected_digits = re.sub(r"[^0-9]", "", str(expected or ""))
@@ -2847,14 +2920,8 @@ class ERPLoginBot:
             summary_base_y = _env_int("ERP_MGMT_SUMMARY_Y_BASE", 231)
             summary_row_height = _env_int("ERP_MGMT_ROW_HEIGHT", 20)
             summary_x_candidates = _env_int_list("ERP_MGMT_SUMMARY_X_CANDIDATES", [970, 930, 1010, 890, 1070])
-            # ERP form rows can be rendered a few pixels lower on another PC.
-            # Try the same summary column slightly below before moving sideways.
-            summary_y_offsets = _env_int_list("ERP_MGMT_SUMMARY_Y_OFFSETS", [0, 4, 8, -4, -8])
-            summary_click_candidates = [
-                (x, y_offset)
-                for x in summary_x_candidates
-                for y_offset in summary_y_offsets
-            ]
+            # Row identity is encoded by Y. Never probe above or below a row.
+            summary_click_candidates = _erp_management_summary_click_candidates(summary_x_candidates)
             summary_open_attempts = max(
                 1,
                 _env_int(

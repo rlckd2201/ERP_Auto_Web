@@ -93,7 +93,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.234"
+AGENT_BUNDLE_VERSION = "1.0.238"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
@@ -159,7 +159,14 @@ def _erp_task_runtime_profile(task: dict[str, Any]) -> tuple[str, dict[str, str]
         "ERP_FAST_FIELD_VERIFY": "0",
         "ERP_STABLE_HEADER_FIELDS": "1",
         "ERP_CRITICAL_FIELD_WAIT": "0.45",
+        "ERP_PYAUTOGUI_SAFE_PAUSE": "0.10",
         "ERP_FAST_MANAGEMENT": "0",
+        "ERP_MGMT_KEY_WAIT": "0.16",
+        "ERP_MGMT_COMMIT_WAIT": "0.26",
+        "ERP_MGMT_FOCUS_WAIT": "0.20",
+        "ERP_MGMT_CLICK_WAIT": "0.24",
+        "ERP_MGMT_CLIPBOARD_WAIT": "0.08",
+        "ERP_MGMT_AFTER_GRID_PASTE_WAIT": "0.70",
         "ERP_FAST_NAVIGATION": "1",
         "ERP_STRICT_VENDOR_SELECTION": "1",
         "ERP_AGENT_FRESH_START": "1",

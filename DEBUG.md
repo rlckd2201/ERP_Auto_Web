@@ -257,3 +257,78 @@ Updated: 2026-08-25
 - Repair: `_ProgressEventDispatcher` sends progress through a bounded daemon queue with a two-second network timeout. Submit is non-blocking, overflow keeps the newest event, network exceptions stay local, and queued progress is discarded before the authoritative completion/error POST.
 - Regression coverage: slow HTTP, failed HTTP, late-progress rejection, two coordinate geometry cases, and runtime wiring all pass (6 tests). Production backup `C:\ERP_DB\backups\erp_coord_fix_20260826_154936`; version 1.0.234; backend PID `7508`; exact bundle hash `3fb9dfba25ec68add2c58ae5cbb39e5e398d1dc3739646ca5d715e51530bc71f`.
 - Live containment: #209 remains `ERP대기` with no ERP voucher PDF. Its old 1.0.233 Agent task is still claimed and the remote PC exposes no management/RDP port. Do not enqueue another task until the old Agent/K-System process is ended and K-System is checked for an existing voucher.
+
+## I-035 - 1.0.236 applied an account-unit displacement to every form click - rolled back
+
+- Symptom: Song's #209 retry passed account-unit selection but clicked outside the accounting-date input and failed with `expected=2026-08-18, actual=회계일`.
+- Root cause: calibration accepted an anonymous 166x28 ComboBox at X offset `-76` and assigned that value to `form_coord_offset_x`; `_form_point()` then added `-76` to every later coordinate. The date point moved from relative X `375` to `299`, which selected the static date label. Slip-unit success did not make the global-offset assumption valid because its input area was wider.
+- Safety result: job `a45c2217-c7aa-4c78-91e9-57e915bc65e6` failed before grid entry and before Ctrl+S. No new ERP voucher PDF or output set was produced.
+- Rollback: production and Song Agent are back on 1.0.235/hash `1900baa462be33af637905dec64e5c3d4ef64afa361f1d26532996b5f15e4674`; server tests `8/8`, health, single 8080 listener, and Agent readiness passed. Production backend PID is `7064`.
+- Prevention boundary: do not reintroduce anonymous-anchor global calibration. The next repair must isolate live positioning to the account-unit selector, preserve all other coordinates, reject labels during value verification, and use moderate action/read-back pacing.
+
+## I-036 - SmartBill PDFs looked like screen captures because portrait `print_page()` kept the preview whitespace - resolved
+
+- Symptom: the saved PDF contained the correct invoice and extractable text, but the invoice occupied only roughly `y=55..350` on a portrait `612x792` page, leaving more than half the page blank.
+- Root cause: SmartBill's official invoice is wide, while Selenium `driver.print_page()` emits portrait A4 by default. The crawler reached the correct `prt_prev.aspx` print view but did not normalize that layout.
+- Repair: `_normalize_smartbill_pdf_layout()` unions visible text, drawing, and image bounds, adds six points of source padding, and places the clipped vector page into a landscape A4 target with a 24-point margin. Failure keeps the untouched source PDF.
+- Verification: two unit tests passed; `#216/#217/#218` each became `842x595` with 132-134 extractable words. Visual QA showed only the electronic tax invoice, seals, table, and legal note—no browser chrome, ads, menus, or blank lower half.
+- Deployment: source/download/output-set backups under `C:\ERP_DB\deploy_backups\20260831_smartbill_pdf_layout`; source hash `C556B4ADF9DE3408BA2E491755AD96B60677F1F002A0D490E76F3275FFD36207`; backend listener PID `5872`; HTTPS `200`.
+- Graph maintenance: `graphify update .` refused a non-force overwrite at 1,430 new nodes versus 1,440 existing nodes. Preserve the current graph until missing chunks are recovered or an explicit force rebuild is approved.
+
+## I-037 - SmartBill print-button check allowed unapproved invoices - resolved
+
+- Symptom: invoices `#216/#217/#218` had valid-looking PDFs and completed ERP records, but the SmartBill document page still showed `수신 미승인`.
+- Root cause: `_handle_approval()` returned success whenever an `인쇄` button was visible. SmartBill renders that button even with hidden `hdndtistatus=I`; its print JavaScript merely prompts for approval. The crawler's generic text/alert handling could dismiss that prompt and proceed to the print preview without committing receipt approval.
+- DOM proof: the real controls are images `btnApprove02` and `btnApprove01`, both calling `fnApprove2_click('APPROVE')`. That opens `/xDti/common/popup/n_mem_Approve_layer.aspx`; the real confirmation button calls `fnConfirmClick('APPROVE')`, which invokes the synchronous status-change request and updates the parent status to `C`.
+- Repair: select only those exact controls, process only the exact approval iframe action, require and re-check the canonical `I -> C` transition, close the success modal without its OK-button side effects, and independently block the PDF form POST for missing/`I` state.
+- Production proof: live runs logged `수신 상태값: I` then `수신승인 완료 상태값: C` for all three invoice IDs. Their ERP rows stayed `처리완료`; no ERP retry occurred. Refreshed PDF sizes are `89,885`, `90,007`, and `90,859` bytes, with identical download/output-set hashes and clean landscape-A4 renders.
+- Deployment: backup `C:\ERP_DB\deploy_backups\20260831_smartbill_receipt_approval`; source hash `71400F60D9605B98AD3A9FA9C71EE05234D04FEF797504CD59EC84464645B703`; five tests and compilation pass; Graphify rebuilt to 1,452 nodes/3,931 edges/75 communities; backend PID `5736`, HTTPS `200`.
+
+## I-038 - SmartBill PDFs were incorrectly cropped and enlarged to landscape - resolved
+
+- Symptom: production PDFs contained only the occupied invoice bounds enlarged across landscape A4. They did not match Chrome's original portrait print with full page whitespace and print header/footer.
+- Root cause: `_normalize_smartbill_pdf_layout()` was added under the incorrect assumption that the blank lower area was unwanted. It unioned visible content bounds and replaced the original page with a clipped landscape page.
+- Repair: the normalization hook is now a strict no-op. Final save uses CDP `Page.printToPDF` at `8.27 x 11.69` inches, portrait, with background graphics plus date/title and URL/page-number templates.
+- Deployment-path containment: the server Desktop contains two similar project copies. Runtime evidence showed the one-off runner imports `C:\Users\Administrator\Desktop\전표 자동화 프로그램_WEB_Version`; the first attempted copy targeted the non-operating directory and was stopped after the first validation exposed the old log marker. The non-operating copy was restored and the operating path was then deployed explicitly.
+- Production proof: `#216/#217/#218` are one-page `595.92 x 841.92` portrait PDFs with title, SmartBill URL, and `1/1`; sizes are `152,890`, `153,339`, and `153,857` bytes. Each DB download hash equals its `02_*.pdf` output-set hash, and each DB row remains `처리완료`.
+- Verification/deployment: five tests and compilation pass; backup `C:\ERP_DB\deploy_backups\20260831_smartbill_portrait_restore`; source hash `A0422B70BBF573A969CCAE17B720565EBDA9CA8D2AEF7B5AD13F39C04E7E6A13`; Graphify `1,455/3,936/76`; backend PID `10568`, HTTPS `200`.
+
+## I-039 - SmartBill physical print dispatch verification (2026-08-31)
+
+- Target resolution: Windows registered `평택 프린터 (172.16.10.172)` as `Normal` on port `172.16.10.172`; `김제 프린터` remained the default but was not selected.
+- Dispatch proof: PDF24 Reader `/printTo` returned `0` for `#216`, `#217`, and `#218`; final target queue count was zero.
+
+## I-040 - One deferred SmartBill mail filled the recent failure list - resolved
+
+- Symptom: the dashboard failure group shows many `done 100%` purchase-mail collection rows with `실패 메일 1건 자동 재시도 대기`.
+- Evidence: every listed one-minute job has `failed_count=0` and `deferred_count=1`. State contains only one failure key: Gmail UID `1087`, message ID `<6a8f9de5.5e3d45fe.65b1b.cc86SMTPIN_ADDED_MISSING@mx.google.com>`, dated `2026-08-27 11:15 KST`.
+- Actual failure: 11th attempt ended `2026-08-31 06:38 KST` with `'charmap' codec can't encode characters in position 16-17`; 12-hour backoff schedules the next real attempt for `18:38 KST`. The collector merely records cooldown checks once per minute until then.
+- Scope check: invoice `#219` completed ERP and two-file Pyeongtaek output; `#216/#217/#218` are separate processed message IDs. No evidence indicates multiple current invoice failures.
+- Repair: `BaseTaxInvoiceHandler.process()` makes legacy stdout/stderr Unicode-safe with `backslashreplace`. Deferred event and completion text no longer contains `실패`, so the existing frontend classifier does not group successful cooldown checks as failures.
+- Safety: production source, state, and SQLite DB were backed up at `C:\ERP_DB\deploy_backups\20260831_mail_retry_fix`. UID `1087` was fetched read-only first and checked for both exact-path and semantic duplicates before insertion. State clearing and IMAP read marking occurred only after invoice lookup succeeded.
+- Live result: a transient SmartBill print-window closure was retried by the existing bounded retry path; the second fresh browser session succeeded. The invoice was inserted once as `#220`, with no semantic duplicate found.
+- End-to-end proof: `#220` completed ERP input at 14:42, verified vendor management value `대신아이씨티(DS163)`, stored the ERP voucher PDF, and completed Pyeongtaek output job `2754a858-49b5-4311-bc65-14e6c3ea8641` with `2/2` Windows spooler submissions. Parent job `b4991887-08aa-4cc6-bf93-ad23728bd908` finished and sent the result email.
+- Post-restart proof: consecutive automatic collector jobs report zero unread/new/failed/deferred items and finish with `구매 메일 수집 완료: 신규 대상 없음`; HTTPS health is `200`, version `1.0.237`.
+
+## I-041 - 8080 disappeared while the backend task remained Running - resolved in 1.0.238
+
+- Symptom: SSH and the server host were reachable, `AccountingWeb-Backend` reported `Running`, and Python PID `9720` remained alive, but no process listened on TCP 8080.
+- Root cause evidence: at `2026-09-07 17:03:33`, asyncio's Windows `IocpProactor.accept()` raised `OSError [WinError 64]` and logged `Accept failed on a socket`. Mail collection continued every minute, preventing the `Start-Process -Wait` wrapper from returning and hiding the dead web listener from Task Scheduler.
+- Recovery: wait for the current automatic collector to finish, end the wrapper, terminate only backend PIDs `9720` and `9304`, and rerun `AccountingWeb-Backend` from the verified active production root.
+- Verification: `https://172.17.39.121:8080/health` returned HTTP `200` with `ok=true`, version `1.0.237`, production environment, and agent ERP mode.
+- Prevention deployed: `AccountingWeb-Backend-Watchdog` runs as SYSTEM every minute, requires two consecutive HTTPS health failures, stops only the named task and exact `-m web_v1.backend` Python processes, restarts, and verifies HTTP 200. The external runner now pins the verified production root.
+- Production proof: manual healthy-path execution returned `0`; the scheduled task reports `Ready` and last result `0`; `/health` returns v1.0.238 and the active listener PID command line matches `-m web_v1.backend`.
+
+## I-042 - Song management-row retries could click the row below - resolved in 1.0.238
+
+- Symptom: on Song's PC the relation popup intermittently opened for `가지급금(업체)` while the automation was processing the VAT row. The later wrong management value prevented voucher completion.
+- Root cause: equal monitor model, resolution, and scale did not remove per-session ERP work-area and control timing differences. More importantly, management-summary recovery deliberately retried Y offsets `0, +4, +8, -4, -8`; on the slower Song session a late retry could cross the row boundary. Earlier form calibration could also propagate a detected account-unit vertical displacement to unrelated fields.
+- Repair: `_erp_form_applied_offsets()` accepts only a trusted bounded X offset and always returns Y `0`. `_erp_management_summary_click_candidates()` preserves the exact management-row Y and changes only X. Existing default-focus vendor entry and the slower field-specific verification path remain intact.
+- Verification: 6 focused tests, compilation, and production source invariants pass. Song heartbeat at `172.17.30.15` reports v1.0.238, exact production hash, and preflight success. No ERP replay was performed.
+
+## I-043 - Local Agent updater reverted source edits - contained with isolated runtime
+
+- Symptom: code patches in the editable worktree reverted within seconds while the local v1.0.237 Agent compared that dirty tree with the newer production bundle.
+- Root cause: the operator Agent was launched directly from the development repository, so normal self-update copied the production payload over source and unrelated local work.
+- Containment: stop only that Agent, finish and deploy from preserved source, then launch the exact v1.0.238 production payload from `%LOCALAPPDATA%\AccountingWebAgent\1.0.238`. Update the current-user startup and `accountingweb://start` commands to that isolated runtime.
+- Proof: local `172.17.30.13` heartbeat now reports v1.0.238, exact hash `306e8b91adae798a83d7e12b963cf817d0e6cdcfc38e486987f6645632993469`, successful preflight, and the editable worktree remains unchanged.

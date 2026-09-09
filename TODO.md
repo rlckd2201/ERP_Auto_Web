@@ -199,3 +199,61 @@ Remaining acceptance: confirm one regular-due message at the next real noon run,
 - [ ] 송명학 PC에서 멈춘 1.0.233 Agent/K-System을 종료하고 Agent 1.0.234 재접속을 확인한다.
 - [ ] K-System에서 #209 기존 저장 전표 유무를 확인한 뒤 claimed 큐와 invoice 상태를 안전하게 정리한다.
 - [ ] 중복 위험이 없는 1건으로 실제 좌표 캔버스/앵커/거래처 입력/전표 PDF까지 최종 확인한다.
+
+## Invoice #209 coordinate rollback and next repair (2026-08-27)
+
+- [x] Stop the failed 1.0.236 #209 job before ERP save and leave the invoice in error.
+- [x] Roll production and the Song operator Agent back to 1.0.235; verify version, bundle hash, health, and eight regression tests.
+- [x] Restore the editable worktree to the exact 1.0.235 source hashes and rebuild Graphify.
+- [ ] Implement 1.0.237 with account-unit-only live positioning and no form-wide coordinate offset.
+- [ ] Use moderate field-specific pacing; require ERP read-back after account unit, slip unit, date, and each vendor management value.
+- [ ] Add tests proving Song's account-unit X difference cannot move date, grid, or management coordinates and that a `Text` label cannot satisfy field verification.
+- [ ] Perform no-click coordinate diagnostics before any live retry; run #209 only during an explicitly approved operator test window.
+
+## SmartBill clean PDF output (2026-08-31)
+
+- [x] Inspect the signed-in SmartBill invoice and confirm the official print-preview endpoint.
+- [x] Preserve vector text/lines/seals while cropping the occupied invoice region and fitting it to landscape A4.
+- [x] Add focused layout tests and compile the changed crawler module.
+- [x] Visually inspect the transformed `#216`, `#217`, and `#218` PDFs.
+- [x] Back up and deploy the crawler change to the 121 server.
+- [x] Back up and normalize the three production download PDFs and their output-set copies without rerunning ERP.
+- [x] Verify backend task/listener and HTTPS `200` after deployment.
+- [ ] Observe one new SmartBill mail end to end and confirm the future-crawl path produces landscape A4 without manual normalization.
+
+## SmartBill receipt approval (2026-08-31)
+
+- [x] Prove that the print button is present while canonical `hdndtistatus` is still `I`.
+- [x] Identify the actual approval controls: `btnApprove01/02`, approval iframe, and `fnConfirmClick('APPROVE')`.
+- [x] Require an `I -> C` status transition before parsing, PDF saving, or later processing.
+- [x] Block the official print form POST when status is missing or still `I`.
+- [x] Back up production source and the three existing download/output PDFs.
+- [x] Approve `#216/#217/#218` on SmartBill without rerunning ERP and refresh only their PDFs.
+- [x] Verify 5 tests, compilation, landscape-A4 visual QA, matching download/output hashes, backend task/listener, HTTPS `200`, and Graphify update.
+- [ ] Observe one new SmartBill mail end to end and confirm the log records status `C` before the first PDF print request.
+
+## SmartBill portrait print correction (2026-08-31)
+
+- [x] Confirm the user-authoritative target is Chrome's full portrait A4 print, including blank lower page and native-style header/footer.
+- [x] Disable occupied-region cropping and landscape enlargement.
+- [x] Generate PDFs through Chrome CDP with A4 portrait dimensions and date/title/URL/page-number header/footer fields.
+- [x] Reprint `#216/#217/#218` without rerunning ERP and copy the exact files to the user's local Desktop.
+- [x] Verify all three are one-page portrait `595.92 x 841.92`, contain title/source/page fields, and match their output-set copies by SHA-256.
+- [x] Verify five tests, compilation, backend PID/listener, HTTPS `200`, and Graphify update.
+- [ ] Observe one new SmartBill mail end to end and confirm the stored/output PDF remains the full portrait print artifact.
+- [x] Send the verified `#216/#217/#218` portrait PDFs, one copy each, to `평택 프린터 (172.16.10.172)` and confirm the queue drains.
+- [x] Repair UID `1087` with encoding-safe console output, exact/semantic duplicate checks, and failure-state clearing only after successful DB registration.
+- [x] Prevent cooldown-only completed mail jobs from repeating under the failure-log group by removing the failure keyword from deferred event/notification text.
+- [x] Complete invoice `#220` through ERP entry, voucher PDF storage, two-file Pyeongtaek output, spooler verification, and result email.
+- [x] Verify post-restart mail jobs complete with zero failures and no deferred-failure wording.
+
+## 2026-09-09 backend/socket and Song-PC follow-up
+
+- [x] Identify why task state was `Running` while 8080 was unavailable (`WinError 64` killed the accept socket; background mail thread kept PID `9720` alive).
+- [x] Recover 8080 with a clean backend-only restart and verify HTTPS `/health` returns `200` on production `1.0.237`.
+- [x] Add listener-aware supervision; process/task presence alone must not count as backend health.
+- [x] Make ERP form calibration X-only and force management summary retries to keep the exact same Y coordinate.
+- [x] Add regression tests and deploy WEB/Agent v1.0.238 after a production backup.
+- [x] Rotate the user-supplied Voucher Automation API key only in the production secret environment; never commit or document its value.
+- [x] Confirm Song, 243 regular, and local operator Agents report v1.0.238, the exact production bundle hash, and successful preflight.
+- [ ] Observe one genuinely new Song purchase voucher end to end; do not replay an existing voucher for acceptance.

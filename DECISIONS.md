@@ -159,3 +159,43 @@ Resolution equality does not imply coordinate equality on a mixed-DPI extended d
 ## D-038 - progress telemetry cannot control ERP desktop timing
 
 ERP UI actions are authoritative and must not wait for per-step HTTP logging. Progress events are best-effort through a bounded background queue with short request timeouts; stale queued events are discarded before the synchronous final completion/error report. A telemetry outage may reduce detail but cannot fail or slow the voucher input itself.
+
+## D-039 - a control-specific displacement is not a form-wide coordinate offset
+
+An anonymous account-unit ComboBox may be selected from its live rectangle, but its displacement must never be copied into slip-unit, accounting-date, grid, or management-item coordinates. Those fields retain the proven work-area-relative coordinates unless their own independently verified anchor exists. Value verification must ignore static `Text` labels. Interactive purchase pacing is field-specific and moderate: send one action, wait for ERP state, read the resulting value, then advance; neither global high-speed input nor blanket long sleeps are permitted.
+
+## D-040 - SmartBill PDFs use the official print preview and vector layout normalization
+
+Never save the SmartBill detail webpage as the tax-invoice document. Submit the actual invoice form to the official `/xDTI/arap_repo/common/prt_prev.aspx` print preview, preserve its PDF vector content, calculate the occupied bounds from text/drawings/images, and fit that region to landscape A4 with a small even margin. Keep the original file if normalization fails; do not replace it with a raster screenshot. Existing production PDFs may be normalized in place only after backing up both the download copy and output-set copy, without rerunning ERP.
+
+## D-041 - SmartBill receipt approval is a canonical status transition, not a visible-button inference
+
+The print button is not approval evidence. Read SmartBill's canonical `hdndtistatus`; missing state fails closed, and `I` requires clicking only the real receipt-approval control plus the approval iframe's explicit APPROVE action. Continue only after the page reports a non-`I` status and that status is revalidated after closing the modal. The print form itself must reject missing/`I` state as a second gate. Existing completed invoices may have portal approval and PDFs repaired without inserting DB rows or rerunning ERP.
+
+## D-042 - SmartBill PDFs preserve the complete Chrome portrait print artifact
+
+This decision supersedes the layout portion of D-040. Use the official `/xDTI/arap_repo/common/prt_prev.aspx` page, but print it as full A4 portrait with background graphics and native-style date/title and URL/page-number header/footer. Preserve the blank lower page exactly as printed. Never calculate occupied bounds, crop the invoice, enlarge it, rotate it, or convert it to landscape. Receipt-approval requirements from D-041 remain unchanged.
+
+## D-043 - Physical PDF dispatch names the destination printer explicitly
+
+For manual production dispatch, pass the exact registered printer name to the PDF reader's `PrintTo` action and never rely on the Windows default printer. This prevents the default `김제 프린터` from receiving documents intended for `평택 프린터 (172.16.10.172)`.
+
+## D-044 - Deferred mail is not a failed job
+
+A mail-collection run with `status=done`, `failed_count=0`, and only `deferred_count>0` is a successful scheduler check, not a new failure. The UI may show the underlying deferred mail once with its attempt count and next retry time, but must not place every one-minute cooldown check into the failure-job list.
+
+## D-045 - Console rendering cannot determine crawler success
+
+Portal parsing, approval, PDF creation, and DB persistence are authoritative. A Korean diagnostic message that the inherited Windows console encoding cannot represent must be escaped for display rather than raised as a crawler failure. Configure handler stdout/stderr with `backslashreplace`, retain the existing encoding when possible, and keep the business result independent from logging output.
+
+## D-046 - Backend liveness requires a healthy listener, not a live wrapper process
+
+The scheduled-task state and Python PID are insufficient health signals because Uvicorn's Windows accept socket can fail while background scheduler threads keep the process alive. Supervision must probe the local HTTPS health endpoint (or at minimum the 8080 listener) and restart only the identified backend process tree after a bounded failure threshold. Secret values remain outside source, Git, logs, and session documents.
+
+## D-047 - ERP coordinate calibration cannot move a row vertically
+
+The live account-unit control may calibrate a bounded horizontal form offset only. Its vertical displacement is diagnostic and must not alter the slip unit, accounting date, grid, or management-row Y coordinates. A retry that opens a management summary may try bounded X positions on the same row, but it must never probe above or below that row. Vendor selection continues to use the proven popup default-focus keyboard contract and must pass visible value read-back before advancing.
+
+## D-048 - Development worktrees are not Agent installation directories
+
+An Agent updater must not run from an editable repository when production and local bundle hashes can intentionally differ. The local operator Agent is therefore launched from a versioned `%LOCALAPPDATA%\AccountingWebAgent` runtime copied from the exact production payload. The source worktree remains stopped as an Agent target so unrelated local changes cannot be overwritten by self-update.

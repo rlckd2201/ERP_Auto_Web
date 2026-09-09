@@ -1,14 +1,14 @@
 # Session
 
-Updated: 2026-08-25
+Updated: 2026-08-31
 
 ## Current objective
 
-Keep the 1.0.228 operating server reliable and maintain an evidence-backed executive/operator system overview deck.
+Keep the 1.0.237 operating server reliable, including end-to-end mail collection, ERP entry, and document output.
 
 ## Status
 
-The Zoom Excel-PDF repair is deployed on `172.17.39.121`. Server health is good on version `1.0.228`; backend PID `7484` is the only port-8080 listener and owns the cross-process regular-due sender lock. Zoom `#212` generated its missing report and completed one `2/2` Pyeongtaek output job. The next real 12:00 run remains the final operational observation.
+The purchase-mail retry/log repair is deployed on `172.17.39.121`; HTTPS health reports version `1.0.237`. The only real deferred failure, SmartBill UID `1087`, was recovered as invoice `#220`, completed ERP, generated its voucher PDF, submitted both output files to the Pyeongtaek printer, and sent the result email. New one-minute mail checks complete without being misclassified as failures.
 
 ## 2026-08-24 Zoom expense-report recovery
 
@@ -295,3 +295,111 @@ Do not reset or retry #209 or #211 until K-System is checked for vouchers saved 
 ## Next exact starting point after 1.0.234 deployment
 
 송명학 PC에서 멈춘 1.0.233 `pythonw.exe` Agent와 해당 K-System 세션을 종료한다. Agent를 다시 시작해 1.0.234/번들 해시 일치를 확인한 뒤, #209의 기존 전표 저장 여부를 K-System에서 먼저 확인하고 큐/상태를 정리한다. 중복 위험이 없을 때만 새 Job으로 한 번 재실행하고 `ERP coordinate canvas` 및 폼 앵커 보정 로그와 거래처 행 1/3/4 결과를 확인한다.
+
+## Invoice #209 coordinate rollback (2026-08-27)
+
+- Version 1.0.236 incorrectly treated the anonymous account-unit ComboBox's `-76px` X difference as a form-wide offset. The same offset moved the accounting-date click from relative X `375` to `299`, where validation read the `회계일` label instead of the date value.
+- Job `a45c2217-c7aa-4c78-91e9-57e915bc65e6` stopped before grid entry and Ctrl+S with `expected=2026-08-18, actual=회계일`; invoice #209 remains error and no new voucher/output PDF was created by this run.
+- Production, the Song operator Agent, and the editable worktree were rolled back to version 1.0.235 and bundle hash `1900baa462be33af637905dec64e5c3d4ef64afa361f1d26532996b5f15e4674`.
+- Production restore source: `C:\ERP_DB\backups\erp_form_anchor_236_20260827_093703`. Pre-rollback 1.0.236 safety snapshot: `C:\ERP_DB\backups\before_rollback_236_20260827_102111`.
+- Rollback verification passed eight tests, external health/version, background backend task PID `7064`, and Song Agent setup/display readiness. No ERP retry was started after rollback.
+
+## Next exact starting point after 1.0.235 rollback
+
+Design 1.0.237 without a form-wide offset: use the live ComboBox only for account-unit selection, keep the proven coordinates for slip unit/date/grid/management, reject label controls during value verification, and apply moderate field-specific pacing with read-back before advancing. Do not run #209 again until the implementation and no-click coordinate checks pass and the operator explicitly provides a test window.
+
+## SmartBill clean tax-invoice PDF deployment (2026-08-31)
+
+- Confirmed in the user's signed-in Daou Office/SmartBill page that the official `인쇄` action posts the invoice form to `/xDTI/arap_repo/common/prt_prev.aspx`. The crawler already reached that preview, but Selenium `print_page()` forced portrait A4 and left the wide invoice in the top half, which looked like a screen capture.
+- Added vector-preserving PDF layout normalization: detect the occupied invoice bounds (text, rules, seals), clip only that region, and fit it to landscape A4 with a 24-point margin. No raster screenshot or advertisement/browser UI is included.
+- Two focused unit tests and Python compilation passed. Real PDFs for invoices `#216`, `#217`, and `#218` rendered at `842x595` points with 132-134 extractable words and passed visual inspection.
+- Production source backup: `C:\ERP_DB\deploy_backups\20260831_smartbill_pdf_layout\portal_smartbill.py`. Original download PDFs and output-set copies are backed up under the same directory.
+- Deployed source hash `C556B4ADF9DE3408BA2E491755AD96B60677F1F002A0D490E76F3275FFD36207`. Backend scheduled task is running with listener PID `5872`; HTTPS root returns `200`.
+- Existing download PDFs and `output_sets\regular\216..218\02_세금계산서.pdf` were normalized in place after backup. ERP vouchers were not rerun and invoice states were not changed.
+- `graphify update .` was attempted but refused the safety overwrite because the new graph had 1,430 nodes versus the existing 1,440. No force update was used.
+
+## Next exact starting point after SmartBill PDF deployment
+
+Observe the next genuinely new SmartBill invoice collection and verify that its download PDF and output-set tax invoice are landscape A4 before ERP output. If production still shows portrait A4, inspect whether that portal bypassed the final `_smartbill_form_post_print_save_pdf` override; do not fall back to printing the detail webpage.
+
+## SmartBill receipt-approval gate and production repair (2026-08-31)
+
+- Root cause: `_handle_approval()` treated the presence of SmartBill's always-visible print button as proof of receipt approval. The official page still had canonical `hdndtistatus=I`, and the print routine's confirmation was dismissed, so PDFs and ERP work could continue while the portal remained `수신 미승인`.
+- Approval now reads `hdndtistatus` and fails closed when the value is missing or `I`. For an unapproved invoice it clicks only the real `btnApprove01/btnApprove02` element, then only the approval iframe action `fnConfirmClick('APPROVE')`. It requires the canonical status to transition away from `I` and revalidates it before PDF print.
+- The generic text matcher is no longer used for approval. The success modal is closed directly without invoking its unrelated OK-button side effects, and PDF form submission independently rejects missing/`I` status.
+- Production invoices `#216`, `#217`, and `#218` were repaired in place: all three live SmartBill pages transitioned from `I` to `C`; ERP vouchers were not rerun; only their download PDFs and `output_sets\regular\216..218\02_세금계산서.pdf` copies were refreshed.
+- Visual QA confirmed all three refreshed documents are single-page landscape A4 (`842x595`) with aligned tables, no crop/skew/browser chrome, and `275,000` total. Each download/output-set pair has an identical SHA-256 hash; DB rows remain `처리완료`.
+- Production backup: `C:\ERP_DB\deploy_backups\20260831_smartbill_receipt_approval`. Deployed source SHA-256 is `71400F60D9605B98AD3A9FA9C71EE05234D04FEF797504CD59EC84464645B703`.
+- Five focused tests, Python compilation, focused diff checks, and `graphify update .` passed. Graphify now reports `1,452` nodes, `3,931` edges, and `75` communities. Backend task/listener PID `5736` is running and HTTPS root returns `200`.
+
+## Next exact starting point after SmartBill approval repair
+
+Observe the next genuinely new SmartBill mail from collection through ERP/output. Require log evidence of canonical status `C` before print and verify the new download/output PDF is landscape A4. Do not infer approval from an available print button or retry an existing completed ERP voucher.
+
+## SmartBill original portrait print restoration (2026-08-31)
+
+- User acceptance corrected the PDF requirement: SmartBill output must match Chrome's original print artifact, not a cropped or enlarged invoice. The authoritative format is full portrait A4 with the blank lower page retained, date/title header, and source URL/page-number footer.
+- Replaced the final PDF creation with Chrome CDP `Page.printToPDF` fixed to A4 portrait (`8.27 x 11.69`), background graphics, and explicit native-style header/footer templates. `_normalize_smartbill_pdf_layout()` is now a compatibility no-op and cannot crop, rotate, resize, or rewrite the file.
+- Reprinted production invoices `#216`, `#217`, and `#218` without rerunning ERP. All three remain `처리완료`; each download PDF exactly matches its `output_sets\regular\<id>\02_*.pdf` copy by SHA-256.
+- Visual and structural QA passed for all three: one page, `595.92 x 841.92` points, portrait orientation, invoice at the top, full blank lower area, `:: Business is ON! ::`, SmartBill source URL, and `1/1` present.
+- Local deliverables: `C:\Users\user\Desktop\스마트빌_승인완료_PDF\216_대승_D1공장_세금계산서.pdf`, `217_일강1공장_세금계산서.pdf`, and `218_대승정밀_P1공장_세금계산서.pdf`.
+- Production safety backup: `C:\ERP_DB\deploy_backups\20260831_smartbill_portrait_restore`. Operating source hash `A0422B70BBF573A969CCAE17B720565EBDA9CA8D2AEF7B5AD13F39C04E7E6A13`; backend PID `10568`; HTTPS `200`.
+- Five focused tests and compilation pass. `graphify update .` completed at 1,455 nodes, 3,936 edges, and 76 communities.
+
+## Next exact starting point after portrait restoration
+
+Observe one genuinely new SmartBill mail end to end. Require canonical receipt status `C`, full portrait A4 with header/footer, matching download/output hashes, and no duplicate ERP execution. Do not restore the superseded landscape normalization.
+
+## SmartBill local print dispatch (2026-08-31)
+
+- Sent the three verified portrait PDFs for invoices `#216`, `#217`, and `#218`, one copy each, to the explicitly selected local device `평택 프린터 (172.16.10.172)`.
+- PDF24 Reader returned exit code `0` for every file. The target queue drained to zero; the default `김제 프린터` was not used.
+
+## Purchase-mail repeated failure-log diagnosis (2026-08-31)
+
+- The many visible failure rows are not many failed invoices. The one-minute automatic collector creates a completed job each minute, and every completed job reports the same single deferred mail in its message.
+- The sole failure-state record is unread Gmail UID `1087`, dated `2026-08-27 11:15 KST`, subject `[전자세금계산서 정발행] 대신아이씨티㈜ ▶ ㈜대승`, with 11 historical attempts. Last actual failure was `2026-08-31 06:38 KST`; next retry is `18:38 KST`.
+- Stored root error: Python Windows encoding exception `'charmap' codec can't encode characters in position 16-17`. The per-minute jobs since then have `failed_count=0`, `deferred_count=1`, and status `done`; they do not execute the crawler during the cooldown.
+- Current invoice `#219` (피플러스) is unrelated and completed ERP/output successfully. The three new SmartBill mails `#216/#217/#218` also have distinct message IDs and remain processed.
+
+## Purchase-mail retry/log repair completed (2026-08-31)
+
+- Root cause was one UID `1087` crawler run aborting while Windows `cp1252` stdout tried to print Korean text. The many dashboard rows were successful cooldown checks whose notification still contained the word `실패`.
+- Crawler stdout/stderr now use `backslashreplace` when a legacy console cannot encode a message. Cooldown-only job/event text now says `재시도 대기` without the failure keyword.
+- Production source, collector state, and SQLite DB were backed up under `C:\ERP_DB\deploy_backups\20260831_mail_retry_fix`; deployed files match the staged SHA-256 hashes and the backup DB passes `PRAGMA integrity_check`.
+- UID `1087` was fetched without marking it read, crawled with the normal transient-window retry, checked by exact PDF path and vendor/date/amount/context identity, then inserted once as invoice `#220`. Its failure record was cleared only after DB verification and the mail was then marked read.
+- Invoice `#220` (`대신아이씨티(주)`, D1공장, 935,000원, 2026-08-27) completed the normal regular-auto flow: ERP 3 rows, vendor management value `대신아이씨티(DS163)` verified, voucher PDF stored, two output files submitted to `평택 프린터 (172.16.10.172)` with `2/2` spooler verification, and result email sent.
+- Post-restart mail jobs show `failed_count=0`, `deferred_count=0`, status `done`, and message `구매 메일 수집 완료: 신규 대상 없음`. HTTPS `/health` returns `200` on version `1.0.237`.
+
+## Next exact starting point after purchase-mail repair
+
+Observe the next genuinely failed mail, if any, as a single underlying failure rather than repeated cooldown jobs. Do not replay invoice `#220`; its ERP and Pyeongtaek output are complete.
+
+## 8080 listener recovery (2026-09-09)
+
+- `AccountingWeb-Backend` still reported `Running`, but `172.17.39.121:8080` had no listener. The surviving Python PID `9720` continued one-minute mail collection after the web socket had failed.
+- The first fatal listener evidence is at `2026-09-07 17:03:33`: asyncio `IocpProactor.accept()` raised `OSError [WinError 64]`, followed by `Accept failed on a socket`. The non-web background thread kept the process alive, so the task wrapper never exited and no restart occurred.
+- Recovery ended the scheduled-task wrapper, terminated only the confirmed orphan/current backend PIDs (`9720`, `9304`), and started `AccountingWeb-Backend` cleanly after the current automatic mail collection completed.
+- Final proof: HTTPS `/health` returned `200`, version `1.0.237`, production/agent mode. The active production root is `C:\Users\Administrator\Desktop\전표 자동화 프로그램_WEB_Version`.
+
+## Next exact starting point after 8080 recovery
+
+Implement a listener-aware watchdog so a live Python process without a healthy 8080 listener is restarted. Then continue the approved Song-PC coordinate repair: never propagate account-unit Y displacement to the form and never retry management rows at a different Y coordinate. Do not replay an ERP voucher during code verification.
+
+## v1.0.238 Song-PC coordinate and backend supervision release (2026-09-09)
+
+- Deployed v1.0.238 to the verified production root with a pre-change backup at `C:\ERP_DB\deploy_backups\20260909_v1.0.238_song_y_watchdog`.
+- ERP form calibration is now X-only. A detected account-unit Y displacement is never propagated to the slip unit, accounting date, grid, or management rows.
+- Management-summary retries keep the exact row Y and vary only the bounded X candidates. The old `0, +4, +8, -4, -8` vertical retries that could open the next relation row on a slow PC are gone.
+- Preserved the established default-focus vendor search sequence; no search textbox-click path was added and the 243-PC regular automation timing profile was not changed.
+- Installed `AccountingWeb-Backend-Watchdog` as SYSTEM every minute. It requires two consecutive HTTPS health failures, then ends only `AccountingWeb-Backend` and Python processes whose command line is `-m web_v1.backend`, restarts the task, and requires HTTP 200.
+- Replaced the external server runner with an explicit production-root runner so it can no longer select a similarly named Desktop folder.
+- Rotated the production Voucher Automation/Gemini key in `web_v1/backend/.env` without placing the value in source, Git, logs, or session documents. `APP_VERSION` is `1.0.238`.
+- Production verification: all seven selected deployed files match their staged SHA-256 values; the external runner matches; all coordinate invariants are true; `/health` is HTTP 200; the active listener PID command line is `-m web_v1.backend`; recent one-minute mail jobs finish `done` with zero failures.
+- Agent acceptance: Song `172.17.30.15`, regular PC `172.17.30.243`, and the local operator PC `172.17.30.13` all report v1.0.238, exact bundle hash `306e8b91adae798a83d7e12b963cf817d0e6cdcfc38e486987f6645632993469`, and successful preflight. The local operator Agent now runs from isolated `%LOCALAPPDATA%\AccountingWebAgent\1.0.238` so its updater does not overwrite the editable repository.
+- Verification passed: Python compilation, 6 focused tests, three PowerShell parser checks, Graphify update (`1,484` nodes / `3,956` edges / `91` communities), healthy watchdog execution, and production hash checks.
+- No existing ERP voucher was replayed and no live ERP click/save was issued during this release.
+
+## Next exact starting point after v1.0.238
+
+Observe the first genuinely new Song purchase voucher through account unit, accounting date, VAT/vendor management rows, save, and document-set output. Require the log to show `form-x-only` calibration and same-Y management retries. Do not reuse or reset an older voucher merely to test coordinates.
