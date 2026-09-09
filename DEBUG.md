@@ -339,3 +339,17 @@ Updated: 2026-08-25
 - Raw-mail proof: the subjects are `컴퓨존, 결제확인 메일입니다`; the messages describe orders `28692792` (`1,220,000`) and `28682826` (`282,000`). Neither message contains `세금계산서`, an attachment, or a supported invoice portal URL.
 - Scope proof: read-only IMAP search of Gmail All Mail for September 7-9 found exactly those two Compuzone messages and no official tax-invoice message. The messages were processed before the 8080 socket failure, so the outage did not cause this omission.
 - Result: no DB row exists because no tax-invoice source document arrived. Do not synthesize or post an ERP tax voucher from these payment confirmations.
+
+## I-045 - Purchase-page entry intermittently waits several seconds - resolved in 1.0.239
+
+- Symptom: entering the purchase page shows a long/variable loading delay even though only 32 purchase rows are displayed.
+- Server-side proof: repeated loopback calls made `/health` vary from `0.03-0.23s` to `2.12-2.25s`, proving the delay exists without browser or LAN latency. Direct `list_invoices(mode='purchase', limit=200)` took about `40ms`.
+- Root cause: `C:\ERP_DB\erp_queue` has `3,615` JSON artifacts (`3,207 error`, `404 done`, `3 stale`, `1 claimed`). `_task_files()` sorts/stats all of them and `claim_next_erp_task()` reads/parses them all for an idle Agent. A read-only measurement took `1.75-1.99s` per scan.
+- Amplifier: four Agents had heartbeats within eight seconds and poll every three seconds after preflight. `/api/agent/erp/next` is `async` but calls the synchronous full-file scan directly, blocking the single Uvicorn event loop while each scan runs.
+- Frontend amplifier: initial application load awaits `/health`, `/api/jobs`, and `/api/invoices?limit=200` sequentially after setup status, so any blocked request delays the following list call.
+- Repair: maintain a process-local actionable-task index keyed by queue filename. Keep only pending/retry files and claimed output jobs needing stale recovery in the hot set; retain all terminal files on disk. Every poll lists filenames so new tasks are detected immediately, but it never reparses known terminal JSON. Serialize claims with a process lock and execute discovery through `run_in_threadpool` so the async server loop remains responsive.
+- Regression caught and removed an unsafe intermediate directory-mtime shortcut: Windows did not always refresh the directory timestamp immediately after a new JSON was created. Final discovery relies on the filename set, not directory mtime.
+- Test proof: 3,615-file synthetic cold classification `2.194 s` once; subsequent idle claims `30.35-44.07 ms`; 3 focused queue-index tests pass.
+- Production proof: final v1.0.239 deployment measured 40 loopback health samples at `59.4 ms` average, `342.9 ms` p95, and `453.2 ms` maximum with four Agents. Setup/jobs/mail/invoices returned in `46/42/26/90 ms`; mail collection remained successful.
+- Release proof: all four active Agents report v1.0.239, successful preflight, and final hash `734abad61055e6d9ae2e3c7f7f7aa338b9a0bfc477f9cba73e8314e02c5a6d33`. The local Agent is pinned to `%LOCALAPPDATA%\AccountingWebAgent\1.0.239`, not the editable worktree.
+- Graph note: the final `py -m graphify update .` completed with `1,484` nodes, `3,971` edges, and `88` communities after the regression test was restored.

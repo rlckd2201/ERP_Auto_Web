@@ -414,3 +414,32 @@ Observe the first genuinely new Song purchase voucher through account unit, acco
 ## Next exact starting point after Compuzone mail diagnosis
 
 Wait for the official electronic tax-invoice mail or obtain its PDF. When it arrives, collect it by its distinct message ID and merge/attach the existing order number as quote context; do not post an ERP voucher from payment-confirmation email alone.
+
+## Purchase-page loading diagnosis (2026-09-09)
+
+- Production contains `3,615` JSON files under `C:\ERP_DB\erp_queue`: `404 done`, `3,207 error`, `3 stale`, and `1 claimed`.
+- Every active Agent calls `/api/agent/erp/next` after each heartbeat. That endpoint is declared `async`, but synchronously sorts, opens, and parses every queue JSON before it can return `204 No Content`.
+- A read-only production measurement of that scan took `1.75-1.99 seconds` per request (`118-165 ms` directory/stat work plus `1.63-1.82 seconds` JSON reads). Four Agents were active within the last 8 seconds, so their polling repeatedly blocks Uvicorn's single event loop.
+- Loopback `/health` consequently alternated between roughly `0.03 seconds` and `2.1-2.25 seconds`; direct invoice DB list construction itself took only about `40 ms`. The purchase list is not the primary bottleneck.
+- Frontend entry adds avoidable serialization: after setup status it awaits health, recent jobs, and the 200-row invoice request in sequence before the list finishes loading.
+
+## Next exact starting point after purchase-page loading diagnosis
+
+Optimize task claiming so it inspects only actionable queue files (or maintain an in-memory/indexed pending set), run unavoidable filesystem scanning outside the async event loop, archive completed/error queue files without deleting audit data, and load independent dashboard APIs concurrently. Verify idle task claims and `/health` remain sub-second with all four Agents online before deployment.
+
+## v1.0.239 queue-latency release (2026-09-09)
+
+- Backed up the live v1.0.238 source and secret environment to `C:\ERP_DB\deploy_backups\20260909_v1.0.239_queue_latency`, then deployed v1.0.239 to the verified production root.
+- `agent_queue.py` now classifies the historical queue once and retains only pending/retry tasks plus claimed output jobs that require the existing 120-second stale recovery. Completed/error/stale JSON audit records remain in place.
+- Each poll performs only a lightweight filename listing to discover new queue entries. Known terminal files are never reopened, avoiding any dependency on Windows directory timestamp refresh behavior.
+- `/api/agent/erp/next` runs task discovery through Starlette's worker thread pool. A one-time cold classification can no longer block Uvicorn's event loop, and a process-level lock preserves atomic task claiming across concurrent Agent requests.
+- Final synthetic `3,615`-file verification measured `2.194 s` for the one-time cold classification and `30.35-44.07 ms` for warm idle claims. Three focused queue-index tests cover terminal-file caching, immediate new-file discovery, and claimed-output stale recovery.
+- Live verification with four active Agents: the final 40 health samples averaged `66.7 ms`, `277.1 ms` p95, and `318.9 ms` maximum. Before repair, the same loopback health request repeatedly reached `2.12-2.25 s`.
+- Live setup, jobs, mail status, and 200-row purchase invoice endpoints measured approximately `40 ms`, `66 ms`, `58 ms`, and `102 ms`. Mail collection finished `done` with zero failures, HTTPS health reports v1.0.239, and all deployed source hashes match local release files.
+- All four active Agents report v1.0.239, exact final bundle hash `734abad61055e6d9ae2e3c7f7f7aa338b9a0bfc477f9cba73e8314e02c5a6d33`, and successful preflight.
+- The local operator Agent was found restarting from the development worktree during self-update. It is now pinned to `%LOCALAPPDATA%\AccountingWebAgent\1.0.239`; both login auto-start and `accountingweb://` point directly to that isolated runtime, and the regression test file remains intact.
+- Final Graphify update completed after the regression test was restored: `1,484` nodes, `3,971` edges, and `88` communities.
+
+## Next exact starting point after v1.0.239
+
+Confirm the purchase page feels immediate after one normal refresh. If further optimization is desired, restore/reconcile the separately deleted tracked frontend source first, then parallelize its independent health/jobs/invoice startup calls without overwriting unrelated worktree changes.

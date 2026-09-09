@@ -93,7 +93,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.238"
+AGENT_BUNDLE_VERSION = "1.0.239"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(

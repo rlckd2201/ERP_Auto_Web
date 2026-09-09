@@ -203,3 +203,7 @@ An Agent updater must not run from an editable repository when production and lo
 ## D-049 - A payment confirmation is not sufficient evidence for an ERP purchase voucher
 
 Compuzone payment-confirmation mail may provide order number, items, and amount, but it is not an electronic tax invoice and does not authorize a tax-invoice purchase row by itself. Insert the purchase row only from an official tax-invoice portal link, supported attachment, or manually supplied invoice PDF. If payment confirmations are exposed in the UI later, keep them in a separate `awaiting tax invoice` state and merge them by order number when the official document arrives.
+
+## D-050 - Agent polling must not scan historical queue files on the event loop
+
+Completed, failed, and stale ERP queue artifacts are audit history, not task-claim candidates. Agent claim requests must operate on a bounded actionable set and must not synchronously enumerate and parse the full historical queue from an `async` endpoint. Any unavoidable disk scan belongs in a worker thread or a maintained index. Independent page-entry reads should execute concurrently so a noncritical status call cannot delay the invoice list.

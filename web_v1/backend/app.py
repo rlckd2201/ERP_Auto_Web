@@ -19,6 +19,7 @@ from fastapi import FastAPI, File, Form, HTTPException, Query, Request, UploadFi
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.concurrency import run_in_threadpool
 
 from .agent_queue import claim_next_erp_task, update_erp_task
 from .approval_fetcher import fetch_approval_documents
@@ -1748,7 +1749,8 @@ async def api_agent_setup_install_complete(job_id: str, request: Request) -> dic
 @app.post("/api/agent/erp/next", response_model=None)
 async def api_agent_next_task(request: Request) -> Any:
     payload = await request.json()
-    task = claim_next_erp_task(
+    task = await run_in_threadpool(
+        claim_next_erp_task,
         agent_id=str(payload.get("agent_id") or ""),
         capabilities=payload.get("capabilities") if isinstance(payload.get("capabilities"), dict) else {},
         client_ip=client_ip(request),

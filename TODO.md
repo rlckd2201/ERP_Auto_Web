@@ -264,3 +264,14 @@ Remaining acceptance: confirm one regular-due message at the next real noon run,
 - [x] Confirm both are payment confirmations for orders `28692792` and `28682826`, not tax-invoice messages.
 - [x] Confirm there is no tax-invoice attachment, portal link, or separate Compuzone tax-invoice mail through September 9.
 - [ ] On receipt of the official tax-invoice mail/PDF, verify it creates two distinct purchase rows and attaches the matching order context.
+
+## 2026-09-09 purchase-page loading latency
+
+- [x] Separate browser/network latency from production loopback API latency.
+- [x] Confirm invoice list construction is about 40 ms and is not the primary delay.
+- [x] Identify the synchronous `3,615`-file ERP queue scan inside the async Agent claim endpoint as the repeating 1.75-1.99 second event-loop blocker.
+- [x] Replace full historical queue scans with actionable-task indexing/filtering and offload unavoidable filesystem work from the event loop.
+- [ ] Load health, jobs, mail status, and invoice data concurrently after the application shell is visible.
+- [x] Verify sub-second health/list responses with all four currently active Agents polling, back up production, and deploy v1.0.239.
+- [x] Preserve all completed/error/stale JSON audit records and the claimed-output 120-second recovery path.
+- [x] Verify exact deployed hashes, HTTPS v1.0.239 health, zero mail failures, and exact bundle-hash/preflight status from all four active Agents.
