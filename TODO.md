@@ -257,3 +257,10 @@ Remaining acceptance: confirm one regular-due message at the next real noon run,
 - [x] Rotate the user-supplied Voucher Automation API key only in the production secret environment; never commit or document its value.
 - [x] Confirm Song, 243 regular, and local operator Agents report v1.0.238, the exact production bundle hash, and successful preflight.
 - [ ] Observe one genuinely new Song purchase voucher end to end; do not replay an existing voucher for acceptance.
+
+## 2026-09-09 Compuzone September 7 mail check
+
+- [x] Locate both Compuzone messages in Gmail, including All Mail, without changing read state.
+- [x] Confirm both are payment confirmations for orders `28692792` and `28682826`, not tax-invoice messages.
+- [x] Confirm there is no tax-invoice attachment, portal link, or separate Compuzone tax-invoice mail through September 9.
+- [ ] On receipt of the official tax-invoice mail/PDF, verify it creates two distinct purchase rows and attaches the matching order context.

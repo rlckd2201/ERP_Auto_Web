@@ -332,3 +332,10 @@ Updated: 2026-08-25
 - Root cause: the operator Agent was launched directly from the development repository, so normal self-update copied the production payload over source and unrelated local work.
 - Containment: stop only that Agent, finish and deploy from preserved source, then launch the exact v1.0.238 production payload from `%LOCALAPPDATA%\AccountingWebAgent\1.0.238`. Update the current-user startup and `accountingweb://start` commands to that isolated runtime.
 - Proof: local `172.17.30.13` heartbeat now reports v1.0.238, exact hash `306e8b91adae798a83d7e12b963cf817d0e6cdcfc38e486987f6645632993469`, successful preflight, and the editable worktree remains unchanged.
+
+## I-044 - Two September 7 Compuzone messages are absent from the purchase list - explained
+
+- Evidence: mail-collection history contains message IDs `<20260907060206.CDF842400707@mail.compuzone.co.kr>` and `<20260907060207.876B82400706@mail.compuzone.co.kr>`, both recorded at 15:02 KST as `no supported tax invoice target`.
+- Raw-mail proof: the subjects are `컴퓨존, 결제확인 메일입니다`; the messages describe orders `28692792` (`1,220,000`) and `28682826` (`282,000`). Neither message contains `세금계산서`, an attachment, or a supported invoice portal URL.
+- Scope proof: read-only IMAP search of Gmail All Mail for September 7-9 found exactly those two Compuzone messages and no official tax-invoice message. The messages were processed before the 8080 socket failure, so the outage did not cause this omission.
+- Result: no DB row exists because no tax-invoice source document arrived. Do not synthesize or post an ERP tax voucher from these payment confirmations.

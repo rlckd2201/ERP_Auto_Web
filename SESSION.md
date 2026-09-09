@@ -403,3 +403,14 @@ Implement a listener-aware watchdog so a live Python process without a healthy 8
 ## Next exact starting point after v1.0.238
 
 Observe the first genuinely new Song purchase voucher through account unit, accounting date, VAT/vendor management rows, save, and document-set output. Require the log to show `form-x-only` calibration and same-Y management retries. Do not reuse or reset an older voucher merely to test coordinates.
+
+## Compuzone September 7 mail diagnosis (2026-09-09)
+
+- The two expected messages exist in Gmail and in `purchase_mail_collect_state.json`: 2026-09-07 15:02:06/07 KST, message IDs ending `CDF842400707` and `876B82400706`.
+- They are payment-confirmation messages, not electronic tax invoices. Orders `28692792` and `28682826` show amounts `1,220,000` and `282,000`, but contain no tax-invoice wording, no attachment, and no supported e-tax portal link; only generic Compuzone/My Orders links are present.
+- The collector examined both before the later 8080 listener failure and recorded `no supported tax invoice target`. This is why no purchase invoice row was inserted.
+- Read-only IMAP inspection of Gmail All Mail from September 7 through September 9 found no other Compuzone message and therefore no later official tax-invoice mail to recover.
+
+## Next exact starting point after Compuzone mail diagnosis
+
+Wait for the official electronic tax-invoice mail or obtain its PDF. When it arrives, collect it by its distinct message ID and merge/attach the existing order number as quote context; do not post an ERP voucher from payment-confirmation email alone.
