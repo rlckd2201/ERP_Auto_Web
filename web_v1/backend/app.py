@@ -633,6 +633,16 @@ def _regular_auto_normalize_path(value: Any) -> str:
     return re.sub(r"[\\/]+", r"\\", text).lower()
 
 
+def _regular_auto_document_path(value: Any) -> str:
+    """Return a normalized PDF/XML path only when the value is absolute."""
+    text = str(value or "").strip().strip('"')
+    if not text.lower().endswith((".pdf", ".xml")):
+        return ""
+    windows_text = text.replace("/", "\\")
+    is_absolute = bool(re.match(r"^[A-Za-z]:\\", windows_text)) or windows_text.startswith("\\\\") or text.startswith("/")
+    return _regular_auto_normalize_path(text) if is_absolute else ""
+
+
 def _regular_auto_clean_number(value: Any) -> str:
     text = re.sub(r"[^0-9A-Za-z]", "", str(value or "")).upper()
     return text if len(text) >= 8 else ""
@@ -699,16 +709,16 @@ def _regular_auto_path_values(value: Any, *, depth: int = 0) -> set[str]:
     if depth > 6:
         return set()
     found: set[str] = set()
-    if isinstance(value, dict):
-        for key, item in value.items():
-            key_text = str(key or "").lower()
+    if isinstance(value, str):
+        path = _regular_auto_document_path(value)
+        if path:
+            found.add(path)
+    elif isinstance(value, dict):
+        for item in value.values():
             if isinstance(item, str):
-                text = item.strip()
-                lower = text.lower()
-                if ("path" in key_text or lower.endswith((".pdf", ".xml"))) and lower.endswith((".pdf", ".xml")):
-                    path = _regular_auto_normalize_path(text)
-                    if path:
-                        found.add(path)
+                path = _regular_auto_document_path(item)
+                if path:
+                    found.add(path)
             if isinstance(item, (dict, list)):
                 found.update(_regular_auto_path_values(item, depth=depth + 1))
     elif isinstance(value, list):
@@ -3479,6 +3489,41 @@ def api_update_invoice_status(invoice_id: int, body: InvoiceStatusUpdate) -> dic
         "status": target_status,
         "invoice": refreshed,
     }
+
+
+@app.post("/api/agent/jobs/{job_id}/diagnostic")
+def api_agent_job_diagnostic_upload(
+    job_id: str,
+    request: Request,
+    invoice_id: int = Form(...),
+    agent_id: str = Form(""),
+    screenshot: UploadFile = File(...),
+    ui_dump: UploadFile | None = File(None),
+) -> dict[str, Any]:
+    if not re.fullmatch(r"[0-9a-fA-F-]{36}", job_id) or not job_store.get(job_id):
+        raise HTTPException(status_code=404, detail="Job not found")
+    if not get_invoice(invoice_id):
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    if not (screenshot.filename or "").lower().endswith(".png"):
+        raise HTTPException(status_code=400, detail="PNG screenshot required")
+    files = [(screenshot, "form.png", 8 * 1024 * 1024)]
+    if ui_dump is not None:
+        files.append((ui_dump, "ui_dump.txt", 512 * 1024))
+    target_dir = settings.erp_db_dir / "agent_diagnostics" / job_id / str(invoice_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    saved = []
+    for upload, filename, max_bytes in files:
+        upload.file.seek(0, 2)
+        size = upload.file.tell()
+        upload.file.seek(0)
+        if size <= 0 or size > max_bytes:
+            raise HTTPException(status_code=400, detail=f"Invalid diagnostic size: {filename}")
+        target = target_dir / filename
+        with target.open("wb") as out:
+            shutil.copyfileobj(upload.file, out)
+        saved.append(str(target))
+    touch_agent_seen(agent_id, client_ip=client_ip(request))
+    return {"ok": True, "files": saved}
 
 
 @app.delete("/api/invoices/{invoice_id}")

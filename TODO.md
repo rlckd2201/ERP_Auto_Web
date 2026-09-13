@@ -275,3 +275,12 @@ Remaining acceptance: confirm one regular-due message at the next real noon run,
 - [x] Verify sub-second health/list responses with all four currently active Agents polling, back up production, and deploy v1.0.239.
 - [x] Preserve all completed/error/stale JSON audit records and the claimed-output 120-second recovery path.
 - [x] Verify exact deployed hashes, HTTPS v1.0.239 health, zero mail failures, and exact bundle-hash/preflight status from all four active Agents.
+
+## 2026-09-14 243PC 정기처리 오류 복구
+
+- [x] 운영 정기 목록의 실패 건을 전수 확인하고 ERP 저장 전 실패만 선별했다: #231, #232.
+- [x] 243의 실제 실패 화면과 UI 요소 위치를 서버에 보존해 증빙→통화 오입력과 거래처 표 밖 클릭 원인을 확인했다.
+- [x] 검증된 243 이동형 폼의 증빙·관리항목 입력 좌표를 수정하고, 거래처 값 검증 실패 시 저장을 막았다.
+- [x] 소스·환경 백업 후 v1.0.247 배포, 243 Agent 해시 일치, 정적 회귀 12건과 Graphify 업데이트 확인.
+- [x] #231 및 #232의 ERP 저장과 평택 문서 2/2개 출력 완료 확인. 정기 목록 90/90 처리완료, 오류 0건.
+- [ ] 다음 신규 정기 D1건을 자연 실행으로 관찰하고 다른 공장/폼 배치는 별도 진단 후 확장한다.

@@ -443,3 +443,15 @@ Optimize task claiming so it inspects only actionable queue files (or maintain a
 ## Next exact starting point after v1.0.239
 
 Confirm the purchase page feels immediate after one normal refresh. If further optimization is desired, restore/reconcile the separately deleted tracked frontend source first, then parallelize its independent health/jobs/invoice startup calls without overwriting unrelated worktree changes.
+
+## v1.0.247 243PC 정기처리 오류 복구 (2026-09-14)
+
+- 운영 정기 목록의 오류는 #231 에티버스(D1공장)와 #232 KT(D1공장) 두 건이었다. 둘 다 ERP 저장 전 관리항목 클릭 실패였고 전표 PDF가 없어 중복 기표 없이 재시도 가능했다.
+- 243 화면 진단에서 회계단위 콤보와 오른쪽 관리항목값 표가 기존보다 X축 181px 왼쪽에 있음을 확인했다. 기존 증빙 좌표는 실제 통화 칸에 입력하고, 기존 거래처 좌표는 관리항목 표 밖을 클릭했다.
+- v1.0.247은 검증된 이동형 폼에서만 증빙 칸을 항목 라벨 옆 입력칸으로 찾고, 관리항목값 표의 거래일·거래처·공급가액·사업자번호 셀을 검증된 X 이동량과 행 중앙으로 클릭한다. 거래처 값 확인 실패 시 저장하지 않는다.
+- 서버 백업 `C:\ERP_DB\deploy_backups\20260914_082512_v1.0.247_regular_management_grid`; 운영 HTTPS `/health` v1.0.247, 243 Agent v1.0.247 및 동일 번들 해시 `69368e81339b88bbe865b1b50aca4035327ae1dc4cc31ed5b04baf708964c29a` 확인.
+- #231과 #232는 243에서 각각 거래처 확인, ERP 전표 PDF 저장, 문서 세트 생성, 평택 프린터 2/2개 Windows 인쇄 큐 확인까지 완료했다. 운영 정기 목록은 90건 처리완료, 오류 0건이다. 정적 회귀 12건 통과, Graphify 업데이트 완료.
+
+## Next exact starting point after v1.0.247
+
+다음 신규 정기 D1건의 자연 실행에서 증빙/관리항목/ERP 저장/평택 출력 로그를 확인한다. 다른 공장이나 다른 ERP 폼 배치가 나타나면 검증된 이동량 안전 범위 밖에서 중단시키고, 화면 진단을 먼저 확인한다. 이미 ERP 저장된 건은 재기표하지 않는다.

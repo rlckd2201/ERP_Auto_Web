@@ -651,6 +651,30 @@ def _window_center_in_monitor(win, monitor):
         return False
 
 
+def _erp_account_unit_anchor_flags(
+    automation_id,
+    control_type,
+    anchor_width,
+    anchor_height,
+    offset_x,
+    offset_y,
+    anonymous_x_limit=120,
+):
+    """Classify only geometrically plausible account-unit combo anchors."""
+    exact_anchor = str(automation_id or "").strip().lower() == "cboaccunit"
+    anonymous_account_unit = (
+        not str(automation_id or "").strip()
+        and str(control_type or "").strip().lower() == "combobox"
+        and 150 <= int(anchor_width or 0) <= 180
+        and 24 <= int(anchor_height or 0) <= 32
+        and offset_x is not None
+        and abs(int(offset_x)) <= max(8, int(anonymous_x_limit))
+        and offset_y is not None
+        and abs(int(offset_y)) <= 8
+    )
+    return exact_anchor, anonymous_account_unit
+
+
 def _erp_form_anchor_offset_limits(
     automation_id,
     configured_limit,
@@ -659,23 +683,24 @@ def _erp_form_anchor_offset_limits(
     control_type="",
     anchor_width=0,
     anchor_height=0,
+    offset_x=None,
     offset_y=None,
 ):
     """Return conservative X/Y limits for ERP form anchor calibration."""
     base_limit = max(8, int(configured_limit))
-    exact_anchor = str(automation_id or "").strip().lower() == "cboaccunit"
-    anonymous_account_unit = (
-        not str(automation_id or "").strip()
-        and str(control_type or "").strip().lower() == "combobox"
-        and 150 <= int(anchor_width or 0) <= 180
-        and 24 <= int(anchor_height or 0) <= 32
-        and offset_y is not None
-        and abs(int(offset_y)) <= 8
-    )
     if exact_anchor_x_limit is None:
         exact_anchor_x_limit = int(
             float(os.getenv("ERP_FORM_EXACT_ANCHOR_MAX_X_OFFSET", "120") or "120")
         )
+    exact_anchor, anonymous_account_unit = _erp_account_unit_anchor_flags(
+        automation_id,
+        control_type,
+        anchor_width,
+        anchor_height,
+        offset_x,
+        offset_y,
+        anonymous_x_limit=exact_anchor_x_limit,
+    )
     trusted_anchor = exact_anchor or anonymous_account_unit
     x_limit = max(base_limit, max(8, int(exact_anchor_x_limit))) if trusted_anchor else base_limit
     apply_form_x_offset = exact_anchor
@@ -686,6 +711,27 @@ def _erp_form_applied_offsets(offset_x, offset_y, apply_form_x_offset):
     """Apply a trusted account-unit X delta without moving any form row vertically."""
     del offset_y
     return (int(offset_x) if apply_form_x_offset else 0), 0
+
+
+def _erp_verified_account_unit_form_x_shift(anchor_right, canvas_left=0, expected_right=501, max_abs_shift=260):
+    """Calculate a form X shift after the combo's list was verified as an account-unit list."""
+    shift = int(anchor_right) - (int(canvas_left) + int(expected_right))
+    if abs(shift) > max(8, int(max_abs_shift)):
+        return None
+    return shift
+
+
+def _erp_shifted_management_cell(x, y, verified_shift):
+    """Center a known management-grid value cell on the verified shifted form."""
+    x, y, verified_shift = int(x), int(y), int(verified_shift)
+    if not (1050 <= x <= 1180 and 780 <= y <= 900 and -220 <= verified_shift <= -140):
+        raise ValueError("management grid coordinate or verified shift out of range")
+    return x + verified_shift, y + 10
+
+
+def _erp_account_unit_requires_anchor_mode(exact_anchor, anonymous_anchor, wide_verified_anchor):
+    """Use semantic controls when only a far-X combo could be verified by its item list."""
+    return bool(wide_verified_anchor and not exact_anchor and not anonymous_anchor)
 
 
 def _erp_management_summary_click_candidates(x_candidates):
@@ -1546,6 +1592,8 @@ class ERPLoginBot:
         form_coord_offset_x = 0
         form_coord_offset_y = 0
         form_coord_calibrated = False
+        form_layout_anchor_mode = False
+        form_verified_management_x_shift = 0
 
         def _uia_disconnected(exc):
             text = str(exc or "").lower()
@@ -1793,26 +1841,57 @@ class ERPLoginBot:
                         pass
             return best
 
-        def _find_acc_unit_combo():
+        def _acc_unit_combo_candidates(include_wide_verified_candidates=False):
             r = _main_rect()
-            best = None
-            best_score = 10 ** 12
+            candidates = []
+            expected_x = r.left + 493 + form_coord_offset_x
+            expected_y = r.top + 124 + form_coord_offset_y
+            anonymous_x_limit = max(
+                8,
+                int(float(os.getenv("ERP_FORM_EXACT_ANCHOR_MAX_X_OFFSET", "120") or "120")),
+            )
             for ctrl in _iter_visible("ComboBox"):
                 try:
                     cr = ctrl.rectangle()
                     aid = str(ctrl.element_info.automation_id or "")
+                    control_type = str(ctrl.element_info.control_type or "ComboBox")
                     text = _control_text(ctrl)
-                    score = abs(((cr.left + cr.right) // 2) - (r.left + 493 + form_coord_offset_x)) + abs(((cr.top + cr.bottom) // 2) - (r.top + 124 + form_coord_offset_y))
-                    if aid == "cboAccUnit":
+                    offset_x = ((cr.left + cr.right) // 2) - expected_x
+                    offset_y = ((cr.top + cr.bottom) // 2) - expected_y
+                    exact_anchor, anonymous_anchor = _erp_account_unit_anchor_flags(
+                        aid,
+                        control_type,
+                        cr.width(),
+                        cr.height(),
+                        offset_x,
+                        offset_y,
+                        anonymous_x_limit=anonymous_x_limit,
+                    )
+                    wide_anonymous_anchor = (
+                        include_wide_verified_candidates
+                        and not aid.strip()
+                        and control_type.strip().lower() == "combobox"
+                        and 150 <= cr.width() <= 180
+                        and 24 <= cr.height() <= 32
+                        and abs(offset_y) <= 8
+                        and r.left <= cr.left < cr.right <= r.right
+                    )
+                    if not exact_anchor and not anonymous_anchor and not wide_anonymous_anchor:
+                        continue
+                    score = abs(offset_x) + abs(offset_y)
+                    if exact_anchor:
                         score -= 10000
                     if "공장" in text or "일강" in text or "제이엠" in text or "더원" in text:
                         score -= 500
-                    if score < best_score:
-                        best = ctrl
-                        best_score = score
+                    candidates.append((score, ctrl, offset_x, offset_y, exact_anchor, anonymous_anchor, wide_anonymous_anchor))
                 except:
                     pass
-            return best
+            candidates.sort(key=lambda item: item[0])
+            return candidates
+
+        def _find_acc_unit_combo():
+            candidates = _acc_unit_combo_candidates(include_wide_verified_candidates=False)
+            return candidates[0][1] if candidates else None
 
         def _calibrate_form_coordinate_offset(reason="ERP form"):
             nonlocal form_coord_offset_x, form_coord_offset_y, form_coord_calibrated
@@ -1846,6 +1925,7 @@ class ERPLoginBot:
                 control_type=anchor_control_type,
                 anchor_width=rect.width(),
                 anchor_height=rect.height(),
+                offset_x=offset_x,
                 offset_y=offset_y,
             )
             if abs(offset_x) > x_limit or abs(offset_y) > y_limit:
@@ -1907,7 +1987,7 @@ class ERPLoginBot:
                     f"time={stamp}",
                     "",
                 ]
-                for ct in ("ComboBox", "Edit", "Button", "Text"):
+                for ct in ("ComboBox", "Edit", "Button", "Text", "Custom", "DataItem"):
                     lines.append(f"[{ct}]")
                     for ctrl in _iter_visible(ct):
                         try:
@@ -1935,11 +2015,13 @@ class ERPLoginBot:
             _dump_form_diagnostics(message)
             raise RuntimeError(message)
 
-        def _verify_acc_unit(expected):
+        def _verify_acc_unit(expected, preferred_combo=None):
             expected_norm = _norm_text(expected)
             checks = []
+            if preferred_combo:
+                checks.append(_control_text(preferred_combo))
             combo = _find_acc_unit_combo()
-            if combo:
+            if combo and combo is not preferred_combo:
                 checks.append(_control_text(combo))
             near = _find_near_control(493, 124, ("ComboBox", "Edit", "Text"))
             if near:
@@ -2046,6 +2128,8 @@ class ERPLoginBot:
                     _reconnect_main_window(f"{label} 입력 전", required=True)
             used_anchor = False
             coord_first = str(os.getenv("ERP_FORM_COORD_FIRST", "1")).strip().lower() not in ("0", "false", "no", "off")
+            if form_layout_anchor_mode:
+                coord_first = False
             if coord_first:
                 _click_form_xy(*fallback_xy, label)
             else:
@@ -2130,6 +2214,8 @@ class ERPLoginBot:
             # first data row. The previous loose fallback could drift into the
             # right-side "부가세행추가" button area.
             grid_coord_first = str(os.getenv("ERP_GRID_COORD_FIRST", "1")).strip().lower() not in ("0", "false", "no", "off")
+            if form_layout_anchor_mode:
+                grid_coord_first = False
             if grid_coord_first:
                 self.logger.info(f"  [FORM-GRID] account cell coordinate-first: {fallback_xy}")
                 _click_form_xy(*fallback_xy, "grid first account cell")
@@ -2235,7 +2321,7 @@ class ERPLoginBot:
         def _click_add_row(add_clicks, fallback_xy):
             if add_clicks <= 0:
                 return
-            if _env_flag("ERP_ADD_ROW_COORD_FIRST", "1"):
+            if _env_flag("ERP_ADD_ROW_COORD_FIRST", "1") and not form_layout_anchor_mode:
                 _, ax, ay = _form_point(*fallback_xy)
                 for _ in range(add_clicks):
                     pyautogui.click(ax, ay)
@@ -2292,28 +2378,29 @@ class ERPLoginBot:
                 time.sleep(ERP_CLICK_WAIT)
 
         def _select_acc_unit_by_coord(target_site):
+            nonlocal form_coord_offset_x, form_coord_offset_y, form_coord_calibrated, form_layout_anchor_mode, form_verified_management_x_shift
             order = ["P1공장", "P2공장", "P3공장", "P4공장", "D1공장", "D2공장", "D3공장", "일강 1공장", "일강 2공장", "제이엠", "더원"]
             key = _acc_unit_display(target_site)
             down_count = order.index(key) if key in order else 0
             self.logger.info(f"  [FORM-XY] 회계단위 좌표 선택 시작: target={key}, down={down_count}")
-            combo = _find_acc_unit_combo()
+            combo = None
 
-            def _try_open(method):
+            def _try_open(method, candidate=None):
                 try:
-                    if method == "expand" and combo:
-                        combo.expand()
-                    elif method == "combo-arrow" and combo:
-                        cr = combo.rectangle()
+                    if method == "expand" and candidate:
+                        candidate.expand()
+                    elif method == "combo-arrow" and candidate:
+                        cr = candidate.rectangle()
                         pyautogui.click(cr.right - 12, (cr.top + cr.bottom) // 2)
                     elif method == "alt-down":
-                        if combo:
-                            combo.click_input()
+                        if candidate:
+                            candidate.click_input()
                         else:
                             _click_form_xy(493, 124, "회계단위 드롭다운")
                         pyautogui.hotkey("alt", "down")
                     elif method == "f4":
-                        if combo:
-                            combo.click_input()
+                        if candidate:
+                            candidate.click_input()
                         else:
                             _click_form_xy(493, 124, "회계단위 드롭다운")
                         pyautogui.press("f4")
@@ -2322,17 +2409,36 @@ class ERPLoginBot:
                     time.sleep(ERP_SETTLE_WAIT)
                     items = _visible_acc_unit_items()
                     if items:
-                        self.logger.info(f"  [FORM-VERIFY] 회계단위 드롭다운 열림 확인: {method} / {len(items)}건")
-                        return items
+                        item_names = [str(item.window_text() or "").strip() for item in items]
+                        if key in item_names:
+                            self.logger.info(f"  [FORM-VERIFY] 회계단위 드롭다운 열림 확인: {method} / {len(items)}건")
+                            return items
+                        self.logger.warning(
+                            f"  [FORM-VERIFY] 회계단위가 아닌 콤보 제외: method={method}, items={item_names[:8]}"
+                        )
+                        pyautogui.press("escape")
+                        time.sleep(quick_wait)
                 except Exception as e:
                     self.logger.warning(f"  [FORM-XY] 회계단위 드롭다운 열기 실패({method}): {e}")
                 return []
 
             items = []
-            for method in ("expand", "combo-arrow", "alt-down", "f4", "xy-arrow"):
-                items = _try_open(method)
+            candidate_meta = None
+            for meta in _acc_unit_combo_candidates(include_wide_verified_candidates=True):
+                candidate = meta[1]
+                for method in ("expand", "combo-arrow", "alt-down", "f4"):
+                    items = _try_open(method, candidate)
+                    if items:
+                        combo = candidate
+                        candidate_meta = meta
+                        break
                 if items:
                     break
+            if not items:
+                for method in ("alt-down", "f4", "xy-arrow"):
+                    items = _try_open(method, None)
+                    if items:
+                        break
             if not items:
                 _fail_form(f"회계단위 드롭다운 열기 실패: target={key}")
 
@@ -2347,13 +2453,37 @@ class ERPLoginBot:
             lr = target_item.rectangle()
             pyautogui.click(lr.left + lr.width() // 2, lr.top + lr.height() // 2)
             time.sleep(critical_field_wait if stable_header_fields else ERP_SETTLE_WAIT)
+            if combo and candidate_meta:
+                cr = combo.rectangle()
+                reference = _main_rect()
+                exact_anchor = bool(candidate_meta[4])
+                anonymous_anchor = bool(candidate_meta[5])
+                wide_verified_anchor = bool(candidate_meta[6])
+                if _erp_account_unit_requires_anchor_mode(
+                    exact_anchor,
+                    anonymous_anchor,
+                    wide_verified_anchor,
+                ):
+                    shift = _erp_verified_account_unit_form_x_shift(cr.right, reference.left)
+                    if shift is None or not -220 <= shift <= -140:
+                        _fail_form(f"검증된 회계단위의 관리항목 X 이동량이 안전 범위를 벗어남: {shift}")
+                    form_layout_anchor_mode = True
+                    form_verified_management_x_shift = shift
+                    form_coord_offset_x = 0
+                    form_coord_offset_y = 0
+                    self.logger.info(
+                        f"  [FORM-CALIBRATE] 원거리 회계단위 목록 검증 완료: "
+                        f"상단/그리드 anchor mode 사용, 관리항목 X 보정={shift}, "
+                        f"combo=({cr.left},{cr.top})-({cr.right},{cr.bottom}), "
+                        f"canvas=({reference.left},{reference.top})-({reference.right},{reference.bottom})"
+                    )
             if stable_header_fields:
                 _reconnect_main_window("회계단위 선택 후", required=True)
-                _verify_acc_unit(key)
+                _verify_acc_unit(key, combo)
             elif fast_field_verify:
                 self.logger.info(f"  [FORM-VERIFY] 회계단위 fast verify skipped: {key}")
             else:
-                _verify_acc_unit(key)
+                _verify_acc_unit(key, combo)
             self.logger.info(f"  [FORM-XY] 회계단위 좌표 선택 완료: {key}")
 
         def _double_click_form_xy(x, y, label, wait=None, interval=None):
@@ -2534,6 +2664,54 @@ class ERPLoginBot:
                 self.logger.warning(f"  [MGMT-XY] {row_no}행 출납처리여부 UIA 해제 실패: {e}. 좌표 1회 클릭 fallback")
                 _click_form_xy(506, 772, f"{row_no}행 출납처리여부 체크박스")
 
+        def _management_value_point(label, fallback_xy):
+            if not form_layout_anchor_mode:
+                return fallback_xy
+            target = re.sub(r"\s+", "", label)
+            if target != "증빙":
+                point = _erp_shifted_management_cell(*fallback_xy, form_verified_management_x_shift)
+                self.logger.info(f"  [MGMT-ANCHOR] {label} 관리항목값 셀: rel={point}, shift={form_verified_management_x_shift}")
+                return point
+            reference = _main_rect()
+            labels = []
+            for ctrl in _iter_visible("Text"):
+                try:
+                    name = re.sub(r"\s+", "", str(ctrl.window_text() or ""))
+                    rect = ctrl.rectangle()
+                    if name == target and reference.top + 750 <= rect.top <= reference.top + 920:
+                        labels.append(rect)
+                except Exception:
+                    continue
+            edits = []
+            for ctrl in _iter_visible("Edit"):
+                try:
+                    rect = ctrl.rectangle()
+                    if reference.top + 750 <= rect.top <= reference.top + 920 and rect.width() >= 45:
+                        edits.append(rect)
+                except Exception:
+                    continue
+            candidates = []
+            for label_rect in labels:
+                label_y = (label_rect.top + label_rect.bottom) // 2
+                for edit_rect in edits:
+                    edit_y = (edit_rect.top + edit_rect.bottom) // 2
+                    gap_x = edit_rect.left - label_rect.right
+                    if 0 <= gap_x <= 100 and abs(edit_y - label_y) <= 14:
+                        candidates.append((gap_x, abs(edit_y - label_y), edit_rect))
+            if not candidates:
+                raise RuntimeError(f"관리항목 '{label}' 입력칸 미발견: 243 폼 좌표 입력 중단")
+            rect = sorted(candidates, key=lambda item: (item[0], item[1]))[0][2]
+            point = ((rect.left + rect.right) // 2 - reference.left, (rect.top + rect.bottom) // 2 - reference.top)
+            self.logger.info(
+                f"  [MGMT-ANCHOR] {label} 입력칸 확인: rel={point}, "
+                f"rect=({rect.left},{rect.top})-({rect.right},{rect.bottom})"
+            )
+            return point
+
+        def _input_management_value(label, fallback_xy, value, step_label, enter_count=0):
+            x, y = _management_value_point(label, fallback_xy)
+            _input_value_xy(x, y, value, step_label, enter_count=enter_count, clear=True)
+
         def _fill_management_for_current_row(row_no, account_name):
             vendor_name = str(form_data.get('vendor_name', '') or '').strip()
             vendor_biz_no = str(
@@ -2651,7 +2829,8 @@ class ERPLoginBot:
                 evidence_text = _evidence_keyword(account_key, corp)
                 self.logger.info(f"  [MGMT-XY] {row_no}행 증빙 검색어: {evidence_text}")
                 # 증빙 칸은 Enter 입력 시 ERP가 통화 필드로 포커스를 넘기는 경우가 있어 타이핑만 수행합니다.
-                _input_value_xy(408, 826, evidence_text, f"{row_no}행 증빙", enter_count=0, clear=True)
+                evidence_xy = _management_value_point("증빙", (408, 826))
+                _input_value_xy(*evidence_xy, evidence_text, f"{row_no}행 증빙", enter_count=0, clear=True)
 
             def _find_vendor_popup(timeout=3.0):
                 end_at = time.time() + timeout
@@ -2741,7 +2920,8 @@ class ERPLoginBot:
                             rect = ctrl.rectangle()
                             center_x = (rect.left + rect.right) // 2 - main_rect.left
                             center_y = (rect.top + rect.bottom) // 2 - main_rect.top
-                            if not (980 <= center_x <= 1280 and abs(center_y - int(target_y)) <= 24):
+                            min_x, max_x = (800, 1060) if form_layout_anchor_mode else (980, 1280)
+                            if not (min_x <= center_x <= max_x and abs(center_y - int(target_y)) <= 24):
                                 continue
                             value = str(_control_text(ctrl) or "").strip()
                             if value and value not in values:
@@ -2769,6 +2949,21 @@ class ERPLoginBot:
                     f"  [MGMT-VERIFY] {label}: 거래처 관리항목 값 불일치: "
                     f"expected={expected or '-'}, visible={last_values or ['<empty>']}"
                 )
+                return ""
+
+            def _copy_vendor_management_value(x, y, expected, label):
+                if not form_layout_anchor_mode:
+                    return ""
+                _click_form_xy(x, y, f"{label} 입력값 확인", wait=mgmt_click_wait)
+                pyautogui.hotkey('ctrl', 'c')
+                _release_modifiers(f"{label} 복사 후", wait=False)
+                time.sleep(max(0.25, mgmt_key_wait))
+                copied = str(pyperclip.paste() or "").strip()
+                mgmt_clipboard_cache["text"] = None
+                if _vendor_value_matches(copied, expected):
+                    self.logger.info(f"  [MGMT-VERIFY] {label}: 관리항목값 셀 복사로 거래처 확인: {copied}")
+                    return copied
+                self.logger.warning(f"  [MGMT-VERIFY] {label}: 관리항목값 셀 복사값 불일치: {copied[:80] or '<empty>'}")
                 return ""
 
             def _input_vendor_by_business_no_keyboard(x, y, label, target_biz_no):
@@ -2841,11 +3036,13 @@ class ERPLoginBot:
                         time.sleep(max(0.50, mgmt_commit_wait))
                         continue
 
-                    actual_vendor = _wait_vendor_management_value(
-                        y,
-                        expected_vendor_name,
-                        attempt_label,
-                    )
+                    actual_vendor = _copy_vendor_management_value(x, y, expected_vendor_name, attempt_label)
+                    if not actual_vendor:
+                        actual_vendor = _wait_vendor_management_value(
+                            y,
+                            expected_vendor_name,
+                            attempt_label,
+                        )
                     if actual_vendor:
                         return True
                     time.sleep(max(0.50, mgmt_commit_wait))
@@ -2859,6 +3056,7 @@ class ERPLoginBot:
             def _input_vendor_value_xy(x, y, label):
                 if not vendor_name and not vendor_target_biz_no:
                     return False
+                x, y = _management_value_point("거래처", (x, y))
                 if vendor_target_biz_no:
                     if _input_vendor_by_business_no_keyboard(x, y, label, vendor_target_biz_no):
                         return True
@@ -2882,20 +3080,20 @@ class ERPLoginBot:
                     if not _input_vendor_value_xy(1118, 797, f"{row_no}행 거래처"):
                         raise RuntimeError(f"{row_no}행 거래처 관계항목 입력 실패")
                 if "supply" in plan and supply_amount:
-                    _input_value_xy(1118, 817, supply_amount, f"{row_no}행 공급가액", enter_count=0, clear=True)
+                    _input_management_value("공급가액", (1118, 817), supply_amount, f"{row_no}행 공급가액")
                 if "date" in plan:
-                    _input_value_xy(1118, 837, invoice_date, f"{row_no}행 거래일", enter_count=0, clear=True)
+                    _input_management_value("거래일", (1118, 837), invoice_date, f"{row_no}행 거래일")
                 if "business" in plan and business_query:
-                    _input_value_xy(1118, 857, business_query, f"{row_no}행 사업자번호", enter_count=1, clear=True)
+                    _input_management_value("사업자번호", (1118, 857), business_query, f"{row_no}행 사업자번호", enter_count=1)
                 self.logger.info(f"  [MGMT-XY] {row_no}행 일강 부가세대급금 관리항목 입력 완료")
                 return True
 
             if "project" in plan:
                 # 일강 집기비품: 거래처 다음 줄(프로젝트코드)에 "일반"을 입력합니다.
-                _input_value_xy(1118, 817, "일반", f"{row_no}행 프로젝트코드", enter_count=1, clear=True)
+                _input_management_value("프로젝트코드", (1118, 817), "일반", f"{row_no}행 프로젝트코드", enter_count=1)
 
             if "date" in plan:
-                _input_value_xy(1118, 797, invoice_date, f"{row_no}행 거래일/관리일", enter_count=0, clear=True)
+                _input_management_value("거래일", (1118, 797), invoice_date, f"{row_no}행 거래일/관리일")
 
             if "vendor_vat" in plan and (vendor_name or vendor_target_biz_no):
                 if not _input_vendor_value_xy(1118, 817, f"{row_no}행 거래처"):
@@ -2906,10 +3104,10 @@ class ERPLoginBot:
                     raise RuntimeError(f"{row_no}행 거래처 관계항목 입력 실패")
 
             if "supply" in plan and supply_amount:
-                _input_value_xy(1118, 837, supply_amount, f"{row_no}행 공급가액", enter_count=0, clear=True)
+                _input_management_value("공급가액", (1118, 837), supply_amount, f"{row_no}행 공급가액")
 
             if "business" in plan and business_query:
-                _input_value_xy(1118, 857, business_query, f"{row_no}행 사업자번호", enter_count=1, clear=True)
+                _input_management_value("사업자번호", (1118, 857), business_query, f"{row_no}행 사업자번호", enter_count=1)
 
             self.logger.info(f"  [MGMT-XY] {row_no}행 관리항목 입력 완료")
             return True
@@ -3625,6 +3823,7 @@ class ERPLoginBot:
             return
         except Exception as e:
             self.logger.error(f"  [FORM-XY] 좌표 전용 폼 세팅 실패: {e}")
+            _dump_form_diagnostics(str(e))
             raise
 
         def _all_edits():

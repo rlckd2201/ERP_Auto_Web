@@ -18,6 +18,7 @@ import tempfile
 import threading
 import time
 import zipfile
+from contextlib import ExitStack
 from ctypes import wintypes
 from datetime import datetime
 from pathlib import Path
@@ -93,7 +94,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.239"
+AGENT_BUNDLE_VERSION = "1.0.247"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
@@ -553,6 +554,60 @@ def _upload_erp_voucher(
         return {"ok": True, "server_path": server_path, "local_path": str(pdf_path)}
     except Exception as exc:
         return {"ok": False, "error": str(exc), "local_path": str(pdf_path)}
+
+
+def _upload_erp_failure_diagnostic(
+    server: str,
+    job_id: str,
+    invoice_id: int,
+    agent_id: str,
+    verify: bool,
+    started_at: float,
+) -> dict[str, Any]:
+    """Upload only a form failure captured during the current ERP attempt."""
+    if not job_id or invoice_id <= 0:
+        return {"ok": False, "error": "missing job or invoice id"}
+    debug_dir = Path(r"C:\ERP_DB\debug")
+    screenshots = sorted(
+        debug_dir.glob(f"erp_form_fail_{job_id}_{invoice_id}_*.png"),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    ) if debug_dir.is_dir() else []
+    screenshot = next(
+        (path for path in screenshots if path.stat().st_mtime >= started_at - 5),
+        None,
+    )
+    if screenshot is None:
+        return {"ok": False, "error": "current-attempt form screenshot not found"}
+    dump_path = LEGACY_MANAGER.parent / "erp_ui_dump.txt"
+    if not dump_path.is_file() or dump_path.stat().st_mtime < started_at - 5:
+        dump_path = None
+    try:
+        with ExitStack() as stack:
+            files = {
+                "screenshot": (
+                    screenshot.name,
+                    stack.enter_context(screenshot.open("rb")),
+                    "image/png",
+                ),
+            }
+            if dump_path is not None:
+                files["ui_dump"] = (
+                    dump_path.name,
+                    stack.enter_context(dump_path.open("rb")),
+                    "text/plain",
+                )
+            response = requests.post(
+                f"{server.rstrip('/')}/api/agent/jobs/{job_id}/diagnostic",
+                data={"agent_id": agent_id, "invoice_id": str(invoice_id)},
+                files=files,
+                verify=verify,
+                timeout=60,
+            )
+        response.raise_for_status()
+        return response.json() if response.content else {"ok": True}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def _upload_expense_report(
@@ -2061,6 +2116,8 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
         }
     )
     successes = []
+    current_invoice_id = 0
+    current_invoice_started_at = 0.0
     try:
         display = _display_check()
         if not display.get("ok"):
@@ -2074,6 +2131,8 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
 
         for index, invoice in enumerate(invoices, start=1):
             invoice_id = int(invoice.get("id") or 0)
+            current_invoice_id = invoice_id
+            current_invoice_started_at = time.time()
             base_progress = 82 + int(index / max(len(invoices), 1) * 12)
             last_progress_post_at = 0.0
 
@@ -2163,6 +2222,10 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
     except Exception as exc:
         message = str(exc) or exc.__class__.__name__
         log(f"ERP task failed: {message}")
+        diagnostic = _upload_erp_failure_diagnostic(
+            server, job_id, current_invoice_id, agent_id, verify, current_invoice_started_at,
+        )
+        log(f"ERP failure diagnostic: {'uploaded' if diagnostic.get('ok') else diagnostic.get('error', 'unknown error')}")
         progress_dispatcher.close()
         try:
             _post(

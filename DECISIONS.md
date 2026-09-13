@@ -207,3 +207,7 @@ Compuzone payment-confirmation mail may provide order number, items, and amount,
 ## D-050 - Agent polling must not scan historical queue files on the event loop
 
 Completed, failed, and stale ERP queue artifacts are audit history, not task-claim candidates. Agent claim requests must operate on a bounded actionable set and must not synchronously enumerate and parse the full historical queue from an `async` endpoint. Any unavoidable disk scan belongs in a worker thread or a maintained index. Independent page-entry reads should execute concurrently so a noncritical status call cannot delay the invoice list.
+
+## D-051 - 243 정기 폼의 이동형 관리항목 표는 검증 후에만 보정
+
+243의 회계단위 목록이 실제 목표 공장을 포함하고 X 이동량이 안전 범위인 경우에만 이동형 폼으로 분류한다. 왼쪽 증빙 입력칸은 `증빙` 라벨과 실제 Edit 위치로 찾는다. 오른쪽 관리항목값 표는 UIA가 개별 셀을 노출하지 않으므로 검증된 X 이동량과 각 행 중앙으로 클릭한다. 거래처 팝업 선택 후 표시값을 확인하지 못하면 ERP 저장을 금지한다. 다른 담당자 PC의 기존 입력 경로는 바꾸지 않는다.

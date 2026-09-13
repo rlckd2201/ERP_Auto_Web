@@ -353,3 +353,11 @@ Updated: 2026-08-25
 - Production proof: final v1.0.239 deployment measured 40 loopback health samples at `59.4 ms` average, `342.9 ms` p95, and `453.2 ms` maximum with four Agents. Setup/jobs/mail/invoices returned in `46/42/26/90 ms`; mail collection remained successful.
 - Release proof: all four active Agents report v1.0.239, successful preflight, and final hash `734abad61055e6d9ae2e3c7f7f7aa338b9a0bfc477f9cba73e8314e02c5a6d33`. The local Agent is pinned to `%LOCALAPPDATA%\AccountingWebAgent\1.0.239`, not the editable worktree.
 - Graph note: the final `py -m graphify update .` completed with `1,484` nodes, `3,971` edges, and `88` communities after the regression test was restored.
+
+## I-046 - 243 정기 #231/#232 관리항목 팝업 실패 - v1.0.247 해결
+
+- 증상: 243에서 #231 에티버스와 #232 KT가 `2행 거래처 관계항목 입력 실패`로 ERP 저장 전에 중단했다. 두 건 모두 서버 전표 PDF가 없었다.
+- 진단: #231 실패 화면은 `C:\ERP_DB\agent_diagnostics\f3f7e2ea-6d8c-4e58-b6ff-9e7d4e632966\231`에 보존했다. 초기 증빙 클릭 `(408,826)`은 243 화면에서 통화 칸이었고 통화 검색 팝업이 열렸다. 관리항목값 표는 x=831~1040인데 거래처 클릭은 x=1118이었다.
+- 원인: 243의 회계단위 콤보/관리항목 표가 기준 폼보다 181px 왼쪽에 배치됐다. v1.0.243은 상단/그리드만 이동형으로 처리하고 관리항목 고정 좌표를 유지해 잘못 클릭했다.
+- 수리: 검증된 원거리 콤보에서만 관리항목 표 X=-181px와 행 중앙 Y=기존+10px를 사용하고 증빙은 라벨-입력칸 관계로 찾는다. 거래처 선택값 검증을 통과해야 저장한다. 저장 전 실패 진단 화면 업로드도 추가했다.
+- 검증: #231과 #232 모두 243 Agent v1.0.247에서 거래처 확인, ERP 전표 PDF 서버 보관, 평택 문서 2/2개 출력 완료. 정기 목록 90건 중 오류 0건. 정적 회귀 12건 통과, 서버/Agent 동일 해시 확인.
