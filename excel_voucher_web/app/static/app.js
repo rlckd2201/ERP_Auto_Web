@@ -134,6 +134,39 @@ function renderTransientProgress(message, progress) {
   `;
 }
 
+function renderVerificationInput(job) {
+  if (!(job.result || {}).verification_required) {
+    return "";
+  }
+  return `
+    <div class="notice verificationNotice">
+      <strong>ERP 이메일 인증번호 입력</strong>
+      <span>ERP 화면에 표시된 인증번호를 입력해 주세요.</span>
+      <div class="inlineForm">
+        <input id="verificationCodeInput" inputmode="numeric" maxlength="32" autocomplete="one-time-code" placeholder="인증번호">
+        <button class="toolButton" id="verificationCodeButton" type="button">인증번호 전송</button>
+      </div>
+    </div>
+  `;
+}
+
+async function submitVerificationCode() {
+  const input = document.querySelector("#verificationCodeInput");
+  const button = document.querySelector("#verificationCodeButton");
+  const code = (input?.value || "").trim();
+  if (!code || !state.selectedJobId) return;
+  button.disabled = true;
+  try {
+    await postJson(`/api/jobs/${state.selectedJobId}/verification-code`, { code });
+    await selectJob(state.selectedJobId);
+  } catch (error) {
+    input.setCustomValidity(error.message);
+    input.reportValidity();
+  } finally {
+    button.disabled = false;
+  }
+}
+
 function formatAge(seconds) {
   if (seconds === null || seconds === undefined) {
     return "-";
@@ -580,6 +613,7 @@ async function selectJob(jobId, keepSelection = true) {
       <div class="largeProgressBar" style="width:${progress}%"></div>
     </div>
     ${renderSteps(job)}
+    ${renderVerificationInput(job)}
     <div class="detailGrid">
       <div class="metric"><strong>${money(payload.debit_total)}</strong><span>처리 금액</span></div>
       <div class="metric"><strong>${Number(payload.source_row_count || 0)}</strong><span>엑셀 행</span></div>
@@ -752,6 +786,9 @@ document.querySelector("#adminTailLogButton").addEventListener("click", () => ru
 document.querySelector("#adminUpdateServerButton").addEventListener("click", updateServerFromAdmin);
 document.querySelector("#adminUpdateAgentButton").addEventListener("click", () => runAdminAgentCommand("update-agent"));
 document.querySelector("#adminRestartAgentButton").addEventListener("click", () => runAdminAgentCommand("restart-agent"));
+document.addEventListener("click", (event) => {
+  if (event.target?.id === "verificationCodeButton") submitVerificationCode();
+});
 document.querySelector("#loginForm").addEventListener("submit", login);
 document.querySelector("#changePasswordForm").addEventListener("submit", changePassword);
 document.querySelector("#forgotPasswordButton").addEventListener("click", forgotPassword);

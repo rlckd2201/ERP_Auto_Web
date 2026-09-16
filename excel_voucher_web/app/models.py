@@ -137,6 +137,10 @@ class AgentAdminCommandCompleteRequest(BaseModel):
     error: str = Field(default="", max_length=4000)
 
 
+class VerificationCodeRequest(BaseModel):
+    code: str = Field(default="", min_length=4, max_length=32)
+
+
 class LoginRequest(BaseModel):
     user_id: str = Field(default="", max_length=160)
     password: str = Field(default="", max_length=200)

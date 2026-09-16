@@ -1304,6 +1304,43 @@ class ERPLoginBot:
                     pass
                 return win
 
+            verification_provider = globals().get("ERP_VERIFICATION_CODE_PROVIDER")
+            verification_state = {"handled": False}
+
+            def _try_email_verification():
+                if verification_state["handled"] or not callable(verification_provider):
+                    return False
+                markers = ("\uc774\uba54\uc77c", "\uc778\uc99d\ubc88\ud638", "verification code", "verify code")
+                try:
+                    windows = self.app.windows(visible=True)
+                except Exception:
+                    return False
+                for win in windows:
+                    try:
+                        texts = [win.window_text() or ""]
+                        texts.extend((ctrl.window_text() or "") for ctrl in win.descendants())
+                        blob = " ".join(texts).lower()
+                        if not any(marker.lower() in blob for marker in markers):
+                            continue
+                        edits = [ctrl for ctrl in win.descendants(control_type="Edit") if ctrl.is_visible() and ctrl.is_enabled()]
+                        if not edits:
+                            continue
+                        self.logger.info("ERP 이메일 인증창을 발견했습니다. 웹 입력을 기다립니다.")
+                        code = str(verification_provider() or "").strip()
+                        if not code:
+                            continue
+                        edits[0].click_input()
+                        edits[0].type_keys("^a{BACKSPACE}")
+                        edits[0].type_keys(code, with_spaces=True)
+                        win.type_keys("{ENTER}")
+                        verification_state["handled"] = True
+                        self.logger.info("ERP 이메일 인증번호를 입력하고 로그인을 계속합니다.")
+                        time.sleep(1.0)
+                        return True
+                    except Exception as exc:
+                        self.logger.warning(f"ERP 이메일 인증창 처리 실패: {exc}")
+                return False
+
             main_win = None
             if resume_existing_voucher:
                 main_win = _fast_recovery_main_window()

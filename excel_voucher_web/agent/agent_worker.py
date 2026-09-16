@@ -637,6 +637,23 @@ def run_loop(
         # 18행 실패 화면을 그대로 반환).
         job_started_at = time.time()
         try:
+            def verification_code_provider() -> str:
+                _post(session, server, f"/api/agent/jobs/{job_id}/event", {
+                    "agent_id": agent_id,
+                    "status": "running",
+                    "progress": 40,
+                    "message": "ERP 이메일 인증번호 입력 대기 중입니다.",
+                    "result": {"verification_required": True},
+                }, verify_tls=verify_tls)
+                deadline = time.time() + 600
+                while time.time() < deadline:
+                    response = _post(session, server, f"/api/agent/jobs/{job_id}/verification-code", {"agent_id": agent_id}, verify_tls=verify_tls)
+                    code = str(response.get("code") or "").strip()
+                    if code:
+                        return code
+                    time.sleep(2)
+                raise RuntimeError("ERP 이메일 인증번호 입력 대기시간이 초과되었습니다.")
+
             _post(
                 session,
                 server,
@@ -678,6 +695,7 @@ def run_loop(
                 printer_name=printer_name,
                 print_wait_seconds=print_wait_seconds,
                 erp_mode=erp_mode,
+                verification_code_provider=verification_code_provider,
             )
             if erp_mode == "real" and result.get("erp_saved"):
                 _post(

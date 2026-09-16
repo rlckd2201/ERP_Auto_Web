@@ -190,6 +190,28 @@ class JobStore:
             raise KeyError(job_id)
         return Path(row["source_path"])
 
+    def set_verification_code(self, job_id: str, code: str) -> JobRecord:
+        code = str(code or "").strip()
+        if not code:
+            raise ValueError("verification code is empty")
+        job = self.get_job(job_id)
+        result = {**job.result, "verification_code": code, "verification_required": True}
+        return self.update_job(job_id, status="running", progress=max(job.progress, 40), message="ERP email verification code received; continuing login.", result=result)
+
+    def consume_verification_code(self, job_id: str) -> str:
+        with self.connect() as conn:
+            row = conn.execute("SELECT result_json FROM jobs WHERE id = ?", (job_id,)).fetchone()
+            if not row:
+                raise KeyError(job_id)
+            result = _json_loads(row["result_json"])
+            code = str(result.pop("verification_code", "") or "").strip()
+            if not code:
+                return ""
+            result["verification_required"] = False
+            result["verification_submitted"] = True
+            conn.execute("UPDATE jobs SET result_json = ?, updated_at = ? WHERE id = ?", (_json_dumps(result), now_text(), job_id))
+            return code
+
     def list_jobs(self, limit: int = 100) -> list[JobRecord]:
         with self.connect() as conn:
             rows = conn.execute(

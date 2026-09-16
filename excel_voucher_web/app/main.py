@@ -30,6 +30,7 @@ from .models import (
     ErpCredentialRequest,
     ForgotPasswordRequest,
     LoginRequest,
+    VerificationCodeRequest,
 )
 from .notifications import notify_job_completed, notify_job_failed, notify_password_reset
 from .settings import BASE_DIR, default_accounting_date, manager_profile, manager_profiles, settings
@@ -602,6 +603,27 @@ def api_job_voucher(job_id: str) -> dict[str, Any]:
         return _public_payload(store.get_job(job_id).payload)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
+
+
+@app.post("/api/jobs/{job_id}/verification-code")
+def api_job_verification_code(job_id: str, payload: VerificationCodeRequest, request: Request) -> dict[str, Any]:
+    _require_user(request)
+    try:
+        job = store.set_verification_code(job_id, payload.code)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="인증번호를 입력해 주세요.") from exc
+    return {"ok": True, "job": _public_job_dump(job)}
+
+
+@app.api_route("/api/agent/jobs/{job_id}/verification-code", methods=["GET", "POST"])
+def api_agent_verification_code(job_id: str) -> dict[str, Any]:
+    try:
+        code = store.consume_verification_code(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="작업을 찾을 수 없습니다.") from exc
+    return {"ok": True, "code": code}
 
 
 @app.get("/api/jobs/{job_id}/source")

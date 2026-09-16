@@ -9,7 +9,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 
 PRINT_RECOVERY_FILENAME_PREFIX = "__resume_print_only__"
@@ -535,6 +535,7 @@ def _run_real_erp_voucher_task(
     print_mode: str,
     printer_name: str,
     print_wait_seconds: float,
+    verification_code_provider: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     output_dir.mkdir(parents=True, exist_ok=True)
     job_id = str(task.get("id") or task.get("job_id") or "unknown")
@@ -659,6 +660,7 @@ def _run_real_erp_voucher_task(
         )
         erp_runner._configure_pyautogui_for_server(legacy)
         main_app.erp_job_id = job_id
+        legacy.ERP_VERIFICATION_CODE_PROVIDER = verification_code_provider
         bot = legacy.ERPLoginBot(install_info, corp_info, corp_code, manager, logger)
         result = bot.run()
         if result is not True:
@@ -703,6 +705,7 @@ def run_erp_voucher_task(
     printer_name: str = "",
     print_wait_seconds: float = 3.0,
     erp_mode: str = "dry-run",
+    verification_code_provider: Callable[[], str] | None = None,
 ) -> dict[str, Any]:
     """Run a dry-run print preview or the real legacy ERP automation on the voucher PC Agent."""
     normalized_mode = str(os.getenv("EXCEL_VOUCHER_ERP_MODE") or erp_mode or "dry-run").strip().lower().replace("_", "-")
@@ -713,6 +716,7 @@ def run_erp_voucher_task(
             print_mode=print_mode,
             printer_name=printer_name,
             print_wait_seconds=print_wait_seconds,
+            verification_code_provider=verification_code_provider,
         )
 
     output_dir.mkdir(parents=True, exist_ok=True)
