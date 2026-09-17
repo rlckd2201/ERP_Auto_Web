@@ -123,13 +123,12 @@ def test_erp_email_notice_then_code_entry_uses_web_provider():
     prompt = Window("K-System Genuine", 2, {"Text": [Control("인증번호")], "Edit": [entry]})
     active = [notice]
     requested = []
-    state = {"handled": False, "acknowledged": set(), "prompt_seen": False, "missing_edit_logged": set()}
+    state = {"handled": False, "acknowledged": set(), "prompt_seen": False, "missing_edit_logged": set(), "code": ""}
     logger = SimpleNamespace(info=lambda msg: None, warning=lambda msg: None)
     scope = {
         "re": re,
         "time": SimpleNamespace(sleep=lambda seconds: None),
-        "Desktop": lambda backend: SimpleNamespace(windows=lambda visible: active[:]),
-        "self": SimpleNamespace(app=SimpleNamespace(top_window=lambda: active[0]), logger=logger),
+        "self": SimpleNamespace(app=SimpleNamespace(top_window=lambda: active[0], windows=lambda visible: active[:]), logger=logger),
         "verification_provider": lambda: requested.append(True) or "12345",
         "verification_state": state,
     }
@@ -145,4 +144,69 @@ def test_erp_email_notice_then_code_entry_uses_web_provider():
     assert requested == [True]
     assert entry.actions == ["click", "^a{BACKSPACE}", "12345"]
     assert prompt.actions == ["{ENTER}"]
+    assert state["handled"] is True
+
+
+def test_erp_email_code_request_does_not_wait_for_uia_edit():
+    source = (Path(__file__).resolve().parents[2] / "manager_server" / "전표 자동화 프로그램(담당자용)_v6.2.py").read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    names = {"_window_text_blob", "_try_email_verification"}
+    definitions = [node for node in ast.walk(tree) if isinstance(node, ast.FunctionDef) and node.name in names]
+
+    class Control:
+        def __init__(self, text=""):
+            self.text = text
+            self.actions = []
+
+        def window_text(self):
+            return self.text
+
+        def is_visible(self):
+            return True
+
+        def is_enabled(self):
+            return True
+
+        def click_input(self):
+            self.actions.append("click")
+
+        def type_keys(self, value, **kwargs):
+            self.actions.append(value)
+
+    class Window(Control):
+        handle = 3
+
+        def __init__(self):
+            super().__init__("K-System Genuine")
+            self.edit = None
+
+        def descendants(self, control_type=None):
+            if control_type == "Edit":
+                return [self.edit] if self.edit else []
+            if control_type == "Button":
+                return []
+            return [Control("인증번호")]
+
+    prompt = Window()
+    requested = []
+    state = {"handled": False, "acknowledged": set(), "prompt_seen": False, "missing_edit_logged": set(), "code": ""}
+    scope = {
+        "re": re,
+        "time": SimpleNamespace(sleep=lambda seconds: None),
+        "self": SimpleNamespace(
+            app=SimpleNamespace(top_window=lambda: prompt, windows=lambda visible: [prompt]),
+            logger=SimpleNamespace(info=lambda msg: None, warning=lambda msg: None),
+        ),
+        "verification_provider": lambda: requested.append(True) or "12345",
+        "verification_state": state,
+    }
+    exec(compile(ast.Module(body=definitions, type_ignores=[]), "<erp-login-functions>", "exec"), scope)
+
+    assert scope["_try_email_verification"]() is False
+    assert requested == [True]
+    assert state["prompt_seen"] is True
+    prompt.edit = Control()
+    assert scope["_try_email_verification"]() is True
+    assert requested == [True]
+    assert prompt.edit.actions == ["click", "^a{BACKSPACE}", "12345"]
     assert state["handled"] is True

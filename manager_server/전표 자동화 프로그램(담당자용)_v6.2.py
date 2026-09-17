@@ -1313,58 +1313,56 @@ class ERPLoginBot:
                 return win
 
             verification_provider = globals().get("ERP_VERIFICATION_CODE_PROVIDER")
-            verification_state = {"handled": False, "acknowledged": set(), "prompt_seen": False, "missing_edit_logged": set()}
+            verification_state = {"handled": False, "acknowledged": set(), "prompt_seen": False, "missing_edit_logged": set(), "code": ""}
 
             def _try_email_verification():
                 if verification_state["handled"] or not callable(verification_provider):
                     return False
                 markers = ("\uc774\uba54\uc77c", "\uc778\uc99d\ubc88\ud638", "verification code", "verify code")
                 try:
-                    windows = Desktop(backend="uia").windows(visible=True)
-                except Exception:
+                    top = self.app.top_window()
+                except Exception as exc:
+                    self.logger.warning(f"ERP 이메일 인증창 조회 실패: {exc}")
                     return False
+                windows = [top]
                 try:
-                    erp_top_handle = self.app.top_window().handle
-                except Exception:
-                    erp_top_handle = None
-                windows.sort(key=lambda win: win.handle != erp_top_handle)
+                    windows.extend(win for win in self.app.windows(visible=True) if win.handle != top.handle)
+                except Exception as exc:
+                    self.logger.warning(f"ERP 추가 인증창 목록 조회 실패: {exc}")
                 for win in windows:
                     try:
-                        texts = [win.window_text() or ""]
-                        texts.extend((ctrl.window_text() or "") for ctrl in win.descendants())
-                        blob = " ".join(texts).lower()
+                        blob = _window_text_blob(win).lower()
                         if not any(marker.lower() in blob for marker in markers):
                             continue
-                        if win.handle == erp_top_handle:
-                            verification_state["prompt_seen"] = True
-                        edits = [ctrl for ctrl in win.descendants(control_type="Edit") if ctrl.is_visible() and ctrl.is_enabled()]
-                        if not edits:
-                            if (
-                                win.handle == erp_top_handle
-                                and win.handle not in verification_state["acknowledged"]
-                                and any(word in blob for word in ("발송", "전송", "보냈", "sent"))
-                            ):
-                                confirm_buttons = [
-                                    ctrl for ctrl in win.descendants(control_type="Button")
-                                    if (ctrl.window_text() or "").strip() in ("확인", "OK")
-                                ]
-                                if confirm_buttons:
-                                    confirm_buttons[0].click_input()
-                                else:
-                                    win.set_focus()
-                                    win.type_keys("{ENTER}")
-                                verification_state["acknowledged"].add(win.handle)
-                                self.logger.info("ERP 이메일 인증번호 발송 안내를 확인했습니다.")
-                                return True
-                            if win.handle == erp_top_handle and win.handle not in verification_state["missing_edit_logged"]:
-                                verification_state["missing_edit_logged"].add(win.handle)
-                                self.logger.warning("ERP 이메일 인증창은 보이지만 UIA 입력칸은 아직 감지되지 않았습니다.")
-                            continue
+                        verification_state["prompt_seen"] = True
+                        if win.handle not in verification_state["acknowledged"] and any(
+                            word in blob for word in ("발송", "전송", "보냈", "sent")
+                        ):
+                            confirm_buttons = [
+                                ctrl for ctrl in win.descendants(control_type="Button")
+                                if (ctrl.window_text() or "").strip() in ("확인", "OK")
+                            ]
+                            if confirm_buttons:
+                                confirm_buttons[0].click_input()
+                            else:
+                                win.set_focus()
+                                win.type_keys("{ENTER}")
+                            verification_state["acknowledged"].add(win.handle)
+                            self.logger.info("ERP 이메일 인증번호 발송 안내를 확인했습니다.")
+                            return True
                         if not any(marker in blob for marker in ("인증번호", "verification code", "verify code")):
                             continue
-                        self.logger.info("ERP 이메일 인증창을 발견했습니다. 웹 입력을 기다립니다.")
-                        code = str(verification_provider() or "").strip()
+                        if not verification_state["code"]:
+                            self.logger.info("ERP 이메일 인증창을 발견했습니다. 웹 입력을 기다립니다.")
+                            verification_state["code"] = str(verification_provider() or "").strip()
+                        code = verification_state["code"]
                         if not code:
+                            continue
+                        edits = [ctrl for ctrl in win.descendants(control_type="Edit") if ctrl.is_visible() and ctrl.is_enabled()]
+                        if not edits:
+                            if win.handle not in verification_state["missing_edit_logged"]:
+                                verification_state["missing_edit_logged"].add(win.handle)
+                                self.logger.warning("ERP 이메일 인증창은 보이지만 UIA 입력칸은 아직 감지되지 않았습니다.")
                             continue
                         edits[0].click_input()
                         edits[0].type_keys("^a{BACKSPACE}")
@@ -1382,12 +1380,12 @@ class ERPLoginBot:
             if resume_existing_voucher:
                 main_win = _fast_recovery_main_window()
             try:
-                login_wait_deadline = time.time() + float(os.getenv("ERP_LOGIN_MAIN_WAIT_SECONDS", "10") or "10")
+                login_wait_deadline = time.time() + float(os.getenv("ERP_LOGIN_MAIN_WAIT_SECONDS", "30") or "30")
                 while not resume_existing_voucher and time.time() < login_wait_deadline:
                     try:
                         # 무조건 최상단 창을 가져와서 메인 ERP인지 먼저 판별합니다.
                         if _try_email_verification():
-                            login_wait_deadline = max(login_wait_deadline, time.time() + (30 if verification_state["handled"] else 10))
+                            login_wait_deadline = max(login_wait_deadline, time.time() + 30)
                             continue
                         top = self.app.top_window()
                         top_text = top.window_text() or ""
