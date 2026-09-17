@@ -1312,6 +1312,7 @@ class ERPLoginBot:
                     pass
                 return win
 
+            main_win = None
             verification_provider = globals().get("ERP_VERIFICATION_CODE_PROVIDER")
             verification_state = {"handled": False, "acknowledged": set(), "prompt_seen": False, "missing_edit_logged": set(), "code": ""}
 
@@ -1326,7 +1327,7 @@ class ERPLoginBot:
                     return False
                 windows = [top]
                 try:
-                    windows.extend(win for win in self.app.windows(visible=True) if win.handle != top.handle)
+                    windows.extend(win for win in self.app.windows() if win.handle != top.handle and win.is_visible())
                 except Exception as exc:
                     self.logger.warning(f"ERP 추가 인증창 목록 조회 실패: {exc}")
                 for win in windows:
@@ -1376,7 +1377,6 @@ class ERPLoginBot:
                         self.logger.warning(f"ERP 이메일 인증창 처리 실패: {exc}")
                 return False
 
-            main_win = None
             if resume_existing_voucher:
                 main_win = _fast_recovery_main_window()
             try:
