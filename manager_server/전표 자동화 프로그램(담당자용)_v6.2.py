@@ -1312,7 +1312,7 @@ class ERPLoginBot:
                     return False
                 markers = ("\uc774\uba54\uc77c", "\uc778\uc99d\ubc88\ud638", "verification code", "verify code")
                 try:
-                    windows = self.app.windows(visible=True)
+                    windows = Desktop(backend="uia").windows(visible=True)
                 except Exception:
                     return False
                 for win in windows:
