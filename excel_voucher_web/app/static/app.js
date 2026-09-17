@@ -134,23 +134,24 @@ function renderTransientProgress(message, progress) {
   `;
 }
 
-function renderVerificationInput(job) {
-  if (!(job.result || {}).verification_required) {
-    return "";
+function updateVerificationDialog(job) {
+  const dialog = document.querySelector("#erpVerificationDialog");
+  const input = document.querySelector("#verificationCodeInput");
+  const required = job.status === "running" && Boolean((job.result || {}).verification_required);
+  if (!required) {
+    dialog.hidden = true;
+    input.value = "";
+    input.setCustomValidity("");
+    return;
   }
-  return `
-    <div class="notice verificationNotice">
-      <strong>ERP 이메일 인증번호 입력</strong>
-      <span>이메일로 받은 ERP 인증번호를 입력해 주세요.</span>
-      <div class="inlineForm">
-        <input id="verificationCodeInput" inputmode="numeric" maxlength="32" autocomplete="one-time-code" placeholder="인증번호">
-        <button class="toolButton" id="verificationCodeButton" type="button">인증번호 전송</button>
-      </div>
-    </div>
-  `;
+  if (dialog.hidden) {
+    dialog.hidden = false;
+    input.focus();
+  }
 }
 
-async function submitVerificationCode() {
+async function submitVerificationCode(event) {
+  event.preventDefault();
   const input = document.querySelector("#verificationCodeInput");
   const button = document.querySelector("#verificationCodeButton");
   const code = (input?.value || "").trim();
@@ -158,6 +159,7 @@ async function submitVerificationCode() {
   button.disabled = true;
   try {
     await postJson(`/api/jobs/${state.selectedJobId}/verification-code`, { code });
+    input.value = "";
     await selectJob(state.selectedJobId);
   } catch (error) {
     input.setCustomValidity(error.message);
@@ -277,6 +279,7 @@ function applyAuthUi() {
 
   appShell.hidden = !canUseApp();
   authShell.hidden = canUseApp();
+  if (!canUseApp()) updateVerificationDialog({ status: "", result: {} });
   adminPanel.hidden = !isAdmin();
   loginPanel.hidden = Boolean(user && user.must_change_password);
   changePasswordPanel.hidden = !(user && user.must_change_password);
@@ -576,6 +579,7 @@ async function refreshJobs() {
   } else if (!state.uploading && jobs.length) {
     await selectJob(jobs[0].id);
   } else if (!state.uploading) {
+    updateVerificationDialog({ status: "", result: {} });
     setDetailStatus("");
     document.querySelector("#jobDetail").className = "currentJob emptyState";
     document.querySelector("#jobDetail").textContent = "엑셀 파일을 업로드하면 처리 현황이 표시됩니다.";
@@ -593,6 +597,7 @@ async function selectJob(jobId, keepSelection = true) {
     if (state.selectedJobId === jobId) {
       state.selectedJobId = "";
     }
+    updateVerificationDialog({ status: "", result: {} });
     return;
   }
   setDetailStatus(job.status);
@@ -600,9 +605,6 @@ async function selectJob(jobId, keepSelection = true) {
   const warnings = payload.warnings || [];
   const progress = Math.max(0, Math.min(Number(job.progress || 0), 100));
   const notification = (job.result || {}).notification || {};
-  const verificationInput = document.querySelector("#verificationCodeInput");
-  const pendingCode = verificationInput?.value || "";
-  const wasTypingCode = document.activeElement === verificationInput;
   document.querySelector("#jobDetail").className = "currentJob";
   document.querySelector("#jobDetail").innerHTML = `
     <div class="currentHeader">
@@ -616,7 +618,6 @@ async function selectJob(jobId, keepSelection = true) {
       <div class="largeProgressBar" style="width:${progress}%"></div>
     </div>
     ${renderSteps(job)}
-    ${renderVerificationInput(job)}
     <div class="detailGrid">
       <div class="metric"><strong>${money(payload.debit_total)}</strong><span>처리 금액</span></div>
       <div class="metric"><strong>${Number(payload.source_row_count || 0)}</strong><span>엑셀 행</span></div>
@@ -628,13 +629,7 @@ async function selectJob(jobId, keepSelection = true) {
     ${warnings.length ? `<ul class="warningList">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
     ${renderAdminDiagnostics(job)}
   `;
-  const refreshedVerificationInput = document.querySelector("#verificationCodeInput");
-  if (refreshedVerificationInput && pendingCode) {
-    refreshedVerificationInput.value = pendingCode;
-  }
-  if (refreshedVerificationInput && wasTypingCode) {
-    refreshedVerificationInput.focus();
-  }
+  updateVerificationDialog(job);
 }
 
 async function uploadVoucher(event) {
@@ -796,15 +791,8 @@ document.querySelector("#adminTailLogButton").addEventListener("click", () => ru
 document.querySelector("#adminUpdateServerButton").addEventListener("click", updateServerFromAdmin);
 document.querySelector("#adminUpdateAgentButton").addEventListener("click", () => runAdminAgentCommand("update-agent"));
 document.querySelector("#adminRestartAgentButton").addEventListener("click", () => runAdminAgentCommand("restart-agent"));
-document.addEventListener("click", (event) => {
-  if (event.target?.id === "verificationCodeButton") submitVerificationCode();
-});
-document.addEventListener("keydown", (event) => {
-  if (event.target?.id === "verificationCodeInput" && event.key === "Enter") {
-    event.preventDefault();
-    submitVerificationCode();
-  }
-});
+document.querySelector("#erpVerificationForm").addEventListener("submit", submitVerificationCode);
+document.querySelector("#verificationCodeInput").addEventListener("input", (event) => event.target.setCustomValidity(""));
 document.querySelector("#loginForm").addEventListener("submit", login);
 document.querySelector("#changePasswordForm").addEventListener("submit", changePassword);
 document.querySelector("#forgotPasswordButton").addEventListener("click", forgotPassword);

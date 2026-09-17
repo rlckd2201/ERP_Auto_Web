@@ -163,6 +163,23 @@
       </form>
     </div>
 
+    <div class="modalBackdrop" id="erpVerificationDialog" role="dialog" aria-modal="true" aria-labelledby="erpVerificationTitle" hidden>
+      <form class="modalPanel" id="erpVerificationForm">
+        <div class="panelTitle">
+          <h2 id="erpVerificationTitle">ERP 로그인 인증</h2>
+          <span class="badge">K-System</span>
+        </div>
+        <p class="modalMessage">ERP 계정 이메일로 받은 인증번호를 입력해 주세요.</p>
+        <label>
+          이메일 인증번호
+          <input id="verificationCodeInput" inputmode="numeric" maxlength="32" autocomplete="one-time-code" required />
+        </label>
+        <div class="modalActions">
+          <button class="primaryButton" id="verificationCodeButton" type="submit">인증번호 전송</button>
+        </div>
+      </form>
+    </div>
+
     <script src="/static/app.js"></script>
   </body>
 </html>
