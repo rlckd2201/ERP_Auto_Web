@@ -2221,15 +2221,15 @@ class ERPLoginBot:
                 summary_cols = cols[4:]
                 if summary_cols and not summary_cols[0].strip():
                     summary_cols = summary_cols[1:]
-                cols = [cols[0], cols[2], cols[3], "", "\t".join(summary_cols)]
+                cols = [cols[0], cols[2], cols[3], "\t".join(summary_cols)]
             elif len(cols) == 4:
-                cols = [cols[0], cols[1], cols[2], "", cols[3]]
+                cols = [cols[0], cols[1], cols[2], cols[3]]
             elif len(cols) >= 5:
-                cols = [cols[0], cols[1], cols[2], cols[3], "\t".join(cols[4:])]
+                cols = [cols[0], cols[1], cols[2], "\t".join(cols[4:])]
             else:
-                cols = (cols + ["", "", "", "", ""])[:5]
+                cols = (cols + ["", "", "", ""])[:4]
 
-            result = [str(value or "").strip() for value in cols[:5]]
+            result = [str(value or "").strip() for value in cols[:4]]
             for idx in (1, 2):
                 compact = result[idx].replace(",", "")
                 if re.fullmatch(r"-?\d+", compact or ""):
@@ -2276,10 +2276,10 @@ class ERPLoginBot:
             sheet = book.Worksheets.Add(After=book.Worksheets(book.Worksheets.Count))
             sheet.Name = sheet_name
             end_row = len(rows_for_excel)
-            end_col = 5
+            end_col = 4
             target = sheet.Range(sheet.Cells(1, 1), sheet.Cells(end_row, end_col))
             target.Value = tuple(tuple(row) for row in rows_for_excel)
-            sheet.Columns("A:E").AutoFit()
+            sheet.Columns("A:D").AutoFit()
             book.Save()
             sheet.Activate()
             target.Select()
@@ -2290,7 +2290,7 @@ class ERPLoginBot:
             time.sleep(max(0.2, float(os.getenv("ERP_EXCEL_COPY_SETTLE_SECONDS", "0.8") or "0.8")))
             self.logger.info(
                 f"  [FORM-GRID] Excel range copied: path={abs_source_path}, "
-                f"sheet={sheet_name}, range=A1:E{end_row}"
+                f"sheet={sheet_name}, range=A1:D{end_row}"
             )
             return True
 
@@ -3068,6 +3068,37 @@ class ERPLoginBot:
                     f"expected={expected}, copied={copied[:120]}"
                 )
             return matched
+
+        def _verify_grid_first_summary_or_fail():
+            first_row = next((line for line in str(original_clipboard or "").splitlines() if line.strip()), "")
+            expected = _grid_row_to_excel_values(first_row)[3]
+            if not expected:
+                _fail_form("첫 행 적요가 비어 있어 ERP 저장을 중단합니다.")
+            summary_x = int(os.getenv("ERP_MGMT_SUMMARY_X", "970") or "970")
+            first_row_y = int(os.getenv("ERP_MGMT_FIRST_ROW_Y", "231") or "231")
+            for attempt in range(3):
+                sentinel = f"__ERP_SUMMARY_VERIFY_{time.time_ns()}__"
+                copied = ""
+                try:
+                    pyperclip.copy(sentinel)
+                    time.sleep(0.05)
+                    _click_form_xy(summary_x, first_row_y, "첫 행 적요 검증", wait=mgmt_click_wait)
+                    pyautogui.hotkey("ctrl", "c")
+                    _release_modifiers("첫 행 적요 Ctrl+C", wait=False)
+                    time.sleep(max(0.15, ERP_FORM_WAIT))
+                    copied = str(pyperclip.paste() or "")
+                finally:
+                    pyperclip.copy(original_clipboard)
+                if copied != sentinel and _norm_text(copied) == _norm_text(expected):
+                    grid_paste_state["verified"] = True
+                    self.logger.info("  [FORM-VERIFY] 첫 행 적요가 적요 칸에 붙여넣어진 것을 확인했습니다.")
+                    return
+                self.logger.warning(
+                    f"  [FORM-VERIFY] 첫 행 적요 불일치({attempt + 1}/3): "
+                    f"expected={expected[:80]}, copied={copied[:80]}"
+                )
+                time.sleep(0.4)
+            _fail_form("첫 행 적요가 ERP 적요 칸에서 확인되지 않아 저장을 중단합니다.")
 
         management_grid_ready_state = {"snapshot": None}
 
@@ -10734,6 +10765,8 @@ class ERPLoginBot:
 
             # 6. 그리드 첫 계정과목 셀에 계정과목/금액/적요 행 전체를 입력합니다.
             excel_copy_used = _copy_grid_rows_via_excel()
+            if _env_flag("ERP_GRID_COPY_VIA_EXCEL", "0") and not excel_copy_used:
+                _fail_form("ERP Excel 4열 복사를 준비하지 못해 전표 입력을 중단합니다.")
             if not excel_copy_used:
                 pyperclip.copy(original_clipboard)
                 time.sleep(ERP_FORM_WAIT)
@@ -10764,6 +10797,8 @@ class ERPLoginBot:
                     used_excel_clipboard = False
                     if excel_copy_used:
                         used_excel_clipboard = _refresh_excel_grid_clipboard()
+                        if not used_excel_clipboard:
+                            _fail_form("ERP Excel 4열 복사 복원에 실패해 전표 입력을 중단합니다.")
                     if not used_excel_clipboard:
                         pyperclip.copy(original_clipboard)
                         time.sleep(max(0.2, ERP_FORM_WAIT))
@@ -10928,6 +10963,8 @@ class ERPLoginBot:
             finally:
                 if excel_copy_used:
                     _close_excel_copy_workbook()
+
+            _verify_grid_first_summary_or_fail()
 
             # 7. 계정과목별 관리항목값을 입력합니다.
             _fill_management_items_by_coord()
