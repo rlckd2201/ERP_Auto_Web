@@ -1236,8 +1236,10 @@ class ERPLoginBot:
                 compact = re.sub(r"\s+", "", blob).lower()
                 if not compact:
                     return False
+                if any(word in compact for word in ("이메일", "인증번호", "verificationcode")):
+                    return False
                 login_words = ("로그인", "사용자", "아이디", "id", "user", "비밀번호", "password")
-                fail_words = ("실패", "오류", "오입력", "불일치", "확인", "잘못", "invalid", "incorrect", "fail", "error")
+                fail_words = ("실패", "오류", "오입력", "불일치", "일치하지", "잘못", "invalid", "incorrect", "fail", "error")
                 return any(word.lower() in compact for word in login_words) and any(
                     word.lower() in compact for word in fail_words
                 )
@@ -1305,7 +1307,7 @@ class ERPLoginBot:
                 return win
 
             verification_provider = globals().get("ERP_VERIFICATION_CODE_PROVIDER")
-            verification_state = {"handled": False}
+            verification_state = {"handled": False, "acknowledged": set()}
 
             def _try_email_verification():
                 if verification_state["handled"] or not callable(verification_provider):
@@ -1315,6 +1317,10 @@ class ERPLoginBot:
                     windows = Desktop(backend="uia").windows(visible=True)
                 except Exception:
                     return False
+                try:
+                    erp_top_handle = self.app.top_window().handle
+                except Exception:
+                    erp_top_handle = None
                 for win in windows:
                     try:
                         texts = [win.window_text() or ""]
@@ -1324,6 +1330,23 @@ class ERPLoginBot:
                             continue
                         edits = [ctrl for ctrl in win.descendants(control_type="Edit") if ctrl.is_visible() and ctrl.is_enabled()]
                         if not edits:
+                            if (
+                                win.handle == erp_top_handle
+                                and win.handle not in verification_state["acknowledged"]
+                                and any(word in blob for word in ("발송", "전송", "보냈", "sent"))
+                            ):
+                                confirm_buttons = [
+                                    ctrl for ctrl in win.descendants(control_type="Button")
+                                    if (ctrl.window_text() or "").strip() in ("확인", "OK")
+                                ]
+                                if confirm_buttons:
+                                    confirm_buttons[0].click_input()
+                                else:
+                                    win.set_focus()
+                                    win.type_keys("{ENTER}")
+                                verification_state["acknowledged"].add(win.handle)
+                                self.logger.info("ERP 이메일 인증번호 발송 안내를 확인했습니다.")
+                                return True
                             continue
                         self.logger.info("ERP 이메일 인증창을 발견했습니다. 웹 입력을 기다립니다.")
                         code = str(verification_provider() or "").strip()
@@ -1349,6 +1372,9 @@ class ERPLoginBot:
                 while not resume_existing_voucher and time.time() < login_wait_deadline:
                     try:
                         # 무조건 최상단 창을 가져와서 메인 ERP인지 먼저 판별합니다.
+                        if _try_email_verification():
+                            login_wait_deadline = max(login_wait_deadline, time.time() + (30 if verification_state["handled"] else 10))
+                            continue
                         top = self.app.top_window()
                         top_text = top.window_text() or ""
                         top_auto = top.element_info.automation_id or ""

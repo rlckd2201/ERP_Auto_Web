@@ -141,7 +141,7 @@ function renderVerificationInput(job) {
   return `
     <div class="notice verificationNotice">
       <strong>ERP 이메일 인증번호 입력</strong>
-      <span>ERP 화면에 표시된 인증번호를 입력해 주세요.</span>
+      <span>이메일로 받은 ERP 인증번호를 입력해 주세요.</span>
       <div class="inlineForm">
         <input id="verificationCodeInput" inputmode="numeric" maxlength="32" autocomplete="one-time-code" placeholder="인증번호">
         <button class="toolButton" id="verificationCodeButton" type="button">인증번호 전송</button>
@@ -600,6 +600,9 @@ async function selectJob(jobId, keepSelection = true) {
   const warnings = payload.warnings || [];
   const progress = Math.max(0, Math.min(Number(job.progress || 0), 100));
   const notification = (job.result || {}).notification || {};
+  const verificationInput = document.querySelector("#verificationCodeInput");
+  const pendingCode = verificationInput?.value || "";
+  const wasTypingCode = document.activeElement === verificationInput;
   document.querySelector("#jobDetail").className = "currentJob";
   document.querySelector("#jobDetail").innerHTML = `
     <div class="currentHeader">
@@ -625,6 +628,13 @@ async function selectJob(jobId, keepSelection = true) {
     ${warnings.length ? `<ul class="warningList">${warnings.map((warning) => `<li>${escapeHtml(warning)}</li>`).join("")}</ul>` : ""}
     ${renderAdminDiagnostics(job)}
   `;
+  const refreshedVerificationInput = document.querySelector("#verificationCodeInput");
+  if (refreshedVerificationInput && pendingCode) {
+    refreshedVerificationInput.value = pendingCode;
+  }
+  if (refreshedVerificationInput && wasTypingCode) {
+    refreshedVerificationInput.focus();
+  }
 }
 
 async function uploadVoucher(event) {
@@ -788,6 +798,12 @@ document.querySelector("#adminUpdateAgentButton").addEventListener("click", () =
 document.querySelector("#adminRestartAgentButton").addEventListener("click", () => runAdminAgentCommand("restart-agent"));
 document.addEventListener("click", (event) => {
   if (event.target?.id === "verificationCodeButton") submitVerificationCode();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.target?.id === "verificationCodeInput" && event.key === "Enter") {
+    event.preventDefault();
+    submitVerificationCode();
+  }
 });
 document.querySelector("#loginForm").addEventListener("submit", login);
 document.querySelector("#changePasswordForm").addEventListener("submit", changePassword);

@@ -253,6 +253,7 @@ def _public_payload(payload: dict[str, Any]) -> dict[str, Any]:
 def _public_job_dump(job: Any) -> dict[str, Any]:
     data = job.model_dump(mode="json")
     data["payload"] = _public_payload(data.get("payload") or {})
+    data["result"].pop("verification_code", None)
     return data
 
 
