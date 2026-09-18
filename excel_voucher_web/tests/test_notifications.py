@@ -23,6 +23,7 @@ def _fake_settings(tmp_path, outbox):
         admin_email="ds1501@dae-seung.co.kr; another@example.com",
         support_email="ds1501@dae-seung.co.kr",
         smtp_from_name="재정전표자동화 시스템",
+        failure_email_enabled=True,
     )
 
 
@@ -159,6 +160,25 @@ def test_failure_notification_falls_back_when_requester_email_missing(tmp_path, 
         "another@example.com",
     ]
     assert payload["cc"] == ""
+
+
+def test_failure_notification_can_be_paused_without_queueing_mail(monkeypatch):
+    monkeypatch.setattr(
+        notifications,
+        "settings",
+        SimpleNamespace(failure_email_enabled=False),
+    )
+    monkeypatch.setattr(
+        notifications,
+        "send_mail",
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(AssertionError("mail sent")),
+    )
+
+    result = notifications.notify_job_failed(SimpleNamespace(id="paused-job"))
+
+    assert result["suppressed"] is True
+    assert result["sent"] is False
+    assert result["queued"] is False
 
 
 def test_completion_notification_goes_only_to_requester(tmp_path, monkeypatch):

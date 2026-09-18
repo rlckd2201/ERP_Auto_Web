@@ -510,6 +510,13 @@ def notify_job_failed(
     events: Iterable[JobEvent] | None = None,
     source_path: Path | None = None,
 ) -> dict[str, Any]:
+    if not settings.failure_email_enabled:
+        return {
+            "sent": False,
+            "queued": False,
+            "suppressed": True,
+            "reason": "failure email temporarily disabled",
+        }
     # 오류 메일은 재정 자동화 관리자와 업로드한 담당자에게 함께 보낸다.
     # (성공 메일은 담당자에게만 간다 — notify_job_completed 참고.)
     recipients = _failure_recipients(job)

@@ -59,6 +59,9 @@ function jobTitle(job) {
 
 function resultNotice(job) {
   const notification = (job.result || {}).notification || {};
+  if (notification.suppressed && job.status === "error") {
+    return "오류 메일은 일시 중지 중입니다. 오류 내용은 이 화면에서 확인할 수 있습니다.";
+  }
   if (notification.sent) {
     return job.status === "error" ? "오류 메일 발송이 끝났습니다." : "출력 요청과 완료 메일 발송이 끝났습니다.";
   }

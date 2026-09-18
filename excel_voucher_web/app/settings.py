@@ -90,6 +90,7 @@ class Settings:
     smtp_from: str = _env("EXCEL_VOUCHER_SMTP_FROM", "admpdm@dae-seung.co.kr")
     smtp_from_name: str = _env("EXCEL_VOUCHER_SMTP_FROM_NAME", "재정전표자동화 시스템")
     smtp_starttls: bool = _env_bool("EXCEL_VOUCHER_SMTP_STARTTLS", True)
+    failure_email_enabled: bool = _env_bool("EXCEL_VOUCHER_FAILURE_EMAIL_ENABLED", False)
     mail_outbox_dir: Path = Path(_env("EXCEL_VOUCHER_MAIL_OUTBOX_DIR", str(data_dir / "mail_outbox")))
 
     @property
