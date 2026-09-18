@@ -5408,6 +5408,56 @@ def test_vendor_commit_check_fails_closed_when_value_never_appears():
     assert pressed == ["f9", "enter"]
 
 
+def test_vendor_commit_check_waits_for_value_after_defocus():
+    # 실기기 첫 행: Enter 직후와 포커스 해제 직후에는 잉크가 0이었지만,
+    # 다음 시도의 입력 전 검사에는 KK015가 표시됐다. 재입력 없이 기다린다.
+    pressed = []
+    clicks = []
+    state = {"defocused": False, "checks": 0}
+
+    def fake_click(_x, _y, label, **_kwargs):
+        clicks.append(label)
+        if "포커스 해제" in label:
+            state["defocused"] = True
+
+    def fake_ink(_x, _y):
+        if state["defocused"]:
+            state["checks"] += 1
+            if state["checks"] >= 3:
+                return (36, 9, 10, 28)
+        return (0, 0, 0, 0)
+
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": fake_click,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": fake_ink,
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(
+                sleep=lambda _seconds: None,
+                time=lambda _clock=iter(range(1000)): float(next(_clock)),
+            ),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 746, "KK015", "1행 거래처", 0.0, 0.0
+    ) is True
+    assert state["checks"] >= 3
+    assert any("포커스 해제" in label for label in clicks)
+    assert pressed == ["f9", "enter"]
+
+
 def test_unreadable_save_message_is_closed_with_enter_then_print_verifies():
     # 실측(작업 6b82ad1d7c56): 210행 입력·저장 클릭까지 성공했으나 저장 후
     # Message가 GDI로 그려져 win32/uia 모두 본문을 노출하지 않았다

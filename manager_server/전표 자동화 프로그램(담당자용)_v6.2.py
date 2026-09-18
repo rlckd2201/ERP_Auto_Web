@@ -5844,11 +5844,29 @@ class ERPLoginBot:
                         )
                         time.sleep(max(0.25, mgmt_key_wait))
                         recheck_ink = _management_value_visual_ink(x, y)
-                        if _is_occupied(recheck_ink):
-                            return True
-                        if _is_popup(recheck_ink):
-                            _close_stuck_vendor_popup("commit-recheck")
-                            return False
+                        defocus_deadline = time.time() + max(
+                            1.0,
+                            float(
+                                os.getenv(
+                                    "ERP_FINANCE_VENDOR_DEFOCUS_POLL", "8.0"
+                                )
+                                or "8.0"
+                            ),
+                        )
+                        while True:
+                            if _is_occupied(recheck_ink):
+                                self.logger.info(
+                                    f"  [MGMT-XY] {label}: 포커스 해제 후 거래처값 "
+                                    f"표시 확인(ink={recheck_ink})."
+                                )
+                                return True
+                            if _is_popup(recheck_ink):
+                                _close_stuck_vendor_popup("commit-recheck")
+                                return False
+                            if time.time() >= defocus_deadline:
+                                break
+                            time.sleep(0.5)
+                            recheck_ink = _management_value_visual_ink(x, y)
                         self.logger.warning(
                             f"  [MGMT-XY] {label}: Enter 후에도 값 셀이 비어 "
                             f"있어 확정 미반영으로 판단합니다"
