@@ -1602,7 +1602,7 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     assert [event[0] for event in events] == ["finance-input"]
     _, first_args = events[-1]
     assert first_args[2] == "A001"
-    assert first_args[4:] == (0.10, 0.16)
+    assert first_args[4:] == (0.10, 0.16, None)
 
     loaded["row_no"] = 2
     loaded["explicit_management"] = {"거래처": "B002"}
@@ -1610,7 +1610,7 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     assert [event[0] for event in events] == ["finance-input", "finance-input"]
     _, direct_args = events[-1]
     assert direct_args[2] == "B002"
-    assert direct_args[4:] == (0.10, 0.16)
+    assert direct_args[4:] == (0.10, 0.16, None)
 
     events.clear()
     loaded["row_no"] = 3
@@ -5456,6 +5456,57 @@ def test_vendor_commit_check_waits_for_value_after_defocus():
     assert state["checks"] >= 3
     assert any("포커스 해제" in label for label in clicks)
     assert pressed == ["f9", "enter"]
+
+
+def test_vendor_commit_defocuses_to_verified_summary_row():
+    # 243 실화면: 하단 헤더 클릭/8초 대기 중에는 빈칸으로 읽혔고,
+    # 같은 전표 행 적요를 다시 클릭한 뒤에야 KK015가 표시됐다.
+    pressed = []
+    clicks = []
+    state = {"summary_clicked": False}
+
+    def fake_click(x, y, label, **_kwargs):
+        clicks.append((x, y, label))
+        if (x, y) == (970, 231):
+            state["summary_clicked"] = True
+
+    loaded = _load_nested_functions(
+        "_input_finance_vendor_code_xy",
+        namespace={
+            "re": re,
+            "os": SimpleNamespace(getenv=lambda _name, default=None: default),
+            "_click_form_xy": fake_click,
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_type_vendor_code": lambda *_args, **_kwargs: True,
+            "_management_value_visual_ink": lambda _x, _y: (
+                (36, 9, 10, 28) if state["summary_clicked"] else (0, 0, 0, 0)
+            ),
+            "pyautogui": SimpleNamespace(
+                press=lambda key, **_kwargs: pressed.append(key)
+            ),
+            "time": SimpleNamespace(
+                sleep=lambda _seconds: None,
+                time=lambda _clock=iter(range(1000)): float(next(_clock)),
+            ),
+            "mgmt_click_wait": 0.0,
+            "mgmt_focus_wait": 0.0,
+            "mgmt_key_wait": 0.0,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+
+    assert loaded["_input_finance_vendor_code_xy"](
+        1118, 746, "KK015", "1행 거래처", 0.0, 0.0, (970, 231)
+    ) is True
+    assert any((x, y) == (970, 231) for x, y, _label in clicks)
+    assert pressed == ["f9", "enter"]
+
+    source = MANAGER_SOURCE.read_text(encoding="utf-8")
+    coord_scope = source.index("def _fill_management_items_by_coord")
+    focus_at = source.index('management_active_row_context["summary_focus"] = (', coord_scope)
+    fill_at = source.index('_fill_management_for_current_row(row_no, account_name)', focus_at)
+    assert focus_at < fill_at
+    assert 'summary_focus[0] == row_no' in source
 
 
 def test_unreadable_save_message_is_closed_with_enter_then_print_verifies():

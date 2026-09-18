@@ -4117,7 +4117,7 @@ class ERPLoginBot:
         management_value_xy_cache = {}
         management_bank_value_xy_cache = {}
         management_bank_coordinate_fallback_rows = set()
-        management_active_row_context = {"row_no": None}
+        management_active_row_context = {"row_no": None, "summary_focus": None}
         finance_vendor_entry_state = {"f9_seeded": False}
         vendor_popup_detection_state = {"signature": None}
         bank_account_popup_state = {
@@ -5656,6 +5656,7 @@ class ERPLoginBot:
                 label,
                 paste_settle_wait,
                 commit_settle_wait,
+                defocus_xy=None,
             ):
                 vendor_code = str(vendor_code or "").strip()
                 if not vendor_code.isascii() or not re.fullmatch(
@@ -5827,18 +5828,21 @@ class ERPLoginBot:
                                 continue
                             _close_stuck_vendor_popup("commit-final")
                             return False
-                        # 반전 렌더링(선택 상태)이 값을 0 잉크로 읽는 오탐을
-                        # 막기 위해, 관리항목 헤더를 클릭해 값 셀 포커스를
-                        # 해제한 뒤 한 번 더 판독하고 나서 판정한다.
+                        # 하단 헤더 클릭은 GDI 값 셀의 편집을 끝내지 못한다.
+                        # 행 식별을 마친 같은 행 적요로 포커스를 옮겨 확정/재도색한다.
                         commit_defocus_dy = int(
                             float(
                                 os.getenv("ERP_MGMT_VALUE_DEFOCUS_DY", "25")
                                 or "25"
                             )
                         )
+                        defocus_x, defocus_y = (
+                            defocus_xy if defocus_xy is not None
+                            else (x, y - commit_defocus_dy)
+                        )
                         _click_form_xy(
-                            x,
-                            y - commit_defocus_dy,
+                            defocus_x,
+                            defocus_y,
                             f"{label} 확정 재판독(포커스 해제)",
                             wait=mgmt_click_wait,
                         )
@@ -6417,6 +6421,14 @@ class ERPLoginBot:
                             # 사용자 확정: 1행부터 마지막 미지급금 행까지 전부
                             # 동일하게 값 입력 → F9 → Enter로 확정한다.
                             # 1행 전용 거래처ds 팝업 키 시퀀스는 사용하지 않는다.
+                            summary_focus = management_active_row_context.get(
+                                "summary_focus"
+                            )
+                            defocus_xy = (
+                                summary_focus[1:]
+                                if summary_focus and summary_focus[0] == row_no
+                                else None
+                            )
                             if not _input_finance_vendor_code_xy(
                                 value_x,
                                 value_y,
@@ -6424,6 +6436,7 @@ class ERPLoginBot:
                                 label,
                                 finance_vendor_paste_settle_wait,
                                 finance_vendor_commit_settle_wait,
+                                defocus_xy,
                             ):
                                 _save_management_failure_screenshot(
                                     f"row{row_no}_vendor_input"
@@ -7766,6 +7779,11 @@ class ERPLoginBot:
                             )
                             if mgmt_after_summary_open_wait:
                                 time.sleep(mgmt_after_summary_open_wait)
+                        management_active_row_context["summary_focus"] = (
+                            row_no,
+                            summary_x,
+                            current_y,
+                        )
                         management_enter_sent = bool(
                             _fill_management_for_current_row(row_no, account_name)
                         )
