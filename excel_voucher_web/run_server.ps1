@@ -17,8 +17,8 @@ param(
   [string]$SmtpPassword = "",
   [string]$SmtpFrom = "admpdm@dae-seung.co.kr",
   [string]$SmtpFromName = "",
-  [string]$SslCertFile = "",
-  [string]$SslKeyFile = ""
+  [string]$SslCertFile = "C:\ERP_DB\certs\web_v1.cert.pem",
+  [string]$SslKeyFile = "C:\ERP_DB\certs\web_v1.key.pem"
 )
 
 $ErrorActionPreference = "Stop"
@@ -29,6 +29,23 @@ if (-not $SmtpFromName) {
   $SmtpFromName = [Text.Encoding]::UTF8.GetString(
     [Convert]::FromBase64String("7J6s7KCV7KCE7ZGc7J6Q64+Z7ZmUIOyLnOyKpO2FnA==")
   )
+}
+
+$UsesHttps = $PublicOrigin -match '^https://'
+$HasCert = -not [string]::IsNullOrWhiteSpace($SslCertFile)
+$HasKey = -not [string]::IsNullOrWhiteSpace($SslKeyFile)
+
+if ($HasCert -xor $HasKey) {
+  throw "HTTPS requires both -SslCertFile and -SslKeyFile."
+}
+if ($UsesHttps -and (-not $HasCert -or -not $HasKey)) {
+  throw "PublicOrigin uses HTTPS, but SSL certificate paths are empty."
+}
+if ($HasCert -and -not (Test-Path -LiteralPath $SslCertFile -PathType Leaf)) {
+  throw "SSL certificate file was not found: $SslCertFile"
+}
+if ($HasKey -and -not (Test-Path -LiteralPath $SslKeyFile -PathType Leaf)) {
+  throw "SSL key file was not found: $SslKeyFile"
 }
 
 $Candidates = @(@(
