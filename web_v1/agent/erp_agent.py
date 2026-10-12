@@ -94,7 +94,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.247"
+AGENT_BUNDLE_VERSION = "1.0.248"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
@@ -2373,7 +2373,7 @@ def _run_self_update(server: str, verify: bool) -> bool:
         if not setup_script.exists():
             raise RuntimeError(f"setup script not found in payload: {temp_root}")
         powershell = str(Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "WindowsPowerShell" / "v1.0" / "powershell.exe")
-        subprocess.Popen([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(setup_script)], cwd=str(temp_root), close_fds=True, creationflags=(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)))
+        subprocess.Popen([powershell, "-NoProfile", "-ExecutionPolicy", "Bypass", "-WindowStyle", "Hidden", "-File", str(setup_script)], cwd=str(temp_root), close_fds=True, env={**os.environ, "ACCOUNTING_WEB_INSTALL_ROOT": str(PROJECT_ROOT)}, creationflags=(getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0) | getattr(subprocess, "CREATE_NO_WINDOW", 0)))
         log("agent self-update started; current process will exit")
         return True
     except Exception as exc:

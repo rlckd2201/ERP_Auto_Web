@@ -5,6 +5,7 @@ import logging
 import re
 import sys
 import types
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
@@ -235,30 +236,22 @@ def validate_purchase_invoice_for_erp(invoice: dict[str, Any]) -> None:
 
 
 def _extract_invoice_date(data: dict[str, Any], pdf_path: str = "") -> str:
-    candidates = [
-        data.get("invoice_date"),
-        data.get("issue_date"),
-        data.get("write_date"),
-        data.get("작성일자"),
-        data.get("date"),
-    ]
-    for value in candidates:
-        digits = re.sub(r"[^0-9]", "", str(value or ""))
-        if len(digits) >= 8:
-            return f"{digits[:4]}-{digits[4:6]}-{digits[6:8]}"
+    for key in ("invoice_date", "issue_date", "write_date", "작성일자", "date"):
+        parsed = _extract_invoice_date_from_text(str(data.get(key) or ""))
+        if parsed:
+            return parsed
     filename = Path(pdf_path or "").name
     filename_patterns = [
-        r"(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?([0-3]\d)",
+        r"(?<!\d)(20\d{2})[-_.]?(0[1-9]|1[0-2])[-_.]?([0-3]\d)(?!\d)",
         r"(20\d{2})\s*\ub144\s*(0?[1-9]|1[0-2])\s*\uc6d4\s*([0-3]?\d)\s*\uc77c",
     ]
     for pattern in filename_patterns:
-        match = re.search(pattern, filename)
-        if match:
-            return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+        for match in re.finditer(pattern, filename):
+            parsed = _format_invoice_date(*match.groups())
+            if parsed:
+                return parsed
     pdf_text = _extract_pdf_text_for_date(pdf_path)
-    if pdf_text:
-        return _extract_invoice_date_from_text(pdf_text)
-    return ""
+    return _extract_invoice_date_from_text(pdf_text) if pdf_text else ""
 
 
 def _extract_pdf_text_for_date(pdf_path: str = "") -> str:
@@ -284,35 +277,33 @@ def _extract_pdf_text_for_date(pdf_path: str = "") -> str:
     return ""
 
 
+def _format_invoice_date(year: str, month: str, day: str) -> str:
+    try:
+        return date(int(year), int(month), int(day)).isoformat()
+    except (TypeError, ValueError):
+        return ""
+
+
 def _extract_invoice_date_from_text(text: str) -> str:
-    def _format(year: str, month: str, day: str) -> str:
-        return f"{int(year):04d}-{int(month):02d}-{int(day):02d}"
-
-    label = (
-        r"(?:"
-        r"\uc791\s*\uc131\s*\uc77c\s*\uc790|"
-        r"\ubc1c\s*\ud589\s*\uc77c\s*\uc790|"
-        r"\uacf5\s*\uae09\s*\uc77c\s*\uc790"
-        r")"
-    )
+    month = r"(1[0-2]|0?[1-9])"
+    day = r"(3[01]|[12]\d|0?[1-9])"
+    compact = r"(?<!\d)(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)"
+    label = r"(?:\uc791\s*\uc131\s*\uc77c\s*\uc790|\ubc1c\s*\ud589\s*\uc77c\s*\uc790|\uacf5\s*\uae09\s*\uc77c\s*\uc790)"
     labeled_patterns = [
-        label + r"[\s\S]{0,220}?(20\d{2})\D{0,8}(0?[1-9]|1[0-2])\D{0,8}([0-3]?\d)",
-        label + r"[\s\S]{0,220}?(20\d{2})(0[1-9]|1[0-2])([0-3]\d)",
+        label + rf"[\s\S]{{0,220}}?(?<!\d)(20\d{{2}})\D{{1,8}}{month}\D{{1,8}}{day}(?!\d)",
+        label + r"[\s\S]{0,220}?" + compact,
     ]
-    for pattern in labeled_patterns:
-        match = re.search(pattern, text, re.IGNORECASE)
-        if match:
-            return _format(match.group(1), match.group(2), match.group(3))
-
     generic_patterns = [
-        r"\b(20\d{2})\s+(0?[1-9]|1[0-2])\s+([0-3]?\d)\b",
-        r"\b(20\d{2})[-./](0?[1-9]|1[0-2])[-./]([0-3]?\d)\b",
-        r"\b(20\d{2})(0[1-9]|1[0-2])([0-3]\d)\b",
+        rf"(?<!\d)(20\d{{2}})\s+{month}\s+{day}(?!\d)",
+        rf"(?<!\d)(20\d{{2}})[-./]{month}[-./]{day}(?!\d)",
+        rf"(?<!\d)(20\d{{2}})\s*\ub144\s*{month}\s*\uc6d4\s*{day}\s*\uc77c",
+        compact,
     ]
-    for pattern in generic_patterns:
-        match = re.search(pattern, text)
-        if match:
-            return _format(match.group(1), match.group(2), match.group(3))
+    for pattern in labeled_patterns + generic_patterns:
+        for match in re.finditer(pattern, text, re.IGNORECASE):
+            parsed = _format_invoice_date(*match.groups())
+            if parsed:
+                return parsed
     return ""
 
 

@@ -1,5 +1,18 @@
 # TODO
 
+## 2026-10-12 Daou date repair
+
+- [x] Identify #259, reproduce the date parser failure from the real PDF, and correlate ERP failure with the false noon missing alert.
+- [x] Confirm the original date visually and verify no grid/save phase was reached in the failed automatic job.
+- [x] Check recent regular invoices and demonstrate correct received status on an in-memory repaired copy.
+- [x] Obtain approval for the proposed implementation/deployment/recovery scope and the original 243 PC target.
+- [x] Correct date token boundaries and require valid calendar dates; pass 12 focused tests locally/on server.
+- [x] Back up production/SQLite/#259, deploy v1.0.248, restore the source-grounded date, and verify Daou due status is received.
+- [x] Fix self-update installation-root handling, pass three focused tests plus PowerShell parsing, and isolate the current-PC Agent from the editable repository.
+- [x] Submit one #259 retry `d91c7b9c-958f-4c17-8ff5-33e6fa4aeff1` to the chosen 243 Agent with Pyeongtaek output.
+- [ ] Verify 243 reconnects on the final v1.0.248 bundle, then confirm that existing job completes ERP save, voucher PDF, and two-file output. Do not submit another retry.
+- [ ] Confirm the next real vendor alert uses valid date evidence and does not repeat the false Daou request.
+
 Updated: 2026-08-25
 
 ## P0 - Zoom expense-report generation failure

@@ -1,5 +1,13 @@
 # Decisions
 
+## D-054 - Invoice date strings require calendar validation
+
+A nonempty string or eight numeric characters is insufficient proof of an invoice date. Month/day tokens must not be split from within another number, and every candidate must pass calendar validation before persistence or ERP use. Invalid metadata should fall back to source PDF evidence rather than flow unchanged into ERP. Recover the exact invoice date from the original document, never substitute receipt date merely to remove a missing alert. A failed invoice may be retried only after its full execution evidence establishes that ERP save was not reached.
+
+## D-055 - Self-update must preserve the running installation location
+
+Pinning an Agent launcher to an isolated runtime is insufficient if its updater invokes an installer that always targets the Desktop development folder. Self-update now passes its actual `PROJECT_ROOT` as a child-process installation override; the installer resolves that absolute root and checks every recursive cleanup target is its intended immediate child. Manual installation retains the established default. Never let a runtime update reset the editable repository; retain source/tests outside disposable runtime cleanup.
+
 Updated: 2026-08-25
 
 ## D-001 — actual code is the source of truth

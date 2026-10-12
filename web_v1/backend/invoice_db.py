@@ -401,17 +401,15 @@ def learn_dictionary_items(items: list[dict[str, Any]]) -> int:
 def _repair_regular_fields(result: dict[str, Any], pdf_path: str) -> dict[str, Any]:
     fixed = dict(result)
     nested = _invoice_data(fixed)
-    has_date = any(str(source.get("invoice_date") or source.get("issue_date") or source.get("write_date") or "").strip() for source in (fixed, nested))
-    if not has_date:
-        try:
-            from .erp_runner import _extract_invoice_date
+    try:
+        from .erp_runner import _extract_invoice_date
 
-            invoice_date = _extract_invoice_date({**fixed, **nested, "pdf_path": pdf_path}, pdf_path)
-        except Exception:
-            invoice_date = ""
-        if invoice_date:
-            fixed["invoice_date"] = invoice_date
-            nested["invoice_date"] = invoice_date
+        invoice_date = _extract_invoice_date({**fixed, **nested, "pdf_path": pdf_path}, pdf_path)
+    except Exception:
+        invoice_date = ""
+    if invoice_date:
+        fixed["invoice_date"] = invoice_date
+        nested["invoice_date"] = invoice_date
     site_name = _regular_site_name(fixed, nested, subject=str(fixed.get("subject") or ""), pdf_path=pdf_path)
     if site_name:
         fixed["site_name"] = site_name

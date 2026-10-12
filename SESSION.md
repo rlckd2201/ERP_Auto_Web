@@ -1,5 +1,15 @@
 # Session
 
+## 2026-10-12 Daou date repair deployed; ERP retry awaits 243 Agent
+
+- User reported Daou regular processing failure followed by an unnecessary issuance request despite receipt. Invoice #259 was collected at 10:32:33 KST for D1, 3,652,000 KRW; its original PDF visibly states 2026-10-11.
+- Root cause and reproduction are recorded in DEBUG I-050. The stored invalid date caused both ERP header failure and the noon false-missing report. Complete invoice logs/terminal queue evidence show the sole automatic job stopped at accounting-date verification before grid entry or save.
+- User approved the repair and chose the original 243 PC for retry. Primary agent/current model worked alone. Deployed v1.0.248, restored every malformed #259 date field to 2026-10-11 without changing the original PDF, and verified its ERP payload date and due report `수신완료/ok`. Other recent regular #258/#256/#255 have valid dates.
+- Verification: 12 date tests locally/on server, three self-update/install-root tests locally/on server, Python compilation, installer PowerShell parsing, deployed SHA-256 checks, HTTPS health, and final Graphify rebuild (1,541 nodes / 4,047 edges / 106 communities). Backup `C:\ERP_DB\deploy_backups\20261012_143246_v1.0.248_invoice_date` includes source, secret environment, SQLite snapshot, original #259 row, and repair/deployment proofs.
+- During verification, the existing Agent installer repeatedly removed the development `web_v1`/`manager_server` folders. Fixed self-update to pass its actual installation root; installer respects that override and checks cleanup targets. Current-PC Agent/startup/protocol/manual launcher now use `%LOCALAPPDATA%\AccountingWebAgent\1.0.248`; final bundle hash `124795088411410c8a3f5267ef6feef963d68542cf84123f3b30eca089a196e1`. Preserved unrelated source changes; restored the initially clean coordinate regression file removed by the old updater.
+- One retry job `d91c7b9c-958f-4c17-8ff5-33e6fa4aeff1` was submitted at 14:59 KST for #259 only, targeting `DESKTOP-55LQ6BN-TEST` / `172.17.30.243` and Pyeongtaek output. The 243 profile still last reports 10:34:13; retry completion, ERP voucher, and physical output remain unverified. No duplicate retry or additional vendor-request email was issued.
+- Next exact starting point: when 243 Agent reconnects, verify v1.0.248/final hash, follow that existing retry through correct date, vendor verification, one ERP save, voucher PDF, and two-file Pyeongtaek spooler evidence. Do not enqueue a second job while this retry is pending or after save.
+
 Updated: 2026-08-31
 
 ## Current objective

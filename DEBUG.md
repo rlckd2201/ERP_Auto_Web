@@ -1,5 +1,23 @@
 # Debug
 
+## I-050 - Daou October date parser repaired (2026-10-12; live retry pending)
+
+- Invoice #259: Daou/D1/3,652,000 KRW; received 10:32:33 KST; original one-page CSBill PDF shows 작성일자 2026 / 10 / 11 and approval number `2026101141000018da100001`. Local unchanged QA copy `tmp/pdfs/daou_259_source.pdf`; rendered page `tmp/pdfs/daou_259_page1.png` inspected in full.
+- Production `erp_runner._extract_invoice_date_from_text()` reproduces `2026-01-00` on both PDF text extraction paths. Its labeled regex puts `(0?[1-9]|1[0-2])` before a zero-length separator `\D{0,8}` and accepts day `0`; it therefore matches the October digits as month 1/day 0. `_format()` does not validate the calendar, and `_extract_invoice_date()` subsequently trusts the first eight metadata digits without validation.
+- DB/raw/nested `invoice_date` is `2026-01-00`. `_repair_regular_fields()` treats any nonempty date as present, so the malformed value remains. Due-monitor date parsing rejects it, and the filename contains only year/month, so #259 has no usable issue date and the 12:00 report wrongly classifies Daou's 2026-10-11 cycle as missing.
+- Sole job `00b84823-36c7-48c0-847c-d2ebf42b8f92`/Agent `DESKTOP-55LQ6BN-TEST` ended at 10:34:08 KST with `회계일 검증 실패: expected=2026-01-00, actual=`. Terminal queue `C:\ERP_DB\erp_queue\regular_erp_00b84823-36c7-48c0-847c-d2ebf42b8f92.json` has `agent_status=error`. Full logs contain header actions only and no grid/save action; no ERP voucher/output was produced.
+- A source-grounded `2026-10-11` correction applied only to a deep-copied invoice makes `_evaluate_rule()` return `수신완료/ok` and match #259. Production still has the original error/date. Recent regular #258 (KT), #256 (AhnLab), and #255 (SecurePoint) have valid persisted dates. No source/DB/ERP/mail change has been made during this diagnosis.
+- Approved repair: v1.0.248 now parses complete month/day tokens with number boundaries and calendar validation, skips invalid metadata to examine the original PDF, and checks nonempty regular metadata before registration. All 12 regression tests passed locally and on the server. #259 raw/nested dates were repaired atomically from the PDF while still in its old pre-save error state; its generated payload date is 2026-10-11, and the current due report matches #259 as `수신완료/ok`.
+- Source/database backups and proofs: `C:\ERP_DB\deploy_backups\20261012_143246_v1.0.248_invoice_date`. Initial deployed erp_runner SHA-256 `e0ff58820e0a59f35e9bcdc391e4493ae72e93cafa71f73c34ea2a2cc5cc740f`; invoice_db `a4bb9fec4c6d8dd146d5c80656984b8b38841d5a1cc97697b39d854e6cdd555a`. Health is 200/v1.0.248.
+- The selected 243 Agent has no heartbeat after 10:34:13. A fresh-v1.0.248 wait timed out without submitting anything; saved RDP connection was attempted but did not establish a usable desktop/Agent session. After the user chose 243, one durable normal retry job `d91c7b9c-958f-4c17-8ff5-33e6fa4aeff1` was queued at 14:59 KST; audit `invoice_259_recovery_job.json` in the backup directory. It has not yet been confirmed as claimed/saved/printed.
+
+## I-051 - Isolated Agent self-update still reset the Desktop repository (2026-10-12, fixed)
+
+- Actual repeated source/test reverts came from `_run_self_update()` invoking packaged `setup.ps1` without an install-root override. That installer hard-coded the Desktop project path and recursively removed `web_v1` and `manager_server`, even when the initiating Agent ran from an isolated folder. This also recreated the old source-based launcher/startup.
+- Self-update now passes `ACCOUNTING_WEB_INSTALL_ROOT=str(PROJECT_ROOT)` only in the child's environment. Installer uses that root, resolves it absolutely, and checks cleanup children; manual default is preserved. Three mock/native-PowerShell tests passed locally and on the server; full installer PowerShell syntax parsing passed.
+- Final app source hash `be9f3732cfa4bd304e1ea99f8fa716e27f85c900a9a4db7de3aa31ab14e3769e`; Agent hash `3bac7d54c377b87203b892f8c53480aa26e1c20162454095361327a28a07c55f`; final bundle `124795088411410c8a3f5267ef6feef963d68542cf84123f3b30eca089a196e1`. Local runtime, current-user startup, URL protocol, and manual launcher are pinned to `%LOCALAPPDATA%\AccountingWebAgent\1.0.248`.
+- Restored modified modules/tests from the verified stage and restored only the initially clean coordinate test the old updater deleted. Other pre-existing worktree changes/deletions were preserved. Final Graphify update succeeded with 1,541 nodes / 4,047 edges / 106 communities after one earlier smaller-graph overwrite refusal; no force update was used.
+
 Updated: 2026-08-25
 
 ## I-001 — backend static frontend dependency was missing — resolved

@@ -1133,7 +1133,9 @@ def _agent_installer_script(server_url: str) -> str:
     return r'''
 $ErrorActionPreference = "Stop"
 $ServerUrl = "__SERVER_URL__"
-$InstallRoot = Join-Path $env:USERPROFILE "Desktop\개발파일\회계업무 자동화_WEB_Version"
+$InstallRoot = $env:ACCOUNTING_WEB_INSTALL_ROOT
+if (-not $InstallRoot) { $InstallRoot = Join-Path $env:USERPROFILE "Desktop\개발파일\회계업무 자동화_WEB_Version" }
+$InstallRoot = [System.IO.Path]::GetFullPath($InstallRoot)
 $PackageRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $PayloadRoot = Join-Path $PackageRoot "payload"
 
@@ -1144,7 +1146,8 @@ Write-Host "[회계업무 WEB] 설치 폴더: $InstallRoot"
 New-Item -ItemType Directory -Path $InstallRoot -Force | Out-Null
 $CleanTargets = @("web_v1", "manager_server")
 foreach ($Relative in $CleanTargets) {
-    $Target = Join-Path $InstallRoot $Relative
+    $Target = [System.IO.Path]::GetFullPath((Join-Path $InstallRoot $Relative))
+    if ((Split-Path -Parent $Target) -ne $InstallRoot.TrimEnd('\')) { throw "Runtime cleanup target is outside the install root: $Target" }
     if (Test-Path $Target) {
         Write-Host "[Accounting WEB] Removing old runtime folder: $Relative"
         Remove-Item -LiteralPath $Target -Recurse -Force
