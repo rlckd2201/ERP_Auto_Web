@@ -17,6 +17,9 @@ from .settings import settings
 
 STEP_LABELS = ("작업시작", "업로드완료", "ERP 입력시작", "저장완료", "출력완료")
 FAILURE_RECIPIENT_EMAIL = "ds1501@dae-seung.co.kr"
+JOB_RECIPIENT_OVERRIDES = {
+    ("daeseung", "tmdwn8807"): ("tmdwn8807@dae-seung.co.kr", "이승주"),
+}
 
 
 def _recipients(value: str | Iterable[str] | None) -> list[str]:
@@ -172,12 +175,25 @@ def send_mail(
     }
 
 
+def _job_recipient_override(job: JobRecord) -> tuple[str, str] | None:
+    payload = job.payload or {}
+    # Match the authenticated web requester, never the ERP login or company alone.
+    key = (job.company_key, str(payload.get("requester_id") or "").strip())
+    return JOB_RECIPIENT_OVERRIDES.get(key)
+
+
 def _job_recipient(job: JobRecord) -> str:
+    override = _job_recipient_override(job)
+    if override:
+        return override[0]
     payload = job.payload or {}
     return str(payload.get("requester_email") or settings.admin_email or "").strip()
 
 
 def _job_recipient_name(job: JobRecord) -> str:
+    override = _job_recipient_override(job)
+    if override:
+        return override[1]
     payload = job.payload or {}
     return str(payload.get("requester") or job.requester or "").strip()
 

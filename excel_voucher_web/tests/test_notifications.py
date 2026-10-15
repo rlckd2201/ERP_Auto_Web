@@ -5,6 +5,8 @@ from datetime import datetime
 from email.utils import getaddresses
 from types import SimpleNamespace
 
+import pytest
+
 from app import notifications
 from app.models import JobEvent, JobRecord
 
@@ -217,6 +219,64 @@ def test_completion_notification_goes_only_to_requester(tmp_path, monkeypatch):
     ]
     assert payload["cc"] == ""
     assert "ds1501@dae-seung.co.kr" not in payload["to"]
+
+
+@pytest.mark.parametrize("profile_email", ["", "rlckd9646@dae-seung.co.kr", "tmdwn8807@dae-seung.co.kr"])
+def test_daeseung_finance_completion_goes_to_lee_seungju(tmp_path, monkeypatch, profile_email):
+    outbox = tmp_path / "outbox"
+    monkeypatch.setattr(notifications, "settings", _fake_settings(tmp_path, outbox))
+    now = datetime(2026, 10, 15, 15, 2, 54)
+    job = JobRecord(
+        id="finance-completion",
+        title="대승 2026-10-20 수시결제 전표",
+        requester="재정 담당자",
+        company_key="daeseung",
+        accounting_date="2026-10-20",
+        source_filename="upload.xlsx",
+        status="done",
+        progress=100,
+        message="처리 완료",
+        target_agent_id="finance-agent-172-17-30-243",
+        target_client_ip="172.17.30.243",
+        created_at=now,
+        updated_at=now,
+        payload={
+            "requester_id": "tmdwn8807",
+            "requester_email": profile_email,
+            "requester": "재정 담당자",
+            "company_name": "대승",
+        },
+        result={},
+    )
+
+    result = notifications.notify_job_completed(job)
+
+    assert result["queued"] is True
+    mail = json.loads(next(outbox.glob("*.json")).read_text(encoding="utf-8"))
+    assert getaddresses([mail["to"]]) == [("이승주", "tmdwn8807@dae-seung.co.kr")]
+    assert mail["cc"] == ""
+    assert "이승주" in mail["body"]
+    assert "이승주" in mail["html_body"]
+
+
+@pytest.mark.parametrize(
+    ("company_key", "requester_id"),
+    [("daeseung", "rlckd9646"), ("daeseung", ""), ("other", "tmdwn8807")],
+)
+def test_finance_recipient_override_does_not_reroute_other_requesters(company_key, requester_id):
+    job = SimpleNamespace(
+        company_key=company_key,
+        requester="작업자",
+        payload={
+            "requester_id": requester_id,
+            "requester_email": "requester@example.com",
+            "requester": "작업자",
+            "erp_credentials": {"user_id": "tmdwn8807"},
+        },
+    )
+
+    assert notifications._job_recipient(job) == "requester@example.com"
+    assert notifications._job_recipient_name(job) == "작업자"
 
 
 def test_failure_recipients_dedupe_when_requester_is_admin(tmp_path, monkeypatch):
