@@ -3363,13 +3363,12 @@ class ERPLoginBot:
                         width - 1,
                         int(main_rect.left + value_x - 160 - scan_left),
                     )
-                    # The management value cell ends only a few pixels to the right
-                    # of the configured click anchor.  Requiring that painted right
-                    # border prevents an ordinary voucher-grid row (which has the
-                    # same horizontal pitch and plenty of text) from being accepted.
+                    # ERP persists column widths, so the painted right edge can
+                    # move left of the configured click anchor.  Still require all
+                    # three borders and label ink before accepting the table.
                     right_border_search_left = max(
                         0,
-                        int(main_rect.left + value_x + 12 - scan_left),
+                        int(main_rect.left + value_x - 80 - scan_left),
                     )
                     right_border_search_right = min(
                         width - 1,
@@ -3716,6 +3715,15 @@ class ERPLoginBot:
                         }
                     )
                     if structural_candidate is not None:
+                        value_left = (
+                            scan_left - main_rect.left
+                            + int(structural_candidate["divider_x"])
+                        )
+                        value_right = (
+                            scan_left - main_rect.left
+                            + int(structural_candidate["right_border_x"])
+                        )
+                        value_x = min(max(value_x, value_left + 12), value_right - 12)
                         structure_sample_center = int(round(
                             (
                                 int(structural_candidate["upper"])
@@ -3773,6 +3781,11 @@ class ERPLoginBot:
                             "red_rows": len(red_row_clusters),
                         }
                         visual_counts["boundary"] = boundary_detail
+                        visual_counts["value_bounds"] = {
+                            "left": value_left,
+                            "right": value_right,
+                            "click_x": value_x,
+                        }
                         break
             except Exception as e:
                 self.logger.debug(f"  [FORM-VERIFY] management visual snapshot failed: {e}")

@@ -1822,6 +1822,7 @@ class _SyntheticGdiImage:
         include_left_border=True,
         include_divider=True,
         include_right_border=True,
+        right_border_x=494,
         separator_rows=(),
     ):
         self.size = (width, height)
@@ -1834,6 +1835,7 @@ class _SyntheticGdiImage:
         self.include_left_border = include_left_border
         self.include_divider = include_divider
         self.include_right_border = include_right_border
+        self.right_border_x = right_border_x
         self.separator_rows = set(separator_rows)
 
     def getpixel(self, point):
@@ -1852,9 +1854,11 @@ class _SyntheticGdiImage:
                 return (180, 180, 180)
             if self.include_divider and x == 200 and upper <= y <= lower:
                 return (180, 180, 180)
-            # scan_left=main.left+650 and value_x=1118, so x=494 is
-            # exactly the management table's painted border at value_x+26.
-            if self.include_right_border and x == 494 and upper <= y <= lower:
+            if (
+                self.include_right_border
+                and x == self.right_border_x
+                and upper <= y <= lower
+            ):
                 return (180, 180, 180)
         if (
             self.row_center_y is not None
@@ -1890,6 +1894,7 @@ def _synthetic_gdi_visual_snapshot(
     include_left_border=True,
     include_divider=True,
     include_right_border=True,
+    right_border_x=494,
     structure_band_top=None,
     structure_row_center_y=None,
     separators=True,
@@ -1933,6 +1938,7 @@ def _synthetic_gdi_visual_snapshot(
             include_left_border=include_left_border,
             include_divider=include_divider,
             include_right_border=include_right_border,
+            right_border_x=right_border_x,
         )
 
     loaded = _load_nested_functions(
@@ -1946,6 +1952,22 @@ def _synthetic_gdi_visual_snapshot(
         },
     )
     return loaded["_management_grid_visual_snapshot"](), main_rect, screenshot_regions
+
+
+@pytest.mark.parametrize("right_border_x", [420, 465, 480, 494])
+@pytest.mark.parametrize("include_upper_separator", [True, False])
+def test_gdi_visual_snapshot_handles_narrower_value_cell(
+    right_border_x, include_upper_separator
+):
+    snapshot, _main_rect, _regions = _synthetic_gdi_visual_snapshot(
+        24,
+        right_border_x=right_border_x,
+        include_upper_separator=include_upper_separator,
+    )
+
+    assert snapshot["visual_ready"] is True
+    assert snapshot["value_x"] == min(1118, 650 + right_border_x - 12)
+    assert 650 + 200 < snapshot["value_x"] < 650 + right_border_x
 
 
 def test_gdi_visual_snapshot_uses_painted_separator_boundary_and_detailed_signature():

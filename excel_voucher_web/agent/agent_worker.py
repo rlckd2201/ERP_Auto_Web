@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import getpass
 import hashlib
+import json
 import mimetypes
 import os
 import shutil
@@ -289,6 +290,98 @@ def _top_level_window_diagnostics() -> dict[str, Any]:
     return snapshot
 
 
+def _native_erp_screen_geometry() -> dict[str, Any]:
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.windll.user32
+    user32.GetForegroundWindow.restype = wintypes.HWND
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    user32.GetWindowRect.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.RECT)]
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetDpiForWindow.argtypes = [wintypes.HWND]
+    user32.GetDpiForWindow.restype = wintypes.UINT
+    user32.IsIconic.argtypes = [wintypes.HWND]
+    hwnd = user32.GetForegroundWindow()
+    title = ctypes.create_unicode_buffer(512)
+    user32.GetWindowTextW(hwnd, title, len(title))
+    rect = wintypes.RECT()
+    if not user32.GetWindowRect(hwnd, ctypes.byref(rect)):
+        raise RuntimeError("ERP screen diagnostic could not read the foreground rectangle")
+    pid = wintypes.DWORD()
+    user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+    session_id = wintypes.DWORD()
+    session_ok = ctypes.windll.kernel32.ProcessIdToSessionId(os.getpid(), ctypes.byref(session_id))
+    return {
+        "coordinate_space": "agent-desktop-physical-pixels",
+        "agent_pid": os.getpid(),
+        "agent_session_id": int(session_id.value) if session_ok else None,
+        "foreground_pid": int(pid.value),
+        "foreground_title": title.value.strip(),
+        "window_rect": [int(rect.left), int(rect.top), int(rect.right), int(rect.bottom)],
+        "window_dpi": int(user32.GetDpiForWindow(hwnd)),
+        "minimized": bool(user32.IsIconic(hwnd)),
+        "virtual_screen_rect": [
+            user32.GetSystemMetrics(76), user32.GetSystemMetrics(77),
+            user32.GetSystemMetrics(76) + user32.GetSystemMetrics(78),
+            user32.GetSystemMetrics(77) + user32.GetSystemMetrics(79),
+        ],
+    }
+
+
+def _save_native_erp_screen(output_dir: Path) -> dict[str, Any]:
+    from PIL import ImageGrab
+
+    snapshot = _native_erp_screen_geometry()
+    left, top, right, bottom = snapshot["window_rect"]
+    # Never capture a login form or unrelated foreground application, and never
+    # activate, resize, click or type into ERP as part of this diagnostic.
+    if (
+        snapshot["foreground_title"] not in {"대승", "대승정밀", "일강", "제이엠"}
+        or snapshot["minimized"]
+        or right - left < 640
+        or bottom - top < 480
+    ):
+        snapshot["capture_skipped"] = "ERP main window is not in the foreground"
+        return snapshot
+    capture = ImageGrab.grab(bbox=(left, top, right, bottom), all_screens=True)
+    if capture.size != (right - left, bottom - top):
+        raise RuntimeError("ERP screenshot size does not match its physical window rectangle")
+    directory = output_dir / "diagnostics"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"erp_screen_{time.time_ns()}.png"
+    capture.save(path)
+    snapshot.update({
+        "captured_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+        "screenshot_path": str(path),
+        "screenshot_origin": [left, top],
+        "screenshot_size": list(capture.size),
+    })
+    path.with_suffix(".json").write_text(
+        json.dumps(snapshot, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    return snapshot
+
+
+def _native_erp_screen_diagnostics(output_dir: Path) -> dict[str, Any]:
+    if sys.platform != "win32":
+        return {"capture_skipped": "Windows Agent required"}
+    import ctypes
+
+    # Set DPI awareness only on the diagnostic thread, leaving the running
+    # automation thread's coordinate space and the remote session unchanged.
+    setter = ctypes.windll.user32.SetThreadDpiAwarenessContext
+    setter.argtypes = [ctypes.c_void_p]
+    setter.restype = ctypes.c_void_p
+    previous = setter(ctypes.c_void_p(-4))
+    if not previous:
+        raise RuntimeError("Could not enable physical-pixel ERP screen diagnostics")
+    try:
+        return _save_native_erp_screen(output_dir)
+    finally:
+        setter(previous)
+
+
 def _popen_hidden(args: list[str]) -> subprocess.Popen:
     creationflags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
     return subprocess.Popen(args, creationflags=creationflags)
@@ -444,6 +537,14 @@ def _execute_admin_command(
     payload = command.get("payload") if isinstance(command.get("payload"), dict) else {}
     if command_type == "tail-log":
         result = _latest_agent_log(output_dir)
+        try:
+            diagnostic = _native_erp_screen_diagnostics(output_dir)
+        except Exception as exc:
+            diagnostic = {"error": str(exc)}
+        result["screen_diagnostic"] = diagnostic
+        result["tail"] = result.get("tail", "") + "\n[ERP-SCREEN] " + json.dumps(
+            diagnostic, ensure_ascii=False
+        )
         if payload.get("inspect_erp_windows") is True:
             result["top_level_windows"] = _top_level_window_diagnostics()
         return result
