@@ -154,10 +154,11 @@ def test_finance_first_vendor_uses_exact_f9_keyboard_sequence():
     assert "_management_value_visual_ink(" not in helper
     assert 'finance_vendor_entry_state = {"f9_seeded": False}' in source
     assert 'if account_key == "미지급금(원화)":' in source
-    # 사용자 확정: 1행 전용 팝업 시퀀스는 더 이상 호출하지 않는다.
-    # 1행부터 마지막 미지급금 행까지 동일한 입력→F9→Enter 흐름만 사용한다.
+    # The legacy Tab-based seed remains unused. Finance initializes the actual
+    # lookup's third condition before subsequent direct entry.
     assert source.count("_seed_vendor_by_number_f9") == 1
-    assert 'if not finance_vendor_entry_state["f9_seeded"]:' not in source
+    assert 'if not finance_vendor_entry_state["f9_seeded"]:' in source
+    assert source.count("_seed_finance_vendor_number_lookup") == 2
     assert 'finance_vendor_entry_state["f9_seeded"] = True' in source
     assert "관리항목값 셀 키보드 입력 후 Enter 완료" in source
     assert "거래처번호 팝업 입력 실패, 직접 입력 fallback" in source
@@ -795,7 +796,7 @@ def test_finance_first_vendor_search_types_physically_without_clipboard():
 
     source = MANAGER_SOURCE.read_text(encoding="utf-8")
     helper_start = source.index("def _replace_vendor_ds_search_text")
-    helper_end = source.index("def _seed_vendor_by_number_f9", helper_start)
+    helper_end = source.index("def _seed_finance_vendor_number_lookup", helper_start)
     helper = source[helper_start:helper_end]
     # 클립보드는 원격 도구와 공유되어 오염될 수 있어 값 입력에 쓰지 않는다.
     assert "pyperclip" not in helper
@@ -1556,7 +1557,8 @@ def test_agent_launch_configures_fine_gdi_scan_and_two_sample_stability():
     assert 'os.getenv("ERP_GRID_PASTE_READY_MAX_SECONDS", "180")' in manager_source
 
 
-def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
+@pytest.mark.parametrize("seed_success", [True, False])
+def test_finance_vendor_state_initializes_lookup_once_then_preserves_bank_path(seed_success):
     events = []
     state = {"f9_seeded": False}
     loaded = _load_nested_functions(
@@ -1575,9 +1577,10 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
             "finance_vendor_entry_state": state,
             "finance_vendor_paste_settle_wait": 0.10,
             "finance_vendor_commit_settle_wait": 0.16,
-            "_seed_vendor_by_number_f9": lambda x, y, label, text: (
-                events.append(("seed", x, y, label, text)) or True
+            "_seed_finance_vendor_number_lookup": lambda x, y, label, text: (
+                events.append(("seed", x, y, label, text)) or seed_success
             ),
+            "_save_management_failure_screenshot": lambda *_args: None,
             "_input_finance_vendor_code_xy": lambda *args: (
                 events.append(("finance-input", args)) or True
             ),
@@ -1595,19 +1598,22 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
     )
     fill = loaded["_fill_explicit_management_items"]
 
-    # 사용자 확정: 1행도 다른 행과 동일한 입력→F9→Enter 흐름을 쓴다.
-    # 1행 전용 seed(거래처ds 팝업 시퀀스)는 호출되지 않는다.
+    if not seed_success:
+        with pytest.raises(RuntimeError, match="최초 검색 또는 결과 선택"):
+            fill()
+        assert state["f9_seeded"] is False
+        assert [event[0] for event in events] == ["seed"]
+        return
+
     assert fill() is True
     assert state["f9_seeded"] is True
-    assert [event[0] for event in events] == ["finance-input"]
-    _, first_args = events[-1]
-    assert first_args[2] == "A001"
-    assert first_args[4:] == (0.10, 0.16, None)
+    assert [event[0] for event in events] == ["seed"]
+    assert events[-1][-1] == "A001"
 
     loaded["row_no"] = 2
     loaded["explicit_management"] = {"거래처": "B002"}
     assert fill() is True
-    assert [event[0] for event in events] == ["finance-input", "finance-input"]
+    assert [event[0] for event in events] == ["seed", "finance-input"]
     _, direct_args = events[-1]
     assert direct_args[2] == "B002"
     assert direct_args[4:] == (0.10, 0.16, None)
@@ -1630,6 +1636,94 @@ def test_finance_vendor_state_uses_f9_once_then_preserves_bank_path():
         "신한 수원금융센터",
         "3행 계좌번호",
     )
+
+
+@pytest.mark.parametrize(
+    "dpi,origin,result_text,popup_available,committed,expected",
+    [
+        (96, (0, 0), "금강기계공업아산지점(KK015)", True, True, True),
+        (144, (200, 100), "금강기계공업아산지점(KK015)", True, True, True),
+        (96, (0, 0), "", True, True, False),
+        (96, (0, 0), "다른 거래처(KK0150)", True, True, False),
+        (96, (0, 0), "금강기계공업아산지점(KK015)", False, True, False),
+        (96, (0, 0), "금강기계공업아산지점(KK015)", True, False, False),
+    ],
+)
+def test_finance_lookup_uses_native_geometry_and_matches_result_before_selecting(
+    dpi, origin, result_text, popup_available, committed, expected,
+):
+    events = []
+    clock = [0.0]
+    foreground = [0]
+    scale = dpi / 96.0
+    left, top = origin
+    rect = _FakeRect(left, top, left + round(1920 * scale), top + round(1040 * scale))
+
+    def sleep(seconds):
+        clock[0] += seconds
+
+    def active_window():
+        foreground[0] += 1
+        if foreground[0] == 1 or not popup_available:
+            return 100, "대승"
+        return 200, "거래처_ds"
+
+    def record(name):
+        return lambda *args, **kwargs: events.append((name, args, kwargs))
+
+    loaded = _load_nested_functions(
+        "_seed_finance_vendor_number_lookup",
+        namespace={
+            "_foreground_window_title": active_window,
+            "_window_process_id": lambda _hwnd: 555,
+            "_is_vendor_ds_title": lambda title: title == "거래처_ds",
+            "_double_click_vendor_value_xy": record("open"),
+            "_wait_vendor_ds_foreground": lambda *_args: (
+                (200, "거래처_ds") if popup_available else (0, "")
+            ),
+            "Desktop": lambda **_kwargs: SimpleNamespace(
+                window=lambda **_kwargs: SimpleNamespace(rectangle=lambda: rect)
+            ),
+            "ctypes": SimpleNamespace(windll=SimpleNamespace(user32=SimpleNamespace(
+                GetDpiForWindow=lambda _hwnd: dpi,
+            ))),
+            "vendor_popup_open_wait": 0.2,
+            "ERP_FORM_WAIT": 0.2,
+            "pyautogui": SimpleNamespace(
+                click=record("click"), hotkey=record("hotkey"), press=record("press"),
+            ),
+            "pyperclip": SimpleNamespace(copy=record("copy"), paste=lambda: result_text),
+            "_release_modifiers": lambda *_args, **_kwargs: None,
+            "_replace_vendor_ds_search_text": lambda *args: (
+                events.append(("type", args, {})) or True
+            ),
+            "_vendor_double_click_abs": record("select"),
+            "_wait_first_vendor_value_committed": lambda *args: (
+                events.append(("commit", args, {})) or committed
+            ),
+            "time": SimpleNamespace(time=lambda: clock[0], sleep=sleep),
+            "re": re,
+            "self": SimpleNamespace(logger=_FakeLogger()),
+        },
+    )
+    assert loaded["_seed_finance_vendor_number_lookup"](1103, 746, "1행 거래처", "KK015") is expected
+    selections = [event for event in events if event[0] == "select"]
+    if not popup_available or not re.search(r"\(KK015\)", result_text):
+        assert selections == []
+        assert not any(event[0] == "commit" for event in events)
+        return
+
+    assert selections[0][1][:2] == (left + round(250 * scale), top + round(192 * scale))
+    clicks = [event[1] for event in events if event[0] == "click"]
+    assert clicks[:3] == [
+        (left + round(300 * scale), top + round(62 * scale)),
+        (left + round(155 * scale), top + round(62 * scale)),
+        (rect.right - round(68 * scale), top + round(62 * scale)),
+    ]
+    keys = [event[1:] for event in events if event[0] == "press"]
+    assert keys == [(("home",), {}), (("down",), {"presses": 2, "interval": 0.15}), (("enter",), {})]
+    assert next(event for event in events if event[0] == "type")[1][-1] == 1.0
+    assert [event[0] for event in events][-2:] == ["select", "commit"]
 
 
 def test_management_value_xy_reuses_ready_snapshot_without_another_uia_scan():

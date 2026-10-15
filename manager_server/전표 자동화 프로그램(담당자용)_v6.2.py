@@ -5576,6 +5576,88 @@ class ERPLoginBot:
                 )
                 return True
 
+            def _seed_finance_vendor_number_lookup(x, y, label, vendor_code):
+                """Initialize the lookup filter once using the Agent's native window."""
+                try:
+                    base_hwnd, base_title = _foreground_window_title()
+                    base_pid = _window_process_id(base_hwnd)
+                    if not base_pid or _is_vendor_ds_title(base_title):
+                        return False
+                    _double_click_vendor_value_xy(
+                        x, y, f"{label} 최초 거래처 조회", wait=vendor_popup_open_wait,
+                    )
+                    popup_hwnd, _ = _wait_vendor_ds_foreground(base_pid, 5.0)
+                    if not popup_hwnd:
+                        # Recovery may start with an already resolved value in edit mode.
+                        current_hwnd, _ = _foreground_window_title()
+                        if current_hwnd != base_hwnd:
+                            return False
+                        pyautogui.press('f9')
+                        popup_hwnd, _ = _wait_vendor_ds_foreground(base_pid, 15.0)
+                    if not popup_hwnd:
+                        return False
+                    # 거래처_ds is a native top-level window, not the ERP MDI inset.
+                    popup_rect = Desktop(backend="win32").window(handle=popup_hwnd).rectangle()
+                    dpi = int(ctypes.windll.user32.GetDpiForWindow(popup_hwnd) or 96)
+                    scale = dpi / 96.0
+                    if popup_rect.width() < 700 * scale or popup_rect.height() < 250 * scale:
+                        return False
+                    search_y = popup_rect.top + round(62 * scale)
+                    search_x = popup_rect.right - round(68 * scale)
+                    result_x = popup_rect.left + round(250 * scale)
+                    result_y = popup_rect.top + round(192 * scale)
+                    self.logger.info(
+                        f"  [MGMT-SEED] {label}: native 거래처 조회 "
+                        f"rect=({popup_rect.left},{popup_rect.top})-"
+                        f"({popup_rect.right},{popup_rect.bottom}), dpi={dpi}"
+                    )
+                    pyautogui.click(popup_rect.left + round(300 * scale), search_y)
+                    pyautogui.hotkey('ctrl', 'a')
+                    _release_modifiers(f"{label} 최초 검색어", wait=False)
+                    if not _replace_vendor_ds_search_text(vendor_code, label, 1.0):
+                        return False
+                    pyautogui.click(popup_rect.left + round(155 * scale), search_y)
+                    time.sleep(0.35)
+                    pyautogui.press('home')
+                    pyautogui.press('down', presses=2, interval=0.15)
+                    pyautogui.press('enter')
+                    time.sleep(0.5)
+                    pyautogui.click(search_x, search_y)
+                    self.logger.info(
+                        f"  [MGMT-SEED] {label}: 거래처번호 조건 선택 후 검색 버튼 클릭 "
+                        f"abs=({search_x},{search_y}), query={vendor_code}"
+                    )
+                    # Do not double-click an empty/stale row; read the actual result name.
+                    matched = False
+                    deadline = time.time() + 15.0
+                    pattern = rf"(?<![A-Za-z0-9_-]){re.escape(vendor_code)}(?![A-Za-z0-9_-])"
+                    while time.time() < deadline:
+                        time.sleep(0.5)
+                        hwnd, title = _foreground_window_title()
+                        if hwnd != popup_hwnd or not _is_vendor_ds_title(title):
+                            return False
+                        pyperclip.copy("")
+                        pyautogui.click(result_x, result_y)
+                        pyautogui.hotkey('ctrl', 'c')
+                        _release_modifiers(f"{label} 검색 결과 확인", wait=False)
+                        time.sleep(0.35)
+                        result_text = str(pyperclip.paste() or "").strip()
+                        if re.search(pattern, result_text, re.IGNORECASE):
+                            matched = True
+                            break
+                    if not matched:
+                        self.logger.warning(f"  [MGMT-SEED] {label}: 거래처번호와 일치하는 검색 결과 미확인")
+                        return False
+                    _vendor_double_click_abs(
+                        result_x, result_y, f"{label} 거래처번호 일치 결과", wait=ERP_FORM_WAIT,
+                    )
+                    return _wait_first_vendor_value_committed(
+                        x, y, label, 15.0, base_hwnd, 0,
+                    )
+                except Exception as exc:
+                    self.logger.warning(f"  [MGMT-SEED] {label}: 최초 거래처번호 조회 실패: {exc}")
+                    return False
+
             def _seed_vendor_by_number_f9(x, y, label, vendor_code):
                 try:
                     # 재정 미지급금 첫 행은 ERP에서 확인한 키보드 흐름만 사용한다.
@@ -6431,9 +6513,19 @@ class ERPLoginBot:
                     if item_key in ("거래처", "거래처코드", "업체코드", "vendor", "vendor_code"):
                         label = f"{row_no}행 {item_name}"
                         if account_key == "미지급금(원화)":
-                            # 사용자 확정: 1행부터 마지막 미지급금 행까지 전부
-                            # 동일하게 값 입력 → F9 → Enter로 확정한다.
-                            # 1행 전용 거래처ds 팝업 키 시퀀스는 사용하지 않는다.
+                            if not finance_vendor_entry_state["f9_seeded"]:
+                                if not _seed_finance_vendor_number_lookup(
+                                    value_x, value_y, label, text,
+                                ):
+                                    _save_management_failure_screenshot(f"row{row_no}_vendor_seed")
+                                    raise RuntimeError(
+                                        f"{row_no}행 거래처번호 최초 검색 또는 결과 선택에 실패했습니다."
+                                    )
+                                finance_vendor_entry_state["f9_seeded"] = True
+                                management_enter_sent = True
+                                self.logger.info(f"  [MGMT-SEED] {label}: 최초 거래처번호 검색/선택 확인 완료")
+                                y += 20
+                                continue
                             summary_focus = management_active_row_context.get(
                                 "summary_focus"
                             )
