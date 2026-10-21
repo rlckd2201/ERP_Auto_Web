@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, Callable
 
 from .config import PROJECT_ROOT, settings
+from .erp_runner import _extract_invoice_date
 from .invoice_db import add_invoice_log, get_invoice, update_invoice_json
 
 Progress = Callable[[str, int, str], None]
@@ -62,6 +63,30 @@ def _invoice_data(invoice: dict[str, Any]) -> dict[str, Any]:
         merged.update(invoice["data"])
     merged.update(invoice)
     return merged
+
+
+def _display_date(value: object) -> str:
+    text = str(value or "").strip()
+    if not text:
+        return time.strftime("%Y. %m. %d")
+    normalized = re.sub(r"\s*([./-])\s*", r"\1", text)
+    parsed = _extract_invoice_date({"invoice_date": normalized})
+    if not parsed:
+        raise ValueError(f"현금출금결의서 작성일자가 올바르지 않습니다: {text}")
+    return parsed.replace("-", ". ")
+
+
+def _expense_report_date(invoice: dict[str, Any], data: dict[str, Any]) -> str:
+    raw_date = (
+        data.get("invoice_date")
+        or data.get("issue_date")
+        or invoice.get("invoice_date")
+        or invoice.get("issue_date")
+    )
+    if raw_date:
+        return _display_date(raw_date)
+    pdf_path = str(data.get("pdf_path") or invoice.get("pdf_path") or "")
+    return _display_date(_extract_invoice_date(data, pdf_path))
 
 
 def _clean_path(value: Any) -> str:
@@ -553,7 +578,7 @@ def _expense_payload(invoice: dict[str, Any]) -> dict[str, str]:
     }
     title = f"{title_map.get(dominant_account, '구매 건')}({site or '사업장미상'})"
     return {
-        "date": time.strftime("%Y. %m. %d"),
+        "date": _expense_report_date(invoice, data),
         "dept": "전산팀",
         "author": str(data.get("processor") or invoice.get("processor") or "").strip(),
         "title": title,

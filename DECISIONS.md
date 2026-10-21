@@ -1,5 +1,11 @@
 # Decisions
 
+## D-057 - Document completion must match the actual Agent result and invoice schema
+
+The purchase expense-report endpoint must reconcile the current generation job with the persisted metadata in invoice data/raw. A completed Agent job must not become a false timeout because a handler checks a nonexistent top-level field; merely finding an older PDF is also insufficient proof of a newly requested generation. Keep the existing ERP failure state separate from document-generation results, and avoid replaying ERP or printing to resolve a false document error. All rendered dates require calendar validation and complete month/day tokens, including display-only formatters.
+
+The user subsequently explicitly approved implementation and agent-side server access recovery. v1.0.249 checks current done job + matching upload ID + existing PDF, and validates displayed dates through the shared ERP parser. One scoped #272 regeneration passed the real endpoint and complete-page QA; its stored output-set copy was updated without replaying ERP or printing. Preserve the manually attached voucher and existing ERP error state rather than silently treating document completion as an ERP recovery.
+
 ## D-054 - Invoice date strings require calendar validation
 
 A nonempty string or eight numeric characters is insufficient proof of an invoice date. Month/day tokens must not be split from within another number, and every candidate must pass calendar validation before persistence or ERP use. Invalid metadata should fall back to source PDF evidence rather than flow unchanged into ERP. Recover the exact invoice date from the original document, never substitute receipt date merely to remove a missing alert. A failed invoice may be retried only after its full execution evidence establishes that ERP save was not reached.

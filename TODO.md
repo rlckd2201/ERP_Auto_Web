@@ -1,5 +1,17 @@
 # TODO
 
+## 2026-10-21 purchase expense report #272
+
+- [x] Identify the current #272 report requests and correlate Agent done/upload events with later false timeout logs.
+- [x] Reproduce the existing handler's 120-second HTTP 408 with a completed Agent job and nested report path, without production side effects.
+- [x] Inspect the existing PDF in full and reproduce valid 2026-10-20 becoming 2026.01.00 in the expense date formatter.
+- [x] After explicit user approval, fix current-request completion/path detection and calendar-valid date display while preserving unrelated output_set.py changes.
+- [x] Pass 28 focused tests in the working tree and clean focused stage; pass 13 new tests on server, compile, and update Graphify.
+- [x] Recover SSH using the existing management rule scoped to old/current work PCs; close the user's RDP connection; back up and deploy v1.0.249, restoring the watchdog.
+- [x] Verify the target Agent's exact final bundle and regenerate #272 once through the real endpoint: HTTP 200 in 37.61 seconds, done job eddcbb1e-442e-4e03-b819-2815d0f94801.
+- [x] Inspect the corrected native PDF in full and synchronize only its output-set copy: valid 2026.10.20 date, author 현시훈, 193,100 amount. No ERP replay/additional print was performed.
+- [ ] Observe the next natural user-initiated expense generation; track the separate #272 ERP failure independently of this completed document fix.
+
 ## 2026-10-12 Daou date repair
 
 - [x] Identify #259, reproduce the date parser failure from the real PDF, and correlate ERP failure with the false noon missing alert.

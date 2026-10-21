@@ -3267,8 +3267,20 @@ def api_generate_expense_report(invoice_id: int, request: Request) -> dict[str, 
     last_error = ""
     while time.monotonic() < deadline:
         refreshed = get_invoice(invoice_id) or invoice
-        report_path = str(refreshed.get("expense_report_pdf_path") or "").strip()
-        if report_path and Path(report_path).exists():
+        report_data = _invoice_data(refreshed)
+        report_path = str(report_data.get("expense_report_pdf_path") or "").strip()
+        upload_job_id = str(report_data.get("expense_report_upload_job_id") or "").strip()
+        current_job = job_store.get(job.id)
+        if current_job and current_job.status == "error":
+            last_error = current_job.error or current_job.message or ""
+            break
+        if (
+            current_job
+            and current_job.status == "done"
+            and upload_job_id == job.id
+            and report_path
+            and Path(report_path).is_file()
+        ):
             output_docs = build_output_set_status(refreshed, persist=True)
             refreshed = get_invoice(invoice_id) or refreshed
             if isinstance(refreshed, dict):
@@ -3279,9 +3291,8 @@ def api_generate_expense_report(invoice_id: int, request: Request) -> dict[str, 
                 "expense_report_pdf_path": report_path,
                 "output_docs": output_docs,
             }
-        current_job = job_store.get(job.id)
-        if current_job and current_job.status == "error":
-            last_error = current_job.error or current_job.message or ""
+        if current_job and current_job.status == "done":
+            last_error = "현금출금결의서 생성 완료 응답을 받았지만 이번 요청의 PDF 파일을 확인하지 못했습니다."
             break
         time.sleep(1.0)
 
