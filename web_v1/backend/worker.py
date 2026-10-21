@@ -353,6 +353,9 @@ class JobWorker:
             "target_agent_id": str(job.payload.get("target_agent_id") or ""),
             "target_client_ip": str(job.payload.get("target_client_ip") or ""),
             "regular_auto": bool(job.payload.get("regular_auto")),
+            "purchase_shared": bool(job.payload.get("purchase_shared")),
+            "output_agent_id": str(job.payload.get("output_agent_id") or ""),
+            "output_client_ip": str(job.payload.get("output_client_ip") or ""),
         }
         queue_path = queue_writer(
             job.id,

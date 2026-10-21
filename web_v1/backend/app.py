@@ -30,6 +30,7 @@ from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delet
 from .job_store import job_store
 from .models import InvoiceIdsRequest, InvoiceStatusUpdate, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .notifications import notify_regular_auto_result
+from .purchase_execution import purchase_routing_payload, resolve_purchase_execution
 from .output_set import build_output_set_status, generate_expense_report_pdf
 from .regular_due_monitor import regular_due_history, regular_due_status, send_regular_due_report, send_regular_due_vendor_alert_sample, start_regular_due_scheduler
 from .erp_queue import queue_dir, write_expense_report_queue
@@ -1051,8 +1052,8 @@ def _maybe_queue_one_click_output(source_job_id: str) -> None:
                 "printer_name": str(source_job.payload.get("printer_name") or ""),
                 "processor": str(source_job.payload.get("processor") or "WEB v1.0"),
                 "source_job_id": source_job_id,
-                "target_agent_id": str(source_job.payload.get("target_agent_id") or ""),
-                "target_client_ip": str(source_job.payload.get("target_client_ip") or ""),
+                "target_agent_id": str(source_job.payload.get("output_agent_id") or source_job.payload.get("target_agent_id") or ""),
+                "target_client_ip": str(source_job.payload.get("output_client_ip") or source_job.payload.get("target_client_ip") or ""),
                 "existing_only": True,
                 "regular_auto": bool(source_job.payload.get("regular_auto")),
             },
@@ -1484,6 +1485,11 @@ def require_setup_ready(request: Request) -> dict[str, Any]:
         missing = ", ".join(status.get("missing_items") or [])
         raise HTTPException(status_code=409, detail=f"필수 프로그램 점검이 완료되지 않았습니다: {missing}")
     return status
+
+
+def _purchase_execution_setup(request: Request) -> tuple[dict[str, Any], dict[str, Any]]:
+    caller = setup_status(client_ip=client_ip(request))
+    return caller, resolve_purchase_execution(caller)
 
 
 @app.on_event("startup")
@@ -2487,7 +2493,7 @@ def create_purchase_mail_collect_job() -> JobResponse:
 def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="원클릭 처리할 구매 건을 선택해야 합니다.")
-    setup = require_setup_ready(request)
+    setup, executor = _purchase_execution_setup(request)
     processor = _request_processor_name(request, body.processor, setup)
     output = _one_click_output_payload(body.output_target, setup)
     # Guard before saving the browser-side analysis. update_invoice_json clears
@@ -2550,8 +2556,9 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
                 "erp_invoice_ids": erp_invoice_ids,
                 "ready_output_invoice_ids": ready_output_ids,
                 "processor": processor,
-                "target_agent_id": setup.get("agent_id") or "",
-                "target_client_ip": setup.get("client_ip") or client_ip(request),
+                "target_agent_id": executor.get("agent_id") or "",
+                "target_client_ip": executor.get("client_ip") or client_ip(request),
+                **purchase_routing_payload(setup, executor),
                 "one_click": True,
                 "output_target": body.output_target,
                 "output_action": output["action"],
@@ -2684,7 +2691,7 @@ def create_purchase_analyze_job(body: InvoiceIdsRequest, request: Request) -> Jo
 def create_purchase_erp_input_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="ERP 입력할 구매 건을 선택해야 합니다.")
-    setup = require_setup_ready(request)
+    setup, executor = _purchase_execution_setup(request)
     processor = _request_processor_name(request, body.processor, setup)
     job = job_store.create(
         JobCreateRequest(
@@ -2693,8 +2700,9 @@ def create_purchase_erp_input_job(body: InvoiceIdsRequest, request: Request) -> 
             payload={
                 "invoice_ids": body.invoice_ids,
                 "processor": processor,
-                "target_agent_id": setup.get("agent_id") or "",
-                "target_client_ip": setup.get("client_ip") or client_ip(request),
+                "target_agent_id": executor.get("agent_id") or "",
+                "target_client_ip": executor.get("client_ip") or client_ip(request),
+                **purchase_routing_payload(setup, executor),
             },
         )
     )
@@ -3233,10 +3241,10 @@ def api_generate_expense_report(invoice_id: int, request: Request) -> dict[str, 
         raise HTTPException(status_code=404, detail="Invoice not found")
     if str(invoice.get("invoice_type") or "").lower() != "purchase":
         raise HTTPException(status_code=400, detail="구매 처리 건에만 현금출금결의서를 생성할 수 있습니다.")
-    setup = require_setup_ready(request)
+    setup, executor = _purchase_execution_setup(request)
     processor = _request_processor_name(request, "", setup)
-    target_agent_id = str(setup.get("agent_id") or "").strip()
-    target_client_ip = str(setup.get("client_ip") or client_ip(request)).strip()
+    target_agent_id = str(executor.get("agent_id") or "").strip()
+    target_client_ip = str(executor.get("client_ip") or client_ip(request)).strip()
     if not target_agent_id or not target_client_ip:
         raise HTTPException(status_code=409, detail="담당자 PC 필수 프로그램이 연결되어야 현금출금결의서를 생성할 수 있습니다.")
     invoice = _set_expense_report_author(invoice, processor)

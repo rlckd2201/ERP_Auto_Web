@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-22 opt-in shared purchase executor
+
+- Use a complete-account-ID allowlist plus an explicit target Agent ID/IP. Enable Song's account only in production; empty allowlist preserves the default local behavior. Shared-PC readiness fails explicitly without switching execution to another PC after a failure.
+- Separate execution ownership from business ownership: ERP and Excel may run on 243; processor/document author stay with the requesting account, and one-click output returns to the request's original Agent/printer. Existing document sets retain output-only handling.
+- Use the existing synchronous Agent task loop for both purchase and regular work. Shared purchases keep strict purchase checks, allow more RD Viewer/PDF wait time, restore task-scoped environment settings, and close their ERP session after each task.
+- Preserve ERP_SAVE_CONFIRM_REQUIRED across metadata/PDF updates. For older cleared errors, inspect only the current failed task belonging to that invoice. Explicit reset to waiting acknowledges prior voucher review. Route changes never authorize automatic recovery/replay.
+- Roll back new routing by clearing PURCHASE_SHARED_USER_IDS and restarting after active work finishes. Preserve queued targets and current DB data; an old DB snapshot is evidence/recovery material, not an automatic release rollback step. Operator notes: `docs/purchase-shared-agent.md`.
+
 ## D-057 - Document completion must match the actual Agent result and invoice schema
 
 The purchase expense-report endpoint must reconcile the current generation job with the persisted metadata in invoice data/raw. A completed Agent job must not become a false timeout because a handler checks a nonexistent top-level field; merely finding an older PDF is also insufficient proof of a newly requested generation. Keep the existing ERP failure state separate from document-generation results, and avoid replaying ERP or printing to resolve a false document error. All rendered dates require calendar validation and complete month/day tokens, including display-only formatters.

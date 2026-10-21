@@ -94,7 +94,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.249"
+AGENT_BUNDLE_VERSION = "1.0.250"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
@@ -153,9 +153,7 @@ def _erp_task_runtime_profile(task: dict[str, Any]) -> tuple[str, dict[str, str]
     if not is_purchase:
         return "", {}
 
-    # Interactive purchase work runs on the requesting user's normal PC.
-    # The slow 243 PC uses the separate regular-auto profile above.
-    return "purchase-interactive", {
+    profile = {
         "ERP_FAST_INPUT": "0",
         "ERP_FAST_FIELD_VERIFY": "0",
         "ERP_STABLE_HEADER_FIELDS": "1",
@@ -189,14 +187,27 @@ def _erp_task_runtime_profile(task: dict[str, Any]) -> tuple[str, dict[str, str]
         "ERP_PDF_SAVE_RETRIES": "1",
         "ERP_AGENT_PROGRESS_THROTTLE_SEC": "4.0",
     }
+    if bool(task.get("purchase_shared") or source_context.get("purchase_shared")):
+        # Shared purchase work keeps purchase validation and allows the slower
+        # dedicated PC more time to open RD Viewer and finish a PDF save.
+        profile.update({
+            "ERP_SLIP_OPEN_WAIT": "5.0",
+            "ERP_PRINT_SAVE_WAIT": "2.0",
+            "ERP_PRINT_VIEWER_TIMEOUT_SEC": "15.0",
+            "ERP_PRINT_DIALOG_TIMEOUT_SEC": "15.0",
+            "ERP_PDF_SAVE_DIALOG_TIMEOUT_SEC": "20.0",
+            "ERP_PDF_CREATED_TIMEOUT_SEC": "15.0",
+        })
+        return "purchase-shared", profile
+    return "purchase-interactive", profile
 
 
-def _apply_erp_runtime_profile(profile: dict[str, str]) -> dict[str, str | None]:
+def _apply_erp_runtime_profile(profile: dict[str, str], *, force: bool = False) -> dict[str, str | None]:
     """Apply task settings while forcing safety-critical purchase values."""
     previous: dict[str, str | None] = {}
     for key, value in profile.items():
         previous[key] = os.environ.get(key)
-        if key in ERP_RUNTIME_PROFILE_FORCE_KEYS or key not in os.environ:
+        if force or key in ERP_RUNTIME_PROFILE_FORCE_KEYS or key not in os.environ:
             os.environ[key] = value
     return previous
 
@@ -2092,10 +2103,11 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
     os.environ.setdefault("ERP_AGENT_FRESH_START", "1")
     source_context = task.get("source_job_payload") if isinstance(task.get("source_job_payload"), dict) else {}
     is_regular_auto_task = bool(task.get("regular_auto") or source_context.get("regular_auto"))
+    is_shared_purchase_task = bool(task.get("purchase_shared") or source_context.get("purchase_shared"))
     runtime_profile_name, runtime_defaults = _erp_task_runtime_profile(task)
     previous_speed_env: dict[str, str | None] = {}
     if runtime_defaults:
-        previous_speed_env = _apply_erp_runtime_profile(runtime_defaults)
+        previous_speed_env = _apply_erp_runtime_profile(runtime_defaults, force=is_shared_purchase_task)
         log(f"ERP runtime profile applied: {runtime_profile_name}")
     if str(PROJECT_ROOT) not in sys.path:
         sys.path.insert(0, str(PROJECT_ROOT))
@@ -2245,9 +2257,9 @@ def run_task(server: str, task: dict[str, Any], agent_id: str, verify: bool) -> 
             log(f"ERP failure report failed: {report_exc}")
     finally:
         progress_dispatcher.close()
-        close_after_task = is_regular_auto_task or os.getenv("ERP_AGENT_CLOSE_ERP_AFTER_TASK", "0").strip().lower() in {"1", "true", "yes", "y"}
+        close_after_task = is_regular_auto_task or is_shared_purchase_task or os.getenv("ERP_AGENT_CLOSE_ERP_AFTER_TASK", "0").strip().lower() in {"1", "true", "yes", "y"}
         if close_after_task:
-            _cleanup_erp_processes_after_task("regular_auto" if is_regular_auto_task else "env")
+            _cleanup_erp_processes_after_task("regular_auto" if is_regular_auto_task else "purchase_shared" if is_shared_purchase_task else "env")
         if runtime_defaults:
             _restore_erp_runtime_profile(previous_speed_env)
 

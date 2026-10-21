@@ -110,6 +110,9 @@ class Settings:
     erp_print_target: str = _env("ERP_PRINT_TARGET", _env("PRINT_TARGET_PDF", "Microsoft Print to PDF"))
     erp_execute_enabled: bool = _env("ERP_EXECUTE_ENABLED", "1").lower() not in {"0", "false", "no", "off"}
     erp_execution_mode: str = _env("ERP_EXECUTION_MODE", "agent").lower()  # agent | server
+    purchase_shared_agent_ip: str = _env("PURCHASE_SHARED_AGENT_IP")
+    purchase_shared_agent_id: str = _env("PURCHASE_SHARED_AGENT_ID")
+    purchase_shared_user_ids: str = _env("PURCHASE_SHARED_USER_IDS")
     regular_auto_agent_ip: str = _env("REGULAR_AUTO_AGENT_IP")
     regular_auto_printer_key: str = _env("REGULAR_AUTO_PRINTER_KEY", "pyeongtaek").lower()
     regular_auto_enabled: bool = _env_bool("REGULAR_AUTO_ENABLED", bool(_env("REGULAR_AUTO_AGENT_IP")))

@@ -1,5 +1,14 @@
 # Debug
 
+## I-054 - Song purchase execution offloaded to 243 (2026-10-22)
+
+- Current v249 preflight passed for Song `tuy1120` / 172.17.30.15 and 243 at 1920x1080 / 100%; both had the exact v249 bundle. 243 already supports purchase tasks. API endpoints always selected the requesting PC, and one-click downstream output reused that same target, preventing separate execution/output placement.
+- Song's most recent failed queue records are #267 (2026-10-20 11:19:44, job 1463c29f-e16c-47c9-90a7-c1de2c61a247) and #262 (2026-10-13 13:49:42, job 5f5c7485-2e26-409d-a155-cccda4261949). Both report ERP_SAVE_CONFIRM_REQUIRED after save-command/PDF output failure. Both are now completed by earlier intervening user actions; no Oct 22 purchase failure was found in the current records.
+- Existing update_invoice_json/update_invoice_pdf_path erased last_error during document/analysis changes. v250 preserves save-confirmation errors, consults the current failed queue for older erased markers, and validates this before a new ERP queue is prepared.
+- Added allowlisted routing, separate downstream output Agent/IP, and shared purchase runtime profile. Default local purchase and regular-auto profiles retain their values. v250 server bundle: `58aeebf421c6698cf5affab8d8cd1029fa81fc98a01d5ff1e4a6dfcb43d97d88`.
+- Initial deployment gate stopped before any live changes because a 2026-08-26 queue for #209 remained claimed. Its invoice is already completed under a different ERP job. Updated the gate to compare current invoice status/job ownership; preserved the historical queue unchanged. No active invoice/job was displaced.
+- Evidence: local `tmp/purchase_executor_20261022/`; server backup contains backup_manifest.json, deployment_250.json, routing_verification_250.json, before_deploy/, predeploy_db.sqlite. Server regression log: `C:/ERP_DB/incoming/purchase_shared_250/server_tests.txt`. All 55 focused tests passed on each of the three stages. Final production proof at 08:45:16: all four observed Agents are ready on the exact v250 hash; Song routes to 243, reum/hah4627 stay local, backend/watchdog are enabled, all 12 deployment hashes match, and all 159 invoice rows retain their original status/owner/processing/error fields. Actual GUI purchase save/print remains for the next new purchase.
+
 ## I-053 - Purchase expense-report false HTTP 408 and invalid displayed date (2026-10-21, fixed)
 
 - Target #272, Compuzone/D1/193,100 KRW, operator/Agent 현시훈 at 172.16.10.18. At 13:14:17, ten recent expense_report jobs are done, eight older requests later log response timeout. Example `ba26a40c-0c4f-46f0-b464-cf3fb869799f`: created 13:09:36, completed 13:09:45, then false failure log 13:11:37. Latest inspected upload job is `941b2f47-2171-499c-a14b-9decd4ff4a6c`. Production health is v1.0.248.

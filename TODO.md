@@ -1,5 +1,15 @@
 # TODO
 
+## 2026-10-22 shared purchase execution acceptance
+
+- [x] Back up current operating source/config/DB/queue before implementation; validate backup integrity.
+- [x] Enable only account tuy1120 on shared Agent 243; retain other users' routes and the original author/output destination.
+- [x] Add shared-PC purchase timing, preserve task environment restoration/session cleanup, and block unreviewed post-save retries.
+- [x] Pass 55 focused tests in working, focused-commit, and production staging; compile; deploy v250 with rollback copies and restored watchdog.
+- [x] Confirmed updated 243/Song Agent bundle and ready state; real production routing and two unaffected users passed read-only checks.
+- [ ] Observe the next genuinely new purchase through ERP save, voucher upload, report generation, and original-destination output. Do not use a previously saved/completed invoice as a test.
+- [ ] Commit and push only this feature's source/docs/config delta; preserve existing unrelated dirty/deleted files.
+
 ## 2026-10-21 purchase expense report #272
 
 - [x] Identify the current #272 report requests and correlate Agent done/upload events with later false timeout logs.

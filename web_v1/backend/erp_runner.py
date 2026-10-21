@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import logging
 import re
 import sys
@@ -61,7 +62,24 @@ ERP_SAVE_CONFIRM_REQUIRED = "[ERP_SAVE_CONFIRM_REQUIRED]"
 
 
 def requires_erp_save_confirmation(invoice: dict[str, Any] | None) -> bool:
-    return bool(invoice) and ERP_SAVE_CONFIRM_REQUIRED in str((invoice or {}).get("last_error") or "")
+    if not invoice:
+        return False
+    if ERP_SAVE_CONFIRM_REQUIRED in str(invoice.get("last_error") or ""):
+        return True
+    # Older metadata updates erased last_error. Consult only this invoice's
+    # current failed task; explicitly resetting to waiting acknowledges review.
+    job_id = str(invoice.get("erp_job_id") or "")
+    if invoice.get("status") != "오류" or not re.fullmatch(r"[0-9a-fA-F-]{36}", job_id):
+        return False
+    path = settings.erp_db_dir / "erp_queue" / f"purchase_erp_{job_id}.json"
+    try:
+        task = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return False
+    if task.get("job_id") != job_id or not any(str(item.get("id")) == str(invoice.get("id")) for item in task.get("invoices", []) if isinstance(item, dict)):
+        return False
+    result = task.get("agent_result") if isinstance(task.get("agent_result"), dict) else {}
+    return ERP_SAVE_CONFIRM_REQUIRED in str(result.get("message") or "")
 
 
 def _to_int(value: Any) -> int:
@@ -213,6 +231,8 @@ def _purchase_erp_ready(data: dict[str, Any], raw: dict[str, Any]) -> bool:
 
 
 def validate_purchase_invoice_for_erp(invoice: dict[str, Any]) -> None:
+    if requires_erp_save_confirmation(invoice):
+        raise RuntimeError(f"{ERP_SAVE_CONFIRM_REQUIRED} K-System에서 기존 전표 저장 여부를 확인한 뒤 대기 상태로 변경해야 합니다.")
     raw = dict(invoice.get("raw") or {})
     data = dict(raw)
     if isinstance(raw.get("data"), dict):

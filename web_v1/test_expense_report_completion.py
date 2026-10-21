@@ -58,6 +58,7 @@ class ExpenseCompletionTests(unittest.TestCase):
             "Any": Any, "Request": object, "Path": Path, "time": self.clock,
             "HTTPException": HandlerError, "get_invoice": lambda _: self.invoice,
             "require_setup_ready": lambda _: {"agent_id": "agent", "client_ip": "127.0.0.1"},
+            "_purchase_execution_setup": lambda _: ({"agent_id": "agent", "client_ip": "127.0.0.1"}, {"agent_id": "agent", "client_ip": "127.0.0.1"}),
             "_request_processor_name": lambda *args: "author", "client_ip": lambda _: "127.0.0.1",
             "_set_expense_report_author": lambda invoice, _: invoice,
             "job_store": SimpleNamespace(create=lambda _: self.job, get=lambda _: self.job,
@@ -78,6 +79,19 @@ class ExpenseCompletionTests(unittest.TestCase):
         self.assertEqual(self.clock.elapsed, 0)
         self.update.assert_not_called()
         self.assertFalse(any(call.kwargs.get("level") == "error" for call in self.log.call_args_list))
+
+    def test_shared_generation_keeps_requesting_author_and_targets_shared_pc(self):
+        caller = {"user_id": "tuy1120", "agent_id": "song", "client_ip": "172.17.30.15"}
+        executor = {"agent_id": "shared243", "client_ip": "172.17.30.243"}
+        self.namespace["_purchase_execution_setup"] = lambda _: (caller, executor)
+        self.namespace["_request_processor_name"] = Mock(return_value="requesting author")
+        self.namespace["job_store"].create = Mock(return_value=self.job)
+        self.run_handler()
+        self.assertEqual(self.namespace["_request_processor_name"].call_args.args[2], caller)
+        payload = self.namespace["job_store"].create.call_args.args[0]["payload"]
+        self.assertEqual(payload["document_author"], "requesting author")
+        self.assertEqual(payload["target_agent_id"], "shared243")
+        self.assertEqual(self.namespace["write_expense_report_queue"].call_args.kwargs["target_client_ip"], "172.17.30.243")
 
     def test_existing_pdf_is_not_accepted_until_this_generation_finishes(self):
         self.job.status = "erp"

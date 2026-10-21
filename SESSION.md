@@ -1,5 +1,14 @@
 # Session
 
+## 2026-10-22 purchase execution on 243
+
+- User explicitly requested a current-version backup followed by a routing change because Song Myeonghak's purchase work repeatedly fails. Primary agent worked alone; other accounts retain local purchase execution.
+- Before edits, backed up operating v1.0.249 source/config, SQLite, and queue to `C:/ERP_DB/deploy_backups/20261022_083705_v1.0.249_before_purchase243`. Source archive SHA-256 `298fb5f0d8cc5457c2f39d8a98cb60ebb4042ae77b8c40d13975756aca1a606d`; 159 files, ZIP integrity/hashes checked, SQLite integrity ok. Local immutable source copy: `tmp/purchase_executor_20261022/production_v249.zip`.
+- v1.0.250 deployed at 08:43:32 KST. `PURCHASE_SHARED_USER_IDS=tuy1120`, target `DESKTOP-55LQ6BN-TEST` / `172.17.30.243`. Purchase ERP, one-click, and cash-disbursement generation run there; caller identity and chosen output Agent/printer remain attached to the original request. Existing regular processing keeps its settings and synchronous Agent queue.
+- 55 focused tests passed in the working tree, clean focused-commit stage, and operating-server stage. Compilation passed. Graphify refreshed to 1,624 nodes / 4,337 edges / 111 communities. Production health is v250; expected bundle `58aeebf421c6698cf5affab8d8cd1029fa81fc98a01d5ff1e4a6dfcb43d97d88`. At 08:44:50 KST, 243, Song, reum, and hah4627 all reported v250 with that exact hash and ready=true. Live routing resolves Song to 243 and both other users to their original PCs.
+- No historical purchase was replayed, invoice status changed, print submitted, or test email sent. Live read-only #267 payload check yields P3 / 2026-10-13 / three purchase rows. Its completed status is retained.
+- Final 08:45:16 verification confirms all 12 deployed files, enabled backend/watchdog, and unchanged status/processor/processed_at/ERP-job/error fields for all 159 invoice rows. Next exact starting point: observe one genuinely new Song-account purchase through 243. There is no eligible new pending purchase to use as a safe real ERP-save test; do not replay completed #262/#267 or voucher-attached #272 for verification.
+
 ## 2026-10-21 expense-report fix deployed and #272 regenerated
 
 - User requested diagnosis and then explicitly instructed implementation. Primary agent worked alone. Fixed current-request completion/path detection and calendar-valid display dates; v1.0.249 was deployed at 13:32:03 KST after backup to `C:\ERP_DB\deploy_backups\20261021_133152_v1.0.249_expense_report`.

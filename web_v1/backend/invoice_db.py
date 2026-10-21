@@ -610,7 +610,7 @@ def update_invoice_json(invoice_id: int, updates: dict[str, Any], *, message: st
                 data[key] = value
         raw["data"] = data
         cur.execute(
-            "UPDATE invoices SET json_data=?, last_error='' WHERE id=?",
+            "UPDATE invoices SET json_data=?, last_error=CASE WHEN instr(last_error, '[ERP_SAVE_CONFIRM_REQUIRED]') > 0 THEN last_error ELSE '' END WHERE id=?",
             (json.dumps(raw, ensure_ascii=False), invoice_id),
         )
         conn.commit()
@@ -642,7 +642,7 @@ def update_invoice_pdf_path(invoice_id: int, pdf_path: str, updates: dict[str, A
                 data[key] = value
         raw["data"] = data
         cur.execute(
-            "UPDATE invoices SET pdf_path=?, json_data=?, last_error='' WHERE id=?",
+            "UPDATE invoices SET pdf_path=?, json_data=?, last_error=CASE WHEN instr(last_error, '[ERP_SAVE_CONFIRM_REQUIRED]') > 0 THEN last_error ELSE '' END WHERE id=?",
             (pdf_path, json.dumps(raw, ensure_ascii=False), invoice_id),
         )
         conn.commit()
