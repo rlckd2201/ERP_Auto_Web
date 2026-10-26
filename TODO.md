@@ -1,19 +1,15 @@
 # TODO
 
-## 2026-10-26 server migration
+## 2026-10-26 migration phase with old service maintained
 
-- [x] Push focused migration support commit c72d687; retain unrelated dirty/deleted files outside it. Clean focused verification passed 65 unittest cases and 3 watchdog tests.
-- [x] Recover administrator SSH through authorized RDP; preserve existing source/target services and saved configuration.
-- [x] Verify source/full data/DB/task backups; transfer and hash-check private Python, browser binaries and ERP installers.
-- [x] Stage v251 with schedulers off; preserve trust CA, users, documents and shared243/owner/printer rules.
-- [x] Verify 65 tests, SQLite/162 financial rows/all source PDFs, client payload, HTTPS from management PC, Chromium and read-only IMAP. Graphify refreshed.
-- [x] Resolve target8080 conflict by selecting8081; preserve WorkReportIntegration-Web. Prepare HTTP307 old-address redirection because source-to-target network path is blocked. Return staging to loopback while waiting.
-- [x] Prepare guarded source freeze/final snapshot, target sync/activation, and old-address redirect scripts. Verify Python and PowerShell syntax and a clean focused Git stage.
-- [ ] Gateway must authorize new SMTP egress59.13.157.31; retain59.1.29.245. Current external RCPT550, internal250, no message DATA sent. Pending user action; production remains v250 on121.
-- [ ] Rerun target acceptance to full success; freeze source at idle and final-sync authoritative163-or-later invoice DB/documents/state. The staged162-row precopy is not current production.
-- [ ] Activate only target8081/background tasks/watchdog, disable old backend/watchdog and quarantine its two Startup links, then enable old121 redirect only.
-- [ ] Verify exact251 hash on active243/Song/Kim/reum Agents and Hyeon on reconnect; observe a natural collection and preserve due-mail dedup/ownership. Do not submit old ERP/print jobs for testing.
-- [ ] Record actual cutover/final acceptance and rollback proof in all four session documents. Migration is not complete merely because staging passed.
+- [x] Preserve121 operating source/config/backend/watchdog and existing Agent/printer routing; no freeze/redirect or client migration.
+- [x] Take and verify an online15:48 source backup; copy latest163 invoices/375 dictionary rows/6 users/7 Agent profiles/406 setup jobs and all PDFs to105.
+- [x] Publish105:8081 as a clearly labelled read-only preview with original-account login, invoice search and PDF viewing; block actual ERP/print/mail/Agent/install actions before execution. Keep target8080 unrelated service intact.
+- [x] Verify73 tests in working tree/clean focused stage/target, all6 logins,163 rendered rows, zero browser errors, complete unchanged table fingerprints, exact PDF bytes, verified HTTPS and normal-mode compatibility. Review screenshot; refresh Graphify and compile scripts.
+- [x] Update future private-staging/freeze/final-sync scripts for preview0,73 tests and the latest baseline archive. These phase scripts have NOT been executed; source stays active.
+- [ ] External SMTP relay authorization for new egress59.13.157.31 is still needed for full operating cutover; preserve source59.1.29.245. Preview requires no outbound mail.
+- [ ] After full acceptance, freeze source at idle and final-sync then-current DB/state/documents. Do not use the point-in-time preview copy as the final authoritative snapshot.
+- [ ] Activate only target business schedulers, verify Agent migration/owner/printer/due dedup and natural collection, retain source as disabled recovery copy plus old-address redirect. Until then all actual work remains on121.
 
 ## 2026-10-22 shared purchase execution acceptance
 

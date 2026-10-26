@@ -1,14 +1,11 @@
 # Decisions
 
-## 2026-10-26 migrate with one authoritative backend
+## 2026-10-26 maintain existing production while starting migration
 
-- Focused release c72d687 contains only migration support and session evidence. Preserve unrelated pre-existing checkout changes and generated Graphify drift outside the release; current graph remains refreshed locally.
-- Use full operating source/data and compatible absolute paths, preserving users, dictionary, invoice/document/queue/mail/due state and shared243 execution with original author/output printer ownership. Isolate the copied Python/browser runtime so the target's existing apps/global Python stay intact.
-- Stage with BACKEND_BACKGROUND_ENABLED=0 and loopback binding; the default remains enabled for existing installations. Final source freeze/snapshot precedes new business activation. Source backend/watchdog and only its two accounting Startup shortcuts must be disabled/quarantined before new activation; no duplicate mail/due schedulers.
-- Existing target8080 is WorkReportIntegration-Web. Accounting uses105:8081, explicit WEB_PORT/origin/Agent defaults and configurable watchdog health URL. Source cannot reach new subnet ports, so retain old bookmarks/Agent update access using no-cache307 redirection directly to105:8081. Request method/body/query and document escapes are preserved. No fallback to old business execution.
-- New105 TLS leaf is signed by the existing trusted CA. SSL_TRUST_CERT_FILE serves the public root to installers rather than the new leaf/chain. Old private CA/key remain server-side. Set REGULAR_DUE_SENDER_HOST to WIN-L1NNJRVR4BA and due history origin105:8081; preserve daily sent-state.
-- Require successful external SMTP RCPT authorization from new egress59.13.157.31 before cutover. Do not silently change sender identity, route mail through an unreviewed transport, or disable outbound reminders to make migration appear complete. Pending gateway allowlist action is a real dependency, not another server-login permission request.
-- Do not roll back by copying the stale precopy over an activated target. Once target has accepted business work, freeze it and resync its latest authoritative data before restoring the old backend. Offline Agents migrate on reconnect; actual new ERP/print work is observed only when naturally requested.
+- User's latest instruction requires preserving the current service during migration. Keep121 and its Agents as sole business authority. Advance105 through a usable read-only preview and a fresh online backup rather than stopping the working server while external SMTP is unresolved.
+- Preview is explicit and default-off: MIGRATION_PREVIEW forces schedulers off, serves a dedicated read-only page, and uses a default-deny API guard. Only login/invoice reads/source-PDF/status/certificate are exposed; all writes, Agent channels, installers/version and state-persisting GETs are blocked. Login must not rebind copied Agent identities. Existing production behavior remains the default when preview is off.
+- Keep8080 WorkReportIntegration-Web intact and use8081 for accounting. Preserve isolated runtime, absolute paths, trusted CA, source credentials, shared243 execution and original author/output printer rules. Target account data is a timestamped snapshot, not bidirectional or continuous replication.
+- Full cutover still needs working external SMTP, fresh idle-source freeze/final sync and preview0 before target business activation. Preserve source data/config/backups for recovery; avoid duplicate schedulers and stale-snapshot rollback. Reaching the preview page is evidence of migration progress, not proof of completed operating cutover.
 
 ## 2026-10-22 opt-in shared purchase executor
 

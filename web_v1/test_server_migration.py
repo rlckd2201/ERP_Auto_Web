@@ -27,7 +27,7 @@ def load_handler(name, namespace):
 
 class MigrationStartupTests(unittest.TestCase):
     def test_staging_initializes_data_without_starting_any_worker_or_scheduler(self):
-        settings = SimpleNamespace(download_dir=Mock(), chrome_profile_dir=Mock(), backend_background_enabled=False)
+        settings = SimpleNamespace(download_dir=Mock(), chrome_profile_dir=Mock(), backend_background_enabled=False, migration_preview=False)
         namespace = dict(settings=settings, init_db=Mock(), init_auth_db=Mock(), init_setup_db=Mock(),
                          worker=SimpleNamespace(start=Mock()), _start_mail_collect_scheduler=Mock(),
                          _start_regular_auto_scheduler=Mock(), start_regular_due_scheduler=Mock())
