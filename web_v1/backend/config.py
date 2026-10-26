@@ -82,7 +82,6 @@ class Settings:
     app_version: str = _app_version()
     app_env: str = _env("APP_ENV", "development")
     backend_background_enabled: bool = _env_bool("BACKEND_BACKGROUND_ENABLED", True)
-    migration_preview: bool = _env_bool("MIGRATION_PREVIEW", False)
     web_host: str = _env("WEB_HOST", "127.0.0.1")
     web_port: int = _env_int("WEB_PORT", 8080)
     web_public_origin: str = _env("WEB_PUBLIC_ORIGIN", "http://127.0.0.1:8080")

@@ -1,15 +1,13 @@
 # TODO
 
-## 2026-10-26 migration phase with old service maintained
+## 2026-10-26 correct migration UI and retain working production
 
-- [x] Preserve121 operating source/config/backend/watchdog and existing Agent/printer routing; no freeze/redirect or client migration.
-- [x] Take and verify an online15:48 source backup; copy latest163 invoices/375 dictionary rows/6 users/7 Agent profiles/406 setup jobs and all PDFs to105.
-- [x] Publish105:8081 as a clearly labelled read-only preview with original-account login, invoice search and PDF viewing; block actual ERP/print/mail/Agent/install actions before execution. Keep target8080 unrelated service intact.
-- [x] Verify73 tests in working tree/clean focused stage/target, all6 logins,163 rendered rows, zero browser errors, complete unchanged table fingerprints, exact PDF bytes, verified HTTPS and normal-mode compatibility. Review screenshot; refresh Graphify and compile scripts.
-- [x] Update future private-staging/freeze/final-sync scripts for preview0,73 tests and the latest baseline archive. These phase scripts have NOT been executed; source stays active.
-- [ ] External SMTP relay authorization for new egress59.13.157.31 is still needed for full operating cutover; preserve source59.1.29.245. Preview requires no outbound mail.
-- [ ] After full acceptance, freeze source at idle and final-sync then-current DB/state/documents. Do not use the point-in-time preview copy as the final authoritative snapshot.
-- [ ] Activate only target business schedulers, verify Agent migration/owner/printer/due dedup and natural collection, retain source as disabled recovery copy plus old-address redirect. Until then all actual work remains on121.
+- [x] Remove unrequested custom preview and restore original application source/UI.
+- [x] Serve105:8081 through a TLS forwarding-only service to existing121; preserve live data, request/client identity, source Agent URL and original printer/author ownership.
+- [x] Confirm original root and all frontend assets exact; real login and20 purchase records render; current management PC setup ready.65 tests pass; Graphify refreshed after removing preview code.
+- [x] Preserve121 source/config/backend/watchdog and target8080 unrelated app. Disable the copied target business backend and retain its163-row snapshot privately at future8082; no duplicate processing.
+- [ ] Complete actual backend migration after external SMTP authorization and fresh private8082 acceptance. Adapt old phase scripts for current architecture/65 tests before executing any freeze/swap.
+- [ ] Final-sync at idle, hand public8081 from frontdoor to the new backend, retain old source recovery files, then verify actual Agent/owner/printer/due/mail operation. Forwarding alone is not completed backend migration.
 
 ## 2026-10-22 shared purchase execution acceptance
 

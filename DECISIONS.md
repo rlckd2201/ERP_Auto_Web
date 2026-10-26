@@ -1,11 +1,10 @@
 # Decisions
 
-## 2026-10-26 maintain existing production while starting migration
+## 2026-10-26 preserve the existing application during server migration
 
-- User's latest instruction requires preserving the current service during migration. Keep121 and its Agents as sole business authority. Advance105 through a usable read-only preview and a fresh online backup rather than stopping the working server while external SMTP is unresolved.
-- Preview is explicit and default-off: MIGRATION_PREVIEW forces schedulers off, serves a dedicated read-only page, and uses a default-deny API guard. Only login/invoice reads/source-PDF/status/certificate are exposed; all writes, Agent channels, installers/version and state-persisting GETs are blocked. Login must not rebind copied Agent identities. Existing production behavior remains the default when preview is off.
-- Keep8080 WorkReportIntegration-Web intact and use8081 for accounting. Preserve isolated runtime, absolute paths, trusted CA, source credentials, shared243 execution and original author/output printer rules. Target account data is a timestamped snapshot, not bidirectional or continuous replication.
-- Full cutover still needs working external SMTP, fresh idle-source freeze/final sync and preview0 before target business activation. Preserve source data/config/backups for recovery; avoid duplicate schedulers and stale-snapshot rollback. Reaching the preview page is evidence of migration progress, not proof of completed operating cutover.
+- User rejected the separate migration preview. Server relocation must preserve the original UI and workflows; do not introduce a new dashboard, read-only replacement or user-facing restrictions without a request.
+- During staged migration,105 may forward the original live application to the single121 business backend. Be explicit that data/ERP/mail still run on121 until actual cutover. Preserve original client IP and use source Host so account/printer resolution and Agent installer URLs remain consistent.
+- Keep copied target backend stopped/private8082/background0 while public frontdoor owns8081. Final handover requires fresh data sync, working mail and sole new business execution; source recovery files remain available. Preserve unrelated services and pre-existing checkout changes.
 
 ## 2026-10-22 opt-in shared purchase executor
 

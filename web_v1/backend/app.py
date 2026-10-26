@@ -26,7 +26,6 @@ from .approval_fetcher import fetch_approval_documents
 from .compuzone_quote import auto_attach_compuzone_quote
 from .config import WEB_ROOT, settings
 from .mail_collector import mail_collect_processed_history
-from .migration_preview import configure_migration_preview, preview_page
 from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
 from .models import InvoiceIdsRequest, InvoiceStatusUpdate, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
@@ -87,7 +86,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-configure_migration_preview(app, settings)
 
 
 @app.middleware("http")
@@ -1501,7 +1499,7 @@ def on_startup() -> None:
     init_db()
     init_auth_db()
     init_setup_db()
-    if settings.migration_preview or not settings.backend_background_enabled:
+    if not settings.backend_background_enabled:
         return
     worker.start()
     _start_mail_collect_scheduler()
@@ -1516,8 +1514,7 @@ def health() -> dict[str, Any]:
         "version": settings.app_version,
         "env": settings.app_env,
         "erp_execution_mode": settings.erp_execution_mode,
-        "background_enabled": settings.backend_background_enabled and not settings.migration_preview,
-        "migration_preview": settings.migration_preview,
+        "background_enabled": settings.backend_background_enabled,
     }
 
 
@@ -1609,8 +1606,6 @@ async def api_login(request: Request) -> dict[str, Any]:
     user = authenticate_user(user_id, password)
     if not user:
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
-    if settings.migration_preview:
-        return {"ok": True, "user": user, "read_only": True}
     status = setup_status(user_id=user["id"], client_ip=client_ip(request))
     return {
         "ok": True,
@@ -2467,32 +2462,8 @@ def admin_db_page() -> FileResponse:
 
 
 @app.get("/", include_in_schema=False)
-def frontend_index() -> Response:
-    if settings.migration_preview:
-        return preview_page()
+def frontend_index() -> FileResponse:
     return FileResponse(FRONTEND_DIR / "index.html")
-
-
-@app.get("/api/migration-preview/status", include_in_schema=False)
-def migration_preview_status() -> dict[str, Any]:
-    if not settings.migration_preview:
-        raise HTTPException(status_code=404, detail="Not found")
-    snapshot_file = settings.erp_db_dir / "incoming_migration/preview_snapshot.json"
-    if not snapshot_file.is_file():
-        raise HTTPException(status_code=503, detail="이관 자료 검증이 아직 완료되지 않았습니다.")
-    snapshot = json.loads(snapshot_file.read_text(encoding="utf-8"))
-    return {key: snapshot[key] for key in ("snapshot_at", "invoice_count", "user_count", "missing_invoice_pdfs")}
-
-
-@app.get("/api/migration-preview/invoices/{invoice_id}/pdf", include_in_schema=False)
-def migration_preview_invoice_pdf(invoice_id: int) -> FileResponse:
-    if not settings.migration_preview:
-        raise HTTPException(status_code=404, detail="Not found")
-    invoice = get_invoice(invoice_id) or {}
-    path = Path(str(invoice.get("pdf_path") or "")).resolve()
-    if not path.is_relative_to(settings.erp_db_dir.resolve()) or not path.is_file():
-        raise HTTPException(status_code=404, detail="PDF not found")
-    return FileResponse(path, filename=path.name, media_type="application/pdf", content_disposition_type="inline")
 
 
 @app.post("/api/jobs", response_model=JobResponse, status_code=202)
