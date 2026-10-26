@@ -1,12 +1,13 @@
 import ast
 import io
+import os
 import tempfile
 import unittest
 import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import httpx
 from cryptography import x509
@@ -29,6 +30,23 @@ def load_handler(name, namespace):
 
 
 class MigrationStartupTests(unittest.TestCase):
+    def test_installer_from_old_address_uses_configured_public_endpoint(self):
+        namespace = dict(os=os, Request=object)
+        origin = load_handler('_installer_server_url', namespace)
+        installer = load_handler('_agent_installer_script', namespace)
+        with patch.dict(os.environ, {'WEB_PUBLIC_ORIGIN': ' https://172.16.19.105:3010/ '}):
+            for old in ('https://172.17.39.121:8080/', 'https://172.16.19.105:8081/'):
+                script = installer(origin(SimpleNamespace(base_url=old)))
+                self.assertIn('$ServerUrl = "https://172.16.19.105:3010"', script)
+                self.assertNotIn(old.rstrip('/'), script)
+
+    def test_installer_without_explicit_public_origin_keeps_request_endpoint(self):
+        namespace = dict(os=os, Request=object)
+        origin = load_handler('_installer_server_url', namespace)
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(origin(SimpleNamespace(base_url='https://custom.internal:443/')),
+                             'https://custom.internal:443')
+
     def test_agent_payload_contains_every_hashed_file_including_deployment_python(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

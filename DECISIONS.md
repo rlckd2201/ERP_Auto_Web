@@ -1,5 +1,18 @@
 # Decisions
 
+## 2026-10-27 migrate active Agents before closing legacy listeners
+
+- User authorizes both old web addresses to close after completion.3010 is a TLS bridge to the same original backend; close8081 externally by binding127.0.0.1 and disabling only its owned allow rule. Do not terminate the backend needed by3010 or touch the unrelated105:8080 app.
+- Canonical installer endpoint uses explicitly configured WEB_PUBLIC_ORIGIN; an old download URL must not reinstall an obsolete Agent address. Without an explicit origin, preserve previous request-origin behavior.253 updates active Agents and startup launchers to3010; no ERP/printer business logic change.
+- Keep121's307 ->3010 compatibility while Hyeon's already-offline Agent still references121. Once it migrates, cleanup is already authorized: disable the redirect task only, retaining recovery data and management access. Do not describe the temporary redirect as an active business server.
+- Readiness/routing/package verification is complete for four active PCs, including243. Actual ERP save and physical output are observed on the next genuine business request, not fabricated migration work or replayed historical invoices.
+
+## 2026-10-27 respect public3010;scope any firewall repair narrowly
+
+- Public accounting address is now https://172.16.19.105:3010, confirmed by user and live TLS/health.3010 is the existing PortalConnectedSystems native bridge; original252 backend8081 remains its underlying service. Do not stop it or blindly change backend bind ports.
+-243 timeout is explained by Gimje policy11 deny with silent drops. User-identified205 already provides the correctly ordered/source/port-scoped allow, but its destination object points at172.16.10.105, not accounting172.16.19.105. Correct205's destination reference rather than adding a duplicate policy or broadening155. Preserve the shared existing10.105 object unless all consumers are explicitly reviewed; the initial new-policy recommendation is superseded.
+- Current task authorized inspection. Configuration changes and end-to-end243 acceptance remain the exact next step; retain original policy evidence and do not replay financial work during network diagnosis.
+
 ## 2026-10-26 single backend moved to105; preserve request/output ownership
 
 - The live external SMTP250/read-only IMAP gate authorized the already-requested idle cutover.105:8081 now owns WEB/DB/mail/due scheduling;121 retains recovery files and307 old-address compatibility only. Preserve the existing accounting interface and unrelated target8080 application.

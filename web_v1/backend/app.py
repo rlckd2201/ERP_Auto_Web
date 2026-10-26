@@ -5,6 +5,7 @@ import base64
 import io
 import json
 import logging
+import os
 import re
 import shutil
 import sqlite3
@@ -1127,7 +1128,8 @@ def _maybe_queue_regular_output_from_context(
 
 
 def _installer_server_url(request: Request) -> str:
-    return str(request.base_url).rstrip("/")
+    public_origin = str(os.getenv("WEB_PUBLIC_ORIGIN") or "").strip().rstrip("/")
+    return public_origin or str(request.base_url).rstrip("/")
 
 
 def _agent_installer_script(server_url: str) -> str:

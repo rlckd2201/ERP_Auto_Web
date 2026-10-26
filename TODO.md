@@ -1,5 +1,23 @@
 # TODO
 
+## 2026-10-27 public3010 completion and old-address cleanup
+
+- [x] Confirm user-fixed205 accepts243 ->105:3010; redirect old121 address to3010 and recover243 automatically.
+- [x] Back up/deploy253 canonical installer/default endpoint;68 tests pass locally/clean stage/server, full payload hash coverage verified, Graphify refreshed.
+- [x] Verify four currently active Agents253/exact/ready on3010; shared purchase/regular executor243 and original output identity retained.163 financial states unchanged, SQLite/mail collection healthy, original UI byte-identical.
+- [x] Close105:8081 externally by loopback-only backend binding and disabling its owned inbound allow rule.3010 remains healthy; its internal8081 dependency and unrelated8080 app preserved.
+- [ ] Hyeon.18 Agent is offline on250/old121 endpoint. Observe its restart/update to253/3010 and output readiness. Old121 business tasks stay disabled;307 compatibility remains solely for remaining client transition.
+- [ ] After that transition, stop/disable121 AccountingWeb-Migration-Bridge and verify8080 closed. User has already authorized this cleanup; preserve backups/data/SSH management.
+- [ ] Observe next real user purchase/regular job through ERP/document/selected output device; no test voucher, historical replay or duplicate printing.
+
+## 2026-10-27 confirmed243 firewall cause and public3010
+
+- [x] Verify HTTPS3010 original-CA/healthy252, existing native-bridge frontend and underlying8081 backend; no service changes.
+- [x] Query both FortiGates: Gimje243 matches enabled deny11 for3010/8081; normal .13 matches allow155;155 excludes243. HQ side accepts via117, return route exists. SSH management still22.
+- [x] Inspect user-identified205: correctly enabled/accept/source243/TCP3010/before11, but destination object resolves172.16.10.105 instead of172.16.19.105. Paired lookups match205 only for10.105;19.105 still hits11.
+- [ ] Correct205 destination reference to verified172.16.19.105/32 after authorization; preserve shared10.105 object and existing policies. Then test243 itself and align Agent endpoint to3010; require fresh252/exact hash/ready. No firewall change was made during diagnosis.
+- [ ] Finish shared purchase/regular migration acceptance after243 reconnects; no historical invoice or print replay.
+
 ## 2026-10-26 actual105 backend acceptance
 
 - [x] Obtain external SMTP RCPT250 on105; IMAP read-only login passes. Freeze121 at idle, seal final163-row snapshot, transfer/hash-check complete data, and activate105 public8081 with business workers alone.
