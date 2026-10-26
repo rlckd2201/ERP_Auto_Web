@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-26 single backend moved to105; preserve request/output ownership
+
+- The live external SMTP250/read-only IMAP gate authorized the already-requested idle cutover.105:8081 now owns WEB/DB/mail/due scheduling;121 retains recovery files and307 old-address compatibility only. Preserve the existing accounting interface and unrelated target8080 application.
+- Source121 cannot itself reach105, so old-address compatibility redirects the caller rather than proxying via121. Agent/server TLS trusts the preserved CA with a105 leaf SAN. Target business task retains its original Interactive login-session requirement; do not claim unattended reboot recovery without testing that requirement.
+- Every file participating in Agent bundle hashing must be included in the installer payload. Deployment Python now ships with deployment scripts;252 forces consistent package installation. Keep this fix scoped to packaging/version/regression coverage.
+- Treat243's missing fresh heartbeat plus browser TCP timeout and zero target-NIC packets as an unresolved network path failure, not evidence that ERP/config/printer prerequisites vanished. Do not reset financial status, switch execution owners, add speculative alternate ports, or replay jobs to diagnose connectivity. Full shared-executor migration acceptance requires243 ready on the exact bundle.
+- A rollback after activation requires latest105 business state to be frozen/synced back first. Preserved121 is a recovery baseline, not permission to overwrite new transactions or restart a second collector/due sender.
+
 ## 2026-10-26 preserve the existing application during server migration
 
 - User rejected the separate migration preview. Server relocation must preserve the original UI and workflows; do not introduce a new dashboard, read-only replacement or user-facing restrictions without a request.

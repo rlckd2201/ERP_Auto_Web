@@ -1,6 +1,8 @@
 import ast
+import io
 import tempfile
 import unittest
+import zipfile
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
@@ -13,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from cryptography.x509.oid import NameOID
 
 from web_v1.deploy.migration_bridge import create_app, create_redirect_app
+from web_v1.backend.versioning import compute_agent_bundle_hash, _iter_bundle_files
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -26,6 +29,36 @@ def load_handler(name, namespace):
 
 
 class MigrationStartupTests(unittest.TestCase):
+    def test_agent_payload_contains_every_hashed_file_including_deployment_python(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            files = {'web_v1/VERSION': 'test-version', 'web_v1/__init__.py': '',
+                     'web_v1/agent/erp_agent.py': '# agent', 'web_v1/backend/config.py': '# config',
+                     'web_v1/deploy/start_agent.ps1': '# launcher',
+                     'web_v1/deploy/migration_bridge.py': '# server deployment helper',
+                     'manager_server/main.py': '# manager'}
+            for name, content in files.items():
+                path = root / name
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(content, encoding='utf-8')
+            namespace = dict(WEB_ROOT=root / 'web_v1', io=io, zipfile=zipfile,
+                             settings=SimpleNamespace(legacy_manager_path=root / 'manager_server/main.py', ssl_trust_cert_file=None),
+                             _agent_installer_script=lambda _: '# setup')
+            for name in ('_add_installer_file', '_add_installer_tree', '_build_user_pc_payload_zip'):
+                load_handler(name, namespace)
+            payload = namespace['_build_user_pc_payload_zip']('https://172.16.19.105:8081')
+            import hashlib
+            digest = hashlib.sha256()
+            with zipfile.ZipFile(io.BytesIO(payload)) as archive:
+                for path in _iter_bundle_files(root):
+                    relative = path.relative_to(root).as_posix()
+                    self.assertIn('payload/' + relative, archive.namelist(), relative)
+                    digest.update(relative.lower().encode())
+                    digest.update(b'\0')
+                    digest.update(archive.read('payload/' + relative))
+                    digest.update(b'\0')
+            self.assertEqual(digest.hexdigest(), compute_agent_bundle_hash(root))
+
     def test_staging_initializes_data_without_starting_any_worker_or_scheduler(self):
         settings = SimpleNamespace(download_dir=Mock(), chrome_profile_dir=Mock(), backend_background_enabled=False)
         namespace = dict(settings=settings, init_db=Mock(), init_auth_db=Mock(), init_setup_db=Mock(),

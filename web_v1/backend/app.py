@@ -1431,7 +1431,7 @@ def _build_user_pc_payload_zip(server_url: str) -> bytes:
         _add_installer_file(archive, WEB_ROOT / "VERSION", "payload/web_v1/VERSION")
         _add_installer_tree(archive, WEB_ROOT / "agent", "payload/web_v1/agent", {".py"})
         _add_installer_tree(archive, WEB_ROOT / "backend", "payload/web_v1/backend", {".py", ".txt", ".ps1"})
-        _add_installer_tree(archive, WEB_ROOT / "deploy", "payload/web_v1/deploy", {".ps1", ".md"})
+        _add_installer_tree(archive, WEB_ROOT / "deploy", "payload/web_v1/deploy", {".py", ".ps1", ".md"})
         _add_installer_tree(archive, project_root / "support", "payload/support", {".py", ".ini", ".json", ".xlsx"})
         legacy_manager = settings.legacy_manager_path
         _add_installer_file(archive, legacy_manager, f"payload/manager_server/{legacy_manager.name}")

@@ -1,5 +1,15 @@
 # TODO
 
+## 2026-10-26 actual105 backend acceptance
+
+- [x] Obtain external SMTP RCPT250 on105; IMAP read-only login passes. Freeze121 at idle, seal final163-row snapshot, transfer/hash-check complete data, and activate105 public8081 with business workers alone.
+- [x] Preserve original UI,121 recovery source/env/tasks/Startup links, existing account/output/printer ownership, and unrelated target8080 application. Old121 address now307 forwards directly to105; disable both old business tasks and former105 frontdoor.
+- [x] Fix missing deploy Python in Agent update payload, deploy252 after backup, verify real package hash coverage and66 focused tests locally/on target; refresh Graphify.
+- [x] Verify163 financial states/integrity/due-send dedup unchanged and natural new-server mail collection successful; three active personal Agents ready on exact252 bundle. Stop temporary capture/remove filter/restore firewall logging.
+- [ ] Resolve243 ->105 TCP8081 timeout.19:15 NIC capture sees other three clients and no243 traffic; remote Chrome independently times out. Pending user firewall allow/deny policy match. Require fresh243252/exact bundle/ready before declaring shared purchase/regular processing accepted.
+- [ ] Observe Hyeon's next normal Agent startup (pre-existing offline since10:49); preserve original output ownership and pre-existing printer mappings. Do not replay completed #267/#272/#275/#276 to test migration.
+- [ ] After243 reconnects, finish read-only routing verification and observe the next genuine user purchase/regular work. Target backend retains Interactive Administrator/AtLogon startup; server login session remains an operational dependency.
+
 ## 2026-10-26 correct migration UI and retain working production
 
 - [x] Remove unrequested custom preview and restore original application source/UI.
