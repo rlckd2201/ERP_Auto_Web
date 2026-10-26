@@ -1,5 +1,19 @@
 # TODO
 
+## 2026-10-26 server migration
+
+- [x] Recover administrator SSH through authorized RDP; preserve existing source/target services and saved configuration.
+- [x] Verify source/full data/DB/task backups; transfer and hash-check private Python, browser binaries and ERP installers.
+- [x] Stage v251 with schedulers off; preserve trust CA, users, documents and shared243/owner/printer rules.
+- [x] Verify 65 tests, SQLite/162 financial rows/all source PDFs, client payload, HTTPS from management PC, Chromium and read-only IMAP. Graphify refreshed.
+- [x] Resolve target8080 conflict by selecting8081; preserve WorkReportIntegration-Web. Prepare HTTP307 old-address redirection because source-to-target network path is blocked. Return staging to loopback while waiting.
+- [x] Prepare guarded source freeze/final snapshot, target sync/activation, and old-address redirect scripts. Verify Python and PowerShell syntax and a clean focused Git stage.
+- [ ] Gateway must authorize new SMTP egress59.13.157.31; retain59.1.29.245. Current external RCPT550, internal250, no message DATA sent. Pending user action; production remains v250 on121.
+- [ ] Rerun target acceptance to full success; freeze source at idle and final-sync authoritative163-or-later invoice DB/documents/state. The staged162-row precopy is not current production.
+- [ ] Activate only target8081/background tasks/watchdog, disable old backend/watchdog and quarantine its two Startup links, then enable old121 redirect only.
+- [ ] Verify exact251 hash on active243/Song/Kim/reum Agents and Hyeon on reconnect; observe a natural collection and preserve due-mail dedup/ownership. Do not submit old ERP/print jobs for testing.
+- [ ] Record actual cutover/final acceptance and rollback proof in all four session documents. Migration is not complete merely because staging passed.
+
 ## 2026-10-22 shared purchase execution acceptance
 
 - [x] Back up current operating source/config/DB/queue before implementation; validate backup integrity.

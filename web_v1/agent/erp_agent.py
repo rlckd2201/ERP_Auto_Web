@@ -94,7 +94,7 @@ PRINTER_KEYS = ["pyeongtaek", "gimje", "pdf"]
 HASH_FILE_SUFFIXES = {".py", ".ps1", ".txt", ".json"}
 HASH_DIRS = ("web_v1/agent", "web_v1/backend", "web_v1/deploy", "manager_server")
 HASH_FILES = ("web_v1/VERSION",)
-AGENT_BUNDLE_VERSION = "1.0.250"
+AGENT_BUNDLE_VERSION = "1.0.251"
 _MUTEX_HANDLE: Any = None
 
 ERP_RUNTIME_PROFILE_FORCE_KEYS = frozenset(
@@ -2395,7 +2395,7 @@ def _run_self_update(server: str, verify: bool) -> bool:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="Accounting WEB v1.0 local ERP Agent")
-    parser.add_argument("--server", default=os.getenv("WEB_SERVER_URL", "https://172.17.39.121:8080"))
+    parser.add_argument("--server", default=os.getenv("WEB_SERVER_URL", "https://172.16.19.105:8081"))
     parser.add_argument("--agent-id", default=os.getenv("ERP_AGENT_ID", f"{socket.gethostname()}-{os.getenv('USERNAME', 'user')}"))
     parser.add_argument("--interval", type=float, default=3.0)
     parser.add_argument("--update-interval", type=float, default=60.0)

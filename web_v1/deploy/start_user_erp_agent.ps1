@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $ScriptPath = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RepoRoot = Resolve-Path (Join-Path $ScriptPath "..\..")
-$ServerUrl = if ($env:WEB_SERVER_URL) { $env:WEB_SERVER_URL } else { "https://172.17.39.121:8080" }
+$ServerUrl = if ($env:WEB_SERVER_URL) { $env:WEB_SERVER_URL } else { "https://172.16.19.105:8081" }
 $Agent = Join-Path $RepoRoot "web_v1\agent\erp_agent.py"
 
 function Resolve-PythonExe {

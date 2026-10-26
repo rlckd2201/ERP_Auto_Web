@@ -1,10 +1,14 @@
-﻿param([string]$TaskName = "AccountingWeb-Backend-Watchdog")
+﻿param(
+    [string]$TaskName = "AccountingWeb-Backend-Watchdog",
+    [ValidatePattern('^https?://[^"\s]+$')]
+    [string]$HealthUrl = "https://127.0.0.1:8080/health"
+)
 
 $ErrorActionPreference = "Stop"
 $WatchdogPath = Join-Path $PSScriptRoot "backend_health_watchdog.ps1"
 if (-not (Test-Path -LiteralPath $WatchdogPath)) { throw "Watchdog script not found: $WatchdogPath" }
 $PowerShell = Join-Path $env:SystemRoot "System32\WindowsPowerShell\v1.0\powershell.exe"
-$arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$WatchdogPath`""
+$arguments = "-NoProfile -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$WatchdogPath`" -HealthUrl `"$HealthUrl`""
 $action = New-ScheduledTaskAction -Execute $PowerShell -Argument $arguments
 $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) `
     -RepetitionInterval (New-TimeSpan -Minutes 1) `

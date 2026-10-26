@@ -1,12 +1,12 @@
 ﻿param(
     [string]$BackendTaskName = "AccountingWeb-Backend",
-    [int]$FailureThreshold = 2
+    [int]$FailureThreshold = 2,
+    [string]$HealthUrl = "https://127.0.0.1:8080/health"
 )
 
 $ErrorActionPreference = "Stop"
 $StatePath = "C:\ERP_DB\backend_health_watchdog.failures"
 $LogPath = "C:\ERP_DB\backend_logs\backend_health_watchdog.log"
-$HealthUrl = "https://127.0.0.1:8080/health"
 
 function Write-WatchdogLog([string]$Message) {
     $directory = Split-Path -Parent $LogPath

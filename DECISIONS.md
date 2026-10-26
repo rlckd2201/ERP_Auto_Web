@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-10-26 migrate with one authoritative backend
+
+- Use full operating source/data and compatible absolute paths, preserving users, dictionary, invoice/document/queue/mail/due state and shared243 execution with original author/output printer ownership. Isolate the copied Python/browser runtime so the target's existing apps/global Python stay intact.
+- Stage with BACKEND_BACKGROUND_ENABLED=0 and loopback binding; the default remains enabled for existing installations. Final source freeze/snapshot precedes new business activation. Source backend/watchdog and only its two accounting Startup shortcuts must be disabled/quarantined before new activation; no duplicate mail/due schedulers.
+- Existing target8080 is WorkReportIntegration-Web. Accounting uses105:8081, explicit WEB_PORT/origin/Agent defaults and configurable watchdog health URL. Source cannot reach new subnet ports, so retain old bookmarks/Agent update access using no-cache307 redirection directly to105:8081. Request method/body/query and document escapes are preserved. No fallback to old business execution.
+- New105 TLS leaf is signed by the existing trusted CA. SSL_TRUST_CERT_FILE serves the public root to installers rather than the new leaf/chain. Old private CA/key remain server-side. Set REGULAR_DUE_SENDER_HOST to WIN-L1NNJRVR4BA and due history origin105:8081; preserve daily sent-state.
+- Require successful external SMTP RCPT authorization from new egress59.13.157.31 before cutover. Do not silently change sender identity, route mail through an unreviewed transport, or disable outbound reminders to make migration appear complete. Pending gateway allowlist action is a real dependency, not another server-login permission request.
+- Do not roll back by copying the stale precopy over an activated target. Once target has accepted business work, freeze it and resync its latest authoritative data before restoring the old backend. Offline Agents migrate on reconnect; actual new ERP/print work is observed only when naturally requested.
+
 ## 2026-10-22 opt-in shared purchase executor
 
 - Use a complete-account-ID allowlist plus an explicit target Agent ID/IP. Enable Song's account only in production; empty allowlist preserves the default local behavior. Shared-PC readiness fails explicitly without switching execution to another PC after a failure.

@@ -81,10 +81,12 @@ def _legacy_manager_path() -> Path:
 class Settings:
     app_version: str = _app_version()
     app_env: str = _env("APP_ENV", "development")
+    backend_background_enabled: bool = _env_bool("BACKEND_BACKGROUND_ENABLED", True)
     web_host: str = _env("WEB_HOST", "127.0.0.1")
     web_port: int = _env_int("WEB_PORT", 8080)
     web_public_origin: str = _env("WEB_PUBLIC_ORIGIN", "http://127.0.0.1:8080")
     ssl_cert_file: Path | None = Path(_env("SSL_CERT_FILE")) if _env("SSL_CERT_FILE") else None
+    ssl_trust_cert_file: Path | None = Path(_env("SSL_TRUST_CERT_FILE", _env("SSL_CERT_FILE"))) if _env("SSL_TRUST_CERT_FILE", _env("SSL_CERT_FILE")) else None
     ssl_key_file: Path | None = Path(_env("SSL_KEY_FILE")) if _env("SSL_KEY_FILE") else None
     erp_db_dir: Path = Path(_env("ERP_DB_DIR", r"C:\ERP_DB"))
     download_dir: Path = Path(_env("DOWNLOAD_DIR", r"C:\ERP_DB\downloads"))

@@ -1435,8 +1435,8 @@ def _build_user_pc_payload_zip(server_url: str) -> bytes:
         _add_installer_tree(archive, project_root / "support", "payload/support", {".py", ".ini", ".json", ".xlsx"})
         legacy_manager = settings.legacy_manager_path
         _add_installer_file(archive, legacy_manager, f"payload/manager_server/{legacy_manager.name}")
-        if settings.ssl_cert_file and settings.ssl_cert_file.exists():
-            _add_installer_file(archive, settings.ssl_cert_file, "web_v1.cert.pem")
+        if settings.ssl_trust_cert_file and settings.ssl_trust_cert_file.exists():
+            _add_installer_file(archive, settings.ssl_trust_cert_file, "web_v1.cert.pem")
     return buffer.getvalue()
 
 
@@ -1499,6 +1499,8 @@ def on_startup() -> None:
     init_db()
     init_auth_db()
     init_setup_db()
+    if not settings.backend_background_enabled:
+        return
     worker.start()
     _start_mail_collect_scheduler()
     _start_regular_auto_scheduler()
@@ -1512,6 +1514,7 @@ def health() -> dict[str, Any]:
         "version": settings.app_version,
         "env": settings.app_env,
         "erp_execution_mode": settings.erp_execution_mode,
+        "background_enabled": settings.backend_background_enabled,
     }
 
 
@@ -1701,9 +1704,9 @@ async def api_setup_install(request: Request) -> dict[str, Any]:
 
 @app.get("/api/setup/certificate")
 def api_setup_certificate() -> FileResponse:
-    if not settings.ssl_cert_file or not settings.ssl_cert_file.exists():
+    if not settings.ssl_trust_cert_file or not settings.ssl_trust_cert_file.exists():
         raise HTTPException(status_code=404, detail="WEB HTTPS 인증서 파일을 찾지 못했습니다.")
-    return FileResponse(settings.ssl_cert_file, filename=settings.ssl_cert_file.name, media_type="application/x-pem-file")
+    return FileResponse(settings.ssl_trust_cert_file, filename=settings.ssl_trust_cert_file.name, media_type="application/x-pem-file")
 
 
 @app.get("/api/setup/user-pc-installer.cmd")
