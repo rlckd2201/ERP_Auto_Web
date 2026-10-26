@@ -2,6 +2,7 @@
 
 ## 2026-10-26 migrate with one authoritative backend
 
+- Focused release c72d687 contains only migration support and session evidence. Preserve unrelated pre-existing checkout changes and generated Graphify drift outside the release; current graph remains refreshed locally.
 - Use full operating source/data and compatible absolute paths, preserving users, dictionary, invoice/document/queue/mail/due state and shared243 execution with original author/output printer ownership. Isolate the copied Python/browser runtime so the target's existing apps/global Python stay intact.
 - Stage with BACKEND_BACKGROUND_ENABLED=0 and loopback binding; the default remains enabled for existing installations. Final source freeze/snapshot precedes new business activation. Source backend/watchdog and only its two accounting Startup shortcuts must be disabled/quarantined before new activation; no duplicate mail/due schedulers.
 - Existing target8080 is WorkReportIntegration-Web. Accounting uses105:8081, explicit WEB_PORT/origin/Agent defaults and configurable watchdog health URL. Source cannot reach new subnet ports, so retain old bookmarks/Agent update access using no-cache307 redirection directly to105:8081. Request method/body/query and document escapes are preserved. No fallback to old business execution.

@@ -2,6 +2,7 @@
 
 ## I-057 - target staged; external SMTP relay blocks cutover
 
+- Final verification: migration support commit c72d687 pushed; clean focused stage65 unittest +3 watchdog tests and Python/PowerShell syntax pass. Latest SMTP recheck remains external550/internal250 without DATA; target127.0.0.1:8081/background=false/exact b75d bundle remains unchanged.
 - RDP native helper failed, and stored TERMSRV/172.16.19.105 credential had an empty password. User explicitly insisted on agent-side RDP action; a host/admin-guarded public-key registration script was executed in the existing elevated Administrator session. Dedicated erp_server105_ed25519 + alias erp-server105 now succeeds. Existing authorized_keys/config backed up; no more user credential handoff needed.
 - Target staging private Python initially failed due to a generated Python string interpreting \backend_logs as backspace. Runner now uses joined Path strings and Start-Process Hidden with explicit stdout/stderr. Archive/ACL/runtime/browsers/import/headless launch checks passed. prepare_target.py was repaired locally; do not rerun its initial empty-target extractor over the populated target.
 - PID27260 listening105:8080 is C:/Program Files/WorkReportIntegration-Web/node.exe under LOCAL SERVICE, unrelated to accounting. Accounting moved to8081; own backend identity is verified by private Python path/module/cwd before stop/restart. HTTPS105:8081 from current management172.17.30.13 passed. Staging is now bound127.0.0.1:8081, background=false, to prevent accidental submissions while waiting.

@@ -2,6 +2,7 @@
 
 ## 2026-10-26 migration staged; SMTP cutover gate pending
 
+- Focused migration release c72d687 was committed and pushed to origin/codex/erp-header-stability-20260826. Clean focused stage: 65 unittest cases plus 3 existing watchdog tests pass; Python/PowerShell syntax checks pass. Final relay recheck is still external550/internal250 with no DATA sent; target remains private/background=false and migration remains incomplete.
 - User authorized moving production from 172.17.39.121 to 172.16.19.105 and insisted on agent-side use of the open RDP session. Dedicated administrator SSH now works through alias erp-server105 / C:/Users/user/.ssh/erp_server105_ed25519. Existing authorized_keys and local SSH config were backed up. No further RDP or password handoff is needed.
 - Production is STILL on 121:8080, v1.0.250 / bundle 58aeebf421c6698cf5affab8d8cd1029fa81fc98a01d5ff1e4a6dfcb43d97d88. At 15:09:37 KST its config matched the precopy backup, backend/watchdog were enabled, and normal collection had increased invoices from 162 to 163. No cutover, ERP replay, print, or test email was performed.
 - Immutable source backup: C:/ERP_DB/migrations/20261026_142216_to_172_16_19_105. operating_source.zip SHA b1d02f08bb6fa9c2dd09167eec0aece2c2d485a78672fccfd24cc41e166f6440; runtime_data.zip SHA 3295e4fa0ef537354a8f59d7484ca91d6184d30150d67396069e9c3c740f2047. Runtime, matching Playwright browsers, ERP installers, documents, SQLite, users and queues were transferred and hash-checked. Initial snapshot has 162 invoices; a FINAL SYNC IS REQUIRED.

@@ -2,6 +2,7 @@
 
 ## 2026-10-26 server migration
 
+- [x] Push focused migration support commit c72d687; retain unrelated dirty/deleted files outside it. Clean focused verification passed 65 unittest cases and 3 watchdog tests.
 - [x] Recover administrator SSH through authorized RDP; preserve existing source/target services and saved configuration.
 - [x] Verify source/full data/DB/task backups; transfer and hash-check private Python, browser binaries and ERP installers.
 - [x] Stage v251 with schedulers off; preserve trust CA, users, documents and shared243/owner/printer rules.
