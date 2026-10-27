@@ -5,13 +5,14 @@ New origin: **https://172.16.19.105:3011**. Previous origin:
 
 ## Cutover Status
 
-As of 2026-10-27 09:15 KST, the new HTTPS server and data import are verified, but the Agent cutover is **pending network access**. Do not submit new vouchers on 105 yet. The old 121 service and startup shortcut have deliberately not been stopped or moved.
+The cutover completed on 2026-10-27 at 09:16 KST after the network administrator allowed TCP 3011. The Agent now connects to 105. The old 121/8081 web process was stopped and its startup shortcut moved to the backup directory; the old database and artifacts remain intact.
 
 - HTTPS 200 with certificate validation, account data/password hashes unchanged (except normal sync timestamps), 6 historical jobs, 22 PDFs with matching hashes, and old PDF HTTP download verified.
 - Service stop/start verified: the 105 listener exits with its task and starts again without a duplicate. The existing localhost 3011 bridge remains PID 22268.
-- Agent first-stage update `d16af0eeeefb` completed using revision `e1203bd` and still reports to 121.
+- Agent first-stage update `d16af0eeeefb` completed using revision `e1203bd`.
 - Target-switch commands `6cb62de74228` and `918e3277ea6a` failed before modifying the Agent task, with a TCP connect timeout to 105:3011.
-- A short, SYN-only packet capture on 105 during the second attempt received no Agent connection packet. The dedicated Windows Firewall allow rule is present. Permit `172.17.30.243 -> 172.16.19.105 TCP 3011` in the intervening network/client policy, then retry the second-stage update. No broad firewall exception or firewall disabling was used.
+- A short, SYN-only packet capture on 105 during the failed attempt received no Agent connection packet. After the administrator permitted `172.17.30.243 -> 172.16.19.105 TCP 3011`, target-switch command `03b933a574d9` completed using revision `3e14ef3`. Fresh Agent heartbeats on 105 were verified at 09:15:55 and 09:16:16, before retiring 8081. No broad firewall exception or firewall disabling was used.
+- Agent task remains under `DESKTOP-55LQ6BN\TEST`, with the existing real ERP mode and printer settings. Only its server address changed.
 - The final local regression suite passed 244 tests. No ERP voucher, printer job, or notification email was sent for this migration.
 
 ## Runtime
@@ -64,6 +65,6 @@ Do not create another RDP session on 243. No ERP GUI manipulation is needed for 
 
 ## Rollback
 
-Keep the 121 code/data and the encrypted migration backup. The old startup shortcut is retained in `C:\ERP_DB\finance_migration_20261027` after cutover. Stop the new web task before rollback; do not let both servers accept new jobs.
+Keep the 121 code/data and the encrypted migration backup. The old startup shortcut is retained at `C:\ERP_DB\finance_migration_20261027\Excel_Voucher_Web_Server.lnk`. Freeze new submissions during rollback; do not let both servers accept new jobs.
 
-If new vouchers have been accepted on 105, reconcile those jobs and artifacts before reverting. Never replay a completed voucher. Restart the original 121 HTTPS launcher, then migrate the Agent back with `target_server: "https://172.17.39.121:8081"` from the currently connected server. Restore the old shortcut only after the old service is verified.
+If new vouchers have been accepted on 105, reconcile those jobs and artifacts before reverting. Never replay a completed voucher. Restart the original 121 HTTPS launcher, then issue `update-agent` with `target_server: "https://172.17.39.121:8081"` through the still-running 105 server. Verify a fresh Agent heartbeat on 121 before stopping `FinanceVoucher-Web-3011` on 105. Restore the old shortcut only after the old service is verified.

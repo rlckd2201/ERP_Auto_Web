@@ -1,8 +1,8 @@
 # Excel Voucher Web
 
-## 새 서버 주소 (2026-10-27 이전 작업)
+## 현재 운영 주소 (2026-10-27 이전 완료)
 
-**https://172.16.19.105:3011**에 웹·데이터 이전을 완료했다. 243에서 새 서버로 TCP 3011 접속이 시간초과되어 Agent 최종 전환은 대기 중이며, 기존 121/8081 서버는 유지한다. 새 주소에서 실제 전표를 실행하기 전에 Agent 연결을 확인한다.
+**https://172.16.19.105:3011**로 웹·데이터·243 Agent 연결 전환을 완료했다. 새 서버의 Agent 상태 갱신을 확인한 뒤 기존 121/8081 웹서버를 종료하고 시작프로그램 바로가기를 백업했다. 기존 계정·작업 이력·PDF는 유지한다. 이전 검증 과정에서 실제 ERP 전표 재입력이나 출력·메일 발송은 실행하지 않았다.
 
 105 서버의 자동시작 작업은 `FinanceVoucher-Web-3011`이며, 재시작은 관리자 PowerShell에서 `Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'` 후 `Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'`로 한다.
 
