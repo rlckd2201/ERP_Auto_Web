@@ -102,6 +102,12 @@ function Require-Success([string]$Name, $Run) {
 function Get-AgentProcesses {
     @(Get-CimInstance Win32_Process -Filter "Name='python.exe' OR Name='pythonw.exe'" | Where-Object { $_.CommandLine -match 'erp_agent\.py' })
 }
+function Select-RepairPython($Probes) {
+    # This PC's Python 3.15 imports pass, but verified HTTPS rejects the deployed
+    # legacy certificate. Use the independently verified 3.11 runtime; retain
+    # both CA/hostname verification and the existing global Python installation.
+    $Probes | Where-Object { $_.all_ok -and $_.version[0] -eq 3 -and $_.version[1] -eq 11 -and $_.bits -eq 64 } | Select-Object -First 1
+}
 function New-Launcher([string]$Root, [string]$Python, [string]$Server) {
     $r = $Root.Replace("'", "''"); $p = $Python.Replace("'", "''"); $s = $Server.Replace("'", "''")
     @"
@@ -117,7 +123,7 @@ if ($LibraryOnly) { return }
 
 $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
 $resultPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "AccountingWeb_Repair_$stamp.json"
-$script:Report = [ordered]@{created_at=(Get-Date -Format o);computer=$env:COMPUTERNAME;user=$env:USERNAME;status='started';steps=(New-Object 'Collections.Generic.List[object]')}
+$script:Report = [ordered]@{repair_version=2;created_at=(Get-Date -Format o);computer=$env:COMPUTERNAME;user=$env:USERNAME;status='started';steps=(New-Object 'Collections.Generic.List[object]')}
 $exitCode = 1
 try {
     Write-Host '현시훈 PC 회계 프로그램 복구를 시작합니다. 완료될 때까지 창을 닫지 마세요.'
@@ -150,7 +156,7 @@ try {
             if ($probe -and $probe.executable -notin @($probes | ForEach-Object {$_.executable})) { $probes += $probe }
         }
         Add-Step 'python_before' $probes
-        $good = @($probes | Where-Object { $_.all_ok -and $_.version[0] -eq 3 -and $_.version[1] -ge 11 } | Select-Object -First 1)
+        $good = @(Select-RepairPython $probes)
         if ($good.Count -gt 0) { $python = $good[0].executable }
         else {
             Write-Host '2/4 회계 프로그램용 Python 3.11 실행환경을 준비합니다.'

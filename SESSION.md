@@ -1,5 +1,14 @@
 # Session
 
+## 2026-10-27 16:38 actual repair result found; TLS gate corrected in v2
+
+- User repeated the original16:18 diagnostic path, but Desktop search found NEW AccountingWeb_Repair_20261027_163233.json (received16:38). It proves Python315 is actually executing and ALL23 real imports pass from the user-site. The package-absence hypothesis is superseded.
+- First repair stopped at python_https, before launcher backup/change or Agent launch: CERTIFICATE_VERIFY_FAILED / Missing Subject Key Identifier. Actual launcher configured_python is the alias python. No Python installation occurred because imports passed.16:38:45 server still only has Hyeon'sOct26 10:49:58/v250 record.
+- Same deployed105 certificate: localPython3.11 requests with CA+hostname verification returns200/v254; enabling VERIFY_X509_STRICT reproduces exactly Missing Subject Key Identifier. This explains the repair tool's gate failure, NOT by itself every cause of the original Agent absence (original launcher used --insecure).
+- Prepared v2: reuse only healthy3.11x64, otherwise install user-scope3.11 and isolated dependencies; retain CA verification, global315, existing user data and shared certificate/server. Seven PS5.1 tests and wrapper self-test pass. Graphify1752nodes/5011edges/117communities.
+- CURRENT USER Desktop/현시훈_PC복구_v2.zip is ready for forwarding,9527bytes/SHAf6f04a2ce3f8ac4efb874b386336eb41fa2758806707556fed1a6ce9e99c6280. PriorZIP preserved. Actual v2 execution remains pending.
+- Next exact start: inspect new AccountingWeb_Repair_*.json with repair_version2, then verify fresh105 Agent/ownership/readiness. Do not ask for or reanalyze the stale16:18 diagnostic when a newer repair file is available.
+
 ## 2026-10-27 Hyeon repair package prepared for execution
 
 - User asks for an actionable next step. Prepared a targeted standalone repair EXE and copied verified ZIP to the CURRENT USER's Desktop/현시훈_PC복구.zip for manual delivery. Nothing was copied to or executed on Hyeon's PC yet.

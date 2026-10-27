@@ -1,5 +1,12 @@
 # TODO
 
+## 2026-10-27 v2 execution after actual TLS failure
+
+- [x] Find/analyze16:32 repair report on Desktop; all23 Python imports pass, first repair stopped at verified HTTPS missingSKI error before Agent launch.
+- [x] Reproduce strict TLS failure and verify Python3.11 HTTPS200; prepare/test/copy v2 ZIP without changing shared servers.
+- [ ] Hyeon executes Desktop-delivered 현시훈_PC복구_v2.zip and returns the new repair_version2 JSON.
+- [ ] Verify fresh105 Agent record and correct ownership/readiness. Original Agent-start failure and common portal502 are not fully explained or resolved by the repair-gate finding.
+
 ## 2026-10-27 execute targeted Hyeon repair
 
 - [x] Prepare/test standalone repair and copy 현시훈_PC복구.zip to the current user's Desktop for forwarding.

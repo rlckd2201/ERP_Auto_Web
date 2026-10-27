@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-10-27 actual imports supersede package-file inference
+
+- Correct the earlier package suspicion: real imports all pass from Python315 user-site. Do not reinstall packages into315 or attribute its failure to missing modules.
+- Fix the demonstrated recovery-tool blocker with the already used/tested3.11 runtime while retaining CA and hostname verification. Keep global315 and shared105 certificate/35 configuration unchanged.
+- The initial repair failed at its additional TLS gate; do not label that automatically as the original launcher's root cause, since the existing launcher uses --insecure. Require actual v2 Agent execution/heartbeat evidence.
+
 ## 2026-10-27 targeted recovery instead of speculative shared deployment
 
 - Existing immediate-fix authorization covers preparing the Hyeon-only repair. Primary agent works alone; shared105/35/243 code and account mappings are unchanged.

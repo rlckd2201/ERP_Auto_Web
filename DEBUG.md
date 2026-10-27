@@ -1,5 +1,13 @@
 # Debug
 
+## 2026-10-27 16:32 repair result and v2 checks
+
+- Found Desktop/AccountingWeb_Repair_20261027_163233.json,9015bytes, completed16:32:47. Python315x64 actual sys.version3.15.1; user-site Roaming/Python/Python315/site-packages; all23 importsok. python_https exit1 SSLCertVerificationError Missing Subject Key Identifier. No launcher_backup/agent_after step, proving first repair never started Agent.
+- Original16:18 diagnostic unchanged: SHAe7c129d93aa4c3d1ebc8b077e8ded81501eb6b3c68d77147a1722dafbb7b6a8e.16:38:45 read-only105 query: Hyeon remainsOct26 10:49:58/v250/notready.
+- Real network regression: local py3.11 requests.get(/api/version,verify=C:/ERP_DB/certs/web_v1.cert.pem)200/v254. urllib verified context with added VERIFY_X509_STRICT reproduces missingSKI. No verify=False/globalTLS override applied.
+- v2 adds repair_version2 and Select-RepairPython requiring healthy3.11x64. Seven PS5.1 tests include healthy-import315 excluded, compatible311 selected, incomplete311 routes to isolated installation. C# wrapper compile/resource test pass; Graphify1752/5011/117.
+- ZIP Desktop/현시훈_PC복구_v2.zip9527bytes/SHAf6f04a2ce3f8ac4efb874b386336eb41fa2758806707556fed1a6ce9e99c6280; EXESHA22c51d1ae5f479fb8822ccd63fb9fd8a40a1a391ce8c3a659fa35fa9a857c235. Not executed on Hyeon yet.
+
 ## 2026-10-27 repair artifact verification
 
 - Sources: tools/hyeon_agent_repair.ps1, AccountingWebRepair.cs, test_hyeon_agent_repair.ps1, HYEON_REPAIR_README.txt. Standalone C# executable embeds the script and runs an interactive PowerShell console; no administrator elevation requested.

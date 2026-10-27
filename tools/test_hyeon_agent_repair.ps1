@@ -37,4 +37,11 @@ Assert ($source.Contains("`$env:COMPUTERNAME -ne '현시훈PC'")) 'Machine guard
 Assert (-not $source.Contains('--insecure')) 'Repair must use certificate verification'
 Assert (-not $source.Contains('Remove-Item')) 'Repair must not delete installed applications'
 Write-Host 'PASS target guard, TLS verification and non-destructive scope'
-Write-Host 'All 6 checks passed. No repair, installation or Agent launch was performed.'
+$modern = [pscustomobject]@{executable='C:\Python315\python.exe';version=@(3,15,1);bits=64;all_ok=$true}
+$compatible = [pscustomobject]@{executable='C:\Python311\python.exe';version=@(3,11,9);bits=64;all_ok=$true}
+$incomplete = [pscustomobject]@{executable='C:\Incomplete311\python.exe';version=@(3,11,9);bits=64;all_ok=$false}
+Assert (@(Select-RepairPython @($modern)).Count -eq 0) 'Import-success alone must not reuse the observed TLS-incompatible interpreter'
+Assert ((Select-RepairPython @($modern,$compatible)).executable -eq $compatible.executable) 'Known compatible runtime must be selected'
+Assert (@(Select-RepairPython @($incomplete)).Count -eq 0) 'Incomplete interpreter must take the isolated-repair branch'
+Write-Host 'PASS v2 runtime selection: healthy imports on 3.15 still require the verified 3.11 path'
+Write-Host 'All 7 checks passed. No repair, installation or Agent launch was performed.'
