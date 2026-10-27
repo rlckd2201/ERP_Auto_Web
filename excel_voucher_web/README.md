@@ -1,5 +1,11 @@
 # Excel Voucher Web
 
+## 현재 운영 주소 (2026-10-27 이전)
+
+**https://172.16.19.105:3011**에서 운영한다. 105 서버의 자동시작 작업은 `FinanceVoucher-Web-3011`이며, 재시작은 관리자 PowerShell에서 `Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'` 후 `Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'`로 한다.
+
+데이터·인증서·Agent 전환·복구 절차는 [이전 운영 문서](deploy/README.md)를 따른다. 아래 121/8081 실행 예시는 이전 서버 참고용이며, 새 서버에서는 실행하지 않는다.
+
 재정 담당자가 엑셀을 업로드하면 서버가 전표 payload를 만들고, 172.17.30.243 자동 전표처리 PC의 Agent가 작업을 가져가 ERP 전표 처리를 수행하는 신규 웹 기반 시스템이다.
 
 ## 실행

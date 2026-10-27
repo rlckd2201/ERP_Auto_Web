@@ -1,5 +1,5 @@
 param(
-  [string]$Server = "https://172.17.39.121:8081",
+  [string]$Server = "https://172.16.19.105:3011",
   [string]$AgentId = "finance-agent-172-17-30-243",
   [string]$ClientIp = "172.17.30.243",
   [ValidateSet("default-printer", "off")]

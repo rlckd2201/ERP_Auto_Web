@@ -552,10 +552,24 @@ def _execute_admin_command(
         script = _schedule_agent_restart(output_dir)
         return {"message": "Agent 재시작을 예약했습니다.", "restart_script": str(script)}
     if command_type == "update-agent":
+        target_server = str(payload.get("target_server") or server).rstrip("/")
+        if target_server != server.rstrip("/"):
+            from urllib.parse import urlsplit
+
+            target = urlsplit(target_server)
+            if (target.scheme != "https" or not target.hostname or target.username or target.password
+                    or target.path or target.query or target.fragment):
+                raise ValueError("Agent migration requires an HTTPS server origin")
+            response = requests.get(
+                target_server + "/api/settings", verify=verify_tls, timeout=20, allow_redirects=False
+            )
+            response.raise_for_status()
+            if str(response.json().get("web_public_origin") or "").rstrip("/") != target_server:
+                raise RuntimeError("Target finance server identity did not match; keeping current server")
         zip_url = str(payload.get("zip_url") or DEFAULT_REPO_ZIP_URL)
         update_result = _update_agent_files(zip_url)
         install_result = _install_agent_task(
-            server=server,
+            server=target_server,
             agent_id=agent_id,
             client_ip=client_ip,
             verify_tls=verify_tls,
@@ -567,6 +581,7 @@ def _execute_admin_command(
         script = _schedule_agent_restart(output_dir)
         return {
             "message": "Agent 최신 적용 후 재시작을 예약했습니다.",
+            "server": target_server,
             **update_result,
             "install": install_result,
             "restart_script": str(script),
