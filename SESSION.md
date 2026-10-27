@@ -1,5 +1,14 @@
 # Session
 
+## 2026-10-27 18:58 purchase output no longer blocked by missing approval
+
+- User explicitly requests voucher, tax invoice and expense report output even when #277's approval attachment cannot be found. Supersedes the17:51 requirement to attach approval before output. Implemented by primary agent alone under existing immediate-fix authorization.
+- Production105 output_set.py now treats approval_docs as optional for output: includes it when present; otherwise keeps the missing status and records skipped_docs/warning while preparing the three required accounting PDFs. Explicit selection of missing approval still fails. Required-document, expense-generation, printer and ERP save-confirmation protections remain.
+- Existing actual jobs completed while inspected, without any new ERP/print submission by us: #277 print jobb47d6eb4 finished18:47:36 with3/3 Samsung files; #278 subsequently posted18:53:12 and finished4/4 Samsung files18:53:31. Evidence is Agent/Windows print-queue acknowledgement, not a physical paper observation. Do not replay either invoice.
+- Deployed18:56 after idle checks and backupC:/ERP_DB/deploy_backups/optional_approval_20261027 (original module, SQLite snapshot, manifest). Accounting native-host restarted30168->24008 through its supervisor; bridge17760/shared relay10140 unchanged. API200, same1.0.254 version/new bundlef04c638ba5b792b75e02e0d23f61dbc3a361566d24079024a7ce903305ff80ab.243 andHyeon match the bundle/readytrue at18:57:31.
+- Verification: original51 tests passed; added one-click existing-document regression =>12 output tests pass plus40 routing/expense tests previously passed. Staged-source snapshot also passes11 with1 Zoom skip because that older committed base lacks Zoom. Graphify refreshed1772nodes/5050edges/120communities.
+- Next exact start: if paper is still absent, inspect Hyeon's Samsung printer queue/device against the two acknowledged jobs; no blind reprint or ERP replay. Observe the next genuine missing-approval purchase to confirm automatic live printing. Changes retain original approval lookup behavior and do not resolve its missing order-number attachment.
+
 ## 2026-10-27 16:38 actual repair result found; TLS gate corrected in v2
 
 - User repeated the original16:18 diagnostic path, but Desktop search found NEW AccountingWeb_Repair_20261027_163233.json (received16:38). It proves Python315 is actually executing and ALL23 real imports pass from the user-site. The package-absence hypothesis is superseded.

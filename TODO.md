@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-10-27 purchase output correction (supersedes blockers below)
+
+- [x] Make purchase approval attachment optional for output while preserving the three required accounting PDFs and missing-document visibility.
+- [x] Verify automatic selected-printer queuing and one-click reuse without duplicate ERP; deploy backed-up105 module.
+- [x] Confirm #2773/3 and #2784/4 print-queue acknowledgements; #278 department blocker is no longer current after its later successful user processing.
+- [x] Confirm243/Hyeon updated and ready after deployment. Do not resubmit completed jobs.
+- [ ] Physical paper receipt is not remotely verified. If still missing, inspect the Samsung device/queue first.
+- [ ] Observe the next user-initiated missing-approval purchase under the deployed policy; fixture and production read-only selection checks passed, but no new print was generated for testing.
+
 ## 2026-10-27 v2 execution after actual TLS failure
 
 - [x] Find/analyze16:32 repair report on Desktop; all23 Python imports pass, first repair stopped at verified HTTPS missingSKI error before Agent launch.

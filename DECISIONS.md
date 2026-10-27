@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-27 missing purchase approval is an output warning
+
+- User explicitly accepts an absent approval attachment while requiring voucher/tax invoice/expense output. Approval lookup and data remain unchanged; only output completeness rules change. Available approval PDFs remain included. Explicitly selecting a missing approval still errors.
+- Default purchase output must retain all three required accounting documents; it must not silently print only a tax invoice when ERP or expense output failed. Existing-only output cannot generate a missing expense report.
+- Missing optional approval is recorded in docs/skipped_docs and the invoice warning log. A saved three-document set qualifies for one-click output reuse, preventing duplicate ERP entry merely because approval is absent.
+- Re-read live state before recovery: #277 and#278 were already acknowledged by the printing Agent during investigation. No duplicate print/ERP submission is justified. Distinguish spooler acknowledgement from actual paper receipt.
+- Keep native portal/frontend/auth untouched; deploy only the verified production-matching output module, preserving unrelated local changes through selective staging. Server bundle changes use the existing Agent self-update mechanism; verify243/Hyeon readiness before completion.
+
 ## 2026-10-27 actual imports supersede package-file inference
 
 - Correct the earlier package suspicion: real imports all pass from Python315 user-site. Do not reinstall packages into315 or attribute its failure to missing modules.

@@ -21,7 +21,8 @@ OUTPUT_DOCS: dict[str, list[dict[str, Any]]] = {
     "purchase": [
         {"key": "erp_voucher", "label": "전표", "filename": "01_전표.pdf", "required": True},
         {"key": "tax_invoice", "label": "세금계산서", "filename": "02_세금계산서.pdf", "required": True},
-        {"key": "approval_docs", "label": "전자결재 품의", "filename": "03_전자결재품의.pdf", "required": True},
+        # An unavailable approval attachment must not block the three accounting PDFs.
+        {"key": "approval_docs", "label": "전자결재 품의", "filename": "03_전자결재품의.pdf", "required": False},
         {"key": "expense_report", "label": "현금출금결의서", "filename": "04_현금출금결의서.pdf", "required": True},
     ],
     "regular": [
@@ -872,7 +873,7 @@ def _docs_for_output(status: dict[str, Any], selected_doc_keys: list[str] | None
     selected = _normalize_selected_doc_keys(selected_doc_keys)
     docs = list(status.get("docs") or [])
     if not selected:
-        return docs
+        return [doc for doc in docs if doc.get("required", True) or doc.get("status") == "exists"]
     by_key = {str(doc.get("key") or ""): doc for doc in docs}
     missing = sorted(key for key in selected if key not in by_key)
     if missing:
@@ -945,6 +946,11 @@ def prepare_output_documents(
     final_status = build_output_set_status(get_invoice(invoice_id) or invoice)
     final_status["individual_files"] = files
     final_status["output_dir"] = str(target_dir)
+    final_status["skipped_docs"] = [
+        {"key": doc["key"], "label": doc["label"], "reason": doc.get("message") or doc["status_label"]}
+        for doc in status["docs"]
+        if not selected and not doc["required"] and doc["status"] != "exists"
+    ]
     update_invoice_json(invoice_id, {"output_docs": final_status, "output_set_dir": str(target_dir)})
     return final_status
 
@@ -998,6 +1004,13 @@ def run_output_set_job(
                 selected_doc_keys=selected_doc_keys,
             )
             files = [str(path) for path in status.get("individual_files") or []]
+            skipped_docs = list(status.get("skipped_docs") or [])
+            if skipped_docs:
+                labels = ", ".join(doc["label"] for doc in skipped_docs)
+                add_invoice_log(
+                    int(invoice_id), f"첨부 문서 누락으로 제외: {labels}. 준비된 회계 문서는 계속 출력합니다.",
+                    level="warning", job_id=job_id,
+                )
             merged_path = ""
             if action == "merged_pdf":
                 invoice = get_invoice(int(invoice_id)) or invoice
@@ -1024,6 +1037,7 @@ def run_output_set_job(
                     "mode": status["mode"],
                     "output_dir": status["output_dir"],
                     "individual_files": files,
+                    "skipped_docs": skipped_docs,
                     "merged_pdf_path": merged_path,
                 }
             )

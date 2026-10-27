@@ -1,5 +1,13 @@
 # Debug
 
+## 2026-10-27 optional approval output fix evidence
+
+- Root cause: OUTPUT_DOCS.purchase.approval_docs requiredtrue made build_output_set_status ready/can_outputfalse; prepare_output_documents(existing_only=True) failed before write_output_print_queue. The original277 follow-updc1394b6 therefore never printed. Changing requiredfalse alone is insufficient: default _docs_for_output also must skip unavailable optional files, or copy raises a missing-file error.
+- Production/source baseline SHA25679f6de61f5ddf7fe0f975b660fb19cb2fd5adee61cc4167484d863a806b4c2f1 matched exactly. Deployed moduleSHAde51e5e1c55a497d3f36175c4f8cdd9bcb0e624f931b9b4e99a97855ec428c6a. Pre-restart active DB and today's queue were empty. One historical claimed queue fromAug26 was excluded from today's activity rather than changed.
+- Latest277 print jobb47d6eb4-d4bc-47f1-b63d-b3492d724f42: created18:47:30,done18:47:36,3/3,requesterAgent현시훈PC-현시훈/.18,printerSamsung M268x_M289x Series/pyeongtaek.278 ERPjobad65f364-cd71-4587-909a-3fccaa08688d completed18:53:12,4/4 print acknowledgment18:53:31. These preceded our18:56 deployment; do not attribute their printing to this fix or queue again.
+- After restart public TLS-verified3010/api/version200 returned bundlef04c638ba5b792b75e02e0d23f61dbc3a361566d24079024a7ce903305ff80ab, matching source computation. Read-only production status:277readytrue/can_outputtrue withkeys[erp_voucher,tax_invoice,expense_report],missingapproval;278readytrue withall4. Both243/Hyeon exact bundle and setupreadytrue18:57:31, no missing checks. Native listener8081PID24008;3010/loopback3011bridge17760 unchanged;19443relay10140 unchanged.
+- Tests:51 routing/expense/output regressions passed, then added duplicate-post prevention test and all12 output tests passed. Real temporary PDFs checked content/order, approval merge, missing required docs, explicit missing selection, repeated preparation, warning, requester queue destination and one-click output-only job. No live output calls in fixtures. StagedHEAD source12 tests =>11pass/1Zoomskip. Graphify first update hit transientEINVAL; retries succeeded, latest1772nodes5050edges120communities.
+
 ## 2026-10-27 16:32 repair result and v2 checks
 
 - Found Desktop/AccountingWeb_Repair_20261027_163233.json,9015bytes, completed16:32:47. Python315x64 actual sys.version3.15.1; user-site Roaming/Python/Python315/site-packages; all23 importsok. python_https exit1 SSLCertVerificationError Missing Subject Key Identifier. No launcher_backup/agent_after step, proving first repair never started Agent.
