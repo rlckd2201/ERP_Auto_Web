@@ -1,5 +1,14 @@
 # Debug
 
+## 2026-10-28 all-user routing and overnight502
+
+- Production baseline purchase_execution.pySHA bf4d4a0643092edbba6afb422f0c049d90a783fe57c00b01f33259d8c23eee27 equaled local; deployedSHA758a00102ec0152f63bec0c1c767e162b8d4019c2bb2feec0de9d91f874687eb. .env changed only PURCHASE_SHARED_USER_IDS=tuy1120,hah4627 to*. Blank identity and unready/wrong shared target fixture cases still409.
+-08:35 direct243 log repeatedly502 heartbeat/certificate.105 still hadnative-host24008 butno8081listener; stderr20261027T0956218555701Z records21:25:09 IocpProactor.accept WinError64/Accept failed, then mail scheduler continued overnight. Prior SQLite lock warnings also existed; no evidence they caused the socket failure. Supervisor retries rejected the orphan each time.
+- OriginalsupervisorSHA061bd734d9891cb0ecb711f5bdd7d502800149587057385c4f6d32087992b095 ->821badb237491867e4f52135a78b42985e24b6692e82cfb2609d10ac4682abdd. Log23:39:29Z recovering pinned runtime without listener24008;23:39:35Z adoptedlistener16868. Foreign/ambiguous/reusedPID/late-listener cases tested with mocks, never real processes.
+- Watchdog task argument https://127.0.0.1:8081/health returned403 despite public3010/version200. PlainHTTP loopback resets (listener usesTLS); TLS loopback /api/version verified200. Exported watchdog taskXML then changed onlyHealthUrl to that endpoint, preserving schedule/principal/settings. Subsequent watchdog run result0; backend taskRunning andlistener16868 stayedstable. No35 or shared relay edits.
+-08:40:56 live source/read-only setup and resolver:243readytrue;rlckd9646(.13),tuy1120(.15),hah4627(.18),reum0009(.16)readytrue andall resolve243, eachoutput_agent_id/client_ip retained. Allcurrent bundles6b6f81e0e12e76e1981b2ae68b70126e5875b48fc4f847fbaf1005c83dde2f32. kimsanul still unbound/notready as before; no account/installation bypass.
+-59 Python tests pass includingnewall-userhandler/author/printer follow-up;8 PS5.1 recovery tests pass; whole supervisor parser passes; Graphify1791nodes5084edges120communities. No financial mutations; deployment idle checkACTIVE_DB empty andno current pending queue.
+
 ## 2026-10-27 optional approval output fix evidence
 
 - Root cause: OUTPUT_DOCS.purchase.approval_docs requiredtrue made build_output_set_status ready/can_outputfalse; prepare_output_documents(existing_only=True) failed before write_output_print_queue. The original277 follow-updc1394b6 therefore never printed. Changing requiredfalse alone is insufficient: default _docs_for_output also must skip unavailable optional files, or copy raises a missing-file error.

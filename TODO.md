@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-10-28 all-user243 rollout
+
+- [x] Enable all named/login users including future accounts for shared purchase execution; preserve author/printer and no-fallback behavior.
+- [x] Backup/deploy module and production wildcard config. Verify Song/Hyeon/Kim/reum routes to243 with fresh ready Agents.
+- [x] Recover the exact pinned accounting runtime with missing listener; fix watchdog health endpoint without changing portal authentication/bridge.
+- [x] Run59 Python and8 PowerShell regression checks; update Graphify.
+- [ ] Observe a real user-triggered purchase after rollout; do not replay yesterday's completed277/278.
+- [ ] Continue investigating Windows accept socket failure only if it recurs; guarded recovery handles the observed orphan state, but the underlying network event was not reproduced.
+
 ## 2026-10-27 purchase output correction (supersedes blockers below)
 
 - [x] Make purchase approval attachment optional for output while preserving the three required accounting PDFs and missing-document visibility.

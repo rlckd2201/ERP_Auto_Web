@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-28 everyone can use the purchase shared executor
+
+- Interpret the current request in its purchase-processing context: production wildcard applies to purchase one-click/direct ERP/expense generation. It does not silently change regular manual processing; existing automatic regular243 routing remains.
+- Use full-token * in PURCHASE_SHARED_USER_IDS, retaining exact allowlist and empty-list local modes for compatibility/rollback. Every wildcard caller must have a nonempty verified user identity; API authentication and PC binding remain unchanged.
+- Execute on the configured exact ready Agent/IP and fail explicitly when unavailable, never fall back to another desktop. Keep actual author and selected output printer/Agent separate from executor. Existing saved documents still output without ERP replay.
+- Restore the observed502 without broad process termination: recovery requires a single guard candidate matching the stored executable, exact arguments,PID and creation time, with no listener and a second identity check immediately before stop. Other processes/listeners/ambiguous state are rejected.
+- Use the verified public loopback version endpoint for liveness. A protected /health403 is an authorization response and must not trigger endless restarts; do not relax NativeGuard or forge portal identity.
+
 ## 2026-10-27 missing purchase approval is an output warning
 
 - User explicitly accepts an absent approval attachment while requiring voucher/tax invoice/expense output. Approval lookup and data remain unchanged; only output completeness rules change. Available approval PDFs remain included. Explicitly selecting a missing approval still errors.

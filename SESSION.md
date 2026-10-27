@@ -1,5 +1,14 @@
 # Session
 
+## 2026-10-28 08:41 all users use243 for purchase execution
+
+- User requests purchase processing on243 regardless of account, explicitly Song/Hyeon/Kim. Added full-token wildcard support and deployed PURCHASE_SHARED_USER_IDS=* (previously tuy1120,hah4627). Covers purchase one-click, direct ERP input and expense generation. Regular automatic target already243; manual regular route was outside this purchase change.
+- Current code/routes verified against active105 source. All named callers plus reum0009 resolve toDESKTOP-55LQ6BN-TEST/.243 while retaining original author/output Agent/IP/printer. At08:40:52-56 all four users and243 have fresh heartbeats, exact updated bundle andreadytrue. Unknown future named users covered by fixture; absent identity still rejected.
+- Found overnight independent outage: native-hostPID24008 remained alive but8081 listener vanished after21:25 WinError64. Scoped pinned-process recovery restored service at08:39:35, newPID16868. Watchdog was also incorrectly checking protected /health(403); changed only its HealthUrl to verified HTTPS loopback /api/version(200), backing up taskXML.3010/3011bridge17760 andshared19443relay10140 unchanged.
+- BackupC:/ERP_DB/deploy_backups/all_users_243_20261028 contains original purchase module,.env,supervisor,record,SQLite snapshot andwatchdog XML. NewAgent hash6b6f81e0e12e76e1981b2ae68b70126e5875b48fc4f847fbaf1005c83dde2f32; version remains254. No invoice/ERP/print job was submitted for validation.
+-59 Python regressions passed,8 PowerShell recovery fixtures passed; Graphify1791nodes/5084edges/120communities refreshed. Primary agent implemented/reviewed alone under user's existing immediate-fix authorization.
+- Next exact start: observe the next genuine purchase request, particularly rlckd9646, for243 sequential execution and caller-selected printing. If another502 occurs, inspect pinned supervisor and actual loopback version health; don't touch35 or shared relay/auth. Live route/readiness verified, no artificial end-to-end financial transaction run.
+
 ## 2026-10-27 18:58 purchase output no longer blocked by missing approval
 
 - User explicitly requests voucher, tax invoice and expense report output even when #277's approval attachment cannot be found. Supersedes the17:51 requirement to attach approval before output. Implemented by primary agent alone under existing immediate-fix authorization.

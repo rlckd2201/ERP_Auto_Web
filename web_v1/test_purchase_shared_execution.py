@@ -67,6 +67,51 @@ class RoutingTests(unittest.TestCase):
         self.settings.purchase_shared_user_ids = ""
         self.assertIs(self.resolve(), self.caller)
 
+    def test_wildcard_routes_every_named_and_future_user_to_shared_pc(self):
+        self.settings.purchase_shared_user_ids = "*"
+        for user_id in ("tuy1120", "hah4627", "rlckd9646", "reum0009", "future-user"):
+            with self.subTest(user_id=user_id):
+                self.caller.update(user_id=user_id, ready=False, missing_items=["local ERP"])
+                self.assertIs(self.resolve(), self.executor)
+
+    def test_wildcard_accepts_the_existing_separator_format(self):
+        self.settings.purchase_shared_user_ids = "tuy1120; *\n hah4627"
+        self.caller["user_id"] = " RLCKD9646 "
+        self.assertIs(self.resolve(), self.executor)
+
+    def test_all_users_still_requires_an_identified_caller(self):
+        self.settings.purchase_shared_user_ids = "*"
+        for value in ("", " ", None):
+            with self.subTest(value=value):
+                self.caller["user_id"] = value
+                with self.assertRaises(RequestError) as caught:
+                    self.resolve()
+                self.assertEqual(caught.exception.status_code, 409)
+        self.lookup.assert_not_called()
+
+    def test_wildcard_is_a_whole_token_not_a_username_pattern(self):
+        self.settings.purchase_shared_user_ids = "tuy*"
+        self.assertIs(self.resolve(), self.caller)
+
+    def test_all_users_never_falls_back_when_shared_pc_is_unavailable(self):
+        self.settings.purchase_shared_user_ids = "*"
+        self.caller["user_id"] = "rlckd9646"
+        for changes in (dict(ready=False), dict(agent_id="other"), dict(client_ip="172.17.30.99")):
+            with self.subTest(changes=changes):
+                self.lookup.return_value = {**self.executor, **changes}
+                with self.assertRaises(RequestError):
+                    self.resolve()
+
+    def test_all_users_requires_both_target_settings(self):
+        self.settings.purchase_shared_user_ids = "*"
+        self.caller["user_id"] = "rlckd9646"
+        for field in ("purchase_shared_agent_ip", "purchase_shared_agent_id"):
+            value = getattr(self.settings, field)
+            setattr(self.settings, field, "")
+            with self.assertRaises(RequestError):
+                self.resolve()
+            setattr(self.settings, field, value)
+
     def test_shared_execution_does_not_require_local_erp(self):
         self.caller.update(ready=False, missing_items=["local ERP"])
         self.assertIs(self.resolve(), self.executor)
@@ -130,6 +175,31 @@ class PipelineTests(unittest.TestCase):
         self.assertEqual(result["processor"], "Song actual author")
         self.assertEqual(result["printer_name"], "Song chosen printer")
         self.assertEqual(result["output_agent_id"], "song")
+
+    def test_all_user_policy_preserves_each_callers_author_and_selected_printer(self):
+        routing = load("web_v1/backend/purchase_execution.py", {"resolve_purchase_execution"}, dict(
+            re=re, HTTPException=RequestError,
+            settings=SimpleNamespace(purchase_shared_user_ids="*", purchase_shared_agent_id="shared243",
+                                     purchase_shared_agent_ip="172.17.30.243"),
+            setup_status=Mock(return_value=self.executor)))
+        self.ns["resolve_purchase_execution"] = routing["resolve_purchase_execution"]
+        self.ns["_request_setup"] = lambda _: self.caller
+        load("web_v1/backend/app.py", {"_purchase_execution_setup"}, self.ns)
+        for user_id in ("tuy1120", "hah4627", "rlckd9646", "new-user"):
+            with self.subTest(user_id=user_id):
+                self.jobs.clear()
+                printer = user_id + " selected printer"
+                self.caller.update(user_id=user_id, agent_id=user_id + "-pc", ready=False,
+                    capabilities={"printer_mapping": {"gimje": printer}})
+                self.ns["_request_processor_name"] = lambda *args: user_id
+                payload = self.ns["create_purchase_one_click_job"](self.body, object())["payload"]
+                self.assertEqual(payload["target_agent_id"], "shared243")
+                self.assertEqual(payload["processor"], user_id)
+                self.assertEqual(payload["output_agent_id"], user_id + "-pc")
+                self.assertEqual(payload["printer_name"], printer)
+                self.ns["_maybe_queue_one_click_output"]("0")
+                self.assertEqual(self.jobs[1].payload["target_agent_id"], user_id + "-pc")
+                self.assertEqual(self.jobs[1].payload["printer_name"], printer)
 
     def test_direct_erp_routes_to_same_shared_agent(self):
         result = self.ns["create_purchase_erp_input_job"](self.body, object())["payload"]

@@ -1,4 +1,4 @@
-"""Opt-in purchase execution on a shared Agent; ownership stays with the caller."""
+"""Shared purchase execution for selected or all users; ownership stays with the caller."""
 from __future__ import annotations
 
 import re
@@ -12,7 +12,11 @@ from .setup_state import setup_status
 
 def resolve_purchase_execution(caller: dict[str, Any]) -> dict[str, Any]:
     users = {item.casefold() for item in re.split(r"[,;\s]+", settings.purchase_shared_user_ids) if item}
-    shared = str(caller.get("user_id") or "").strip().casefold() in users
+    user_id = str(caller.get("user_id") or "").strip().casefold()
+    all_users = "*" in users
+    if all_users and not user_id:
+        raise HTTPException(status_code=409, detail="로그인 사용자를 확인할 수 없습니다. 다시 로그인해 주세요.")
+    shared = all_users or user_id in users
     if not shared:
         if not caller.get("ready"):
             missing = ", ".join(caller.get("missing_items") or [])
