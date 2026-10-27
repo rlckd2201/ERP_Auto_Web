@@ -8,6 +8,7 @@ Production origin: **https://172.16.19.105:3011**. Previous origin:
 - Web code: `C:\ERP_Auto_Web\excel_voucher_web` on 105.
 - Python: `.venv\Scripts\python.exe`, with application dependencies pinned to the source server versions.
 - Task: `FinanceVoucher-Web-3011`, SYSTEM, at startup, automatic restart on failure.
+- The task starts the venv Python with `deploy/run_service.py` directly. Uvicorn stays in that same process so stopping the task also stops the listening socket.
 - Bind **172.16.19.105 only**, not `0.0.0.0`: another accounting application's native bridge owns `127.0.0.1:3011`. Do not stop it.
 - Data: `C:\ERP_DB\finance_3011_data`. Do not overwrite the existing `C:\ERP_DB\excel_voucher_web_data` on 105.
 - Private configuration: `C:\ERP_DB\finance_web105\environment.json`.

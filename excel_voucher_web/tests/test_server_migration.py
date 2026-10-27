@@ -7,6 +7,23 @@ from cryptography.exceptions import InvalidTag
 
 from agent import agent_worker as worker
 from deploy import migrate_server as migration
+from deploy.run_service import load_environment
+
+
+def test_service_environment_rejects_unrelated_process_settings(tmp_path):
+    config = tmp_path / "environment.json"
+    config.write_text('{"PYTHONPATH":"unrelated"}', encoding="utf-8")
+    with pytest.raises(ValueError, match="Invalid finance"):
+        load_environment(config)
+
+
+def test_service_environment_preserves_private_config_without_importing_app(tmp_path):
+    import json
+    config = {"EXCEL_VOUCHER_DATA_DIR": "private-data", "EXCEL_VOUCHER_WEB_HOST": "172.16.19.105",
+              "EXCEL_VOUCHER_WEB_PORT": "3011", "EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN": "https://172.16.19.105:3011"}
+    path = tmp_path / "environment.json"
+    path.write_text(json.dumps(config), encoding="utf-8")
+    assert load_environment(path) == config
 
 
 def test_encrypted_bundle_roundtrip_and_tamper_rejection(tmp_path):
