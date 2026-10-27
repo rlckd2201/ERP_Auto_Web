@@ -354,10 +354,15 @@ function visibleInvoices() {
   return filteredInvoices().slice(0, state.invoicePageSize);
 }
 
+function accountingSessionHeaders() {
+  const token = sessionStorage.getItem("accountingWebSession") || "";
+  return token ? { "X-Accounting-Session": token } : {};
+}
+
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     ...options,
+    headers: { "Content-Type": "application/json", ...accountingSessionHeaders(), ...(options.headers || {}) },
   });
   const text = await response.text();
   let data = {};
@@ -370,13 +375,14 @@ async function requestJson(url, options = {}) {
   }
   if (!response.ok) {
     const message = data.detail || data.message || `HTTP ${response.status}`;
+    if (response.status === 401) clearLoginAndShowLogin(message);
     throw new Error(String(message).startsWith("Internal Server Error") ? "서버 내부 오류가 발생했습니다. 관리자에게 화면을 전달하세요." : message);
   }
   return data;
 }
 
 async function requestForm(url, formData) {
-  const response = await fetch(url, { method: "POST", body: formData });
+  const response = await fetch(url, { method: "POST", headers: accountingSessionHeaders(), body: formData });
   const text = await response.text();
   let data = {};
   if (text) {
@@ -388,6 +394,7 @@ async function requestForm(url, formData) {
   }
   if (!response.ok) {
     const message = data.detail || data.message || `HTTP ${response.status}`;
+    if (response.status === 401) clearLoginAndShowLogin(message);
     throw new Error(String(message).startsWith("Internal Server Error") ? "서버 내부 오류가 발생했습니다. 관리자에게 화면을 전달하세요." : message);
   }
   return data;
@@ -460,12 +467,13 @@ function setPasswordFindOpen(open) {
 async function continueAfterLogin(data) {
   state.pendingLoginData = null;
   state.user = data.user;
+  if (data.session_token) sessionStorage.setItem("accountingWebSession", data.session_token);
   localStorage.setItem("accountingWebUser", JSON.stringify(data.user));
   renderSetupStatus(data.setup);
   if (data.setup?.ready) await showApp();
   else {
     showView("setup");
-    if (!agentConnectedFromSetup()) {
+    if (!data.setup?.identity_message && !agentConnectedFromSetup()) {
       autoStartAgentAfterLogin({ downloadFallback: false });
     }
   }
@@ -495,10 +503,15 @@ function agentUpdateRequiredFromSetup() {
 }
 
 function setupNeedsAgentStart() {
-  return !agentConnectedFromSetup() || agentUpdateRequiredFromSetup();
+  return !state.setupStatus?.identity_message && (!agentConnectedFromSetup() || agentUpdateRequiredFromSetup());
 }
 
 function clearLoginAndShowLogin(message = "") {
+  const headers = accountingSessionHeaders();
+  sessionStorage.removeItem("accountingWebSession");
+  if (headers["X-Accounting-Session"]) {
+    fetch("/api/logout", { method: "POST", headers }).catch(() => {});
+  }
   localStorage.removeItem("accountingWebUser");
   state.user = null;
   state.setupStatus = null;
@@ -670,7 +683,7 @@ function renderSetupStatus(status) {
   const agentText = status.agent_id ? `담당자 PC 연결됨: ${status.agent_id}` : "담당자 PC 필수 프로그램 미연결";
   els.setupSummary.textContent = status.ready
     ? `필수환경 점검 완료. ${agentText}`
-    : `필수환경 점검이 필요합니다. ${agentText}`;
+    : (status.identity_message || `필수환경 점검이 필요합니다. ${agentText}`);
   els.setupChecks.innerHTML = (status.checks || []).map((check) => `
     <article class="check-card ${checkClass(check)}">
       <span class="check-status">${escapeHtml(check.status || "")}</span>
@@ -2185,6 +2198,9 @@ function selectSingleInvoice(invoiceId) {
 }
 
 els.loginForm?.addEventListener("submit", handleLogin);
+const loginSubmitButton = document.querySelector("#loginSubmitButton");
+if (loginSubmitButton) loginSubmitButton.disabled = false;
+if (els.loginMessage) els.loginMessage.textContent = "";
 els.passwordChangeForm?.addEventListener("submit", handleInitialPasswordChange);
 els.forgotPasswordButton?.addEventListener("click", () => setPasswordFindOpen(true));
 els.passwordFindCloseButton?.addEventListener("click", () => setPasswordFindOpen(false));

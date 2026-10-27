@@ -26,6 +26,7 @@ from .agent_queue import claim_next_erp_task, update_erp_task
 from .approval_fetcher import fetch_approval_documents
 from .compuzone_quote import auto_attach_compuzone_quote
 from .config import WEB_ROOT, settings
+from .browser_session import SESSION_HEADER, create_browser_session, resolve_browser_session, revoke_browser_session
 from .mail_collector import mail_collect_processed_history
 from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
@@ -93,7 +94,9 @@ app.add_middleware(
 async def no_cache_frontend_assets(request: Request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path == "/" or path.startswith("/assets/"):
+    if path == "/" or path.startswith("/assets/") or path in {
+        "/api/login", "/api/logout", "/api/password/change-initial"
+    }:
         response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
         response.headers["Pragma"] = "no-cache"
         response.headers["Expires"] = "0"
@@ -1447,6 +1450,55 @@ def client_ip(request: Request) -> str:
     return forwarded or (request.client.host if request.client else "")
 
 
+def _browser_identity(request: Request) -> dict[str, Any] | None:
+    token = request.headers.get(SESSION_HEADER)
+    if token is None:
+        return None
+    if not hasattr(request.state, "accounting_identity"):
+        request.state.accounting_identity = resolve_browser_session(token)
+    return request.state.accounting_identity
+
+
+def _request_setup(request: Request, user_id: str = "", agent_id: str = "") -> dict[str, Any]:
+    identity = _browser_identity(request)
+    if identity is None:
+        ip = client_ip(request)
+        if not latest_agent_profile(client_ip=ip):
+            raise HTTPException(401, detail="포털의 PC 연결을 확인하려면 회계 계정으로 다시 로그인해 주세요.")
+        return setup_status(user_id=user_id, agent_id=agent_id, client_ip=ip)
+    if ((user_id and user_id != identity["user_id"]) or
+            (agent_id and agent_id != identity["agent_id"])):
+        raise HTTPException(403, detail="로그인한 계정의 PC만 사용할 수 있습니다.")
+    return _identity_setup(identity)
+
+
+def _identity_setup(identity: dict[str, Any]) -> dict[str, Any]:
+    if not identity["agent_id"] or not identity["client_ip"]:
+        message = "본인 계정에 연결된 PC를 확인할 수 없습니다. 본인 PC에서 운영 주소로 직접 접속해 한 번 로그인한 후 다시 점검해 주세요."
+        return {"ready": False, "user_id": identity["user_id"], "agent_id": "", "client_ip": "",
+                "identity_message": message, "missing_items": ["본인 PC 연결"],
+                "checks": [{"key": "agent_identity", "label": "본인 PC 연결", "ok": False,
+                            "status": "확인 필요", "message": message}], "capabilities": {}, "printer_mapping": {}}
+    status = setup_status(agent_id=identity["agent_id"], client_ip=identity["client_ip"])
+    if status.get("user_id") != identity["user_id"]:
+        raise HTTPException(403, detail="PC 연결 정보가 변경되었습니다. 회계 계정으로 다시 로그인해 주세요.")
+    return status
+
+
+def _verified_login_result(request: Request, user: dict[str, Any]) -> dict[str, Any]:
+    ip = client_ip(request)
+    # A successful direct login retains the existing local-PC registration behavior.
+    if latest_agent_profile(client_ip=ip):
+        setup_status(user_id=user["id"], client_ip=ip)
+    if user.get("is_initial"):
+        return {"ok": True, "user": user, "password_change_required": True,
+                "setup_required": True, "setup": {"ready": False}}
+    token = create_browser_session(user["id"], preferred_ip=ip)
+    status = _identity_setup(resolve_browser_session(token))
+    return {"ok": True, "user": user, "session_token": token, "password_change_required": False,
+            "setup_required": not status["ready"], "setup": status}
+
+
 def _request_processor_name(
     request: Request,
     requested_processor: Any,
@@ -1454,7 +1506,7 @@ def _request_processor_name(
 ) -> str:
     profile = setup if isinstance(setup, dict) else {}
     if not profile.get("user_id"):
-        profile = latest_agent_profile(client_ip=client_ip(request)) or profile
+        profile = _request_setup(request) or profile
     processor = resolve_user_display_name(profile.get("user_id"), requested_processor)
     if not processor:
         raise HTTPException(
@@ -1482,7 +1534,7 @@ def _agent_update_notes() -> str:
     return "담당자 PC 필수 프로그램 최신 패치입니다."
 
 def require_setup_ready(request: Request) -> dict[str, Any]:
-    status = setup_status(client_ip=client_ip(request))
+    status = _request_setup(request)
     if not status["ready"]:
         missing = ", ".join(status.get("missing_items") or [])
         raise HTTPException(status_code=409, detail=f"필수 프로그램 점검이 완료되지 않았습니다: {missing}")
@@ -1490,7 +1542,9 @@ def require_setup_ready(request: Request) -> dict[str, Any]:
 
 
 def _purchase_execution_setup(request: Request) -> tuple[dict[str, Any], dict[str, Any]]:
-    caller = setup_status(client_ip=client_ip(request))
+    caller = _request_setup(request)
+    if not caller.get("agent_id"):
+        raise HTTPException(409, detail=caller.get("identity_message") or "본인 PC 연결을 확인해 주세요.")
     return caller, resolve_purchase_execution(caller)
 
 
@@ -1608,14 +1662,13 @@ async def api_login(request: Request) -> dict[str, Any]:
     user = authenticate_user(user_id, password)
     if not user:
         raise HTTPException(status_code=401, detail="아이디 또는 비밀번호가 올바르지 않습니다.")
-    status = setup_status(user_id=user["id"], client_ip=client_ip(request))
-    return {
-        "ok": True,
-        "user": user,
-        "password_change_required": bool(user.get("is_initial")),
-        "setup_required": not status["ready"],
-        "setup": status,
-    }
+    return _verified_login_result(request, user)
+
+
+@app.post("/api/logout")
+def api_logout(request: Request) -> dict[str, Any]:
+    revoke_browser_session(request.headers.get(SESSION_HEADER, ""))
+    return {"ok": True}
 
 
 @app.post("/api/password/find")
@@ -1664,39 +1717,44 @@ async def api_password_change_initial(request: Request) -> dict[str, Any]:
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    status = setup_status(user_id=user["id"], client_ip=client_ip(request))
-    return {"ok": True, "user": user, "setup_required": not status["ready"], "setup": status}
+    return _verified_login_result(request, user)
 
 
 @app.get("/api/setup/status")
 def api_setup_status(request: Request, user_id: str = Query(default="", max_length=80), agent_id: str = Query(default="", max_length=160)) -> dict[str, Any]:
-    return setup_status(user_id=user_id, agent_id=agent_id, client_ip=client_ip(request))
+    return _request_setup(request, user_id=user_id, agent_id=agent_id)
 
 
 @app.post("/api/setup/printers")
 async def api_setup_printers(request: Request) -> dict[str, Any]:
     payload = await request.json()
+    caller = _request_setup(request, agent_id=str(payload.get("agent_id") or ""))
+    if not caller.get("agent_id"):
+        raise HTTPException(409, detail=caller.get("identity_message"))
     try:
         saved = save_printer_mapping(
             payload.get("mapping") if isinstance(payload.get("mapping"), dict) else payload,
-            agent_id=str(payload.get("agent_id") or ""),
-            client_ip=client_ip(request),
+            agent_id=caller["agent_id"],
+            client_ip=caller["client_ip"],
         )
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return {"ok": True, **saved, "setup": setup_status(agent_id=saved.get("agent_id", ""), client_ip=client_ip(request))}
+    return {"ok": True, **saved, "setup": _request_setup(request)}
 
 
 @app.post("/api/setup/install")
 async def api_setup_install(request: Request) -> dict[str, Any]:
     payload = await request.json()
+    caller = _request_setup(request, agent_id=str(payload.get("agent_id") or ""))
+    if not caller.get("agent_id"):
+        raise HTTPException(409, detail=caller.get("identity_message"))
     companies = payload.get("companies") if isinstance(payload.get("companies"), list) else None
     install_certificate = bool(payload.get("install_certificate"))
     try:
         job = create_install_job(
             [str(item) for item in companies] if companies is not None else None,
-            agent_id=str(payload.get("agent_id") or ""),
-            client_ip=client_ip(request),
+            agent_id=caller["agent_id"],
+            client_ip=caller["client_ip"],
             install_certificate=install_certificate,
         )
     except ValueError as exc:

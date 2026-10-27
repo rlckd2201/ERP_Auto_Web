@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>회계업무 자동화 WEB v1.0</title>
-  <link rel="stylesheet" href="/assets/styles.css?v=20260521_fix139_agent_protocol_gesture">
+  <link rel="stylesheet" href="/assets/styles.css?v=20261027_portal254">
 </head>
 <body>
   <section id="loginView" class="gate-view">
@@ -16,13 +16,13 @@
           <p>담당자 로그인 후 PC 필수환경을 점검합니다.</p>
         </div>
       </div>
-      <form id="loginForm" class="login-form">
+      <form id="loginForm" class="login-form" method="post">
         <label>아이디<input id="loginUserId" name="user_id" autocomplete="username" required></label>
         <label>비밀번호<input id="loginPassword" name="password" type="password" autocomplete="current-password" required></label>
-        <button class="button primary" type="submit">로그인</button>
+        <button id="loginSubmitButton" class="button primary" type="submit" disabled>로그인</button>
       </form>
       <button id="forgotPasswordButton" class="button ghost login-link-button" type="button">비밀번호 찾기</button>
-      <p id="loginMessage" class="gate-message"></p>
+      <p id="loginMessage" class="gate-message">로그인 화면을 불러오는 중입니다. 계속 표시되면 새로고침해 주세요.</p>
     </div>
   </section>
 
@@ -340,6 +340,6 @@
     </div>
   </div>
 
-  <script src="/assets/app.js?v=20260521_fix139_agent_protocol_gesture" defer></script>
+  <script src="/assets/app.js?v=20261027_portal254" defer></script>
 </body>
 </html>

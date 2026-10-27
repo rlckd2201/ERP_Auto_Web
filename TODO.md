@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-10-27 portal Agent repair and remaining portal-owner task
+
+- [x] User authorized immediate fixes; implement verified-session Agent ownership while preserving separate accounting login.
+- [x] Back up/deploy254; verify91 Python tests plus5 frontend checks, four254/exact/ready Agents, direct purchase screen, original243 routing/output ownership, unchanged financial states and healthy DB.
+- [x] Prevent broken JavaScript from submitting login credentials into URL: form POST, submit disabled until handler registration, cache-busted frontend. Existing user password was not changed; user-controlled rotation is advisable after its observed URL exposure.
+- [ ] Team lead managing172.16.19.35 must correct common portal runtime validation for applicationId it2-accounting-automation with registered basePath /accounting-automation. Preserve all other checks; inspect current source, back up and test. No35 management access or authority to message that person was supplied.
+- [ ] After portal runtime repair, verify accounting password login actually reaches105, session header survives the portal envelope, setup resolves the user's private Agent, and the purchase screen/selected printer are correct. No actual business transaction is needed for this acceptance.
+- [ ] Register/identify Hyeon's replacement laptop, verify its output readiness; only then close the remaining old121 redirect as previously authorized.
+
 ## 2026-10-27 public3010 completion and old-address cleanup
 
 - [x] Confirm user-fixed205 accepts243 ->105:3010; redirect old121 address to3010 and recover243 automatically.

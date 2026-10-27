@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-27 authenticated Agent binding; preserve portal ownership boundary
+
+- User's latest instruction authorizes immediate routine fixes without repeated implementation-approval questions. Keep separate accounting login; no password synchronization, login removal or bypass of portal validation.
+- NAT compatibility uses a server-verified accounting session, never user_id alone or a public-IP-to-PC mapping. Tokens are random, stored by hash, expire after12 hours and invalidate on password change/logout. Bind a unique recent owned Agent, prefer an identified direct PC even during its restart, then pin identity. Ambiguity/missing ownership does not dispatch work or switch to another user's PC.
+- Session-bearing setup/printer/install/business requests use the same owner; Agent heartbeat/job traffic retains actual transport IP. Preserve shared243 execution and original caller/output/printer behavior.
+- The central portal runtime is independently broken after its route rename. User identifies35 as the team lead's active server. Prepare a narrowly scoped alias-validation candidate for the owner; do not modify35, replace its transport/security checks, or send messages without authorization/access.
+- Login forms must remain POST-only and unable to submit before their JavaScript handler attaches. This prevents a script-loading failure from placing a password in a URL. Password rotation remains a user-controlled action.
+
 ## 2026-10-27 migrate active Agents before closing legacy listeners
 
 - User authorizes both old web addresses to close after completion.3010 is a TLS bridge to the same original backend; close8081 externally by binding127.0.0.1 and disabling only its owned allow rule. Do not terminate the backend needed by3010 or touch the unrelated105:8080 app.
