@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-10-27 preserve portal source adaptation while fixing responses
+
+- A controlled rollback proved the11:28 response-parser refactor caused the current portal app.js delivery rejection. Correct the prior hypothesis openly and distinguish this from the earlier intermittent IIS502.
+- Keep the main request-helper source that the portal already adapts intact. Apply API text-response validation in a separate preloaded script, outside those helpers. Always delegate to the existing authenticated fetch chain with unchanged arguments; keep401/logout behavior and binary Response methods.
+- Do not alter or bypass35 authentication, account mappings, signed context or transport policy. The105-only compatibility fix is within the user's existing instruction to fix observed issues immediately.
+- Use a visible startup failure notice for script-load errors. Never silently retry purchase/uploads to hide a gateway failure. Production recovery requires live page/setup/status verification, beyond unit tests or backend200 alone.
+- Completion of the blank-screen repair does not establish that intermittent portal API503 is fixed. Preserve the explicit residual warning and avoid a whole-system recovery claim.
+
+
 ## 2026-10-27 response errors and diagnostic privacy
 
 - Existing user instruction to fix observed issues immediately authorizes the scoped frontend correction. Primary agent works alone; preserve active owner-deployed authentication/transport and inspect current105 source before editing. Change only two staticfrontend files for this fix, with exact baseline hashes and backups; do not restart business services.

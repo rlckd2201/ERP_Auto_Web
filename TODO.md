@@ -1,5 +1,15 @@
 # TODO
 
+## 2026-10-27 14:56 portal blank-screen recovery
+
+- [x] Identify actual script-load503, isolate the incompatible11:28 app.js change, and restore the purchase view.
+- [x] Deploy response validation separately while retaining the portal-adapted app.js source;14 tests and live purchase/setup/printer/status checks pass.
+- [x] Supersede the13:17 Storage Proxy handoff. That candidate is not the fix for this incident; no35 change is needed for the current recovery.
+- [ ] Await Hyeon's actual replacement-PC diagnostic and verify its fresh Agent enrollment separately. Do not label that issue resolved from Kim's working PC.
+- [ ] Investigate recurrent portal API503 separately if it continues: one setup-status warning occurred14:58:37 after the blank-screen repair. Do not reopen the fixed script-adaptation issue on this evidence alone.
+- Next: monitor fresh portal status if the user reports recurrence; preserve request-helper source compatibility when planning subsequent releases.
+
+
 ## 2026-10-27 11:16 portal incident reopened
 
 - [x] Reproduce/raw-HTML response parser defect; deploy static response validation with backup/hash guards and12 passingNode tests.

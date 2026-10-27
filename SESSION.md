@@ -1,5 +1,15 @@
 # Session
 
+## 2026-10-27 14:56 portal blank screen fixed on 105
+
+- Corrected the earlier Storage Proxy hypothesis: live startup instrumentation proved the main `/assets/app.js` never loaded. Portal returned503 JSON ("연결 시스템 화면을 구성하지 못했습니다.") while105 logged200 for that asset. The archived Storage test was not the cause of this production blank screen; do NOT apply the13:17 native-storage patch for this incident.
+- Controlled compatibility check: replacing the11:28 app.js SHA cdae70e5... with the exact earlier1e19c81a... restored the purchase screen immediately. The earlier response-parser refactor is incompatible with the portal's source adaptation.35's internal adapter was not accessed; only the input/output incompatibility is established.
+- Final fix14:56:13 preserves app.js exactly and loads separate api-response-guard.js before it. This delegates through the installed authenticated fetch transport, validates text API responses, keeps401 handling and upload arguments, and leaves binary downloads intact. bootstrap-guard.js now shows a short reload notice if main-script loading fails, instead of a blank page. No diagnostic response-body fetch remains.
+- Backups: C:/ERP_DB/deploy_backups/v254_bootstrap_guard_20261027_144718, v254_portal_compat_probe_20261027_145157, and v254_portal_compat_20261027_145613. Final hashes are in tmp/portal_bootstrap_20261027_1445/deployment.json. No35 edit, backend restart, Agent update, ERP posting, mail sending or printing.
+- Verification:14 Node checks passed, including gatewayHTML, malformed200,401, structured business errors, single upload submission, portal transport argument preservation and native Response/binary methods. Live portal purchase43 records, Kimje printer selection, current-PC setup allnormal, and return-to-purchase succeeded. Mail collection advanced through14:59:06 with0failures. One transient setup-statusHTTP503 warning occurred14:58:37; the login/purchase view stayed intact. Do not claim every portal request is now error-free. Graphify rebuilt1733 nodes/4989 edges/116 communities.
+- Next exact start: if asked about this blank-screen incident, use the restored portal tab929741438 and verify fresh status; preserve the portal-adapted request helpers during future frontend changes. Hyeon's replacement-PC diagnostic/enrollment remains a separate pending issue. Preserve unrelated worktree modifications and pre-existing frontend deletions.
+
+
 ## 2026-10-27 11:16 reopened incident: intermittent portal502 and Hyeon new laptop
 
 - User reports raw IIS502 HTML in Kim's mail-status summary and Hyeon's setup-check alert; Hyeon installed/executed the package and retried. Corrected the earlier broad "resolved" statement:10:52 proved purchase-screen access and heartbeat only, not all requests or replacement-PC enrollment. User confirms Hyeon's new laptop retains172.16.10.18.

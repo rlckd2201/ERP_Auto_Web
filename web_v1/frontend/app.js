@@ -359,48 +359,45 @@ function accountingSessionHeaders() {
   return token ? { "X-Accounting-Session": token } : {};
 }
 
-async function parseApiResponse(response) {
-  const text = await response.text();
-  let data = {};
-  let invalidJson = false;
-  if (text.trim()) {
-    try {
-      data = JSON.parse(text);
-    } catch {
-      invalidJson = true;
-    }
-  }
-  if (!response.ok || invalidJson) {
-    const transient = [502, 503, 504].includes(response.status);
-    const detail = data?.detail || data?.message;
-    const safeDetail = typeof detail === "string" && detail.length <= 400 &&
-      !/<(?:!doctype|html|head|body|script|style)\b/i.test(detail) &&
-      !detail.startsWith("Internal Server Error");
-    const message = transient
-      ? `서버 연결이 일시적으로 원활하지 않습니다. 잠시 후 다시 시도해 주세요. (HTTP ${response.status})`
-      : (safeDetail ? detail : (invalidJson
-          ? `서버에서 올바른 응답을 받지 못했습니다. 잠시 후 다시 시도해 주세요. (HTTP ${response.status})`
-          : `요청을 처리하지 못했습니다. 잠시 후 다시 시도해 주세요. (HTTP ${response.status})`));
-    if (response.status === 401) clearLoginAndShowLogin(message);
-    const error = new Error(message);
-    error.status = response.status;
-    error.transient = transient;
-    throw error;
-  }
-  return data;
-}
-
 async function requestJson(url, options = {}) {
   const response = await fetch(url, {
     ...options,
     headers: { "Content-Type": "application/json", ...accountingSessionHeaders(), ...(options.headers || {}) },
   });
-  return parseApiResponse(response);
+  const text = await response.text();
+  let data = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
+  if (!response.ok) {
+    const message = data.detail || data.message || `HTTP ${response.status}`;
+    if (response.status === 401) clearLoginAndShowLogin(message);
+    throw new Error(String(message).startsWith("Internal Server Error") ? "서버 내부 오류가 발생했습니다. 관리자에게 화면을 전달하세요." : message);
+  }
+  return data;
 }
 
 async function requestForm(url, formData) {
   const response = await fetch(url, { method: "POST", headers: accountingSessionHeaders(), body: formData });
-  return parseApiResponse(response);
+  const text = await response.text();
+  let data = {};
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = { message: text };
+    }
+  }
+  if (!response.ok) {
+    const message = data.detail || data.message || `HTTP ${response.status}`;
+    if (response.status === 401) clearLoginAndShowLogin(message);
+    throw new Error(String(message).startsWith("Internal Server Error") ? "서버 내부 오류가 발생했습니다. 관리자에게 화면을 전달하세요." : message);
+  }
+  return data;
 }
 
 function setupReady() {

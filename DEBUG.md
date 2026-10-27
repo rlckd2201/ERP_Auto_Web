@@ -1,5 +1,14 @@
 # Debug
 
+## 2026-10-27 14:47-14:56 actual blank-screen failure and verified recovery
+
+- Added a temporary startup observer on105 after exact app/index baseline checks and backup. Live Chrome captured script load failure, then static-asset GET503 / application/json /68bytes witherror "연결 시스템 화면을 구성하지 못했습니다.".105 backend asset logs remained200. No app.js runtime/storage exception was reached.
+-14:51:57 restored exact pre11:28 app.js1e19c81afbd800aa3106f1643cef7f5ba0fe600ce4c7571096288987e41c3e36; the same portal immediately rendered purchase43 records. This isolates source compatibility against the portal's adaptation layer; its35 implementation was not read or edited.
+-14:56:13 final105 static deployment:app.js1e19c81afbd800aa3106f1643cef7f5ba0fe600ce4c7571096288987e41c3e36,index8e49bdb7dd1e3f198fe227b9a446e1a166617c01daee6d3a8b61f3ff97a49810,api-response-guard.js d8f9698cf2ba5a0ab0fe692632b31609d457007031b13e68d00b8bb81322db2a,bootstrap-guard.js25668db6f49d20f7e85bfa5f19e7ebf0cdf598f20c98be46a662399e67c4d0ab.
+-14 Node checks pass in isolated stage, including real Response property/method binding, binary downloads and delegation to existing portal fetch without argument changes. Live reload after finaldeploy succeeds; setup reports allnormal forKim/selectedKimje printer and returns to purchase; mailstatus14:56:09/0failed; a later warning at05:58:37.889UTC reports setup monitor HTTP503 while keeping current login. Purchase remains visible and mailstatus advances14:59:06; no repeated app.js load failure. Record this as separate residual portal API instability.
+- Graphify1733nodes/4989edges/116communities. Artifacts:tmp/portal_bootstrap_20261027_1445. Diagnostic fetches removed from final guard. Previousoutput/portal_native_storage_fix_20261027.txt is marked superseded.
+
+
 ## 2026-10-27 11:16 intermittent502 investigation and static fix
 
 - User screenshots show raw IIS XHTML502 in mail summary and Hyeon alert aftersetup recheck. Backend frontendsha matched the priorv254 files. requestJson/requestForm used{message:text} onJSON parse failure and returned it forHTTP200;loadMailCollectStatus printed error.message verbatim. Fixed in isolated stage withparseApiResponse;12 tests coverHTML502/503/504,HTML200 rejection,HTML401 clearing,structured409,empty204,multipart single submission,mail-poll recovery andHTML-in-JSON sanitization.
