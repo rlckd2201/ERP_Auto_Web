@@ -1,5 +1,20 @@
 # TODO
 
+## 2026-10-27 execute targeted Hyeon repair
+
+- [x] Prepare/test standalone repair and copy 현시훈_PC복구.zip to the current user's Desktop for forwarding.
+- [ ] Hyeon executes AccountingWebRepair.exe on his PC and returns his Desktop AccountingWeb_Repair_*.json.
+- [ ] Verify real import/HTTPS result and fresh105 Agent ownership/version/readiness; diagnose any remaining stage from recorded errors.
+- [ ] Confirm portal recheck and printer/ERP prerequisites after enrollment. Do not mark recovered merely because the EXE was delivered or the process starts.
+
+## 2026-10-27 actual Hyeon diagnostic follow-up
+
+- [x] Receive/analyze Hyeon's16:18:41 report:254 files/registrations present, direct105 HTTPS reachable, Agent not running.
+- [x] Check105: no fresh Hyeon registration; lastOct26 10:49:58/v250.
+- [ ] Capture the actual selected Python, real imports/user-site and pip/startup failure metadata. Adjacent package-file absence alone is insufficient to establish the root cause.
+- [ ] Repair the demonstrated local startup failure; require fresh254 heartbeat and readiness before declaring recovery.
+- [ ] Keep common authenticated-portal502 investigation open separately.
+
 ## 2026-10-27 Hyeon recheck502 follow-up
 
 - [x] Confirm common portal502 also occurs on Kim's connected PC and preserve current blank-screen fix.

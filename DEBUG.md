@@ -1,5 +1,20 @@
 # Debug
 
+## 2026-10-27 repair artifact verification
+
+- Sources: tools/hyeon_agent_repair.ps1, AccountingWebRepair.cs, test_hyeon_agent_repair.ps1, HYEON_REPAIR_README.txt. Standalone C# executable embeds the script and runs an interactive PowerShell console; no administrator elevation requested.
+- Six Windows PowerShell5.1 checks pass. Native argument roundtrip covers spaces/quotes/trailing backslash/Korean; actual import probe runs without installing; exit17 must halt and record failure; credentials/query redaction and generated launcher parsing pass. Test array handling was adjusted for PS5 ConvertFrom-Json behavior; runtime quoting roundtrip passes.
+- Compilation/resource self-test pass. Desktop ZIP9007bytes/SHA9da1478f674fe986122e86cf31dc95082010a11408acc90b30ef462307c9de79 matches output copy; EXESHAed00a9a3b868548c35405df828f29d5589c9194b657993e56c259267642d0d23.
+- No full repair/WinGet/pip/Agent launch was executed on this management PC or Hyeon's PC by these tests. Actual success/failure evidence must come from Hyeon's Desktop repair JSON and105 heartbeat.
+
+## 2026-10-27 Hyeon16:18:41 report evidence
+
+- File: current user Desktop/AccountingWeb_Diagnostics_현시훈PC_20261027_161843.json. Host현시훈PC/user현시훈/IP172.16.10.18. Version1.0.254; launcher/protocol/startup/server3010 correct; Agent processes[]. Latest setup16:14:28 has payload.zip/setup.ps1.
+- Agent log modified16:14:58; last64KB markers:ConnectTimeout18,heartbeat failed7,ConnectionError1; ReadTimeout,SSL,ModuleNotFoundError,PermissionError,package repair failed,Traceback,403,502 all0. Counts have no destination/time mapping and exclude pip/PowerShell output.
+- Only discovered Python C:/Python315/python.exe reports3.15.1, ten adjacent-package checksfalse. Diagnostic source confirms no imports, user-site/venv or actual launcher PYTHON_EXE collection; registry coverage is limited.
+- TCP3010 connected3ms; HTTPS version/certificate200; portalTCP443 connected9ms and unauthenticated page302. Relative redirect appearsinvalid_or_absent due the diagnostic URL sanitizer.
+- Live105 app.py1171-1198 accepts --version success, installs3.11 only when no candidate, then verifies pip/imports. deploy/start_user_erp_agent.ps1 repeats pip/import checks before spawning Agent. Fresh105 Hyeon lookup remainsOct26 10:49:58/v250/notready. No remediation deployed during this analysis.
+
 ## 2026-10-27 15:50-16:00 setup502 evidence and mitigation
 
 - Screenshot15:50:36: friendlyHTTP502 alert afterHyeon recheck. Kim's browser has setup monitor andbackground jobsHTTP502 at06:53:48.844UTC. Native API/version remains200/16ms at15:52:11; own/shared243 heartbeat fresh. Hyeon234 setup/status log entries are all200, but the available access log lacks per-line timestamps, so failed frontend requests cannot be matched precisely.

@@ -1,5 +1,19 @@
 # Decisions
 
+## 2026-10-27 targeted recovery instead of speculative shared deployment
+
+- Existing immediate-fix authorization covers preparing the Hyeon-only repair. Primary agent works alone; shared105/35/243 code and account mappings are unchanged.
+- Prefer a healthy existing interpreter after real imports. Otherwise use a separately installed user-scope3.11 base plus a new isolated runtime, retaining existing Python and installed business data. Backup the launcher before pinning the verified executable.
+- Verify Python HTTPS using the installed CA, propagate native exit codes, keep errors visible/redacted and store results locally for user-directed transfer. No automatic uploads or synthetic ERP/print tasks.
+- Package delivery, Agent process launch and server readiness are three separate milestones; the latter two remain unverified on Hyeon's PC until execution and heartbeat evidence arrive.
+
+## 2026-10-27 installed files versus a running Agent
+
+- The returned Hyeon report proves254 files/registration and missing Agent execution, not completed dependency installation.
+- Package-file checks cover only adjacent Lib/site-packages. Do not assert all packages are absent or Python3.15 is incompatible without actual interpreter/import evidence; user-site/venv and the launcher's selection remain unknown.
+- Current HTTPS200 establishes reachability at16:18. Historical timeout counts without endpoint/time and unauthenticated portal302 do not resolve startup root cause or common502.
+- Capture launcher/runtime/import/pip outcomes before changing production behavior speculatively.
+
 ## 2026-10-27 bounded setup-read retries and separate PC diagnosis
 
 - Preserve the exact portal-adapted app.js and extend only the separate response guard. Retry only same-origin GET /api/setup/status on502/503/504, at most twice, retaining the existing authenticated fetch chain and request arguments.

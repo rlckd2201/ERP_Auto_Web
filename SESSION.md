@@ -1,5 +1,22 @@
 # Session
 
+## 2026-10-27 Hyeon repair package prepared for execution
+
+- User asks for an actionable next step. Prepared a targeted standalone repair EXE and copied verified ZIP to the CURRENT USER's Desktop/현시훈_PC복구.zip for manual delivery. Nothing was copied to or executed on Hyeon's PC yet.
+- tools/hyeon_agent_repair.ps1 checks actual selected Python and imports, reuses a healthy interpreter or prepares isolated3.11 dependencies, validates Python HTTPS with installed CA, backs up/rebinds the launcher and starts the normal Agent. Only 현시훈PC / 현시훈 can run the repair; running Agents are left untouched. No shared server or business job changes.
+- Windows PowerShell5.1: six checks pass (real argv/imports, failure propagation, redaction, launcher rendering, target/TLS/no-delete checks). C# wrapper compile/embedded-resource self-test pass. Actual Hyeon repair and heartbeat are not verified.
+- ZIP SHA2569da1478f674fe986122e86cf31dc95082010a11408acc90b30ef462307c9de79; EXEed00a9a3b868548c35405df828f29d5589c9194b657993e56c259267642d0d23. Readme explains execution, runtime changes/backups and Desktop result handoff. Built artifacts remain untracked.
+- Next exact start: Hyeon runs the delivered EXE and returns AccountingWeb_Repair_*.json; inspect outcome and105 fresh profile. A new hostname/user-derived Agent ID may differ from the historical ID; verify ownership before binding. Process-running status alone is not server readiness. Common portal502 remains separate.
+
+## 2026-10-27 Hyeon actual 16:18 diagnostic analyzed
+
+- Actual report received: current user's Desktop/AccountingWeb_Diagnostics_현시훈PC_20261027_161843.json, created16:18:41 on Hyeon's172.16.10.18. The diagnostic ZIP was manually handed off after correcting the earlier file-location confusion.
+- Version254 files, launcher, requirements/config, protocol and startup registration exist and point to105:3010. Agent processes are empty. Fresh105 read-only profile lookup still shows onlyOct26 10:49:58/v250; no new enrollment.
+- At report time105 TCP3010 connected3ms; HTTPS version/certificate endpoints200. PortalTCP443 connected and unauthenticated page302. These do not establish authenticated portal stability.
+- Only discovered Python is C:/Python315/python.exe, product version3.15.1; all ten adjacent-site-packages file checks are false. Collector does not test imports, user-site/venv, all registry views or the launcher's selected interpreter. Dependency/startup failure is plausible, not proven.
+- Live105 launcher accepts --version-success candidates, runs pip/install and import checks before starting Agent. Historical18 ConnectTimeout matches have no destination/timestamps. No source/service/account changes applied.
+- Next exact start: capture actual launcher PYTHON_EXE resolution, interpreter/import/user-site results and pip/startup error/exit metadata on Hyeon's PC; repair the demonstrated failure, then verify fresh254 heartbeat/readiness. Common portal502 remains separate.
+
 ## 2026-10-27 15:50 Hyeon setup502; bounded read retry deployed
 
 - User's Hyeon screenshot reportsHTTP502 after "다시 점검". Kim's portal also logged simultaneous setup/jobs502 at15:53:48, proving this is not exclusively a replacement-laptop symptom. This is separate from the fixed app.js blank-screen incompatibility.
