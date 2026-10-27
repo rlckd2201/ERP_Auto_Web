@@ -213,8 +213,8 @@ def _job_diagnostics(job: Any) -> dict[str, Any]:
         current_location = "작업 상태 확인이 필요합니다."
         recommended_action = "작업 로그를 확인하세요."
 
-    if forward_result and not forward_result.get("ok"):
-        recommended_action += " 18080 데이터 서버 전달은 실패했지만 서버 큐에는 보관되어 있습니다."
+    if settings.forward_to_data_server and forward_result and not forward_result.get("ok"):
+        recommended_action += " 외부 데이터 서버 전달은 실패했지만 서버 큐에는 보관되어 있습니다."
 
     return {
         "current_location": current_location,
@@ -225,6 +225,7 @@ def _job_diagnostics(job: Any) -> dict[str, Any]:
         "agent_online": agent_online,
         "agent_last_seen_age_seconds": last_seen_age,
         "data_server_forward": forward_result,
+        "data_server_forward_enabled": settings.forward_to_data_server,
     }
 
 
@@ -654,6 +655,8 @@ def api_job_artifact(job_id: str, artifact_type: str) -> FileResponse:
 
 @app.post("/api/jobs/{job_id}/forward")
 def api_forward_job(job_id: str) -> dict[str, Any]:
+    if not settings.forward_to_data_server or not data_server_target_url():
+        raise HTTPException(status_code=409, detail="외부 데이터 서버 연계를 사용하지 않습니다.")
     try:
         job = store.get_job(job_id)
     except KeyError as exc:

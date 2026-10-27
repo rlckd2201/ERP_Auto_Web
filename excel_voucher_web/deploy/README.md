@@ -13,7 +13,7 @@ The cutover completed on 2026-10-27 at 09:16 KST after the network administrator
 - Target-switch commands `6cb62de74228` and `918e3277ea6a` failed before modifying the Agent task, with a TCP connect timeout to 105:3011.
 - A short, SYN-only packet capture on 105 during the failed attempt received no Agent connection packet. After the administrator permitted `172.17.30.243 -> 172.16.19.105 TCP 3011`, target-switch command `03b933a574d9` completed using revision `3e14ef3`. Fresh Agent heartbeats on 105 were verified at 09:15:55 and 09:16:16, before retiring 8081. No broad firewall exception or firewall disabling was used.
 - Agent task remains under `DESKTOP-55LQ6BN\TEST`, with the existing real ERP mode and printer settings. Only its server address changed.
-- The final local regression suite passed 244 tests. No ERP voucher, printer job, or notification email was sent for this migration.
+- The final local regression suite passed 253 tests, including upload/queue/claim without external forwarding. No ERP voucher, printer job, or notification email was sent for this migration.
 
 ## Runtime
 
@@ -38,7 +38,7 @@ Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
 Get-NetTCPConnection -State Listen -LocalPort 3011
 ```
 
-Do not launch the migrated web app manually as Administrator: saved ERP credentials are protected with the web service's SYSTEM identity. Legacy `run_server.ps1` / `install_server_autostart.ps1` defaults describe the old 121 installation, not this service.
+Do not launch the migrated web app manually as Administrator: saved ERP credentials are protected with the web service's SYSTEM identity. `run_server.ps1` starts the existing task when the private configuration is present. `install_server_autostart.ps1` retains that task instead of creating a duplicate. Launcher defaults and the reset utility now point at the 105 finance installation.
 
 ## Migration Safety
 
@@ -50,7 +50,9 @@ Import runs under SYSTEM and re-protects readable DPAPI secrets for that identit
 
 Snapshot: 18 accounts, 6 terminal jobs, 63 events, 2 saved ERP credential records. There were no queued/running vouchers. The import verified 254 file hashes; all 22 PDF files match the source. Web password hashes are preserved. Failure emails remain disabled. No voucher is resubmitted or completion email resent during migration.
 
-The optional legacy data-server dependency remains `http://172.17.39.121:18080`; it is not silently redirected to a different application on 105.
+The optional legacy data-server forwarding has been disabled and its URL cleared. It only copied voucher metadata elsewhere; the successfully completed historical voucher already had a failed forwarding result. Local queue/storage and Agent processing do not depend on it. Manual `/api/jobs/{id}/forward` returns 409 while disabled, without a network request or job update. Migration imports also clear this dependency instead of restoring the old address.
+
+The production path is browser -> 105 web/SQLite/artifacts -> 243 ERP Agent. Groupware directory lookup and SMTP keep their existing independent endpoints. No operational dependency on 121 remains. Old history and rollback copies are retained as records, not live connections. The standalone legacy Manager GUI's HTTP features are not used by the finance adapter, which instantiates `ERPLoginBot` through local shims without launching `AppManager` or `ERPAutoApp`.
 
 ## Agent Cutover
 

@@ -178,22 +178,24 @@ def import_bundle(args):
         counts = {table: db.execute(f'SELECT count(*) FROM "{table}"').fetchone()[0] for table in metadata["counts"]}
         if counts != metadata["counts"]:
             raise RuntimeError("Database record count mismatch")
-    environment = metadata["environment"]
-    from urllib.parse import urlsplit, urlunsplit
-    upstream = urlsplit(environment.get("EXCEL_VOUCHER_DATA_SERVER_URL", ""))
-    if upstream.hostname in {"127.0.0.1", "localhost"}:
-        environment["EXCEL_VOUCHER_DATA_SERVER_URL"] = urlunsplit(upstream._replace(netloc="172.17.39.121:" + str(upstream.port or 80)))
-    environment.update({"EXCEL_VOUCHER_DATA_DIR": str(args.data), "EXCEL_VOUCHER_MAIL_OUTBOX_DIR": str(args.data / "mail_outbox"),
-                        "EXCEL_VOUCHER_WEB_HOST": "172.16.19.105", "EXCEL_VOUCHER_WEB_PORT": "3011",
-                        "EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN": "https://172.16.19.105:3011",
-                        "EXCEL_VOUCHER_LEGACY_AUTH_DB_PATH": str(args.config.parent / "unused-legacy-auth.db"),
-                        "EXCEL_VOUCHER_FAILURE_EMAIL_ENABLED": "0"})
+    environment = destination_environment(metadata["environment"], args.data, args.config)
     args.config.write_text(json.dumps(environment, indent=2), encoding="utf-8")
     report = {"imported": True, "identity": os.environ.get("USERNAME"), "counts": counts,
               "reencrypted_secrets": len(converted), "unreadable_source_secrets": metadata["unreadable_secrets"],
               "verified_files": len(metadata["sha256"])}
     args.report.write_text(json.dumps(report, indent=2), encoding="utf-8")
     print(json.dumps(report))
+
+
+def destination_environment(source, data: Path, config: Path):
+    environment = dict(source)
+    environment.update({"EXCEL_VOUCHER_DATA_DIR": str(data), "EXCEL_VOUCHER_MAIL_OUTBOX_DIR": str(data / "mail_outbox"),
+                        "EXCEL_VOUCHER_WEB_HOST": "172.16.19.105", "EXCEL_VOUCHER_WEB_PORT": "3011",
+                        "EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN": "https://172.16.19.105:3011",
+                        "EXCEL_VOUCHER_DATA_SERVER_URL": "", "EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER": "0",
+                        "EXCEL_VOUCHER_LEGACY_AUTH_DB_PATH": str(config.parent / "unused-legacy-auth.db"),
+                        "EXCEL_VOUCHER_FAILURE_EMAIL_ENABLED": "0"})
+    return environment
 
 
 def main():

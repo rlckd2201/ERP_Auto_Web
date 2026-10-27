@@ -1,9 +1,10 @@
 param(
-  [int]$Port = 8081,
-  [string]$PublicOrigin = "https://172.17.39.121:8081",
-  [string]$DataServerUrl = "http://127.0.0.1:18080",
-  [string]$SslCertFile = "C:\ERP_DB\certs\web_v1.cert.pem",
-  [string]$SslKeyFile = "C:\ERP_DB\certs\web_v1.key.pem",
+  [int]$Port = 3011,
+  [string]$PublicOrigin = "https://172.16.19.105:3011",
+  [string]$DataServerUrl = "",
+  [switch]$ForwardToDataServer,
+  [string]$SslCertFile = "C:\ERP_DB\finance_web105\finance.cert.pem",
+  [string]$SslKeyFile = "C:\ERP_DB\finance_web105\finance.key.pem",
   [string]$TaskName = "Excel Voucher Web Server",
   # 기본은 예약 작업(로그인 없이도 부팅 시 시작, 죽으면 자동 재시작).
   # -UseStartupShortcut 를 주면 시작프로그램 폴더에 바로가기만 만든다.
@@ -13,6 +14,12 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+if (Test-Path -LiteralPath 'C:\ERP_DB\finance_web105\environment.json') {
+  $Task = Get-ScheduledTask -TaskName 'FinanceVoucher-Web-3011' -ErrorAction Stop
+  if ($RunNow -and $Task.State -ne 'Running') { Start-ScheduledTask -TaskName $Task.TaskName }
+  Write-Host 'Existing FinanceVoucher-Web-3011 task retained; no duplicate task or startup shortcut created.'
+  return
+}
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 $Runner = Join-Path $Root "run_server.ps1"
 if (-not (Test-Path $Runner)) {
@@ -25,10 +32,10 @@ $ServerArgs = @(
   "-Port", [string]$Port,
   "-PublicOrigin", "`"$PublicOrigin`"",
   "-DataServerUrl", "`"$DataServerUrl`"",
-  "-ForwardToDataServer",
   "-RequireLogin",
   "-GroupwareSyncOnStart"
 )
+if ($ForwardToDataServer) { $ServerArgs += "-ForwardToDataServer" }
 if ($SslCertFile -and $SslKeyFile) {
   $ServerArgs += @("-SslCertFile", "`"$SslCertFile`"", "-SslKeyFile", "`"$SslKeyFile`"")
 }
@@ -54,7 +61,7 @@ if ($UseStartupShortcut) {
   Write-Host "Created startup shortcut: $LinkPath"
   Write-Host "Target : $PowerShell"
   Write-Host "Args   : $Argument"
-  if ($RunNow) { Start-Process -FilePath $PowerShell -ArgumentList $Argument -WorkingDirectory $Root }
+  if ($RunNow) { Start-Process -FilePath $PowerShell -ArgumentList $Argument -WorkingDirectory $Root -WindowStyle Hidden }
   return
 }
 

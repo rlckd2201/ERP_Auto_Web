@@ -51,13 +51,13 @@ class ManagerProfile:
 
 @dataclass(frozen=True)
 class Settings:
-    data_dir: Path = Path(_env("EXCEL_VOUCHER_DATA_DIR", r"C:\ERP_DB\excel_voucher_web_data"))
+    data_dir: Path = Path(_env("EXCEL_VOUCHER_DATA_DIR", r"C:\ERP_DB\finance_3011_data"))
     target_agent_id: str = _env("EXCEL_VOUCHER_TARGET_AGENT_ID", "finance-agent-172-17-30-243")
     target_agent_ip: str = _env("EXCEL_VOUCHER_TARGET_AGENT_IP", "172.17.30.243")
-    web_host: str = _env("EXCEL_VOUCHER_WEB_HOST", "0.0.0.0")
-    web_port: int = _env_int("EXCEL_VOUCHER_WEB_PORT", 8081)
-    web_public_origin: str = _env("EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN", "https://172.17.39.121:8081")
-    data_server_url: str = _env("EXCEL_VOUCHER_DATA_SERVER_URL", "http://127.0.0.1:18080")
+    web_host: str = _env("EXCEL_VOUCHER_WEB_HOST", "172.16.19.105")
+    web_port: int = _env_int("EXCEL_VOUCHER_WEB_PORT", 3011)
+    web_public_origin: str = _env("EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN", "https://172.16.19.105:3011")
+    data_server_url: str = _env("EXCEL_VOUCHER_DATA_SERVER_URL", "")
     data_server_endpoint: str = _env("EXCEL_VOUCHER_DATA_SERVER_ENDPOINT", "/api/excel-voucher/jobs")
     data_server_timeout_seconds: int = _env_int("EXCEL_VOUCHER_DATA_SERVER_TIMEOUT_SECONDS", 10)
     forward_to_data_server: bool = _env_bool("EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER", False)
@@ -69,7 +69,7 @@ class Settings:
     admin_password: str = _env("EXCEL_VOUCHER_ADMIN_PASSWORD", "eotmd12!@")
     admin_email: str = _env("EXCEL_VOUCHER_ADMIN_EMAIL", "rlckd9646@dae-seung.co.kr")
     support_email: str = _env("EXCEL_VOUCHER_SUPPORT_EMAIL", "rlckd9646@dae-seung.co.kr")
-    legacy_auth_db_path: Path = Path(_env("EXCEL_VOUCHER_LEGACY_AUTH_DB_PATH", r"C:\ERP_DB\learned_data.db"))
+    legacy_auth_db_path: Path = Path(_env("EXCEL_VOUCHER_LEGACY_AUTH_DB_PATH", r"C:\ERP_DB\finance_web105\unused-legacy-auth.db"))
 
     groupware_db_host: str = _env("EXCEL_VOUCHER_GROUPWARE_DB_HOST", "172.16.19.33")
     groupware_db_port: int = _env_int("EXCEL_VOUCHER_GROUPWARE_DB_PORT", 3306)

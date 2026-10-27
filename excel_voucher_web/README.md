@@ -6,32 +6,21 @@
 
 105 서버의 자동시작 작업은 `FinanceVoucher-Web-3011`이며, 재시작은 관리자 PowerShell에서 `Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'` 후 `Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'`로 한다.
 
-데이터·인증서·Agent 전환·복구 절차는 [이전 운영 문서](deploy/README.md)를 따른다. 아래 121/8081 실행 예시는 이전 서버 참고용이며, 새 서버에서는 실행하지 않는다.
+데이터·인증서·Agent 전환·복구 절차는 [이전 운영 문서](deploy/README.md)를 따른다. 121로 추가 전송하던 18080 연계는 사용하지 않는다. 작업·계정·PDF는 105에 보관하고 ERP 입력은 243에서 처리한다.
 
 재정 담당자가 엑셀을 업로드하면 서버가 전표 payload를 만들고, 172.17.30.243 자동 전표처리 PC의 Agent가 작업을 가져가 ERP 전표 처리를 수행하는 신규 웹 기반 시스템이다.
 
 ## 실행
 ```powershell
-cd excel_voucher_web
-.\run_server.ps1 `
-  -Port 8081 `
-  -PublicOrigin https://172.17.39.121:8081 `
-  -DataServerUrl http://127.0.0.1:18080 `
-  -ForwardToDataServer `
-  -RequireLogin `
-  -GroupwareSyncOnStart `
-  -SslCertFile C:\ERP_DB\certs\web_v1.cert.pem `
-  -SslKeyFile C:\ERP_DB\certs\web_v1.key.pem
+Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
 ```
 
-브라우저에서 `https://172.17.39.121:8081`을 연다. SSL 인증서를 붙일 때는 `-SslCertFile`, `-SslKeyFile`을 같이 넘긴다.
-
-SSL 없이 내부 테스트만 할 때는 `-SslCertFile`, `-SslKeyFile`을 빼고 `http://172.17.39.121:8081`로 접속한다.
+브라우저에서 `https://172.16.19.105:3011`을 연다. 105의 `run_server.ps1`과 `start_server.cmd`도 기존 예약 작업을 시작하며 별도 Python 프로세스를 만들지 않는다. 개인 계정으로 직접 실행하면 저장된 ERP 비밀번호의 Windows 암호화 사용자가 달라지므로 예약 작업을 사용한다.
 
 ## Agent 실행 예시
 ```powershell
 cd excel_voucher_web
-.\run_agent.ps1 -Server https://172.17.39.121:8081 -ClientIp 172.17.30.243
+.\run_agent.ps1 -Server https://172.16.19.105:3011 -ClientIp 172.17.30.243
 ```
 
 운영에서는 `EXCEL_VOUCHER_TARGET_AGENT_IP=172.17.30.243`를 기본으로 사용한다.
@@ -42,7 +31,7 @@ Agent는 전표 PDF를 먼저 보관하고, Windows 기본 프린터를 변경�
 운영 프린터 출력 예시:
 ```powershell
 .\run_agent.ps1 `
-  -Server https://172.17.39.121:8081 `
+  -Server https://172.16.19.105:3011 `
   -ClientIp 172.17.30.243 `
   -PrinterName "재정 프린터 (172.16.10.173)" `
   -ErpMode real `
@@ -51,12 +40,12 @@ Agent는 전표 PDF를 먼저 보관하고, Windows 기본 프린터를 변경�
 
 출력 없이 큐/전표 데이터만 테스트할 때:
 ```powershell
-.\run_agent.ps1 -Server https://172.17.39.121:8081 -ClientIp 172.17.30.243 -PrintMode off
+.\run_agent.ps1 -Server https://172.16.19.105:3011 -ClientIp 172.17.30.243 -PrintMode off
 ```
 
 self-signed 인증서를 아직 자동 전표처리 PC에 신뢰 등록하지 않은 테스트 환경에서는:
 ```powershell
-.\run_agent.ps1 -Server https://172.17.39.121:8081 -ClientIp 172.17.30.243 -InsecureSkipTlsVerify
+.\run_agent.ps1 -Server https://172.16.19.105:3011 -ClientIp 172.17.30.243 -InsecureSkipTlsVerify
 ```
 
 ## 로그인/그룹웨어 DB 연동
@@ -65,25 +54,16 @@ self-signed 인증서를 아직 자동 전표처리 PC에 신뢰 등록하지 �
 - 로컬 로그인 계정과 비밀번호 해시는 운영 데이터 폴더의 `excel_voucher.sqlite3`에 저장한다.
 - 신규 동기화 계정의 초기 비밀번호는 `wowjd12!@`이며 최초 로그인 시 변경해야 한다.
 - 비밀번호 찾기는 임시 비밀번호를 발급하고 메일 발송 후 다음 로그인에서 다시 변경을 강제한다.
-- 전산 관리자 계정은 기존 회계업무 WEB DB `C:\ERP_DB\learned_data.db`의 `rlckd9646` 계정과 동기화한다.
-- 기존 DB에서 전산 계정을 읽을 수 있으면 서버 시작 시와 로그인 직전에 비밀번호 변경 상태까지 반영한다.
+- 전산 관리자 계정도 이전한 재정 DB를 사용하며, 다른 회계 서비스의 `learned_data.db`와 동기화하지 않는다.
 
-운영 기본값은 `run_server.ps1`에 들어있다.
-- 데이터 폴더: `C:\ERP_DB\excel_voucher_web_data`
+운영 설정은 `C:\ERP_DB\finance_web105\environment.json`에 있다.
+- 데이터 폴더: `C:\ERP_DB\finance_3011_data`
 - 그룹웨어 DB: `172.16.19.33:3306 / ksystem_yundong / dlpadmin2`
 - 메일 SMTP: `35.216.76.148:25`
 
 운영 서버 실행 예시:
 ```powershell
-.\run_server.ps1 `
-  -Port 8081 `
-  -PublicOrigin https://172.17.39.121:8081 `
-  -DataServerUrl http://127.0.0.1:18080 `
-  -ForwardToDataServer `
-  -RequireLogin `
-  -GroupwareSyncOnStart `
-  -SslCertFile C:\ERP_DB\certs\web_v1.cert.pem `
-  -SslKeyFile C:\ERP_DB\certs\web_v1.key.pem
+Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
 ```
 
 기본 그룹웨어 DB 계정은 `dlpadmin2`를 사용한다.
@@ -96,20 +76,19 @@ SMTP 서버 연결에 실패하면 메일은 실제 발송되지 않고 `data/ma
 ## 접속 확인
 서버 PC에서:
 ```powershell
-Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue
-New-NetFirewallRule -DisplayName "Excel Voucher Web 8081" -Direction Inbound -Protocol TCP -LocalPort 8081 -Action Allow
+Get-NetTCPConnection -LocalAddress 172.16.19.105 -LocalPort 3011 -State Listen
 ```
 
 자동 전표처리 PC에서:
 ```powershell
-Test-NetConnection 172.17.39.121 -Port 8081
+Test-NetConnection 172.16.19.105 -Port 3011
 ```
 
 ## 데이터 서버 전달
-- 기본 URL: `http://127.0.0.1:18080`
-- 기본 endpoint: `/api/excel-voucher/jobs`
-- 자동 전달은 `run_server.ps1`의 `-ForwardToDataServer`로 켠다.
-- 수동 재전달 API: `POST /api/jobs/{job_id}/forward`
+- 재정 운영에서는 외부 전달을 사용하지 않으며 URL도 비워 둔다.
+- `EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER=0`, `EXCEL_VOUCHER_DATA_SERVER_URL=`.
+- 수동 재전달 API `POST /api/jobs/{job_id}/forward`도 HTTP 409로 거절하며 외부 요청이나 작업 상태 변경을 하지 않는다.
+- 과거 이벤트는 감사 이력으로 유지하지만 비활성 연계를 현재 장애로 표시하지 않는다.
 
 ## 작업 내역 초기화
 계정/비밀번호는 유지하고 처리 내역과 업로드 파일만 지울 때 서버에서 실행한다.
@@ -118,7 +97,7 @@ Test-NetConnection 172.17.39.121 -Port 8081
 cd "C:\ERP_Auto_Web\excel_voucher_web"
 
 powershell.exe -ExecutionPolicy Bypass -File .\reset_jobs.ps1 `
-  -DataDir "C:\ERP_DB\excel_voucher_web_data" `
+  -DataDir "C:\ERP_DB\finance_3011_data" `
   -ClearUploads `
   -Force
 ```

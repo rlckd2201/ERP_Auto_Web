@@ -1,10 +1,10 @@
 param(
-  [string]$HostName = "0.0.0.0",
-  [int]$Port = 8081,
-  [string]$PublicOrigin = "https://172.17.39.121:8081",
-  [string]$DataServerUrl = "http://127.0.0.1:18080",
+  [string]$HostName = "172.16.19.105",
+  [int]$Port = 3011,
+  [string]$PublicOrigin = "https://172.16.19.105:3011",
+  [string]$DataServerUrl = "",
   [string]$DataServerEndpoint = "/api/excel-voucher/jobs",
-  [string]$DataDir = "C:\ERP_DB\excel_voucher_web_data",
+  [string]$DataDir = "C:\ERP_DB\finance_3011_data",
   [switch]$ForwardToDataServer,
   [switch]$RequireLogin = $true,
   [switch]$GroupwareSyncOnStart,
@@ -17,13 +17,20 @@ param(
   [string]$SmtpPassword = "",
   [string]$SmtpFrom = "admpdm@dae-seung.co.kr",
   [string]$SmtpFromName = "",
-  [string]$SslCertFile = "C:\ERP_DB\certs\web_v1.cert.pem",
-  [string]$SslKeyFile = "C:\ERP_DB\certs\web_v1.key.pem"
+  [string]$SslCertFile = "C:\ERP_DB\finance_web105\finance.cert.pem",
+  [string]$SslKeyFile = "C:\ERP_DB\finance_web105\finance.key.pem"
 )
 
 $ErrorActionPreference = "Stop"
 $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
+
+if (Test-Path -LiteralPath 'C:\ERP_DB\finance_web105\environment.json') {
+  $Task = Get-ScheduledTask -TaskName 'FinanceVoucher-Web-3011' -ErrorAction Stop
+  if ($Task.State -ne 'Running') { Start-ScheduledTask -TaskName $Task.TaskName }
+  Write-Host 'FinanceVoucher-Web-3011 manages this installation with its private configuration.'
+  return
+}
 
 if (-not $SmtpFromName) {
   $SmtpFromName = [Text.Encoding]::UTF8.GetString(
@@ -49,6 +56,7 @@ if ($HasKey -and -not (Test-Path -LiteralPath $SslKeyFile -PathType Leaf)) {
 }
 
 $Candidates = @(@(
+  (Join-Path $Root '.venv\Scripts\python.exe'),
   "$env:LOCALAPPDATA\Programs\Python\Python312\python.exe",
   "$env:LOCALAPPDATA\Programs\Python\Python311\python.exe",
   "$env:ProgramFiles\Python312\python.exe",

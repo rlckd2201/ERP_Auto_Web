@@ -9,7 +9,9 @@ from .settings import settings
 
 
 def data_server_target_url() -> str:
-    base = settings.data_server_url.rstrip("/")
+    base = settings.data_server_url.strip().rstrip("/")
+    if not base:
+        return ""
     endpoint = settings.data_server_endpoint.strip() or "/api/excel-voucher/jobs"
     if not endpoint.startswith("/"):
         endpoint = f"/{endpoint}"
@@ -23,7 +25,11 @@ def _voucher_for_data_server(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def forward_job_to_data_server(job: JobRecord) -> dict[str, Any]:
+    if not settings.forward_to_data_server:
+        return {"ok": False, "skipped": True, "reason": "disabled"}
     url = data_server_target_url()
+    if not url:
+        return {"ok": False, "skipped": True, "reason": "unconfigured"}
     payload = {
         "job_id": job.id,
         "job_type": "excel_voucher",

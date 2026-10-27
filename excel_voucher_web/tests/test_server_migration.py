@@ -61,6 +61,19 @@ def test_import_refuses_existing_data(tmp_path):
         migration.import_bundle(SimpleNamespace(data=tmp_path))
 
 
+@pytest.mark.parametrize("old_url", ["http://127.0.0.1:18080", "http://172.17.39.121:18080"])
+def test_migration_drops_legacy_forwarding_dependency(tmp_path, old_url):
+    source = {"EXCEL_VOUCHER_DATA_SERVER_URL": old_url,
+              "EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER": "1",
+              "EXCEL_VOUCHER_SMTP_HOST": "existing-mail-host"}
+    result = migration.destination_environment(source, tmp_path / "data", tmp_path / "private" / "environment.json")
+    assert result["EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER"] == "0"
+    assert result["EXCEL_VOUCHER_DATA_SERVER_URL"] == ""
+    assert result["EXCEL_VOUCHER_SMTP_HOST"] == source["EXCEL_VOUCHER_SMTP_HOST"]
+    assert result["EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN"] == "https://172.16.19.105:3011"
+    assert source["EXCEL_VOUCHER_DATA_SERVER_URL"] == old_url
+
+
 def test_export_closes_sqlite_snapshot_before_temp_cleanup(tmp_path, monkeypatch):
     import sqlite3
     import psutil

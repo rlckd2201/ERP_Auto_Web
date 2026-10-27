@@ -6,15 +6,7 @@ REM 서버가 뜨지 않는다.
 setlocal
 cd /d "%~dp0"
 
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0run_server.ps1" ^
-  -Port 8081 ^
-  -PublicOrigin https://172.17.39.121:8081 ^
-  -DataServerUrl http://127.0.0.1:18080 ^
-  -ForwardToDataServer ^
-  -RequireLogin ^
-  -GroupwareSyncOnStart ^
-  -SslCertFile C:\ERP_DB\certs\web_v1.cert.pem ^
-  -SslKeyFile C:\ERP_DB\certs\web_v1.key.pem
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0run_server.ps1"
 
 REM 서버가 멈추면 창이 바로 닫히지 않도록 오류 코드를 남긴다.
 if errorlevel 1 (

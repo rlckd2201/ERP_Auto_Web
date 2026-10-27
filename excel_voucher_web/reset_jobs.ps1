@@ -1,5 +1,5 @@
 param(
-  [string]$DataDir = "C:\ERP_DB\excel_voucher_web_data",
+  [string]$DataDir = "C:\ERP_DB\finance_3011_data",
   [switch]$ClearUploads,
   [switch]$Force
 )

@@ -195,6 +195,7 @@ function renderAdminDiagnostics(job) {
   }
   const profile = diagnostics.agent_profile || {};
   const forward = diagnostics.data_server_forward || {};
+  const forwardingEnabled = diagnostics.data_server_forward_enabled === true;
   const hasForward = Object.keys(forward).length > 0;
   const forwardText = hasForward ? (forward.ok ? "성공" : "실패") : "-";
   const events = job.events || [];
@@ -207,7 +208,7 @@ function renderAdminDiagnostics(job) {
         <div><span>자동 전표처리 PC</span><strong>${escapeHtml(diagnostics.target_client_ip || profile.client_ip || "-")}</strong></div>
         <div><span>Agent ID</span><strong>${escapeHtml(diagnostics.target_agent_id || profile.agent_id || "-")}</strong></div>
         <div><span>Agent 프로그램 접속</span><strong>${diagnostics.agent_online ? "정상" : "미확인"} / ${formatAge(diagnostics.agent_last_seen_age_seconds)}</strong></div>
-        <div><span>18080 전달</span><strong>${escapeHtml(forwardText)}</strong></div>
+        ${forwardingEnabled ? `<div><span>외부 데이터 전달</span><strong>${escapeHtml(forwardText)}</strong></div>` : ""}
       </div>
       ${
         events.length
