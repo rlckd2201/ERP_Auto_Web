@@ -5,12 +5,33 @@ Current origin: **https://172.16.19.105:3012**. Original origin:
 
 ## Port Reassignment
 
-Ports 3010 and 3011 belong to the existing accounting system. Finance is being
-reassigned to 3012; the accounting bridge and its scheduled task must not be
-modified. The Agent must validate the new HTTPS endpoint before switching.
-The old finance listener is retired only after the Agent reconnects on 3012.
+Ports 3010 and 3011 belong to the existing accounting system. Finance was
+reassigned to 3012 on 2026-10-27 at 10:23 KST. The accounting bridge and its
+scheduled task were not modified. The Agent validated the new HTTPS endpoint
+before switching, and the old finance listener was retired after reconnection.
 Keep the data directory `C:\ERP_DB\finance_3011_data` unchanged: its name is
 historical, and stored artifact paths must continue to resolve.
+
+- Agent command `dd67b8dae7ae` completed at 10:22:45 using revision `c2f6d5c`.
+  Its task now targets `https://172.16.19.105:3012`; ERP mode, user, printer and
+  Manager code hash were preserved. A fresh heartbeat at 10:23:30 was verified
+  after the old finance listener stopped.
+- The old `FinanceVoucher-Web-3011` task and `FinanceVoucher-HTTPS-3011`
+  firewall rule were removed. The new SYSTEM boot task is
+  `FinanceVoucher-Web-3012`, with only one web process. Both launchers delegate
+  to that task; stop/start and duplicate-launch prevention were verified.
+- The existing accounting process remained PID 22268 on `0.0.0.0:3010` and
+  `127.0.0.1:3011`. Finance listens only on `172.16.19.105:3012`.
+- Private configuration changed only `WEB_PORT` and `WEB_PUBLIC_ORIGIN`.
+  Backup configuration, old task XML, source and firewall metadata are under
+  `C:\ERP_DB\finance_web105\port3012-backup-20261027`, with the existing
+  restricted parent ACL. Do not restore 3011 without coordinating its owner.
+- HTTPS certificate validation, required login and the historical PDF download
+  passed. Counts remain 18 accounts, 6 jobs, 63 events, 2 ERP credentials and
+  22 PDFs. Forwarding to 121 and failure emails remain disabled.
+- Regression checks: 254 Python tests, 2 verification-dialog JavaScript tests,
+  and all four changed PowerShell launchers parsed successfully. No actual ERP
+  voucher, printer job or notification email was submitted during this change.
 
 ## Initial Cutover History
 

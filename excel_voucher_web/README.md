@@ -6,6 +6,8 @@
 
 105 서버의 자동시작 작업은 `FinanceVoucher-Web-3012`이며, 재시작은 관리자 PowerShell에서 `Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'` 후 `Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'`로 한다.
 
+3010·3011은 기존 회계 시스템용으로 유지하고, 재정 서비스는 3012만 사용한다. 2026-10-27 10:23 KST에 243 Agent 전환과 재정용 3011 작업·방화벽 규칙 제거를 확인했다. 데이터 폴더 `C:\ERP_DB\finance_3011_data`는 기존 파일 경로를 보존하기 위해 이름을 바꾸지 않았다.
+
 데이터·인증서·Agent 전환·복구 절차는 [이전 운영 문서](deploy/README.md)를 따른다. 121로 추가 전송하던 18080 연계는 사용하지 않는다. 작업·계정·PDF는 105에 보관하고 ERP 입력은 243에서 처리한다.
 
 재정 담당자가 엑셀을 업로드하면 서버가 전표 payload를 만들고, 172.17.30.243 자동 전표처리 PC의 Agent가 작업을 가져가 ERP 전표 처리를 수행하는 신규 웹 기반 시스템이다.
