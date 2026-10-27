@@ -20,7 +20,7 @@ def test_service_environment_rejects_unrelated_process_settings(tmp_path):
 def test_service_environment_preserves_private_config_without_importing_app(tmp_path):
     import json
     config = {"EXCEL_VOUCHER_DATA_DIR": "private-data", "EXCEL_VOUCHER_WEB_HOST": "172.16.19.105",
-              "EXCEL_VOUCHER_WEB_PORT": "3011", "EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN": "https://172.16.19.105:3011"}
+              "EXCEL_VOUCHER_WEB_PORT": "3012", "EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN": "https://172.16.19.105:3012"}
     path = tmp_path / "environment.json"
     path.write_text(json.dumps(config), encoding="utf-8")
     assert load_environment(path) == config
@@ -70,7 +70,8 @@ def test_migration_drops_legacy_forwarding_dependency(tmp_path, old_url):
     assert result["EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER"] == "0"
     assert result["EXCEL_VOUCHER_DATA_SERVER_URL"] == ""
     assert result["EXCEL_VOUCHER_SMTP_HOST"] == source["EXCEL_VOUCHER_SMTP_HOST"]
-    assert result["EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN"] == "https://172.16.19.105:3011"
+    assert result["EXCEL_VOUCHER_WEB_PORT"] == "3012"
+    assert result["EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN"] == "https://172.16.19.105:3012"
     assert source["EXCEL_VOUCHER_DATA_SERVER_URL"] == old_url
 
 
@@ -107,13 +108,13 @@ def test_export_closes_sqlite_snapshot_before_temp_cleanup(tmp_path, monkeypatch
 def _run_update(tmp_path, target):
     return worker._execute_admin_command(
         {"command": "update-agent", "payload": {"target_server": target}},
-        server="https://172.17.39.121:8081", agent_id="finance-agent", client_ip="172.17.30.243",
+        server="https://172.16.19.105:3011", agent_id="finance-agent", client_ip="172.17.30.243",
         verify_tls=False, print_mode="default-printer", printer_name="existing printer",
         print_wait_seconds=3, erp_mode="real", output_dir=tmp_path)
 
 
 def test_agent_migration_validates_target_and_preserves_settings(tmp_path, monkeypatch):
-    target = "https://172.16.19.105:3011"
+    target = "https://172.16.19.105:3012"
     calls = []
     def get(url, **kwargs):
         calls.append((url, kwargs))
@@ -135,7 +136,7 @@ def test_agent_migration_validates_target_and_preserves_settings(tmp_path, monke
     assert calls[1]["client_ip"] == "172.17.30.243"
 
 
-@pytest.mark.parametrize("target", ["http://172.16.19.105:3011", "https://user:password@host", "https://host/path", "https://host?query=1"])
+@pytest.mark.parametrize("target", ["http://172.16.19.105:3012", "https://user:password@host", "https://host/path", "https://host?query=1"])
 def test_agent_migration_rejects_invalid_origin_before_updating(tmp_path, monkeypatch, target):
     monkeypatch.setattr(worker, "_update_agent_files", lambda _: pytest.fail("must not update"))
     with pytest.raises(ValueError):
@@ -148,4 +149,4 @@ def test_agent_migration_keeps_old_server_on_wrong_target(tmp_path, monkeypatch)
     monkeypatch.setattr(worker, "_install_agent_task", lambda **k: pytest.fail("must not replace task"))
     monkeypatch.setattr(worker, "_update_agent_files", lambda _: pytest.fail("must not update"))
     with pytest.raises(RuntimeError, match="keeping current server"):
-        _run_update(tmp_path, "https://172.16.19.105:3011")
+        _run_update(tmp_path, "https://172.16.19.105:3012")

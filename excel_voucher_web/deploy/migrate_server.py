@@ -190,8 +190,8 @@ def import_bundle(args):
 def destination_environment(source, data: Path, config: Path):
     environment = dict(source)
     environment.update({"EXCEL_VOUCHER_DATA_DIR": str(data), "EXCEL_VOUCHER_MAIL_OUTBOX_DIR": str(data / "mail_outbox"),
-                        "EXCEL_VOUCHER_WEB_HOST": "172.16.19.105", "EXCEL_VOUCHER_WEB_PORT": "3011",
-                        "EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN": "https://172.16.19.105:3011",
+                        "EXCEL_VOUCHER_WEB_HOST": "172.16.19.105", "EXCEL_VOUCHER_WEB_PORT": "3012",
+                        "EXCEL_VOUCHER_WEB_PUBLIC_ORIGIN": "https://172.16.19.105:3012",
                         "EXCEL_VOUCHER_DATA_SERVER_URL": "", "EXCEL_VOUCHER_FORWARD_TO_DATA_SERVER": "0",
                         "EXCEL_VOUCHER_LEGACY_AUTH_DB_PATH": str(config.parent / "unused-legacy-auth.db"),
                         "EXCEL_VOUCHER_FAILURE_EMAIL_ENABLED": "0"})

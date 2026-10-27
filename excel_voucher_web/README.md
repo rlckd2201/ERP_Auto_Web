@@ -2,9 +2,9 @@
 
 ## 현재 운영 주소 (2026-10-27 이전 완료)
 
-**https://172.16.19.105:3011**로 웹·데이터·243 Agent 연결 전환을 완료했다. 새 서버의 Agent 상태 갱신을 확인한 뒤 기존 121/8081 웹서버를 종료하고 시작프로그램 바로가기를 백업했다. 기존 계정·작업 이력·PDF는 유지한다. 이전 검증 과정에서 실제 ERP 전표 재입력이나 출력·메일 발송은 실행하지 않았다.
+**https://172.16.19.105:3012**로 웹·데이터·243 Agent 연결 전환을 완료했다. 새 서버의 Agent 상태 갱신을 확인한 뒤 기존 121/8081 웹서버를 종료하고 시작프로그램 바로가기를 백업했다. 기존 계정·작업 이력·PDF는 유지한다. 이전 검증 과정에서 실제 ERP 전표 재입력이나 출력·메일 발송은 실행하지 않았다.
 
-105 서버의 자동시작 작업은 `FinanceVoucher-Web-3011`이며, 재시작은 관리자 PowerShell에서 `Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'` 후 `Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'`로 한다.
+105 서버의 자동시작 작업은 `FinanceVoucher-Web-3012`이며, 재시작은 관리자 PowerShell에서 `Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'` 후 `Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'`로 한다.
 
 데이터·인증서·Agent 전환·복구 절차는 [이전 운영 문서](deploy/README.md)를 따른다. 121로 추가 전송하던 18080 연계는 사용하지 않는다. 작업·계정·PDF는 105에 보관하고 ERP 입력은 243에서 처리한다.
 
@@ -12,15 +12,15 @@
 
 ## 실행
 ```powershell
-Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
+Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'
 ```
 
-브라우저에서 `https://172.16.19.105:3011`을 연다. 105의 `run_server.ps1`과 `start_server.cmd`도 기존 예약 작업을 시작하며 별도 Python 프로세스를 만들지 않는다. 개인 계정으로 직접 실행하면 저장된 ERP 비밀번호의 Windows 암호화 사용자가 달라지므로 예약 작업을 사용한다.
+브라우저에서 `https://172.16.19.105:3012`을 연다. 105의 `run_server.ps1`과 `start_server.cmd`도 기존 예약 작업을 시작하며 별도 Python 프로세스를 만들지 않는다. 개인 계정으로 직접 실행하면 저장된 ERP 비밀번호의 Windows 암호화 사용자가 달라지므로 예약 작업을 사용한다.
 
 ## Agent 실행 예시
 ```powershell
 cd excel_voucher_web
-.\run_agent.ps1 -Server https://172.16.19.105:3011 -ClientIp 172.17.30.243
+.\run_agent.ps1 -Server https://172.16.19.105:3012 -ClientIp 172.17.30.243
 ```
 
 운영에서는 `EXCEL_VOUCHER_TARGET_AGENT_IP=172.17.30.243`를 기본으로 사용한다.
@@ -31,7 +31,7 @@ Agent는 전표 PDF를 먼저 보관하고, Windows 기본 프린터를 변경�
 운영 프린터 출력 예시:
 ```powershell
 .\run_agent.ps1 `
-  -Server https://172.16.19.105:3011 `
+  -Server https://172.16.19.105:3012 `
   -ClientIp 172.17.30.243 `
   -PrinterName "재정 프린터 (172.16.10.173)" `
   -ErpMode real `
@@ -40,12 +40,12 @@ Agent는 전표 PDF를 먼저 보관하고, Windows 기본 프린터를 변경�
 
 출력 없이 큐/전표 데이터만 테스트할 때:
 ```powershell
-.\run_agent.ps1 -Server https://172.16.19.105:3011 -ClientIp 172.17.30.243 -PrintMode off
+.\run_agent.ps1 -Server https://172.16.19.105:3012 -ClientIp 172.17.30.243 -PrintMode off
 ```
 
 self-signed 인증서를 아직 자동 전표처리 PC에 신뢰 등록하지 않은 테스트 환경에서는:
 ```powershell
-.\run_agent.ps1 -Server https://172.16.19.105:3011 -ClientIp 172.17.30.243 -InsecureSkipTlsVerify
+.\run_agent.ps1 -Server https://172.16.19.105:3012 -ClientIp 172.17.30.243 -InsecureSkipTlsVerify
 ```
 
 ## 로그인/그룹웨어 DB 연동
@@ -63,7 +63,7 @@ self-signed 인증서를 아직 자동 전표처리 PC에 신뢰 등록하지 �
 
 운영 서버 실행 예시:
 ```powershell
-Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
+Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'
 ```
 
 기본 그룹웨어 DB 계정은 `dlpadmin2`를 사용한다.
@@ -76,12 +76,12 @@ SMTP 서버 연결에 실패하면 메일은 실제 발송되지 않고 `data/ma
 ## 접속 확인
 서버 PC에서:
 ```powershell
-Get-NetTCPConnection -LocalAddress 172.16.19.105 -LocalPort 3011 -State Listen
+Get-NetTCPConnection -LocalAddress 172.16.19.105 -LocalPort 3012 -State Listen
 ```
 
 자동 전표처리 PC에서:
 ```powershell
-Test-NetConnection 172.16.19.105 -Port 3011
+Test-NetConnection 172.16.19.105 -Port 3012
 ```
 
 ## 데이터 서버 전달

@@ -1,7 +1,7 @@
 param(
   [string]$HostName = "172.16.19.105",
-  [int]$Port = 3011,
-  [string]$PublicOrigin = "https://172.16.19.105:3011",
+  [int]$Port = 3012,
+  [string]$PublicOrigin = "https://172.16.19.105:3012",
   [string]$DataServerUrl = "",
   [string]$DataServerEndpoint = "/api/excel-voucher/jobs",
   [string]$DataDir = "C:\ERP_DB\finance_3011_data",
@@ -26,9 +26,9 @@ $Root = Split-Path -Parent $MyInvocation.MyCommand.Path
 Set-Location $Root
 
 if (Test-Path -LiteralPath 'C:\ERP_DB\finance_web105\environment.json') {
-  $Task = Get-ScheduledTask -TaskName 'FinanceVoucher-Web-3011' -ErrorAction Stop
+  $Task = Get-ScheduledTask -TaskName 'FinanceVoucher-Web-3012' -ErrorAction Stop
   if ($Task.State -ne 'Running') { Start-ScheduledTask -TaskName $Task.TaskName }
-  Write-Host 'FinanceVoucher-Web-3011 manages this installation with its private configuration.'
+  Write-Host 'FinanceVoucher-Web-3012 manages this installation with its private configuration.'
   return
 }
 

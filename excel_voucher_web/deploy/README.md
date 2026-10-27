@@ -1,9 +1,18 @@
 # Finance Server Migration (2026-10-27)
 
-New origin: **https://172.16.19.105:3011**. Previous origin:
+Current origin: **https://172.16.19.105:3012**. Original origin:
 `https://172.17.39.121:8081`.
 
-## Cutover Status
+## Port Reassignment
+
+Ports 3010 and 3011 belong to the existing accounting system. Finance is being
+reassigned to 3012; the accounting bridge and its scheduled task must not be
+modified. The Agent must validate the new HTTPS endpoint before switching.
+The old finance listener is retired only after the Agent reconnects on 3012.
+Keep the data directory `C:\ERP_DB\finance_3011_data` unchanged: its name is
+historical, and stored artifact paths must continue to resolve.
+
+## Initial Cutover History
 
 The cutover completed on 2026-10-27 at 09:16 KST after the network administrator allowed TCP 3011. The Agent now connects to 105. The old 121/8081 web process was stopped and its startup shortcut moved to the backup directory; the old database and artifacts remain intact.
 
@@ -19,23 +28,23 @@ The cutover completed on 2026-10-27 at 09:16 KST after the network administrator
 
 - Web code: `C:\ERP_Auto_Web\excel_voucher_web` on 105.
 - Python: `.venv\Scripts\python.exe`, with application dependencies pinned to the source server versions.
-- Task: `FinanceVoucher-Web-3011`, SYSTEM, at startup, automatic restart on failure.
+- Task: `FinanceVoucher-Web-3012`, SYSTEM, at startup, automatic restart on failure.
 - The task starts the venv Python with `deploy/run_service.py` directly. Uvicorn stays in that same process so stopping the task also stops the listening socket.
-- Bind **172.16.19.105 only**, not `0.0.0.0`: another accounting application's native bridge owns `127.0.0.1:3011`. Do not stop it.
+- Bind **172.16.19.105:3012 only**, not `0.0.0.0`. Another accounting application's native bridge owns 3010 and localhost 3011. Do not stop it.
 - Data: `C:\ERP_DB\finance_3011_data`. Do not overwrite the existing `C:\ERP_DB\excel_voucher_web_data` on 105.
 - Private configuration: `C:\ERP_DB\finance_web105\environment.json`.
 - Dedicated certificate/key: `C:\ERP_DB\finance_web105\finance.cert.pem` and `finance.key.pem`.
 - Logs: `C:\ERP_DB\finance_3011_data\service_logs`.
 - The new certificate has the 105 IP SAN and is signed by the existing internal CA. Clients must trust that CA.
-- Firewall allows TCP 3011 on the 105 interface from `172.16.0.0/12`.
+- Firewall allows TCP 3012 on the 105 interface from `172.16.0.0/12`.
 
 On 105, use an elevated PowerShell to manage the existing task:
 
 ```powershell
-Get-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
-Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
-Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3011'
-Get-NetTCPConnection -State Listen -LocalPort 3011
+Get-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'
+Stop-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'
+Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'
+Get-NetTCPConnection -State Listen -LocalPort 3012
 ```
 
 Do not launch the migrated web app manually as Administrator: saved ERP credentials are protected with the web service's SYSTEM identity. `run_server.ps1` starts the existing task when the private configuration is present. `install_server_autostart.ps1` retains that task instead of creating a duplicate. Launcher defaults and the reset utility now point at the 105 finance installation.
@@ -58,14 +67,17 @@ The production path is browser -> 105 web/SQLite/artifacts -> 243 ERP Agent. Gro
 
 Agent: `finance-agent-172-17-30-243`, on `172.17.30.243`.
 
-1. Update the running Agent to the migration-capable revision using its existing `update-agent` admin command. Keep the old server address in this first command.
-2. After the restarted Agent reports to 121, issue `update-agent` again with the same pinned ZIP revision and `target_server: "https://172.16.19.105:3011"`.
+1. Keep the current finance endpoint running temporarily while starting and checking the 3012 endpoint. There must be no active voucher jobs during the transition.
+2. Issue `update-agent` on the current endpoint with a pinned ZIP revision and `target_server: "https://172.16.19.105:3012"`.
 3. The Agent checks the new server's `/api/settings` origin before replacing its scheduled task. Existing ERP mode, printer, print mode and TLS verification setting are preserved.
-4. Verify a fresh heartbeat on 105, not the imported historical heartbeat. Only then disable the old 8081 startup shortcut and stop that web process.
+4. Verify a fresh heartbeat on 3012. Then stop and remove only the old finance 3011 task and its dedicated firewall rule. Verify that the unrelated accounting bridge still owns its original listeners.
 
 Do not create another RDP session on 243. No ERP GUI manipulation is needed for this cutover.
 
-## Rollback
+## Original 121 Migration Rollback (Historical Only)
+
+121 is not part of current operations. The original migration rollback below
+requires explicit approval and is not the procedure for a 3012 port issue.
 
 Keep the 121 code/data and the encrypted migration backup. The old startup shortcut is retained at `C:\ERP_DB\finance_migration_20261027\Excel_Voucher_Web_Server.lnk`. Freeze new submissions during rollback; do not let both servers accept new jobs.
 
