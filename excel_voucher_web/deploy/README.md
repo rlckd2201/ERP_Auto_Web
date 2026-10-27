@@ -1,7 +1,18 @@
 # Finance Server Migration (2026-10-27)
 
-Production origin: **https://172.16.19.105:3011**. Previous origin:
+New origin: **https://172.16.19.105:3011**. Previous origin:
 `https://172.17.39.121:8081`.
+
+## Cutover Status
+
+As of 2026-10-27 09:15 KST, the new HTTPS server and data import are verified, but the Agent cutover is **pending network access**. Do not submit new vouchers on 105 yet. The old 121 service and startup shortcut have deliberately not been stopped or moved.
+
+- HTTPS 200 with certificate validation, account data/password hashes unchanged (except normal sync timestamps), 6 historical jobs, 22 PDFs with matching hashes, and old PDF HTTP download verified.
+- Service stop/start verified: the 105 listener exits with its task and starts again without a duplicate. The existing localhost 3011 bridge remains PID 22268.
+- Agent first-stage update `d16af0eeeefb` completed using revision `e1203bd` and still reports to 121.
+- Target-switch commands `6cb62de74228` and `918e3277ea6a` failed before modifying the Agent task, with a TCP connect timeout to 105:3011.
+- A short, SYN-only packet capture on 105 during the second attempt received no Agent connection packet. The dedicated Windows Firewall allow rule is present. Permit `172.17.30.243 -> 172.16.19.105 TCP 3011` in the intervening network/client policy, then retry the second-stage update. No broad firewall exception or firewall disabling was used.
+- The final local regression suite passed 244 tests. No ERP voucher, printer job, or notification email was sent for this migration.
 
 ## Runtime
 
