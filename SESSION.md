@@ -1,5 +1,15 @@
 # Session
 
+## 2026-10-27 15:50 Hyeon setup502; bounded read retry deployed
+
+- User's Hyeon screenshot reportsHTTP502 after "다시 점검". Kim's portal also logged simultaneous setup/jobs502 at15:53:48, proving this is not exclusively a replacement-laptop symptom. This is separate from the fixed app.js blank-screen incompatibility.
+-15:52-15:55 checks:105/api/version200/v254/16ms; existing active Agents fresh. Hyeon hah4627/.18 is still the historicalOct26 10:49:58/v250/notready record, with no new registration.105's available access log contains234 Hyeon setup/status responses, all200; recent tails have no traceback. These logs have no per-line time and cannot identify which request IIS failed or prove35's specific cause.
+-15:59:21 deployed a scoped workaround: GET /api/setup/status retries502/503/504 twice (350ms/1000ms waits), preserves authenticated arguments, honors cancellation, and leaves final failure visible. NoPOST/upload/ERP/print/install retry or other route retry. Main app.js stays byte-identical, preserving portal adaptation. BackupC:/ERP_DB/deploy_backups/v254_setup_read_retry_20261027_155921; hashes in tmp/setup_retry_20261027_1555/deployment.json.
+-18 Node checks pass, including bounded retry, unchanged verified headers, persistent failure,401/POST exclusions and cancellation. LiveKim portal reload, Settings and "다시 점검" complete and return to purchase with normal mailstatus. This does not resolve the proxy root cause or prove Hyeon's Agent installation. No35,shared19443relay,backend restart oraccount mappings changed.
+- Asked whether Hyeon ran AccountingWebDiagnostics.exe. User asked whose Desktop; clarified that the JSON is created on HYEON's laptop when the EXE runs there. User should obtain and attach that result; no actual Hyeon JSON received yet. The existing local smoke JSON belongs toKim and must not be substituted.
+- Next exact start: inspect Hyeon's attached AccountingWeb_Diagnostics_*.json to identify his installation/startup failure, then repair the demonstrated cause. For recurrent common502, correlate35 IIS/substatus/Win32/time-taken with105 observations when owner access/logs are available; do not guess or bypass that boundary.
+
+
 ## 2026-10-27 14:56 portal blank screen fixed on 105
 
 - Corrected the earlier Storage Proxy hypothesis: live startup instrumentation proved the main `/assets/app.js` never loaded. Portal returned503 JSON ("연결 시스템 화면을 구성하지 못했습니다.") while105 logged200 for that asset. The archived Storage test was not the cause of this production blank screen; do NOT apply the13:17 native-storage patch for this incident.

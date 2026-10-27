@@ -18,6 +18,7 @@ function harness(responses) {
   const calls = [], expired = [];
   const summary = { textContent: '' };
   const ctx = {
+    setTimeout: (fn, delay) => setTimeout(fn, 0), clearTimeout, DOMException,
     sessionStorage: { getItem: () => 'test-session' },
     clearLoginAndShowLogin: message => expired.push(message),
     els: { mailCollectSummary: summary },
@@ -39,7 +40,7 @@ function harness(responses) {
 test('IIS gateway HTML becomes a short connection error with its HTTP status', async () => {
   for (const status of [502, 503, 504]) {
     const { ctx, calls, expired } = harness([{ status, body: html }]);
-    await assert.rejects(ctx.requestJson('/api/setup/status'), error => {
+    await assert.rejects(ctx.requestJson('/api/invoices'), error => {
       assert.match(error.message, new RegExp('HTTP ' + status));
       assert.doesNotMatch(error.message, /DOCTYPE|<html|proxy details/);
       assert.ok(error.message.length < 150);
@@ -122,4 +123,44 @@ test('binary downloads and non-API assets retain native Response behavior', asyn
   const response = await ctx.fetch('/api/invoices/1/pdf');
   assert.equal(await (await response.blob()).text(), '%PDF-fixture');
   assert.equal(await (await ctx.fetch('/assets/example.txt')).text(), '%PDF-fixture');
+});
+
+test('setup status GET recovers from two gateway failures with the same verified headers', async () => {
+  const { ctx, calls } = harness([
+    { status: 502, body: html }, { status: 503, body: html },
+    { status: 200, body: '{"ready":false,"agent_id":"owned-pc"}' },
+  ]);
+  const result = await ctx.requestJson('/accounting-automation/api/setup/status?user_id=alice');
+  assert.equal(result.ready, false);
+  assert.equal(result.agent_id, 'owned-pc');
+  assert.equal(calls.length, 3);
+  for (const call of calls) assert.equal(call.options.headers['X-Accounting-Session'], 'test-session');
+});
+
+test('persistent setup failure stops after three attempts and keeps the real failure visible', async () => {
+  const { ctx, calls } = harness(Array.from({ length: 3 }, () => ({ status: 502, body: html })));
+  await assert.rejects(ctx.requestJson('/api/setup/status'), /HTTP 502/);
+  assert.equal(calls.length, 3);
+});
+
+test('setup POST and unauthorized GET are never retried', async () => {
+  const post = harness([{ status: 502, body: html }]);
+  await assert.rejects(post.ctx.requestJson('/api/setup/status', { method: 'POST', body: '{}' }), /HTTP 502/);
+  assert.equal(post.calls.length, 1);
+  const unauthorized = harness([{ status: 401, body: html }]);
+  await assert.rejects(unauthorized.ctx.requestJson('/api/setup/status'));
+  assert.equal(unauthorized.calls.length, 1);
+  assert.equal(unauthorized.expired.length, 1);
+});
+
+test('cancelled setup retry does not issue another request', async () => {
+  const { ctx, calls } = harness([{ status: 502, body: html }]);
+  const controller = new AbortController();
+  ctx.setTimeout = (fn, delay) => {
+    const timer = setTimeout(fn, 1000);
+    queueMicrotask(() => controller.abort());
+    return timer;
+  };
+  await assert.rejects(ctx.requestJson('/api/setup/status', { signal: controller.signal }), error => error.name === 'AbortError');
+  assert.equal(calls.length, 1);
 });

@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-10-27 Hyeon recheck502 follow-up
+
+- [x] Confirm common portal502 also occurs on Kim's connected PC and preserve current blank-screen fix.
+- [x] Add and deploy bounded retries only for read-only setup status502/503/504;18 tests and normal live recheck pass.
+- [ ] Obtain the diagnostic JSON generated on HYEON's Desktop, not this PC. User has been told the location and execution steps.
+- [ ] Restore Hyeon's actual new Agent connection from that evidence; current .18 record is stillOct26/v250.
+- [ ] Resolve the common gateway502 root cause. The frontend retry is resilience only;105 setup200 logs cannot locate the35 failure by themselves.
+
+
 ## 2026-10-27 14:56 portal blank-screen recovery
 
 - [x] Identify actual script-load503, isolate the incompatible11:28 app.js change, and restore the purchase view.

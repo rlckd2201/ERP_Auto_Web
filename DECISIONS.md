@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-10-27 bounded setup-read retries and separate PC diagnosis
+
+- Preserve the exact portal-adapted app.js and extend only the separate response guard. Retry only same-origin GET /api/setup/status on502/503/504, at most twice, retaining the existing authenticated fetch chain and request arguments.
+- Do not retry mutation methods, other endpoints,401, cancellation or arbitrary network failures. Surface persistent failure and retain accurate missing-Agent state; retries are not proof of installation or a gateway root-cause fix.
+- Keep proxy failure and Hyeon's missing new-PC heartbeat separate. Diagnose from the report executed on that laptop; do not attribute another user's unbound Agent to him or alter account binding without evidence.
+
+
 ## 2026-10-27 preserve portal source adaptation while fixing responses
 
 - A controlled rollback proved the11:28 response-parser refactor caused the current portal app.js delivery rejection. Correct the prior hypothesis openly and distinguish this from the earlier intermittent IIS502.

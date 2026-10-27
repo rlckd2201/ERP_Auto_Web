@@ -1,5 +1,14 @@
 # Debug
 
+## 2026-10-27 15:50-16:00 setup502 evidence and mitigation
+
+- Screenshot15:50:36: friendlyHTTP502 alert afterHyeon recheck. Kim's browser has setup monitor andbackground jobsHTTP502 at06:53:48.844UTC. Native API/version remains200/16ms at15:52:11; own/shared243 heartbeat fresh. Hyeon234 setup/status log entries are all200, but the available access log lacks per-line timestamps, so failed frontend requests cannot be matched precisely.
+-105 listeners remain8081/PID30168,3010+loopback3011/PID17760. Shared19443relay permits35 with mutualTLS and serves multiple apps; inspected code only, no modifications. Its own error handlers do not record transport diagnostics.35 IIS evidence is still unavailable.
+-15:59:21 finalstatic deploy:app.js1e19c81afbd800aa3106f1643cef7f5ba0fe600ce4c7571096288987e41c3e36 unchanged,indexd81b6ab9887e7cbf4ac1ee6d98f98b83d63468083780fa633aed677319b91907,responseguard8623ce68bec65485fbe9bfe779f02afc54851c114c0d539ed07aa404f89322fc. Backupv254_setup_read_retry_20261027_155921.
+-18 Node tests pass; localKim live Settings/recheck completes and returns to purchase, mailstatus15:59:09/0failed. No production fault injected. New browser retry logs expose onlystatus/attempt/path (noquery/token). Graphify1734nodes/4990edges/116communities.
+- DiagnosticZIP remainsSHA986bb962ab12a41a483dd04f5086bf3d3299b4872a2695332d4718686a27665c. No actual Hyeon result inDownloads/Documents. Clarified generatedJSON belongs onHyeon's Desktop; only his runtime evidence can establish installation failure cause.
+
+
 ## 2026-10-27 14:47-14:56 actual blank-screen failure and verified recovery
 
 - Added a temporary startup observer on105 after exact app/index baseline checks and backup. Live Chrome captured script load failure, then static-asset GET503 / application/json /68bytes witherror "연결 시스템 화면을 구성하지 못했습니다.".105 backend asset logs remained200. No app.js runtime/storage exception was reached.
