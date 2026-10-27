@@ -6,7 +6,7 @@ const test = require('node:test');
 
 const source = fs.readFileSync(path.join(__dirname, 'frontend/app.js'), 'utf8');
 const html = fs.readFileSync(path.join(__dirname, 'frontend/index.html'), 'utf8');
-const names = ['accountingSessionHeaders', 'requestJson', 'requestForm', 'continueAfterLogin'];
+const names = ['accountingSessionHeaders', 'parseApiResponse', 'requestJson', 'requestForm', 'continueAfterLogin'];
 const selected = names.map(name => {
   const match = source.match(new RegExp('^(?:async )?function ' + name + '\\([^]*?^}', 'm'));
   assert.ok(match, name);

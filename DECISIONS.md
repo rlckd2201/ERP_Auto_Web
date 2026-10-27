@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-10-27 response errors and diagnostic privacy
+
+- Existing user instruction to fix observed issues immediately authorizes the scoped frontend correction. Primary agent works alone; preserve active owner-deployed authentication/transport and inspect current105 source before editing. Change only two staticfrontend files for this fix, with exact baseline hashes and backups; do not restart business services.
+- Reject non-JSON API responses, includingHTML with200; never display gatewayHTML as user-facing text or silently interpret it as missing prerequisites. Preserve verified401 handling and structured business errors. Never automatically resubmit uploads/business mutations to hide transient failures.
+- New-PC diagnostic collects whitelisted metadata and error classifications only, stores locally, and lets the employee/user choose delivery. No credential/raw-log/document collection or automatic upload; no settings mutation or package installation. Do not reuse unrelated accounts or reassign another user's Agent.
+- The intermittent IIS502 requires evidence from the owner-managed35 proxy path; a successful105 API probe does not alone identify its cause. Partial frontend correction and one successful purchase view are not full incident resolution.
+
 ## 2026-10-27 authenticated Agent binding; preserve portal ownership boundary
 
 - User's latest instruction authorizes immediate routine fixes without repeated implementation-approval questions. Keep separate accounting login; no password synchronization, login removal or bypass of portal validation.

@@ -1,5 +1,13 @@
 # TODO
 
+## 2026-10-27 11:16 portal incident reopened
+
+- [x] Reproduce/raw-HTML response parser defect; deploy static response validation with backup/hash guards and12 passingNode tests.
+- [x] Provide tested read-only diagnosticEXE/ZIP for Hyeon's replacement laptop172.16.10.18. User will request execution; await its DesktopJSON result.
+- [ ] Diagnose and restore Hyeon's Agent registration/connection from the actual result. Current record is old250/Oct26, and remote management ports are unavailable. Do not infer successful installation from download/execution alone.
+- [ ] Obtain35 owner IIS502 substatus/Win32 error/time-taken around11:16-11:31; portal still intermittently502 while105/api/version responds200. No35 configuration change performed.
+- [ ] Complete browser acceptance of the new cache-busted frontend once the portal loads, including stable status checks; then verify Hyeon setup readiness. Earlier10:52 UI recovery did not complete these checks.
+
 ## 2026-10-27 portal Agent repair and remaining portal-owner task
 
 - [x] User authorized immediate fixes; implement verified-session Agent ownership while preserving separate accounting login.
