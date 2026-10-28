@@ -1,5 +1,13 @@
 # TODO
 
+## 2026-10-28 follow-up from manual approval backtest
+
+- [x] Evaluate all12current explicitly manually attached approval examples against stored PDF identity with historical first-attempt dates; record83.33%candidate recovery and0%automatic acceptance separately.
+- [x] Diagnose both misses after scoring; verify database records and production matcher sources unchanged; add7backtest scoring/anchor tests.
+- [ ] Correct labeled-total parsing for won-symbol/backslash amounts. Add positive fixtures from formats observed in12manual cases plus negative unit-price/account-number and conflicting-total cases; keep baseline results unchanged and label retest as tuned on the same cohort.
+- [ ] Keep90manual review whenD1/D3bothappear; do not relax identity checks merely to raise automatic rate.
+- [ ] Decide explicitly requested longer-period search for174(9days)and230(17days); maintain current7dayautomatic policy until a scope decision. Use fresh purchases as an independent validation cohort after parser changes.
+
 ## 2026-10-28 amount lookup implementation (supersedes proposal below)
 
 - [x] Back up full current program/database before edits; deploy reviewed files after idle/hash checks.

@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-10-28 retrospective approval scoring policy
+
+- Manual cohort requires explicit Korean upload log prefix 품의결재본 첨부/교체, not filename guesses. Use current retained PDF header identity as ground truth; exclude related-document references. Visually identify scanned headers before live retrieval.
+- Freeze first logged approval lookup or manual upload as historical anchor, independently of outcome; preserve inclusive anchor-7days..anchor and six-account policy. Current parsed invoice context/current groupware permissions are used, so this is not a complete as-of database reconstruction.
+- Evaluate amount fallback alone to simulate missing attachment filename order numbers; do not present the result as overall order-first workflow success. Separate auto_correct,auto_wrong,review_correct_candidate,not_recovered,error; all records remain in denominator. No automatic decisions means automatic precision is undefined.
+- Ground-truth doc-number searches may diagnose failures only after scoring and cannot contribute to recovery rate. Do not silently tune matcher or widen dates during baseline validation. Preserve operational data/source; report tuned-cohort improvement separately and obtain fresh-case evidence before claiming general accuracy.
+
 ## 2026-10-28 approval amount fallback implementation
 
 - Preserve existing order-number attachment search behavior; fallback only on explicit order extraction/matching miss. Login/runtime/timeout/PDF-save failures are not treated as evidence that no approval exists.

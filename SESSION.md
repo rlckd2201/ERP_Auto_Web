@@ -1,5 +1,13 @@
 # Session
 
+## 2026-10-28 historical manual approval backtest
+
+- User requested real-history retrieval-rate validation. Primary ran read-only evaluation of all12explicit manual-upload records among43current purchases/41with approval PDFs. Ground truth was current stored PDF header number; two scans67/68visually verified. All12areCompuzone.
+- Unchanged production amount fallback at first historical lookup/upload date:10/12correct review candidates(83.33%),0/12automatic matches,2/12not recovered,0executionerrors. No wrong automatic match, but auto precision is unmeasurable because none were accepted. This excludes the existing order-first path and actual PDF/ERP/printing.
+- Every recovered case warned on labeled total with won symbol/backslash;90alsomentionsD1andD3.174approvedJul14/searchedJul23(9days);230approvedSep4/uploadedSep21(17days), outside7daywindow. Post-score exact-document diagnosis confirmed both exist and body amount matches; not counted as successes.
+- Added reusable read-only tool web_v1/tools/approval_backtest.py and7passing scoring/anchor/ground-truth tests. Artifacts output/approval_backtest_20261028/{manual_approval_backtest.html,manual_approval_backtest.csv,results.json,diagnostics.json,manifest.json,verification.json}; generated financial snapshots not committed. Graphify1937nodes5478edges122communities.
+- End verification: all12invoice raw JSON/status/processed_at unchanged; production approval_browser.py/approval_matching.py hashes unchanged. No deployment, association, ERP or print. Next exact start: fix currency-prefixed labeled totals with negative parsing regressions; preserve baseline and separately score any tuned version. Review explicit period-extension UX for stale approvals rather than silently changing7days.
+
 ## 2026-10-28 10:42 approval amount fallback deployed
 
 - User authorized backup, implementation and testing, and explicitly restricted fallback drafters to the current six: arci(노양래),reum0009(구름),rlckd9646(김기창),kimsanul(김산울),tuy1120(송명학),hah4627(현시훈). Primary agent implemented and reviewed alone.

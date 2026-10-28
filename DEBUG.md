@@ -1,5 +1,13 @@
 # Debug
 
+## 2026-10-28 manual cohort baseline evidence
+
+- Source manifests in output/approval_backtest_20261028/manifest.json match production/local approval_browser.py and approval_matching.py. Historical search adapter changes observed completedAt URL amount/fromDate/toDate/page only; existing candidate_detail/assess_candidate/decide used unchanged. Snapshot cohort.json is private/generated, not staged.
+- Ground truth67=기안2605-0000190(document144375),68=기안2605-0000267(document144910) read from scanned PDF headers. Remaining10header numbers extracted from text; related-document numbers excluded. Primary dataset12explicit upload logs, not all41attachedPDFs.
+- Correct unique eligible candidates:67,68,78,85,86,90,131,205,206,207. Each warning 본문의 합계 금액을 확정하지 못함. Actual groupware text uses backslash before won amounts, e.g. backslash229,200원; current stated_totals requires digit immediately after label/colon/space.90additionally containsD1andD3. Three outsider candidates across90/206were blocked by drafter account (and extra contradictions on one).
+-174reference2026-07-23/approved2026-07-14;230reference2026-09-21/approved2026-09-04. Both primary searches0hits. Separate post-score document-number lookup confirmed exact body amounts and date-window blocker. These diagnostic lookups are excluded from10/12recovery.
+-7unittests pass: wrong auto decision not rescued by candidate list, review distinct from auto, errors/misses retained in denominator, first attempt rather than finalprocessed date, explicitmanualcohort, relateddoc exclusion, independently verified scan override. Live batch12completed0errors. End verification12raw/status/processed unchanged and bothproductionhashesunchanged. No jobs/printing/deployment.
+
 ## 2026-10-28 amount lookup verification and production evidence
 
 -277: buyer125-81-51622,일강1공장,total413120,order28929687. Real approval180287/기안2610-0000877 is completed2026-10-22 bykimsanul; attachmentfilename 일강1공장 소모품 견적서.pdf omits order while body includes it. ProfileDRAFTuserid977 differs from orgMEMBERid3484; matching uses actual profile email account.
