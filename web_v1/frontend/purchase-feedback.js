@@ -45,31 +45,56 @@
     modalBody.textContent = message;
     modalChoices.replaceChildren();
     if (record?.approval_fetch_status === "review") {
+      let selectedDocId = "";
+      const instruction = document.createElement("p");
+      instruction.textContent = "원문을 확인한 뒤 맞는 품의를 하나 선택하고 ‘이 품의로 지정’을 눌러 주세요. 자동으로 연결하지 않습니다.";
+      const confirm = document.createElement("button");
+      confirm.type = "button"; confirm.className = "button primary approval-confirm-choice";
+      confirm.textContent = "이 품의로 지정"; confirm.disabled = true;
+      confirm.addEventListener("click", () => {
+        if (selectedDocId && !record.approval_search_truncated) beginLookup(record, selectedDocId);
+      });
+      modalChoices.append(instruction);
       for (const candidate of record.approval_candidates || []) {
         const card = document.createElement("article");
         const heading = document.createElement("strong");
         heading.textContent = candidate.title || candidate.doc_no;
+        const validId = /^\d+$/.test(String(candidate.doc_id));
+        if (validId) {
+          const label = document.createElement("label");
+          label.className = "purchase-approval-choice-label";
+          const radio = document.createElement("input");
+          radio.type = "radio"; radio.name = "purchaseApprovalChoice"; radio.value = String(candidate.doc_id);
+          radio.disabled = Boolean(record.approval_search_truncated);
+          radio.addEventListener("change", () => { selectedDocId = radio.value; confirm.disabled = Boolean(record.approval_search_truncated); });
+          label.append(radio, heading); card.append(label);
+        } else card.append(heading);
         const details = document.createElement("p");
         details.textContent = `${candidate.doc_no} · ${candidate.form_name}\n${candidate.drafter_name} (${candidate.drafter_account}) · 결재일 ${candidate.approved_date}`;
+        const amount = document.createElement("p");
+        const totals = (candidate.total_amounts || []).filter(value => Number.isSafeInteger(value) && value > 0);
+        amount.textContent = `본문 합계: ${totals.length ? totals.map(value => value.toLocaleString("ko-KR") + "원").join(" / ") : "확인 필요"}`;
+        const searchTotal = Number(record.total_sum);
+        if (Number.isSafeInteger(searchTotal) && searchTotal > 0) amount.textContent += ` · 검색 기준: ${searchTotal.toLocaleString("ko-KR")}원`;
         const warnings = document.createElement("p");
         warnings.textContent = (candidate.warnings || []).join(" / ");
-        card.append(heading, details, warnings);
-        if (/^\d+$/.test(String(candidate.doc_id))) {
+        card.append(details, amount, warnings);
+        if (validId) {
           const link = document.createElement("a");
           link.href = `https://gw.dae-seung.co.kr/app/approval/document/${candidate.doc_id}`;
-          link.target = "_blank"; link.rel = "noopener"; link.textContent = "원문 확인";
-          const choose = document.createElement("button");
-          choose.type = "button"; choose.className = "button secondary";
-          choose.textContent = "이 품의 연결";
-          choose.disabled = Boolean(record.approval_search_truncated);
-          choose.addEventListener("click", () => beginLookup(record, candidate.doc_id));
-          card.append(link, choose);
+          link.target = "_blank"; link.rel = "noopener noreferrer"; link.textContent = "품의 원문 확인 (새 창)";
+          card.append(link);
         }
         modalChoices.append(card);
       }
+      modalChoices.append(confirm);
     }
     focusAfterClose = target;
     modal.showModal();
+    if (record?.approval_fetch_status === "review") {
+      modal.scrollTop = 0;
+      modalChoices.querySelector("input:not(:disabled)")?.focus({ preventScroll: true });
+    }
   }
 
   function approvalMessage(error, orderNumber) {

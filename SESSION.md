@@ -1,5 +1,14 @@
 # Session
 
+## 2026-10-28 11:21 thirty-day approval search and explicit choice deployed
+
+- User explicitly expanded7days to30days and requested original-post links plus requester selection when multiple candidates exist. Primary implemented/reviewed alone. Shared APPROVAL_LOOKBACK_DAYS30 drives completed-date query, candidate prefilter, final validation, progress text and historical test adapter. Exact anchor-30days..anchor boundaries survive calendar month/leap-year changes; groupware month shortcut is normalized to explicit dates.
+- Candidate modal now has no preselection, original links opening separately, one radio selection and a disabled-until-selected 이 품의로 지정 button. Original link clicks do not select/submit. Displays title,document number,form,drafter,date and parsed totals or 확인 필요 plus search amount. Existing server search-id/fingerprint/account/amount/site/date revalidation remains; duplicates never auto-select.
+- Backup C:/ERP_DB/deploy_backups/approval_30days_20261028_111319 (6sourcefiles + SQLite); second idle deployment backup approval_30days_deploy_20261028_111849. Sixfilesdeployed, mainapp.js unchanged; feedback asset refs?v=20261028_3. Only pinned native backend15704->36736 restarted;35/shared19443relay10140/bridge17760 untouched.
+-38tests passed(21matching/auth/atomic,7backtestscoring,10Chromiumfeedback). Historical same12manual cases now12/12correct review candidates,0misses/0errors; automatic acceptance remains0because currency-symbol total parsing still requires improvement. This is a tuned-cohort candidate recovery result, not general accuracy. Stage live search277 current-day returns unique180287 in previewonly mode. No operational approval association/ERP/reprint submitted.
+-11:21:09 native8081/public3010/version200,all6hashesmatch;243/Kim/Hyeon/Songreadytrue on bundle00fbdbd90761fc92e92324d314c36dc5a08fa4c03fe5a90032926108fc80842a,allnamedcallersroute243. Graphify1942nodes5496edges121communities. Artifacts output/approval_30days_20261028/ inclbacktestresults,QA,manifest,verification.
+- Portal verification blocked: freshChromeaccountingtab andportalroot bothIIS502 afterdeployment; original usertab174leftuntouched.105listenersallnormal andnoportalrootrequest reachednativebackend duringprobes; cannot attribute root cause to35withoutitslogs. No35access/authbypass/sharedrelayrestart. Next exact start: check wholeportal availability,then verify?v=20261028_3 assets inauthenticatedfreshpage; keepcurrencyparserfollow-up separate. User-owned174tab selection/exportstate preserved.
+
 ## 2026-10-28 historical manual approval backtest
 
 - User requested real-history retrieval-rate validation. Primary ran read-only evaluation of all12explicit manual-upload records among43current purchases/41with approval PDFs. Ground truth was current stored PDF header number; two scans67/68visually verified. All12areCompuzone.

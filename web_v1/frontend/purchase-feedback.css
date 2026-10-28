@@ -21,5 +21,10 @@
 .purchase-approval-choices article { padding: 16px; margin: 12px 0; border: 1px solid #d4deea; border-radius: 8px; background: #f7fafc; }
 .purchase-approval-choices p { white-space: pre-wrap; line-height: 1.5; overflow-wrap: anywhere; }
 .purchase-approval-choices a { color: #007a6c; }
+.purchase-approval-choice-label { display: flex; align-items: flex-start; gap: 10px; cursor: pointer; overflow-wrap: anywhere; }
+.purchase-approval-choice-label input { flex: 0 0 auto; margin-top: 4px; }
+.purchase-approval-choices article:has(input:checked) { border-color: #087b6c; box-shadow: 0 0 0 1px #087b6c; }
+#purchaseFeedbackModal .approval-confirm-choice { margin-bottom: 20px; }
+#purchaseFeedbackModal button:disabled { opacity: .5; cursor: not-allowed; }
 #purchaseFeedbackModal .purchase-approval-choices button { margin-top: 10px; }
 #purchaseApprovalFeedback button + button { margin-left: 8px; }

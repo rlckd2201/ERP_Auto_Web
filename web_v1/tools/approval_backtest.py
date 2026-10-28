@@ -14,7 +14,7 @@ import json
 import os
 import re
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
@@ -76,9 +76,10 @@ async def historical_search(page, template: str, amount: str, anchor: str,
     for field in ("title", "attachFileNames", "attachFileContents", "drafterName", "docNum"):
         if params.get(field) not in (None, [""]):
             raise ValueError("Unexpected extra search filter: " + field)
-    day = date.fromisoformat(anchor)
-    params.update(docBody=[amount], fromDate=[f"{day - timedelta(days=7)}T00:00:00.000+09:00"],
-                  toDate=[f"{day}T23:59:59.000+09:00"])
+    from web_v1.backend.approval_matching import approval_date_range
+    start, end = approval_date_range(anchor)
+    params.update(docBody=[amount], fromDate=[f"{start}T00:00:00.000+09:00"],
+                  toDate=[f"{end}T23:59:59.000+09:00"], searchTerm=["specify"])
     rows, expected_total = [], None
     for page_no in range(5):
         params["page"] = [str(page_no)]
@@ -133,7 +134,7 @@ async def run(args) -> dict:
     accounts = {value.strip().lower() for value in settings.approval_drafter_accounts.split(",") if value.strip()}
     manifest = {"cohort": "all explicit manual-upload records with current approval PDFs",
                 "mode": "amount fallback only (simulate missing filename order number)",
-                "anchor": "earliest logged approval lookup or manual upload; inclusive anchor-7d..anchor",
+                "anchor": f"earliest logged approval lookup or manual upload; inclusive anchor-{matching.APPROVAL_LOOKBACK_DAYS}d..anchor",
                 "input_sha256": hashlib.sha256(args.snapshot.read_bytes()).hexdigest(),
                 "source_sha256": {name: hashlib.sha256((root / "web_v1/backend" / name).read_bytes()).hexdigest()
                                   for name in ("approval_browser.py", "approval_matching.py")},
@@ -159,13 +160,13 @@ async def run(args) -> dict:
                         truncated |= limited
                         rows_by_number.update({row["doc_no"]: row for row in rows})
                     candidates = []
-                    anchor = date.fromisoformat(context["reference_date"])
+                    start, end = matching.approval_date_range(context["reference_date"])
                     for row in rows_by_number.values():
                         try:
                             approved = date.fromisoformat(row["approved_date"])
                         except ValueError:
                             continue
-                        if row["status"] == "완료" and anchor - timedelta(days=7) <= approved <= anchor:
+                        if row["status"] == "완료" and start <= approved <= end:
                             candidates.append(await browser_code.candidate_detail(page, row))
                     decision = matching.decide(candidates, context, accounts, truncated=truncated)
                     # Save no body, credentials, bank details or profile personal data.

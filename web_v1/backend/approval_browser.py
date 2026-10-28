@@ -5,16 +5,28 @@ import asyncio
 import json
 import re
 import sys
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit, urlunsplit
 
 from playwright.async_api import async_playwright
 
-from .approval_matching import amount_variants, assess_candidate, decide, public_candidate, validate_context
+from .approval_matching import amount_variants, approval_date_range, decide, public_candidate, validate_context
 
 ORIGIN = "https://gw.dae-seung.co.kr"
 MAX_RESULTS = 100
+
+
+def approval_search_url(url: str, reference_date: str) -> str:
+    """Use exact day boundaries; the groupware 'month' shortcut is calendar-based."""
+    base = urlsplit(url)
+    params = parse_qs(base.query, keep_blank_values=True)
+    if base.scheme + "://" + base.netloc != ORIGIN or base.path != "/app/approval/search" or params.get("dateType") != ["completedAt"]:
+        raise RuntimeError("결재일 검색 조건을 확인하지 못했습니다.")
+    start, end = approval_date_range(reference_date)
+    params.update(fromDate=[f"{start}T00:00:00.000+09:00"], toDate=[f"{end}T23:59:59.000+09:00"],
+                  searchTerm=["specify"], page=["0"])
+    return urlunsplit((base.scheme, base.netloc, base.path, urlencode(params, doseq=True), ""))
 
 
 async def wait_search_result(page, response) -> tuple[int, int]:
@@ -93,7 +105,7 @@ async def search_rows(page, amount: str) -> tuple[list[dict], bool]:
     await form.wait_for()
     await form.locator(".wrap_select_list .btn_select").click()
     await form.locator("#completedAt").click()
-    await form.locator('[data-term="week"]').click()
+    await form.locator('[data-term="month"]').click()
     for field in ("title", "attachFileNames", "attachFileContents"):
         await form.locator(f"input#{field}").uncheck()
     await form.locator("input#docBody").check()
@@ -104,6 +116,10 @@ async def search_rows(page, amount: str) -> tuple[list[dict], bool]:
     response = await response_info.value
     total, _ = await wait_search_result(page, response)
     await page.wait_for_url("**/approval/search?**", timeout=15000)
+    exact_url = approval_search_url(page.url, date.today().isoformat())
+    async with page.expect_response(lambda r: urlsplit(r.url).path == "/api/search/approval", timeout=20000) as response_info:
+        await page.goto(exact_url, wait_until="domcontentloaded")
+    total, _ = await wait_search_result(page, await response_info.value)
     await page.locator("table.type_normal, p.data_null").first.wait_for(timeout=15000)
     base = urlsplit(page.url)
     params = parse_qs(base.query)
@@ -180,14 +196,14 @@ async def run(config: dict) -> dict:
                 for row in rows:
                     rows_by_number[row["doc_no"]] = row
             candidates = []
-            anchor = date.fromisoformat(context["reference_date"])
+            start, end = approval_date_range(context["reference_date"])
             for row in rows_by_number.values():
                 # Cheap filters before opening/profile-reading every search hit.
                 try:
                     approved = date.fromisoformat(row["approved_date"])
                 except ValueError:
                     continue
-                if row["status"] != "완료" or not anchor - timedelta(days=7) <= approved <= anchor:
+                if row["status"] != "완료" or not start <= approved <= end:
                     continue
                 if config.get("drafter_names") and row["drafter_name"] not in config["drafter_names"]:
                     continue

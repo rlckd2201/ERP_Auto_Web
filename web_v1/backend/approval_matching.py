@@ -10,6 +10,13 @@ from typing import Any
 
 from .erp_runner import FACTORY_MAP, CORP_MAP
 
+APPROVAL_LOOKBACK_DAYS = 30
+
+
+def approval_date_range(reference_date: str) -> tuple[date, date]:
+    anchor = date.fromisoformat(reference_date)
+    return anchor - timedelta(days=APPROVAL_LOOKBACK_DAYS), anchor
+
 
 def compact(value: Any) -> str:
     return re.sub(r"\s+", "", str(value or "")).upper()
@@ -84,9 +91,9 @@ def assess_candidate(candidate: dict, context: dict, accounts: set[str]) -> dict
         blocked.append("결재 미완료")
     try:
         approved = date.fromisoformat(str(c.get("approved_date") or ""))
-        anchor = date.fromisoformat(context["reference_date"])
-        if not anchor - timedelta(days=7) <= approved <= anchor:
-            blocked.append("결재일이 최근 7일 범위 밖")
+        start, end = approval_date_range(context["reference_date"])
+        if not start <= approved <= end:
+            blocked.append(f"결재일이 최근 {APPROVAL_LOOKBACK_DAYS}일 범위 밖")
     except ValueError:
         blocked.append("결재일 확인 불가")
     account = str(c.get("drafter_account") or "").lower().split("@")[0]
@@ -115,7 +122,7 @@ def assess_candidate(candidate: dict, context: dict, accounts: set[str]) -> dict
     expected_order = context.get("order_number")
     if orders and expected_order and expected_order not in orders:
         blocked.append("본문 주문번호 불일치")
-    c.update(blocked=blocked, warnings=warnings, eligible=not blocked, verified=not blocked and not warnings,
+    c.update(blocked=blocked, warnings=warnings, total_amounts=sorted(totals), eligible=not blocked, verified=not blocked and not warnings,
              matched_order=bool(expected_order and expected_order in orders), matched_total=context["total"] in totals)
     return c
 
@@ -139,5 +146,5 @@ def decide(candidates: list[dict], context: dict, accounts: set[str], *, truncat
 
 def public_candidate(candidate: dict) -> dict:
     # Exclude full body/bank data and browser implementation details from API storage.
-    keys = ("doc_id", "doc_no", "title", "form_name", "drafter_name", "drafter_account", "approved_date", "status", "warnings", "matched_total", "matched_order")
+    keys = ("doc_id", "doc_no", "title", "form_name", "drafter_name", "drafter_account", "approved_date", "status", "warnings", "matched_total", "matched_order", "total_amounts")
     return {key: candidate.get(key) for key in keys}

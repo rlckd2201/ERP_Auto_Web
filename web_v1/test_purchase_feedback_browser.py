@@ -127,17 +127,36 @@ class FeedbackBrowserTests(unittest.TestCase):
 
     def test_duplicate_candidates_need_explicit_choice_and_escape_titles(self):
         candidates = [{"doc_id": str(i), "title": '<img src=x onerror="window.injected=true">', "doc_no": f"기안-{i}",
-            "form_name": "일강 기안", "drafter_name": "김산울", "drafter_account": "kimsanul", "approved_date": "2026-10-22", "warnings": []} for i in (180287,180288)]
-        self.publish(approval_fetch_status="review", approval_fetch_error="조건에 맞는 품의가 여러 건입니다.", approval_search_id="a"*32, approval_candidates=candidates)
+            "form_name": "일강 기안", "drafter_name": "김산울", "drafter_account": "kimsanul", "approved_date": "2026-10-22", "warnings": [], "total_amounts": [413120]} for i in (180287,180288)]
+        self.publish(approval_fetch_status="review", approval_fetch_error="조건에 맞는 품의가 여러 건입니다.", approval_search_id="a"*32, approval_candidates=candidates, total_sum=413120)
         modal=self.page.locator("#purchaseFeedbackModal");modal.wait_for(state="visible")
-        self.assertEqual(modal.get_by_role("button",name="이 품의 연결").count(),2)
+        confirm=modal.get_by_role("button",name="이 품의로 지정")
+        self.assertFalse(confirm.is_enabled())
+        self.assertEqual(modal.get_by_role("radio").count(),2)
+        self.assertEqual(modal.locator("input:checked").count(),0)
+        self.assertIn("본문 합계: 413,120원",modal.inner_text())
+        links=modal.get_by_role("link",name="품의 원문 확인 (새 창)")
+        self.assertEqual(links.nth(1).get_attribute("href"),"https://gw.dae-seung.co.kr/app/approval/document/180288")
+        self.assertEqual(links.nth(1).get_attribute("target"),"_blank")
+        self.assertIn("noopener",links.nth(1).get_attribute("rel"))
         self.assertEqual(modal.locator("img").count(),0)
         self.assertEqual(self.page.evaluate("window.sent.length"),1)
         self.page.evaluate("""() => { window.actions=[]; window.requestJson=async (url,options) => {
           window.actions.push({url,options}); if(options?.method==='POST') return {ok:true};
           return {id:278,invoice_type:'purchase',approval_fetch_status:'done',approval_pdf_paths:['verified.pdf']};
         }; }""")
-        modal.get_by_role("button",name="이 품의 연결").nth(1).click()
+        # Opening an original document must not select or submit a candidate.
+        self.page.context.route("https://gw.dae-seung.co.kr/**",lambda route: route.fulfill(body="fixture original"))
+        with self.page.expect_popup() as info: links.nth(1).click()
+        popup=info.value;popup.wait_for_load_state();popup.close()
+        self.assertFalse(confirm.is_enabled())
+        self.assertEqual(self.page.evaluate("window.actions.length"),0)
+        modal.get_by_role("radio").nth(1).check()
+        self.assertTrue(confirm.is_enabled())
+        self.assertEqual(self.page.evaluate("window.actions.length"),0)
+        if os.getenv("PURCHASE_FEEDBACK_SCREENSHOT_DIR"):
+            self.page.screenshot(path=str(Path(os.environ["PURCHASE_FEEDBACK_SCREENSHOT_DIR"])/"approval-choice-modal.png"))
+        confirm.click()
         self.page.get_by_text("#278 품의 연결 완료", exact=True).wait_for(timeout=7000)
         actions=self.page.evaluate("window.actions")
         self.assertEqual(actions[0]["url"],"/api/invoices/278/approval-choice")
@@ -148,8 +167,9 @@ class FeedbackBrowserTests(unittest.TestCase):
     def test_truncated_candidates_cannot_be_selected(self):
         self.publish(approval_fetch_status="review", approval_fetch_error="전체 후보 미확인", approval_search_truncated=True,
             approval_candidates=[{"doc_id":"1","title":"후보","warnings":[]}])
-        button=self.page.get_by_role("button",name="이 품의 연결");button.wait_for(state="visible")
+        button=self.page.get_by_role("button",name="이 품의로 지정");button.wait_for(state="visible")
         self.assertFalse(button.is_enabled())
+        self.assertFalse(self.page.get_by_role("radio").is_enabled())
 
     def test_missing_approval_without_historical_error_offers_retry(self):
         self.publish(approval_fetch_status="", approval_fetch_error="")

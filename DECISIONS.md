@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-10-28 thirty-day window supersedes seven-day production policy
+
+- Explicit user instruction supersedes prior7daypolicy: allowcompleteddate fromanchor-30days throughanchorinclusive;31daysold/futuredated excluded. Usefixeddaycount,notcalendarmonthshortcut. Historicalbenchmark usesidenticalsharedconstant; retainprior7daybaselineartifact.
+- Multipleeligibleamount-searchcandidates requirerequesterchoice. Originaldocument linksareviewonly; selectingaradiodoesnotsubmit; separateconfirmbuttonneededandnodefaultchoice. Keepverifiedsession,search-id,fingerprint,truncationandserver-sidefreshsearchchecks.
+- Showonlyvalidatedlabeledtotalsas본문합계;show확인필요whenunknownandlabelinvoiceamountas검색기준. Do notsilentlydeclareunknownbodyamountmatched. Currencyparserrepairisnotpartofthiswindow/selectionchange.
+- Currentfrontend mainapp.js andportal35/sharedrelay/authcontract remainunchanged. Globalportalroot502isaseparateunresolvedavailabilityobservation,notproofofafeaturedefectoranidentified35rootcause.
+
 ## 2026-10-28 retrospective approval scoring policy
 
 - Manual cohort requires explicit Korean upload log prefix 품의결재본 첨부/교체, not filename guesses. Use current retained PDF header identity as ground truth; exclude related-document references. Visually identify scanned headers before live retrieval.

@@ -1,5 +1,13 @@
 # TODO
 
+## 2026-10-28 thirty-day search and requester choice
+
+- [x] User-approved30daywindow implemented inrealgroupwarequery,cheapfilter,finalvalidation and progress; preserve6drafters/entitychecks/order-firstpath.
+- [x] Explicit radio selection plus 이 품의로 지정 with original links; openinglinks never submits; truncatedresults cannotbechosen; selecteddoc revalidatedserver-side.
+- [x] Back upanddeploy6files;38testsand12casehistoricalretestpassed;243/Kim/Hyeon/Songupdatedandready.
+- [ ] Wholeportalroot/accountingpage currentlyIIS502 despitehealthy105. Onceportalentryrecovers, verifylatestfeedback?v=20261028_3 inliveportal.35ownerboundary preserved; do not restartsharedservicesorforgeidentity.
+- [ ] Currency-symbol/backslashlabeled-totalparser remainsunfixed;12/12candidate recovery doesnotmean12automaticlinks. Addnegativeparsingregressions andindependentnewcases beforeclaimingautomatic accuracy.
+
 ## 2026-10-28 follow-up from manual approval backtest
 
 - [x] Evaluate all12current explicitly manually attached approval examples against stored PDF identity with historical first-attempt dates; record83.33%candidate recovery and0%automatic acceptance separately.

@@ -71,10 +71,26 @@ class MatchingTests(unittest.TestCase):
             with self.subTest(change=change):
                 self.assertEqual(self.decide([candidate(**change)])["status"], "not_found")
 
-    def test_completed_date_inclusive_seven_days_not_drafted_date(self):
-        for age, expected in ((7, "matched"), (8, "not_found"), (-1, "not_found")):
+    def test_completed_date_inclusive_thirty_days_not_drafted_date(self):
+        for age, expected in ((7, "matched"), (9, "matched"), (17, "matched"), (30, "matched"), (31, "not_found"), (-1, "not_found")):
             self.assertEqual(self.decide([candidate(approved_date=(date.today()-timedelta(days=age)).isoformat(), drafted_date=date.today().isoformat())])["status"], expected)
         self.assertEqual(self.decide([candidate(approved_date="")])["status"], "not_found")
+
+    def test_same_amount_candidate_from_extended_window_still_requires_choice(self):
+        older = candidate(doc_id="older", approved_date=(date.today()-timedelta(days=17)).isoformat())
+        self.assertEqual(self.decide([candidate(), older])["status"], "review")
+
+    def test_exact_day_window_across_month_and_leap_year_boundaries(self):
+        from urllib.parse import parse_qs, urlsplit
+        from web_v1.backend.approval_browser import approval_search_url
+        url = "https://gw.dae-seung.co.kr/app/approval/search?dateType=completedAt&docBody=413%2C120&searchOption=AND&page=2"
+        for anchor, start in (("2026-03-01", "2026-01-30"), ("2024-03-01", "2024-01-31"), ("2026-01-01", "2025-12-02")):
+            params = parse_qs(urlsplit(approval_search_url(url, anchor)).query)
+            self.assertEqual(params["fromDate"], [start+"T00:00:00.000+09:00"])
+            self.assertEqual(params["toDate"], [anchor+"T23:59:59.000+09:00"])
+            self.assertEqual(params["docBody"], ["413,120"])
+            self.assertEqual(params["dateType"], ["completedAt"])
+            self.assertEqual(params["page"], ["0"])
 
     def test_truncated_and_conflicting_totals_never_auto_match(self):
         self.assertEqual(self.decide([candidate()], truncated=True)["status"], "review")

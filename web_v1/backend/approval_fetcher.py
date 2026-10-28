@@ -13,7 +13,7 @@ from typing import Any, Callable
 from .erp_runner import _load_legacy_module
 from .purchase_analysis import purchase_approval_dir
 from .config import PROJECT_ROOT, settings
-from .approval_matching import invoice_context, validate_context
+from .approval_matching import APPROVAL_LOOKBACK_DAYS, invoice_context, validate_context
 
 
 Progress = Callable[[str], None]
@@ -229,5 +229,5 @@ def fetch_approval_documents(invoice_id: int, quote_path: str, progress: Progres
         return _fetch_order_documents(invoice_id, quote_path, progress)
     except OrderSearchMiss:
         if progress:
-            progress("주문번호 검색 결과가 없어 본문 금액·최근 7일 결재일·전산팀 계정으로 품의를 찾습니다.")
+            progress(f"주문번호 검색 결과가 없어 본문 금액·최근 {APPROVAL_LOOKBACK_DAYS}일 결재일·전산팀 계정으로 품의를 찾습니다.")
         return fetch_amount_documents(context)

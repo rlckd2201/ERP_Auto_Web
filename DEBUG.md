@@ -1,5 +1,13 @@
 # Debug
 
+## 2026-10-28 thirty-day and selection verification
+
+- ObservedDaoudetailsearchterms:all,today,week,month,year,specify;datefieldsreadonly. ProductionselectscompletedAt/monththen normalizesobservedquerytoexactfromDate(anchor-30)00:00:00.000+09:00/toDate(anchor)23:59:59.000+09:00/searchTermspecify;waitsAPIresultmetadata+DOMcountsbeforeenumerating. Sameconstantusedbyvalidator/backtest. Boundaryfixtures9/17/30daysaccepted,31days/futureexcluded;March/nonleap/leap/Januaryrolloververified.
+-38testspassed:21approvalmatching/auth/atomic +7backtestscoring +10ChromiumUI. Popuporiginalrouteinterceptedatcontextscope(noexternalcontact);linkclickdoesnotselect/POST;radioalone0POST;confirmonlysendschosen180288+searchid;truncatedradioandconfirmdisabled. QAapproval-choice-modal.png reviewedcentered/legible;injectiontesttitleescapedastext.
+- Stagebacktest12/12review_correct_candidate,0not_recovered,0error,0auto;all12hadexactly1eligiblecandidate.174and230recoveredafter30dayextension. Separatecurrent-daystagebrowser.run preview277=>matched180287;nomutations/PDFcreation. Filesunderoutput/approval_30days_20261028/.
+- Productionbackupsapproval_30days_20261028_111319 andapproval_30days_deploy_20261028_111849;backendPID15704->36736.11:21:09verificationall6filehashesmatch,8081/3010version200,4Agentsreadytrue/bundle00fbdbd90761fc92e92324d314c36dc5a08fa4c03fe5a90032926108fc80842a,routes243. app.jsSHA1e19c81afbd800aa3106f1643cef7f5ba0fe600ce4c7571096288987e41c3e36 unchanged.
+- FreshChrome929741669/accounting-automation andportalroot bothIIS502;reload/hardreloadsame.105loopback3011unauth403expected;native/publicroot302expected;19443PID10140,3010/3011PID17760unchanged. NewnativeaccesslogshowshealthyAgentrequestsbutnoportalrootrequest(onlyourunauth127.0.0.1root302). Thislocalizesfailedobservationbeforebackendbutnotitsrootcause. UserChrome929741651had174selectedandcompleted11:11PDFexportbeforeinspection;leftunchanged,noneofourtestssubmittedit.
+
 ## 2026-10-28 manual cohort baseline evidence
 
 - Source manifests in output/approval_backtest_20261028/manifest.json match production/local approval_browser.py and approval_matching.py. Historical search adapter changes observed completedAt URL amount/fromDate/toDate/page only; existing candidate_detail/assess_candidate/decide used unchanged. Snapshot cohort.json is private/generated, not staged.
