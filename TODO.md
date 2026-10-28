@@ -7,7 +7,8 @@
 - [x] User confirmed only current six 전산2파트 accounts; configure allowlist without name-only identity matching.
 - [x] Ordinary-user retry and centered candidate selection; revalidation,search-id/fingerprint guards,atomic metadata writes,optional approval output preserved.
 - [x]99 automated checks and full isolated-DB real groupware277 lookup/PDF association; production health/hashes/243routing/Agentupdates verified.
-- [ ] Finish authenticated portal button check after pending user login; then observe next genuine user-triggered purchase. No completed-invoice replay for testing.
+- [x] User login followed by live portal277detail: new retry/reason buttons,latest asset versions,centered 안내 dialog and optional-output state verified. Restored initial selection/list.
+- [ ] Observe next genuine user-triggered purchase. No completed-invoice replay for testing.
 
 ## 2026-10-28 department / approval feedback rollout
 

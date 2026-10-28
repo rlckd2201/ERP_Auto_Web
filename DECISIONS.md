@@ -6,6 +6,7 @@
 - User approved current six 전산2파트 accounts only. Compare document DRAFT profile business email account, not display name or organization-tree member id. Config defaults to the approved six; no public unauthenticated policy editor.
 - Seven-day reference is the actual search day, inclusive today-7days..today, using completedAt, never draftedAt. Persist reference and fingerprint; next-day or changed-document choices must re-search. Historical retry does not silently widen the range.
 - Total is an exact labeled whole-KRW total, not arbitrary occurrence/unit price. Unknown/conflicting form/site/vendor information requires review; wrong body total/site/order/account/date is excluded. Truncated search never auto-selects and disables manual choice until complete search succeeds. Multiple candidates never pick first/newest/best-score, even when one contains the order.
+- Live portal verification uses read-only selection and the reason dialog. Do not trigger an operational re-search/association or replay a completed purchase merely to demonstrate UI; full association was already tested on the isolated copy.
 - Selection/retry only associates verified approval PDF and preserves invoice/ERP errors/status. No new ERP/print work. Atomic BEGIN IMMEDIATE merge compares search-id and identity fingerprint and rejects a manual attachment winner. Background lookup shared by API and worker prevents double runs. Main app.js remains byte-identical; separate feedback module calls its existing authenticated requestJson.
 
 ## 2026-10-28 purchase feedback compatibility
