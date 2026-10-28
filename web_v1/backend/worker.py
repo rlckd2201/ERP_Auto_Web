@@ -7,7 +7,7 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from .approval_fetcher import fetch_approval_documents
+from .approval_service import start_approval_lookup
 from .compuzone_quote import auto_attach_compuzone_quote
 from .erp_queue import write_output_print_queue, write_purchase_erp_queue, write_regular_erp_queue
 from .erp_runner import build_regular_erp_payload, run_invoice_erp_input, validate_purchase_invoice_for_erp
@@ -257,46 +257,10 @@ class JobWorker:
             raise
 
     def _start_approval_fetch_background(self, invoice_id: int, quote_path: str) -> None:
-        def _worker() -> None:
-            update_invoice_json(
-                invoice_id,
-                {
-                    "approval_fetch_status": "running",
-                    "approval_fetch_error": "",
-                    "approval_fetch_started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                },
-                message="품의결재본 백그라운드 자동 확보 시작",
-            )
-            try:
-                payload = fetch_approval_documents(
-                    invoice_id,
-                    quote_path,
-                    progress=lambda message: add_invoice_log(invoice_id, f"[품의] {message}"),
-                )
-                update_invoice_json(
-                    invoice_id,
-                    {
-                        **payload,
-                        "approval_fetch_status": "done",
-                        "approval_fetch_error": "",
-                        "approval_fetch_finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "erp_ready": True,
-                    },
-                    message=f"품의결재본 백그라운드 자동 확보 완료: {len(payload.get('approval_pdf_paths') or [])}건",
-                )
-            except Exception as exc:
-                update_invoice_json(
-                    invoice_id,
-                    {
-                        "approval_fetch_status": "error",
-                        "approval_fetch_error": str(exc),
-                        "approval_fetch_finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                        "erp_ready": True,
-                    },
-                    message=f"품의결재본 백그라운드 자동 확보 실패: {exc}",
-                )
-
-        threading.Thread(target=_worker, name=f"approval-fetch-{invoice_id}", daemon=True).start()
+        try:
+            start_approval_lookup(invoice_id, quote_path)
+        except ValueError as exc:
+            add_invoice_log(invoice_id, f"품의 자동 확보 대기: {exc}")
 
     def _run_purchase_erp_input(self, job: JobRecord) -> dict[str, Any]:
         is_regular_job = job.job_type in {"regular_one_click", "regular_erp_input"}

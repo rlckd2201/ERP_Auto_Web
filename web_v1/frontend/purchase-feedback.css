@@ -18,3 +18,8 @@
 #purchaseFeedbackModal button { display: block; margin-left: auto; min-width: 96px; }
 #purchaseApprovalFeedback { padding: 18px; margin-bottom: 16px; border: 1px solid #eac88a; border-left: 4px solid #b87414; border-radius: 8px; background: #fff8e9; color: #653e0d; }
 #purchaseApprovalFeedback p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }
+.purchase-approval-choices article { padding: 16px; margin: 12px 0; border: 1px solid #d4deea; border-radius: 8px; background: #f7fafc; }
+.purchase-approval-choices p { white-space: pre-wrap; line-height: 1.5; overflow-wrap: anywhere; }
+.purchase-approval-choices a { color: #007a6c; }
+#purchaseFeedbackModal .purchase-approval-choices button { margin-top: 10px; }
+#purchaseApprovalFeedback button + button { margin-left: 8px; }

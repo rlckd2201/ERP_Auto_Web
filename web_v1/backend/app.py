@@ -23,14 +23,14 @@ from fastapi.staticfiles import StaticFiles
 from starlette.concurrency import run_in_threadpool
 
 from .agent_queue import claim_next_erp_task, update_erp_task
-from .approval_fetcher import fetch_approval_documents
+from .approval_service import start_approval_lookup
 from .compuzone_quote import auto_attach_compuzone_quote
 from .config import WEB_ROOT, settings
 from .browser_session import SESSION_HEADER, create_browser_session, resolve_browser_session, revoke_browser_session
 from .mail_collector import mail_collect_processed_history
 from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
-from .models import InvoiceIdsRequest, InvoiceStatusUpdate, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
+from .models import ApprovalChoiceRequest, InvoiceIdsRequest, InvoiceStatusUpdate, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .notifications import notify_regular_auto_result
 from .purchase_execution import purchase_routing_payload, resolve_purchase_execution
 from .output_set import build_output_set_status, generate_expense_report_pdf
@@ -236,58 +236,12 @@ def _record_regular_auto_mail_result(job_id: str, invoice_ids: list[int], result
         add_invoice_log(invoice_id, message, level=level, job_id=job_id)
 
 def _start_purchase_approval_fetch_background(invoice_id: int, quote_path: str) -> bool:
-    quote_path = str(quote_path or "").strip()
-    if not quote_path:
-        return False
-    invoice = get_invoice(invoice_id)
-    data = _invoice_data(invoice)
-    existing_paths = [str(path) for path in data.get("approval_pdf_paths") or [] if str(path or "").strip()]
-    if any(Path(path).exists() for path in existing_paths):
-        return False
-    if str(data.get("approval_fetch_status") or "").strip().lower() == "running":
+    try:
+        return start_approval_lookup(invoice_id, quote_path)
+    except ValueError as exc:
+        add_invoice_log(invoice_id, f"품의 자동 확보 대기: {exc}")
         return False
 
-    def _worker() -> None:
-        update_invoice_json(
-            invoice_id,
-            {
-                "approval_fetch_status": "running",
-                "approval_fetch_error": "",
-                "approval_fetch_started_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-            },
-            message="전자결재 품의 자동 확보 시작",
-        )
-        try:
-            payload = fetch_approval_documents(
-                invoice_id,
-                quote_path,
-                progress=lambda message: add_invoice_log(invoice_id, f"[품의] {message}"),
-            )
-            update_invoice_json(
-                invoice_id,
-                {
-                    **payload,
-                    "approval_fetch_status": "done",
-                    "approval_fetch_error": "",
-                    "approval_fetch_finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "erp_ready": True,
-                },
-                message=f"전자결재 품의 자동 확보 완료: {len(payload.get('approval_pdf_paths') or [])}건",
-            )
-        except Exception as exc:
-            update_invoice_json(
-                invoice_id,
-                {
-                    "approval_fetch_status": "error",
-                    "approval_fetch_error": str(exc),
-                    "approval_fetch_finished_at": time.strftime("%Y-%m-%d %H:%M:%S"),
-                    "erp_ready": True,
-                },
-                message=f"전자결재 품의 자동 확보 실패: {exc}",
-            )
-
-    threading.Thread(target=_worker, name=f"approval-fetch-{invoice_id}", daemon=True).start()
-    return True
 
 def _purchase_edit_snapshot(data: dict[str, Any]) -> dict[str, Any]:
     items: list[dict[str, Any]] = []
@@ -3099,6 +3053,29 @@ def api_get_invoice(invoice_id: int) -> dict[str, Any]:
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     return invoice
+
+
+def _start_requested_approval(request: Request, invoice_id: int, *, doc_id: str = "", search_id: str = "") -> dict:
+    identity = _browser_identity(request)
+    if not identity or not identity.get("user_id"):
+        raise HTTPException(401, detail="회계 계정으로 로그인한 뒤 품의를 다시 찾아 주세요.")
+    try:
+        started = start_approval_lookup(invoice_id, doc_id=doc_id, search_id=search_id, requested_by=identity["user_id"])
+    except ValueError as exc:
+        raise HTTPException(409, detail=str(exc)) from None
+    if not started:
+        raise HTTPException(409, detail="이미 품의가 연결되어 있거나 검색 중입니다. 새로고침해 주세요.")
+    return {"ok": True, "invoice_id": invoice_id, "status": "running"}
+
+
+@app.post("/api/invoices/{invoice_id}/approval-retry")
+def api_retry_approval(invoice_id: int, request: Request) -> dict:
+    return _start_requested_approval(request, invoice_id)
+
+
+@app.post("/api/invoices/{invoice_id}/approval-choice")
+def api_choose_approval(invoice_id: int, body: ApprovalChoiceRequest, request: Request) -> dict:
+    return _start_requested_approval(request, invoice_id, doc_id=body.doc_id, search_id=body.search_id)
 
 
 @app.get("/api/invoices/{invoice_id}/output-set")

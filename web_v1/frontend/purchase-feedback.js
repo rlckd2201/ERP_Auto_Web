@@ -4,7 +4,8 @@
   const invoices = new Map();
   const announced = new Set();
   const pending = [];
-  let modal, modalBody, modalTitle, focusAfterClose, renderScheduled = false;
+  let modal, modalBody, modalTitle, modalChoices, focusAfterClose, renderScheduled = false;
+  const lookingUp = new Set();
 
   function ensureModal() {
     if (modal) return;
@@ -16,13 +17,15 @@
     modalTitle.id = "purchaseFeedbackTitle";
     modalBody = document.createElement("p");
     modalBody.id = "purchaseFeedbackMessage";
+    modalChoices = document.createElement("div");
+    modalChoices.className = "purchase-approval-choices";
     const close = document.createElement("button");
     close.type = "button";
     close.className = "button primary";
     close.textContent = "확인";
     close.autofocus = true;
     close.addEventListener("click", () => modal.close());
-    modal.append(modalTitle, modalBody, close);
+    modal.append(modalTitle, modalBody, modalChoices, close);
     modal.addEventListener("close", () => {
       const target = focusAfterClose;
       focusAfterClose = null;
@@ -32,14 +35,39 @@
     document.body.append(modal);
   }
 
-  function present(title, message, target) {
+  function present(title, message, target, record) {
     ensureModal();
     if (modal.open) {
-      if (!pending.some(item => item[1] === message) && modalBody.textContent !== message) pending.push([title, message, target]);
+      if (!pending.some(item => item[1] === message) && modalBody.textContent !== message) pending.push([title, message, target, record]);
       return;
     }
     modalTitle.textContent = title;
     modalBody.textContent = message;
+    modalChoices.replaceChildren();
+    if (record?.approval_fetch_status === "review") {
+      for (const candidate of record.approval_candidates || []) {
+        const card = document.createElement("article");
+        const heading = document.createElement("strong");
+        heading.textContent = candidate.title || candidate.doc_no;
+        const details = document.createElement("p");
+        details.textContent = `${candidate.doc_no} · ${candidate.form_name}\n${candidate.drafter_name} (${candidate.drafter_account}) · 결재일 ${candidate.approved_date}`;
+        const warnings = document.createElement("p");
+        warnings.textContent = (candidate.warnings || []).join(" / ");
+        card.append(heading, details, warnings);
+        if (/^\d+$/.test(String(candidate.doc_id))) {
+          const link = document.createElement("a");
+          link.href = `https://gw.dae-seung.co.kr/app/approval/document/${candidate.doc_id}`;
+          link.target = "_blank"; link.rel = "noopener"; link.textContent = "원문 확인";
+          const choose = document.createElement("button");
+          choose.type = "button"; choose.className = "button secondary";
+          choose.textContent = "이 품의 연결";
+          choose.disabled = Boolean(record.approval_search_truncated);
+          choose.addEventListener("click", () => beginLookup(record, candidate.doc_id));
+          card.append(link, choose);
+        }
+        modalChoices.append(card);
+      }
+    }
     focusAfterClose = target;
     modal.showModal();
   }
@@ -59,6 +87,36 @@
   }
 
   const outputNotice = "\n\n품의가 없어도 전표·세금계산서·현금출금결의서는 준비된 문서대로 출력할 수 있습니다. 품의는 확보 후 별도로 출력해 주세요.";
+  async function beginLookup(record, docId) {
+    const id = Number(record.id);
+    if (lookingUp.has(id)) return;
+    lookingUp.add(id);
+    try {
+      if (typeof requestJson !== "function") throw new Error("화면 연결을 확인하지 못했습니다. 새로고침 후 다시 시도해 주세요.");
+      await requestJson(`/api/invoices/${id}/${docId ? "approval-choice" : "approval-retry"}`, {
+        method: "POST", body: JSON.stringify(docId ? { doc_id: String(docId), search_id: record.approval_search_id } : {})
+      });
+      if (modal?.open) modal.close();
+      invoices.set(id, { ...record, approval_fetch_status: "running", approval_fetch_error: "", approval_candidates: [] });
+      scheduleRender();
+      // Bounded polling only after an explicit retry/choice; ordinary list polling is unchanged.
+      for (let attempt = 0; attempt < 85; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        const current = await requestJson(`/api/invoices/${id}`);
+        invoices.set(id, { ...current.raw, ...current.raw?.data, ...current.data, ...current });
+        scheduleRender();
+        if (current.approval_fetch_status !== "running") {
+          if (current.approval_fetch_status === "done") present(`#${id} 품의 연결 완료`, "품의 PDF를 연결했습니다. 기존 전표를 다시 입력하거나 자동 재출력하지 않았습니다. 품의는 출력 문서에서 선택해 출력해 주세요.");
+          if (typeof refreshInvoices === "function") await refreshInvoices({ forceDetailReload: true, force: true });
+          return;
+        }
+      }
+      throw new Error("품의 조회가 계속 진행 중입니다. 잠시 후 새로고침해 결과를 확인해 주세요.");
+    } catch (error) {
+      if (modal?.open) modal.close();
+      present(`#${id} 품의 확인`, String(error.message || error));
+    } finally { lookingUp.delete(id); scheduleRender(); }
+  }
   function selectedIds() {
     return [...document.querySelectorAll("tr[data-invoice-id]")]
       .filter(row => row.querySelector("input.invoice-check:checked"))
@@ -76,17 +134,21 @@
     const selected = selectedIds();
     const detail = document.getElementById("purchaseDetailBody");
     const currentId = detailId();
-    let activeMessage = "";
+    let activeMessage = "", activeRecord = null;
     for (const id of selected) {
       const data = invoices.get(id);
       if (!data || data.invoice_type === "regular" || data.approval_pdf_paths?.length) continue;
-      if (data.approval_fetch_status !== "error" && !data.approval_fetch_error) continue;
+      if (id === currentId && selected.length === 1) {
+        activeRecord = data;
+        activeMessage = data.approval_fetch_status === "running" ? "품의를 찾고 있습니다. 완료되면 결과를 표시합니다." : "품의가 아직 연결되지 않았습니다. 품의 다시 찾기로 주문번호 검색과 본문 금액 보조 검색을 실행할 수 있습니다.";
+      }
+      if (!["error", "review"].includes(data.approval_fetch_status) && !data.approval_fetch_error) continue;
       const message = approvalMessage(data.approval_fetch_error, data.approval_order_number || data.order_no);
       if (id === currentId && selected.length === 1) activeMessage = message;
       const key = `${id}:${data.approval_fetch_finished_at || ""}:${data.approval_fetch_error || "error"}`;
       if (!announced.has(key)) {
         announced.add(key);
-        present(`#${id} 품의 자동 확보 실패`, message + outputNotice);
+        present(`#${id} ${data.approval_fetch_status === "review" ? "품의 선택 필요" : "품의 자동 확보 실패"}`, message + outputNotice, null, data);
       }
     }
     let banner = document.getElementById("purchaseApprovalFeedback");
@@ -102,11 +164,19 @@
       button.type = "button";
       button.className = "button secondary";
       button.textContent = "실패 이유 다시 보기";
-      button.addEventListener("click", () => present("품의 자동 확보 실패", body.textContent + outputNotice, button));
-      banner.append(heading, body, button);
+      button.addEventListener("click", () => present("품의 확인", body.textContent + outputNotice, button, invoices.get(detailId())));
+      const retry = document.createElement("button");
+      retry.type = "button"; retry.className = "button secondary approval-retry"; retry.textContent = "품의 다시 찾기";
+      retry.addEventListener("click", () => { const current = invoices.get(detailId()); if (current) beginLookup(current); });
+      banner.append(heading, body, button, retry);
       detail.prepend(banner);
     }
     if (banner.querySelector("p").textContent !== activeMessage) banner.querySelector("p").textContent = activeMessage;
+    const headingText = activeRecord?.approval_fetch_status === "review" ? "품의 선택 필요" : "품의 확인";
+    if (banner.querySelector("strong").textContent !== headingText) banner.querySelector("strong").textContent = headingText;
+    const buttonText = activeRecord?.approval_fetch_status === "review" ? "품의 후보 선택" : "이유 다시 보기";
+    if (banner.querySelector("button").textContent !== buttonText) banner.querySelector("button").textContent = buttonText;
+    banner.querySelector(".approval-retry").disabled = activeRecord?.approval_fetch_status === "running" || lookingUp.has(currentId);
   }
 
   // Observe API responses without changing URLs, headers, authentication or retries.

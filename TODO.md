@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-10-28 amount lookup implementation (supersedes proposal below)
+
+- [x] Back up full current program/database before edits; deploy reviewed files after idle/hash checks.
+- [x] Preserve order-first lookup, fallback by exact labeled body total,actual completed date within7days,company/site/vendor,verified drafter account.
+- [x] User confirmed only current six 전산2파트 accounts; configure allowlist without name-only identity matching.
+- [x] Ordinary-user retry and centered candidate selection; revalidation,search-id/fingerprint guards,atomic metadata writes,optional approval output preserved.
+- [x]99 automated checks and full isolated-DB real groupware277 lookup/PDF association; production health/hashes/243routing/Agentupdates verified.
+- [ ] Finish authenticated portal button check after pending user login; then observe next genuine user-triggered purchase. No completed-invoice replay for testing.
+
 ## 2026-10-28 department / approval feedback rollout
 
 - [x] Block missing required asset departments before purchase dispatch; centered modal, row/invoice hints, return focus, batch validation.

@@ -21,6 +21,11 @@ class InvoiceIdsRequest(BaseModel):
     output_target: Literal["pdf", "pyeongtaek", "gimje"] = "pdf"
 
 
+class ApprovalChoiceRequest(BaseModel):
+    doc_id: str = Field(min_length=1, max_length=20, pattern=r"^\d+$")
+    search_id: str = Field(min_length=32, max_length=32, pattern=r"^[a-f0-9]+$")
+
+
 class OutputSetRequest(BaseModel):
     invoice_ids: list[int] = Field(default_factory=list)
     action: Literal["merged_pdf", "individual_pdf", "print_individual"] = "merged_pdf"

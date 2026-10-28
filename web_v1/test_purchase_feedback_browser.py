@@ -125,6 +125,38 @@ class FeedbackBrowserTests(unittest.TestCase):
         self.assertEqual(self.page.evaluate("window.started"), 1)
         self.assertEqual(self.page.locator("#purchaseFeedbackModal").count(), 0)
 
+    def test_duplicate_candidates_need_explicit_choice_and_escape_titles(self):
+        candidates = [{"doc_id": str(i), "title": '<img src=x onerror="window.injected=true">', "doc_no": f"기안-{i}",
+            "form_name": "일강 기안", "drafter_name": "김산울", "drafter_account": "kimsanul", "approved_date": "2026-10-22", "warnings": []} for i in (180287,180288)]
+        self.publish(approval_fetch_status="review", approval_fetch_error="조건에 맞는 품의가 여러 건입니다.", approval_search_id="a"*32, approval_candidates=candidates)
+        modal=self.page.locator("#purchaseFeedbackModal");modal.wait_for(state="visible")
+        self.assertEqual(modal.get_by_role("button",name="이 품의 연결").count(),2)
+        self.assertEqual(modal.locator("img").count(),0)
+        self.assertEqual(self.page.evaluate("window.sent.length"),1)
+        self.page.evaluate("""() => { window.actions=[]; window.requestJson=async (url,options) => {
+          window.actions.push({url,options}); if(options?.method==='POST') return {ok:true};
+          return {id:278,invoice_type:'purchase',approval_fetch_status:'done',approval_pdf_paths:['verified.pdf']};
+        }; }""")
+        modal.get_by_role("button",name="이 품의 연결").nth(1).click()
+        self.page.get_by_text("#278 품의 연결 완료", exact=True).wait_for(timeout=7000)
+        actions=self.page.evaluate("window.actions")
+        self.assertEqual(actions[0]["url"],"/api/invoices/278/approval-choice")
+        import json
+        self.assertEqual(json.loads(actions[0]["options"]["body"]),{"doc_id":"180288","search_id":"a"*32})
+        self.assertEqual(self.page.evaluate("window.started"),0)
+
+    def test_truncated_candidates_cannot_be_selected(self):
+        self.publish(approval_fetch_status="review", approval_fetch_error="전체 후보 미확인", approval_search_truncated=True,
+            approval_candidates=[{"doc_id":"1","title":"후보","warnings":[]}])
+        button=self.page.get_by_role("button",name="이 품의 연결");button.wait_for(state="visible")
+        self.assertFalse(button.is_enabled())
+
+    def test_missing_approval_without_historical_error_offers_retry(self):
+        self.publish(approval_fetch_status="", approval_fetch_error="")
+        retry=self.page.get_by_role("button",name="품의 다시 찾기");retry.wait_for(state="visible")
+        self.assertTrue(retry.is_enabled())
+        self.assertEqual(self.page.locator("#purchaseFeedbackModal").count(),0)
+
 
 if __name__ == "__main__":
     unittest.main()

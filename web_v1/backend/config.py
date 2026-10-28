@@ -115,6 +115,7 @@ class Settings:
     purchase_shared_agent_ip: str = _env("PURCHASE_SHARED_AGENT_IP")
     purchase_shared_agent_id: str = _env("PURCHASE_SHARED_AGENT_ID")
     purchase_shared_user_ids: str = _env("PURCHASE_SHARED_USER_IDS")
+    approval_drafter_accounts: str = _env("APPROVAL_DRAFTER_ACCOUNTS", "arci,reum0009,rlckd9646,kimsanul,tuy1120,hah4627")
     regular_auto_agent_ip: str = _env("REGULAR_AUTO_AGENT_IP")
     regular_auto_printer_key: str = _env("REGULAR_AUTO_PRINTER_KEY", "pyeongtaek").lower()
     regular_auto_enabled: bool = _env_bool("REGULAR_AUTO_ENABLED", bool(_env("REGULAR_AUTO_AGENT_IP")))

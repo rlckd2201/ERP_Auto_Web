@@ -1,5 +1,13 @@
 # Debug
 
+## 2026-10-28 amount lookup verification and production evidence
+
+-277: buyer125-81-51622,일강1공장,total413120,order28929687. Real approval180287/기안2610-0000877 is completed2026-10-22 bykimsanul; attachmentfilename 일강1공장 소모품 견적서.pdf omits order while body includes it. ProfileDRAFTuserid977 differs from orgMEMBERid3484; matching uses actual profile email account.
+- Daou dateType readonly input itself does not open dropdown; click .wrap_select_list .btn_select then#completedAt. Search UI initially renders0before AJAX. Wait for /api/search/approval successful response and matching page.total/data length in DOM; networkidle never completes reliably on this app. Body amount variants comma/plain deduplicate by document number. Candidate click resolves actual document id; verify drafter profile/account and complete body; print page document number and amount checked before PDF save.
+- New19 matching/auth/SQLite tests and10 Chromium UI tests passed; existing57 backend/routing/output and13 transport regressions passed. Initial test cleanup errors were fixture SQLite handles, corrected with tracked closes; new production atomic helper explicitly closes connection. Isolated DB integration preserved277status/jobid,blocked duplicate start,stored only under staging; result output/approval_amount_20261028/integration_result.json. PDF195543bytes,2pages,all six text assertions passed.
+- Fullbackup approval_amount_20261028_102351; deploymentbackup approval_amount_deploy_20261028_103950. All12releasefilehashesmatch; mainapp.js unchanged; runtime15704.10:41:31 snapshot output/approval_amount_20261028/verification.json shows native/public200 andallfourAgentsreadywithbundlea3d4081327ac93a29ab88a5e1f234e62ccc9e797126ddc4ad0d02ecac7efaf1e. Allnamedusersresolve243.
+- Portal refresh returned Sign In, so authenticated UI asset/button check remains pending user login. Independent browser tests cover actual choice payload,disabled truncated choices,ordinary retry,no automatic ERP,escaped candidate text,existing department/optional-output behavior. Do not claim live UI completed until checked.
+
 ## 2026-10-28 department and approval feedback verification
 
 - Baseline production app.py16f9819e... / erp_runner.py ee4e986a... / approval_fetcher.py7b18e810... matched before deployment. Before this change, department rejection occurred in payload build after dispatch and detailed approval error was admin-only.

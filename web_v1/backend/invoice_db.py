@@ -290,6 +290,10 @@ def _row_to_invoice(row: sqlite3.Row) -> dict[str, Any]:
         "approval_fetch_started_at": data.get("approval_fetch_started_at") or raw.get("approval_fetch_started_at") or "",
         "approval_fetch_finished_at": data.get("approval_fetch_finished_at") or raw.get("approval_fetch_finished_at") or "",
         "approval_order_number": data.get("approval_order_number") or raw.get("approval_order_number") or "",
+        "approval_candidates": data.get("approval_candidates") or [],
+        "approval_search_id": data.get("approval_search_id") or "",
+        "approval_search_truncated": bool(data.get("approval_search_truncated")),
+        "approval_match": data.get("approval_match") or {},
         "data": data,
         "raw": raw,
     }
@@ -587,6 +591,34 @@ def get_invoice_by_pdf_path(pdf_path: str) -> dict[str, Any] | None:
         )
         row = cur.fetchone()
     return _row_to_invoice(row) if row else None
+
+
+def update_approval_lookup(invoice_id: int, context: dict | None, updates: dict[str, Any], *, expected_search_id: str = "") -> bool:
+    """Compare and merge approval metadata atomically; preserve ERP status/errors."""
+    from .approval_matching import invoice_context
+    from contextlib import closing
+    with closing(get_conn()) as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute("SELECT * FROM invoices WHERE id=?", (invoice_id,)).fetchone()
+        if not row:
+            return False
+        invoice = _row_to_invoice(row)
+        data = invoice["data"]
+        if expected_search_id and data.get("approval_search_id") != expected_search_id:
+            return False
+        if context and invoice_context(invoice, context["reference_date"])["fingerprint"] != context["fingerprint"]:
+            return False
+        if any(Path(str(p)).is_file() for p in data.get("approval_pdf_paths") or []):
+            return False
+        raw = invoice["raw"]
+        for key, value in updates.items():
+            if not key.startswith("approval_"):
+                raise ValueError("Only approval metadata may be updated")
+            raw[key] = data[key] = value
+        raw["data"] = data
+        conn.execute("UPDATE invoices SET json_data=? WHERE id=?", (json.dumps(raw, ensure_ascii=False), invoice_id))
+        conn.commit()
+    return True
 
 
 def update_invoice_json(invoice_id: int, updates: dict[str, Any], *, message: str = "") -> dict[str, Any] | None:

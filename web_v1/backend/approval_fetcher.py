@@ -6,14 +6,27 @@ import re
 import subprocess
 import sys
 import tempfile
+from datetime import date
 from pathlib import Path
 from typing import Any, Callable
 
 from .erp_runner import _load_legacy_module
 from .purchase_analysis import purchase_approval_dir
+from .config import PROJECT_ROOT, settings
+from .approval_matching import invoice_context, validate_context
 
 
 Progress = Callable[[str], None]
+
+
+class OrderSearchMiss(RuntimeError):
+    """Only a genuine order lookup miss permits the amount fallback."""
+
+
+class ApprovalLookupResult(RuntimeError):
+    def __init__(self, result: dict):
+        super().__init__(result.get("reason") or "품의 확인이 필요합니다.")
+        self.result = result
 
 
 def _approval_failure_message(lines: list[str], order_number: str = "") -> str:
@@ -61,7 +74,7 @@ def _check_playwright_runtime() -> None:
         )
 
 
-def fetch_approval_documents(invoice_id: int, quote_path: str, progress: Progress | None = None) -> dict[str, Any]:
+def _fetch_order_documents(invoice_id: int, quote_path: str, progress: Progress | None = None) -> dict[str, Any]:
     quote = Path(str(quote_path or ""))
     if not quote.exists():
         raise RuntimeError("품의결재본 자동 확보를 위한 견적서 파일을 찾지 못했습니다.")
@@ -142,6 +155,8 @@ def fetch_approval_documents(invoice_id: int, quote_path: str, progress: Progres
 
         rc = proc.wait(timeout=5)
         if rc != 0:
+            if any(token in "\n".join(output_tail) for token in ("견적서에서 주문번호를 찾지 못했습니다", "결재완료 품의 문서가 없습니다")):
+                raise OrderSearchMiss(_approval_failure_message(output_tail, order_number))
             raise RuntimeError(_approval_failure_message(output_tail, order_number))
 
         payload: dict[str, Any] = {}
@@ -166,3 +181,53 @@ def fetch_approval_documents(invoice_id: int, quote_path: str, progress: Progres
                     Path(temp_path).unlink()
             except Exception:
                 pass
+
+
+def fetch_amount_documents(context: dict, *, selected_doc_id: str = "", preview: bool = False) -> dict:
+    validate_context(context)
+    accounts = [v.strip().lower() for v in settings.approval_drafter_accounts.split(",") if v.strip()]
+    if not accounts:
+        raise RuntimeError("금액 보조 검색의 전산팀 기안자 계정 목록이 비어 있습니다.")
+    legacy = _load_legacy_module()
+    with tempfile.TemporaryDirectory(prefix="approval_amount_") as temp:
+        folder = Path(temp)
+        result_path = folder / "result.json"
+        cfg = {"context": context, "accounts": accounts,
+               "username": str(getattr(legacy, "APPROVAL_DEFAULT_USER", "")),
+               "password": str(getattr(legacy, "APPROVAL_DEFAULT_PASSWORD", "")),
+               "output_dir": str(purchase_approval_dir(context["invoice_id"])),
+               "result_path": str(result_path), "selected_doc_id": selected_doc_id, "preview": preview}
+        cfg_path = folder / "config.json"
+        cfg_path.write_text(json.dumps(cfg, ensure_ascii=False), encoding="utf-8")
+        try:
+            proc = subprocess.run([sys.executable, "-X", "utf8", "-m", "web_v1.backend.approval_browser", str(cfg_path)],
+                cwd=str(PROJECT_ROOT), stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                stdin=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace", timeout=240,
+                creationflags=0x08000000 if os.name == "nt" else 0)
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("금액 보조 검색 시간이 초과됐습니다. 잠시 후 품의 다시 찾기를 눌러 주세요.") from None
+        if proc.returncode or not result_path.exists():
+            raise RuntimeError("금액 보조 검색 프로그램을 실행하지 못했습니다. 관리자에게 조회 프로그램 확인을 요청해 주세요.")
+        result = json.loads(result_path.read_text(encoding="utf-8"))
+    result["context"] = context
+    if result.get("status") != "matched":
+        raise ApprovalLookupResult(result)
+    if preview:
+        return result
+    paths = [str(p) for p in result.get("saved", []) if Path(p).is_file() and Path(p).stat().st_size > 100]
+    if not paths:
+        raise RuntimeError("검증된 품의 PDF가 저장되지 않았습니다. 품의 다시 찾기를 눌러 주세요.")
+    return {"approval_pdf_paths": paths, "approval_order_number": context["order_number"],
+            "approval_match": {"mode": "body_amount", "reference_date": context["reference_date"],
+                "fingerprint": context["fingerprint"], "selected": result["selected"], "manual": bool(selected_doc_id)}}
+
+
+def fetch_approval_documents(invoice_id: int, quote_path: str, progress: Progress | None = None) -> dict[str, Any]:
+    from .invoice_db import get_invoice
+    context = invoice_context(get_invoice(invoice_id), date.today().isoformat())
+    try:
+        return _fetch_order_documents(invoice_id, quote_path, progress)
+    except OrderSearchMiss:
+        if progress:
+            progress("주문번호 검색 결과가 없어 본문 금액·최근 7일 결재일·전산팀 계정으로 품의를 찾습니다.")
+        return fetch_amount_documents(context)

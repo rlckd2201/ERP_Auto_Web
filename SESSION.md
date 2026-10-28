@@ -1,5 +1,15 @@
 # Session
 
+## 2026-10-28 10:42 approval amount fallback deployed
+
+- User authorized backup, implementation and testing, and explicitly restricted fallback drafters to the current six: arci(노양래),reum0009(구름),rlckd9646(김기창),kimsanul(김산울),tuy1120(송명학),hah4627(현시훈). Primary agent implemented and reviewed alone.
+- Deployed order-first approval lookup; only actual missing-order/no-completed-order-match falls back to body amount. Search uses comma/plain VAT-inclusive total and actual completed-date filter, today minus7days through today. Company/site derive from buyer business number. Body total/site/vendor and profile account corroborate a unique candidate; uncertain/multiple candidates require explicit centered-modal selection. Same-name outsiders, wrong totals/site/order, incomplete/stale documents cannot be chosen. Account policy is APPROVAL_DRAFTER_ACCOUNTS.
+- Ordinary users now have 품의 다시 찾기 and candidate selection. Both use the existing verified accounting browser session and existing requestJson transport. A chosen document is searched/revalidated again. Atomic fingerprint/search-id merge rejects changed amount/site/quote, stale choice, concurrent search, or manually attached approval. Approval metadata updates preserve ERP status,job id,last_error; no ERP job or automatic printing is created.
+- Full pre-change backup C:/ERP_DB/deploy_backups/approval_amount_20261028_102351 (program.zip155files,SQLite snapshot,hash manifest); second deployment backup C:/ERP_DB/deploy_backups/approval_amount_deploy_20261028_103950. Twelve reviewed files deployed; pinned backend19680->15704. Production app.js unchanged SHA1e19c81afbd800aa3106f1643cef7f5ba0fe600ce4c7571096288987e41c3e36.35/shared relay/auth untouched.
+- Verification:19 new matching/auth/atomic-DB tests +10 isolated Chromium feedback tests +57 routing/department/optional-output regressions +13 HTTP guard tests =99 passed. Actual groupware277 resolved uniquely to180287/기안2610-0000877,김산울,일강1공장,413120,approved2026-10-22,bodyorder28929687. Staging full order-miss->fallback->PDF->association passed using copied DB and staging output; two-page PDF contains expected document number,site,amount,order,drafter/approver. Operational277 remains unchanged; no reprint/re-entry.
+-10:41 live native8081/public3010 versions200,all12hashesmatch;243/Kim/Hyeon/Songreadytrue on bundlea3d4081327ac93a29ab88a5e1f234e62ccc9e797126ddc4ad0d02ecac7efaf1e; all three named callers route243. Graphify updated1917nodes5411edges. Local deletions/unrelated dirty source retained.
+- Next exact start: authenticated portal UI check after user logs into the opened Chrome tab. Refresh redirected to portal Sign In due to expired session; async login request pending. Do not bypass portal auth. Then observe the next genuine purchase, without replaying completed277/278.
+
 ## 2026-10-28 09:29 purchase validation and approval feedback
 
 - Implemented the user's department omission / approval failure feedback request under existing immediate-fix/deploy authorization. Primary agent worked alone; no subagents. Existing all-user243 execution and requester-selected printing remain.
