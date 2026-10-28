@@ -1,5 +1,15 @@
 # TODO
 
+## 2026-10-28 department / approval feedback rollout
+
+- [x] Block missing required asset departments before purchase dispatch; centered modal, row/invoice hints, return focus, batch validation.
+- [x] Show approval failure reasons to ordinary users; attachment `(order number)` / completion guidance, asynchronous updates, no repeated modal on each poll.
+- [x] Preserve optional approval output, saved-document reuse,243 routing and requester printer/author.
+- [x] Backup/deploy/restart pinned backend; verify live hashes, health and all four Agents ready with current bundle.
+- [x]57 Python +7 browser +13 existing HTTP guard tests; Graphify refresh.
+- [x] After user login, verified authenticated portal delivery and live ordinary-user centered failure dialog/banner on existing236; cleared selection and restored20rows. No business job submitted.
+- [ ] Observe the next genuine purchase. Do not replay completed277/278 just to test validation.
+
 ## 2026-10-28 all-user243 rollout
 
 - [x] Enable all named/login users including future accounts for shared purchase execution; preserve author/printer and no-fallback behavior.

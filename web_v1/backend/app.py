@@ -36,7 +36,7 @@ from .purchase_execution import purchase_routing_payload, resolve_purchase_execu
 from .output_set import build_output_set_status, generate_expense_report_pdf
 from .regular_due_monitor import regular_due_history, regular_due_status, send_regular_due_report, send_regular_due_vendor_alert_sample, start_regular_due_scheduler
 from .erp_queue import queue_dir, write_expense_report_queue
-from .erp_runner import build_regular_erp_payload, requires_erp_save_confirmation, _site_from_biz_no, _site_from_known_text
+from .erp_runner import build_regular_erp_payload, requires_erp_save_confirmation, purchase_department_issues, _site_from_biz_no, _site_from_known_text
 from .purchase_analysis import (
     ACCOUNT_CHOICES,
     _extract_amounts_from_tax,
@@ -2552,6 +2552,21 @@ def create_purchase_mail_collect_job() -> JobResponse:
     return job.to_response()
 
 
+def _require_purchase_departments(invoice_ids: list[int]) -> None:
+    issues = []
+    for invoice_id in invoice_ids:
+        invoice = get_invoice(int(invoice_id))
+        if not invoice:
+            raise HTTPException(status_code=404, detail=f"계산서를 찾을 수 없습니다: #{invoice_id}")
+        issues.extend(f"#{invoice_id} · {item}" for item in purchase_department_issues(invoice))
+    if issues:
+        detail = "부서 입력 필요\n" + "\n".join(issues[:4])
+        if len(issues) > 4:
+            detail += f"\n외 {len(issues) - 4}개 품목"
+        detail += "\n해당 건을 선택해 품목별 부서를 입력한 뒤 다시 실행해 주세요. 작업은 등록되지 않았습니다."
+        raise HTTPException(status_code=422, detail=detail)
+
+
 @app.post("/api/jobs/purchase-one-click", response_model=JobResponse, status_code=202)
 def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> JobResponse:
     if not body.invoice_ids:
@@ -2590,6 +2605,7 @@ def create_purchase_one_click_job(body: InvoiceIdsRequest, request: Request) -> 
             add_invoice_log(invoice_id, "기존 문서 세트가 모두 준비되어 원클릭 ERP/현금결의서 생성 단계를 건너뜁니다.")
         else:
             erp_invoice_ids.append(invoice_id)
+    _require_purchase_departments(erp_invoice_ids)
     if ready_output_ids and not erp_invoice_ids:
         job = job_store.create(
             JobCreateRequest(
@@ -2756,6 +2772,7 @@ def create_purchase_erp_input_job(body: InvoiceIdsRequest, request: Request) -> 
         raise HTTPException(status_code=400, detail="ERP 입력할 구매 건을 선택해야 합니다.")
     setup, executor = _purchase_execution_setup(request)
     processor = _request_processor_name(request, body.processor, setup)
+    _require_purchase_departments(body.invoice_ids)
     job = job_store.create(
         JobCreateRequest(
             job_type="purchase_erp_input",

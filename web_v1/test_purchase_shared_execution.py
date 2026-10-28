@@ -161,6 +161,7 @@ class PipelineTests(unittest.TestCase):
             _purchase_execution_setup=lambda _: (self.caller, self.executor),
             _request_processor_name=lambda *args: "Song actual author", client_ip=lambda _: "172.17.30.15",
             get_invoice=lambda _: self.invoice, requires_erp_save_confirmation=lambda _: False,
+            _require_purchase_departments=Mock(),
             _apply_purchase_analysis_payload=Mock(), _invoice_output_set_ready=Mock(return_value=False),
             _expense_report_exists=lambda _: True, add_invoice_log=Mock(), job_store=self.store,
             JobCreateRequest=lambda **kw: kw, worker=SimpleNamespace(submit=Mock())))

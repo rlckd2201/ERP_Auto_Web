@@ -1,5 +1,15 @@
 # Session
 
+## 2026-10-28 09:29 purchase validation and approval feedback
+
+- Implemented the user's department omission / approval failure feedback request under existing immediate-fix/deploy authorization. Primary agent worked alone; no subagents. Existing all-user243 execution and requester-selected printing remain.
+- Production105 now rejects missing purchase asset departments before creating one-click/direct-ERP jobs, including mixed batches. Single-item form blocks immediately with a centered dialog and focuses the missing department after dismissal. Existing completed document sets still print without re-entering ERP or requiring a new department.
+- New isolated purchase-feedback.js/css show ordinary users a centered approval failure dialog and persistent detail banner, including asynchronous poll results. Reasons distinguish missing quote order, no completed approval matching attachment filename, timeout and runtime failures. No-match guidance includes literal parentheses around order number and completion checks, without claiming a missing filename was proven. Approval remains optional for voucher/tax/expense output.
+- Backed up source plus SQLite at C:/ERP_DB/deploy_backups/purchase_validation_20261028_092655; deployed six files and restarted only pinned native backend (newPID19680). Existing main app.js SHA1e19c81afbd800aa3106f1643cef7f5ba0fe600ce4c7571096288987e41c3e36 unchanged.35/shared relay/auth untouched.
+-57 Python backend/routing/output tests,7 isolated Chromium UI tests,13 existing HTTP-guard tests passed. Modal screenshots visually checked under output/purchase_validation_20261028/qa. Graphify1843nodes5173edges124communities refreshed.
+-09:28:36-38 live105 shows243/Kim/Hyeon/Song fresh readytrue on bundlefa6e7fcd3e79776d375cc9fda7c6ba3125d70c612f4c1dc68caaa9bffb85c125; all three named callers resolve243. Native8081 andpublic3010 version endpoints200, all six deployed hashes match. No business job or reprint submitted.
+- User logged into the opened Chrome portal. Live ordinary-user mode: selected existing failed approval236; centered dialog appeared with actual stored PDF-not-found reason and optional-output notice. CSS visibly centered; dismiss leaves the reason banner accessible. Restored20rows and cleared selection. No processing/print buttons used. Next exact start: observe the next genuine purchase with missing department or a new approval-search failure; do not replay completed invoices.
+
 ## 2026-10-28 08:41 all users use243 for purchase execution
 
 - User requests purchase processing on243 regardless of account, explicitly Song/Hyeon/Kim. Added full-token wildcard support and deployed PURCHASE_SHARED_USER_IDS=* (previously tuy1120,hah4627). Covers purchase one-click, direct ERP input and expense generation. Regular automatic target already243; manual regular route was outside this purchase change.

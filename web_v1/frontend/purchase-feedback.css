@@ -1,0 +1,20 @@
+#purchaseFeedbackModal {
+  position: fixed;
+  inset: 0;
+  margin: auto;
+  width: min(560px, calc(100vw - 40px));
+  max-height: calc(100dvh - 48px);
+  box-sizing: border-box;
+  padding: 28px;
+  border: 1px solid #d4deea;
+  border-radius: 14px;
+  color: #183344;
+  background: white;
+  box-shadow: 0 18px 70px #132d4a40;
+}
+#purchaseFeedbackModal::backdrop { background: #0b1e3270; }
+#purchaseFeedbackTitle { margin: 0 0 16px; font-size: 22px; }
+#purchaseFeedbackMessage { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.65; margin: 0 0 22px; }
+#purchaseFeedbackModal button { display: block; margin-left: auto; min-width: 96px; }
+#purchaseApprovalFeedback { padding: 18px; margin-bottom: 16px; border: 1px solid #eac88a; border-left: 4px solid #b87414; border-radius: 8px; background: #fff8e9; color: #653e0d; }
+#purchaseApprovalFeedback p { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.6; }

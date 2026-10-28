@@ -230,6 +230,27 @@ def _purchase_erp_ready(data: dict[str, Any], raw: dict[str, Any]) -> bool:
     return _purchase_analysis_ready(data, raw)
 
 
+def purchase_department_issues(invoice: dict[str, Any]) -> list[str]:
+    """Check the same asset accounts as ERP, before any job is dispatched."""
+    raw = dict(invoice.get("raw") or {})
+    data = {**raw, **(raw.get("data") or {}), **(invoice.get("data") or {})}
+    issues: list[str] = []
+    for index, item in enumerate(data.get("items") or [], 1):
+        if not isinstance(item, dict):
+            continue
+        account = _purchase_account(item.get("account"))
+        is_asset = bool(item["is_a"]) if "is_a" in item else account != "소모품비"
+        if not is_asset:
+            continue
+        # A deliberately empty form field must not be filled from a title or
+        # another item's context. Legacy records without a field retain inference.
+        dept = _clean_text(item.get("dept")) if "dept" in item else _purchase_dept_from_context(item, data)
+        if not dept or dept == "소모품":
+            name = _clean_text(item.get("name") or item.get("item_name"), f"{index}번째 품목")[:48]
+            issues.append(f"{index}행 {name} ({account})")
+    return issues
+
+
 def validate_purchase_invoice_for_erp(invoice: dict[str, Any]) -> None:
     if requires_erp_save_confirmation(invoice):
         raise RuntimeError(f"{ERP_SAVE_CONFIRM_REQUIRED} K-System에서 기존 전표 저장 여부를 확인한 뒤 대기 상태로 변경해야 합니다.")
@@ -246,6 +267,9 @@ def validate_purchase_invoice_for_erp(invoice: dict[str, Any]) -> None:
             "구매 ERP 입력은 세금계산서만으로 실행할 수 없습니다. "
             "견적서 첨부 및 분석 완료 데이터가 필요합니다."
         )
+    missing_departments = purchase_department_issues(invoice)
+    if missing_departments:
+        raise RuntimeError("부서 입력 필요: " + ", ".join(missing_departments) + ". 품목별 부서를 입력해 주세요.")
     if not _resolve_site(data, raw, invoice, pdf_path):
         raise RuntimeError(
             "구매 ERP 입력 회계단위를 특정하지 못했습니다. "

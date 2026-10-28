@@ -195,6 +195,7 @@ class PurchaseOutputTests(unittest.TestCase):
             "_one_click_output_payload": lambda *args: {"action": "print_individual",
                 "printer_key": "pyeongtaek", "printer_name": "Selected Samsung"},
             "requires_erp_save_confirmation": lambda _: False,
+            "_require_purchase_departments": Mock(),
             "JobCreateRequest": lambda **kwargs: SimpleNamespace(**kwargs),
             "job_store": SimpleNamespace(create=create), "worker": SimpleNamespace(submit=submit),
         })

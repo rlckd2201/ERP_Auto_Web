@@ -1,5 +1,15 @@
 # Debug
 
+## 2026-10-28 department and approval feedback verification
+
+- Baseline production app.py16f9819e... / erp_runner.py ee4e986a... / approval_fetcher.py7b18e810... matched before deployment. Before this change, department rejection occurred in payload build after dispatch and detailed approval error was admin-only.
+- Legacy helper extracts order from quote/PDF filename, checks electronic-approval attachment filename `(8 digits)` and filters completed approvals. Known failure string: `(12345678) 로 검색된 결재완료 품의 문서가 없습니다.` New error normalizer covers this and actual missing-order/timeout/runtime outcomes without a misleading definitive filename diagnosis.
+- Deployed app.py627d19d1...,erp_runner.pybe2fb044...,approval_fetcher.pyc0703bca...,feedbackJSfd41f5c1...,feedbackCSSe992eee7...,indexa827c3d8.... Native backend pinned restart16868->19680; original app.js remains1e19c81a.... BackupC:/ERP_DB/deploy_backups/purchase_validation_20261028_092655 includes original files, SQLite online snapshot and supervisor metadata. No processing/ERP-wait invoices at deployment.
+- Tests: py -3.11 -W ignore::DeprecationWarning -m unittest web_v1.test_purchase_feedback web_v1.test_purchase_shared_execution web_v1.test_purchase_output_optional_approval -q =>57 pass. Browser fixture: web_v1.test_purchase_feedback_browser =>7 pass, center position/focus/no dispatch/ordinary-user banner/poll recovery/escaped content/regular unaffected. Existing test_http_error_frontend.cjs against unchanged production snapshot =>13 pass.
+-09:28:36-38 all four relevant Agents have current/expected hashfa6e7fcd3e79776d375cc9fda7c6ba3125d70c612f4c1dc68caaa9bffb85c125 andreadytrue; live route resolution remains243 forKim/Hyeon/Song. Version endpoints200. Direct unauthenticated asset403 and portal asset401 are expected guard responses; do not count them as successful asset delivery or bypass them. Portal opens Sign In; user login requested for remaining live UI check.
+- After user login, Chrome portal displayed purchase page normally with new script reference /accounting-automation/assets/purchase-feedback.js?v=20261028_1. Ordinary-user mode236selection produced centered native dialog and visible reason banner after dismissal; screenshot visually confirmed styling.277currentlyhasnoapprovalstatus/error,278hasapprovaldone. Verified without data mutation, new job or reprint; reset20rowview and clearedselection.
+- Local frontend main/index/styles deletions predate this task and remain untouched. Deployment index based on production snapshot; commit index stages only the two new references againstHEAD, preserving unrelated dirty worktree changes. Generated backups/screenshots/stage folders not committed.
+
 ## 2026-10-28 all-user routing and overnight502
 
 - Production baseline purchase_execution.pySHA bf4d4a0643092edbba6afb422f0c049d90a783fe57c00b01f33259d8c23eee27 equaled local; deployedSHA758a00102ec0152f63bec0c1c767e162b8d4019c2bb2feec0de9d91f874687eb. .env changed only PURCHASE_SHARED_USER_IDS=tuy1120,hah4627 to*. Blank identity and unready/wrong shared target fixture cases still409.

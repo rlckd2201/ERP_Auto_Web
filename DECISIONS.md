@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-28 purchase feedback compatibility
+
+- Department validation runs in the browser before single purchase execution and server-side before any batch job is created. Explicit blank dept is not silently inferred from an unrelated title; legacy records without a dept field retain existing context inference. Consumables remain exempt; existing completed document output is exempt from new ERP validation.
+- Preserve the post-save duplicate-voucher guard before saving analysis. Use string HTTP422 details below600characters so existing portal response guard and error handling remain compatible.
+- Keep production app.js byte-identical because portal adapts that source. Add separate feedback JS/CSS and two index references. Observer delegates fetch unchanged and reads clones; no new API polling, auth headers or tokens. Targeted department alert handling replaces only those alerts with centered dialogs.
+- Historical277 has no saved approval_fetch_error/status, so do not invent a historical failure cause or edit its data to demonstrate the new UI. Verified the live dialog with actual failed record236. No completed approval found by attachment filename does not prove the filename omitted parentheses. State the actual search result and tell users to check `(order number)`, exact order and completed approval. Retain raw operational logs server-side; do not present tracebacks/credentials in user dialogs.
+- Missing approval never blocks otherwise available voucher/tax/expense printing. Ordinary users get an actionable banner and one dialog per selected invoice/failure occurrence; no repeated alarm on every poll.
+
 ## 2026-10-28 everyone can use the purchase shared executor
 
 - Interpret the current request in its purchase-processing context: production wildcard applies to purchase one-click/direct ERP/expense generation. It does not silently change regular manual processing; existing automatic regular243 routing remains.
