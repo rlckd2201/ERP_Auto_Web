@@ -1,5 +1,19 @@
 # Session
 
+## 2026-10-29 mail collection now starts approval lookup
+
+- User explicitly requested applying the diagnosed #279 fix. Primary implemented and verified alone. Successful new-purchase mail analysis now calls the existing guarded background lookup after saving analysis. Lookup startup exceptions are logged separately and do not turn saved analysis into a mail failure or stop the next invoice. Existing order-first/30-day fallback, candidate choice and PDF/in-flight guards remain unchanged.
+- Backed up 47 current backend/frontend/Agent program files plus SQLite before edits: C:/ERP_DB/deploy_backups/mail_approval_20261029_105653. Second source/SQLite/runtime backup: mail_approval_deploy_20261029_110125. Deployed worker.py only (975c13f3 -> cb595bbc); pinned native backend36736 ->21884.3010/3011 bridge17760 and19443 relay10140 unchanged.
+- Ten new flow regressions plus existing matching/atomic/routing/output coverage:88 passed locally and88 against the staged operating-server source. Original worker fails the new automatic-dispatch regression as expected. Graphify updated1956 nodes/5524 edges/121 communities. Artifacts: output/mail_approval_20261029/.
+- Native8081/public3010 both200; all47 baseline files compare unchanged except worker. #279 JSON/status/ERP job/processed timestamp unchanged and approval PDF still present. No live re-search, ERP, print or historical batch replay was submitted. At11:03:32,243/Kim/Hyeon/Song all ready with exact updated bundle; all three callers resolve243. Evidence is recorded in verification.json.
+- Next exact start: observe the next genuine newly collected purchase for analysis-saved -> approval-start -> done/review/error. Real new-mail end-to-end remains unobserved; isolated flow and production health are verified. Known currency-prefix total warning remains outside this fix. Existing portal tab showed only the identity note before deployment; no navigation or35/shared transport changes were made.
+
+## 2026-10-29 08:27 invoice 279 first approval attempt diagnosed
+
+- User asked why #279 was found only after pressing retry. Read-only live DB logs show mail receipt Oct28 14:34:44, quote order 28953656 attached14:35:35, automatic purchase analysis saved14:36:05, then no approval attempt until user rlckd9646 retry Oct29 08:23:55. That first search found completed document181314 by order number and saved its PDF08:24:16. Invoice remains waiting, with no ERP job/processed timestamp.
+- Production/local hashes match for worker, mail_collector, approval_service and approval_fetcher. Worker._run_purchase_mail_collect saves analysis but never calls the approval service; explicit purchase analysis does. Root cause is missing automatic invocation, not a failed historical search or a 30-day matching failure. No source/deployment/business mutation this diagnostic turn.
+- Next exact start: connect successful new-purchase mail analysis to existing guarded background approval lookup; test new purchase, regular exclusion, existing PDF/in-flight deduplication, missing quote and lookup failure isolation before deployment. Preserve #279's already attached PDF and do not replay ERP/printing.
+
 ## 2026-10-28 11:21 thirty-day approval search and explicit choice deployed
 
 - User explicitly expanded7days to30days and requested original-post links plus requester selection when multiple candidates exist. Primary implemented/reviewed alone. Shared APPROVAL_LOOKBACK_DAYS30 drives completed-date query, candidate prefilter, final validation, progress text and historical test adapter. Exact anchor-30days..anchor boundaries survive calendar month/leap-year changes; groupware month shortcut is normalized to explicit dates.

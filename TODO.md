@@ -1,5 +1,17 @@
 # TODO
 
+## 2026-10-29 mail-to-approval dispatch deployed
+
+- [x] Connect successful new-purchase mail analysis to existing shared approval lookup, after persistence; isolate optional startup failures.
+- [x] Verify existing PDF/in-flight guards, missing quotes, regular/duplicate exclusion, asynchronous failure/review, analysis-failure exclusion and next-record continuation;88 local/staged-server tests pass.
+- [x] Back up source/SQLite, deploy worker.py only, verify pinned backend health and unchanged #279 attachment/business state.
+- [ ] Observe next genuine collected purchase through approval completion/review; do not replay #279. Readiness details: output/mail_approval_20261029/verification.json.
+
+## 2026-10-29 invoice 279 automatic lookup omission
+
+- [x] Compare actual first attempt and retry logs against matching production source. #279 had no initial approval search; user retry found document181314/order28953656 in21seconds.
+- [x] Add existing guarded approval dispatch after successful mail-driven purchase analysis. Isolate optional lookup errors from successful analysis; retain current PDF/in-flight guards and regular exclusion. Back up and test before deploying; no #279 business replay.
+
 ## 2026-10-28 thirty-day search and requester choice
 
 - [x] User-approved30daywindow implemented inrealgroupwarequery,cheapfilter,finalvalidation and progress; preserve6drafters/entitychecks/order-firstpath.

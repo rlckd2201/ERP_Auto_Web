@@ -1,5 +1,16 @@
 # Decisions
 
+## 2026-10-29 mail dispatch integration boundary
+
+- Reuse start_approval_lookup through the existing worker wrapper only after purchase analysis has been saved. Do not pre-mark running in the new mail path: the shared service owns eligibility, deduplication and the running transition.
+- Approval remains optional. Startup failure is separately logged and must not decrement successful analysis or block subsequent records. Search failures/review stay in existing approval metadata, leaving ERP and printing state unchanged.
+- Apply to newly saved purchase records only; no periodic retry of all historical errors, completed PDFs or duplicate mails. Preserve current approved30-day matching and explicit candidate choice.
+
+## 2026-10-29 distinguish unattempted approval lookup from no match
+
+- No approval PDF does not prove a search failed. For #279, the complete log timeline plus matching active worker source establishes that automatic mail analysis omitted dispatch entirely. User retry is the first recorded search and succeeds through the unchanged order-number path.
+- Diagnose this omission separately from amount parsing, 30-day filtering or portal availability. This inquiry made no production edits or replay; any follow-up must reuse the shared approval service and preserve completed attachments and ERP/output state.
+
 ## 2026-10-28 thirty-day window supersedes seven-day production policy
 
 - Explicit user instruction supersedes prior7daypolicy: allowcompleteddate fromanchor-30days throughanchorinclusive;31daysold/futuredated excluded. Usefixeddaycount,notcalendarmonthshortcut. Historicalbenchmark usesidenticalsharedconstant; retainprior7daybaselineartifact.

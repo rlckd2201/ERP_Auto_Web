@@ -1,5 +1,18 @@
 # Debug
 
+## 2026-10-29 automatic mail approval regression and rollout
+
+- New isolated flow test executes production worker methods plus actual approval_service guards, with temporary quote/PDF files, in-memory records and held background callbacks. It verifies persisted analysis is visible to lookup, asynchronous completion/error/review, existing PDF preservation, both active-set/recent-running guards, missing quote logging, optional start failure isolation, regular/missing/duplicate exclusions and failed-analysis exclusion. Existing atomic SQLite tests cover real metadata writes. Original worker fails the new dispatch test; revised worker passes.
+-88 tests passed locally; first server staging run had85 passes/3 fixture errors because Agent source was omitted from staging. Added the existing Agent source to the isolated stage;88 then passed. No production behavior change was made for that test harness issue.
+- Deployment read-only guards found no active invoice/approval/Agent tasks. Native child was the Windows System32 conhost console helper, explicitly distinguished from active browser/worker subprocesses.47-file preimage checked; source/SQLite/runtime backed up again immediately before atomic worker replacement. Restart validated exact executable/command/PID/creation time and listener ownership.
+- Production worker SHA256 cb595bbc4802cc41083b883467cf7783a9561409c0703b6bc01933a4e62cb0c9; new bundle f3cdc666a878d475ed0a6675e0a6f7d72659adb8de62e18e4144513eba6ec129; native PID21884. Verified both version endpoints200, other source hashes unchanged and #279 row fingerprint/PDF preserved. At11:03:32 all four Agents were ready with the exact new bundle and the three caller routes remained243. See deployment/restart/verification JSON under output/mail_approval_20261029/.
+
+## 2026-10-29 invoice 279 timeline and source evidence
+
+- Live read-only invoice_logs ids36111..36114: Oct28 mail receipt14:34:44, quote auto-attach14:35:35 (28953656), dictionary update/analysis saved14:36:05. IDs36115..36129: Oct29 first approval start08:23:55, completed row found08:24:11, document181314 resolved08:24:12, PDF saved/done08:24:16. Title 전산 소모품 구매 건(일강1공장); total774740; requester rlckd9646. No earlier approval failure/start exists for279.
+- worker.py SHA256975c13f30f6de28712df57ee1d3847873e4e38e5d39e38c2f07eeda855007885 matches105. _run_purchase_mail_collect lines150..186 saves analysis and increments count without dispatch; _run_purchase_analyze line277 invokes _start_approval_fetch_background, which calls start_approval_lookup. purchase_analysis only preserves existing approval paths. mail_collector/approval_service/approval_fetcher also hash-match production.
+- Graphify query used for flow navigation; source is authoritative. No code changes, tests, graph rebuild or deployment were needed for this read-only diagnosis. Preserve current279 approval_fetch_status=done, waiting ERP status and attached PDF.
+
 ## 2026-10-28 thirty-day and selection verification
 
 - ObservedDaoudetailsearchterms:all,today,week,month,year,specify;datefieldsreadonly. ProductionselectscompletedAt/monththen normalizesobservedquerytoexactfromDate(anchor-30)00:00:00.000+09:00/toDate(anchor)23:59:59.000+09:00/searchTermspecify;waitsAPIresultmetadata+DOMcountsbeforeenumerating. Sameconstantusedbyvalidator/backtest. Boundaryfixtures9/17/30daysaccepted,31days/futureexcluded;March/nonleap/leap/Januaryrolloververified.

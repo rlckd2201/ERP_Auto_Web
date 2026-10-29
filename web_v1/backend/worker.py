@@ -172,6 +172,11 @@ class JobWorker:
                     message="메일 수집 후 신규 구매건 자동 분석 결과가 저장되었습니다.",
                 )
                 auto_analyzed_count += 1
+                # Approval is optional and must not turn a saved analysis into a failed collection.
+                try:
+                    self._start_approval_fetch_background(invoice_id, str(analysis.get("quote_path") or ""))
+                except Exception as exc:
+                    add_invoice_log(invoice_id, f"메일 수집 후 품의 검색 시작 실패: {exc}", level="error", job_id=job.id)
             except Exception as exc:
                 failed += 1
                 errors = result.setdefault("errors", [])
