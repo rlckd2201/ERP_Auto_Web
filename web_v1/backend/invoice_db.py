@@ -529,7 +529,7 @@ def insert_manual_invoice(subject: str, result: dict[str, Any], *, log_message: 
     return invoice_id
 
 
-def list_invoices(mode: str = "", limit: int = 50) -> list[dict[str, Any]]:
+def list_invoices(mode: str = "", limit: int = 50, *, include_data: bool = False) -> list[dict[str, Any]]:
     init_db()
     mode = (mode or "").strip().lower()
     with get_conn() as conn:
@@ -553,8 +553,9 @@ def list_invoices(mode: str = "", limit: int = 50) -> list[dict[str, Any]]:
             continue
         if mode == "regular" and invoice_type != "regular":
             continue
-        invoice.pop("raw", None)
-        invoice.pop("data", None)
+        if not include_data:
+            invoice.pop("raw", None)
+            invoice.pop("data", None)
         invoices.append(invoice)
     return invoices
 

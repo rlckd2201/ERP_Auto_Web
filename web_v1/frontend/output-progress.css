@@ -1,0 +1,27 @@
+.output-progress-compact { margin-top:7px; max-width:440px; white-space:normal; font-size:12px; }
+.output-progress-chips { display:flex; flex-wrap:wrap; gap:4px; margin-bottom:4px; }
+.output-progress-chip { padding:3px 6px; border-radius:5px; background:#eef2f6; color:#42566c; font-weight:500; }
+.output-progress-sent { color:#086653; }
+.output-progress-chip.output-progress-sent { background:#e4f5ec; }
+.output-progress-failed,.output-progress-not_sent { color:#a52724; }
+.output-progress-chip.output-progress-failed,.output-progress-chip.output-progress-not_sent { background:#fdeae7; }
+.output-progress-sending,.output-progress-changed,.output-progress-unknown { color:#8a5900; }
+.output-progress-compact small,.output-progress-table small { display:block; font-size:12px; line-height:1.5; color:#60748a; overflow-wrap:anywhere; }
+.output-progress-link { border:0; padding:3px 0; background:transparent; color:#08796b; cursor:pointer; font:inherit; text-decoration:underline; }
+.output-progress-panel { border:1px solid #d4dfe9; border-radius:10px; background:#fff; padding:18px; margin:0 0 18px; color:#17334e; }
+.output-progress-panel h3 { margin:0 0 8px; }
+.output-progress-table { width:100%; border-collapse:collapse; font-size:13px; text-align:left; }
+.output-progress-table th { background:#f3f6fa; color:#415b74; font-weight:600; }
+.output-progress-table th,.output-progress-table td { padding:10px 12px; border-bottom:1px solid #e2e9f0; white-space:normal; vertical-align:top; }
+.output-progress-scroll { overflow-x:auto; }
+.output-progress-notice { color:#61758b; font-size:12px; line-height:1.6; }
+.output-progress-dialog { position:fixed; inset:0; margin:auto; width:min(850px,calc(100vw - 40px)); max-height:85vh; overflow:auto; box-sizing:border-box; border:1px solid #d4dfe9; border-radius:14px; padding:26px; color:#17334e; background:white; box-shadow:0 20px 70px #142d4e33; }
+.output-progress-dialog::backdrop { background:#122b4566; }
+.output-progress-dialog h2 { margin:0 0 12px; font-size:21px; }
+.output-progress-dialog p { line-height:1.6; }
+.output-progress-actions { display:flex; justify-content:flex-end; gap:8px; margin-top:18px; flex-wrap:wrap; }
+.output-progress-printer { display:flex; align-items:center; gap:12px; font-weight:600; }
+.output-progress-printer select { max-width:100%; padding:9px; border:1px solid #b9cadb; border-radius:6px; background:white; color:#17334e; }
+.output-progress-retry-list { border-left:3px solid #08796b; padding:10px 12px; background:#eef8f5; font-weight:600; }
+.output-progress-error { color:#a52724; }
+@media(max-width:600px) { .output-progress-dialog { padding:16px; } .output-progress-table { min-width:540px; } .output-progress-printer { align-items:stretch; flex-direction:column; } }

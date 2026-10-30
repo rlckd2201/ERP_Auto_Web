@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-10-30 convenience items 1 and 2
+
+- [x] Back up running program/SQLite; display document PDF and print evidence, printer/time, and explicit failed-only retry with server revalidation.
+- [x] Recognize won-prefixed labeled totals while preserving manual-review and matching guards;107 staged backend +16 browser tests passed.
+- [x] Verify actual authenticated portal purchase list and #279 read-only status modal; preserve business records and main transport source.
+- [ ] Re-run the12case historical benchmark once dedicated groupware login works. Current run stopped at login; no new percentage may be claimed.
+- [ ] Observe Song Agent reconnect/update (last_seen12:00 before rollout).243/Kim/Hyeon verified ready; do not force-reset an absent user PC.
+- [ ] Unapproved follow-ups only: bounded approval retries and actionable exception inbox. Do not implement until selected.
+
 ## 2026-10-29 mail-to-approval dispatch deployed
 
 - [x] Connect successful new-purchase mail analysis to existing shared approval lookup, after persistence; isolate optional startup failures.

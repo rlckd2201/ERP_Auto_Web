@@ -4,6 +4,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+import unicodedata
 from pathlib import Path
 from datetime import date, timedelta
 from typing import Any
@@ -68,7 +69,12 @@ def amount_variants(total: int) -> list[str]:
 
 def stated_totals(body: str) -> set[int]:
     # Require a total/amount label, not an arbitrary unit price or account number.
-    pattern = r"(?:총\s*(?:구매\s*)?금액|합\s*계|총\s*계|(?:^|\n)\s*(?:\d+[.)]\s*)?금\s*액|(?:^|\n)\s*계(?=\s*\n))\s*[:：]?\s*([0-9][0-9,]*)\s*(?:원|\b)"
+    body = unicodedata.normalize("NFKC", body)
+    label = r"(?:총\s*(?:구매\s*)?금액|합\s*계|총\s*계|(?:^|\n)\s*(?:\d+[.)]\s*)?금\s*액|(?:^|\n)\s*계(?=\s*\n))"
+    # Some groupware documents use a backslash rendered as the Windows won sign.
+    # Require valid thousands groups and a complete whole-KRW token, never a prefix.
+    amount = r"([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?![0-9,.])"
+    pattern = label + r"\s*[:：]?\s*(?:[₩\\]\s*)?" + amount + r"\s*(?:원(?![가-힣])|(?=$|[\s)\]·]))"
     return {int(m.group(1).replace(",", "")) for m in re.finditer(pattern, body, re.M)}
 
 

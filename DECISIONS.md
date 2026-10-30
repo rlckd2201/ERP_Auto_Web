@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-10-30 output evidence and retry boundary
+
+- Calculate PDF availability using full invoice metadata before stripping private/detail fields from list responses. Derive print evidence from persistent output_print tasks, match semantic documents by standardized filename rather than selection-relative file_index, and preserve earlier successful documents when a later retry contains only some files.
+- Separate PDF ready, verified Windows spooler submission, unverified submission, unknown legacy result, and changed-after-print files. Manual invoice completion is not proof of ERP save. Never call a queue acknowledgement proof of physical paper output.
+- Failed-only retry requires a verified accounting identity, one invoice, physical printer, a fresh server state token, no active work, and matching displayed/current printer mapping. Recompute failed keys server-side under a retry lock and reuse output-set existing_only; successful/unknown/missing-PDF documents are not silently replayed. Existing-only requests cannot trigger Zoom expense generation.
+- Normalize NFKC and allow won/backslash currency prefixes only after labeled totals. Require a whole integer token and valid comma grouping. Unit-price/account numbers, malformed/negative/decimal values do not become totals. Conflicting totals and multiple candidates still require manual choice; six drafters, company/site and30day guards remain unchanged.
+- Keep main app.js byte-identical because portal transport adapts its source; new status display observes existing fetch responses in an isolated asset without issuing background requests or altering authentication. No portal35/shared service changes.
+
 ## 2026-10-29 mail dispatch integration boundary
 
 - Reuse start_approval_lookup through the existing worker wrapper only after purchase analysis has been saved. Do not pre-mark running in the new mail path: the shared service owns eligibility, deduplication and the running transition.

@@ -34,6 +34,7 @@ from .models import ApprovalChoiceRequest, InvoiceIdsRequest, InvoiceStatusUpdat
 from .notifications import notify_regular_auto_result
 from .purchase_execution import purchase_routing_payload, resolve_purchase_execution
 from .output_set import build_output_set_status, generate_expense_report_pdf
+from .output_progress import add_processing_status, retry_lock, validate_retry
 from .regular_due_monitor import regular_due_history, regular_due_status, send_regular_due_report, send_regular_due_vendor_alert_sample, start_regular_due_scheduler
 from .erp_queue import queue_dir, write_expense_report_queue
 from .erp_runner import build_regular_erp_payload, requires_erp_save_confirmation, purchase_department_issues, _site_from_biz_no, _site_from_known_text
@@ -2772,8 +2773,32 @@ def create_regular_erp_input_job(body: InvoiceIdsRequest, request: Request) -> J
     return job.to_response()
 
 
+def _retry_failed_output(body: OutputSetRequest, request: Request) -> JobResponse:
+    identity = _browser_identity(request)
+    if not identity or not identity.get("user_id"):
+        raise HTTPException(401, detail="회계 계정으로 로그인한 뒤 다시 출력해 주세요.")
+    if len(body.invoice_ids) != 1 or body.action != "print_individual" or body.printer_key == "pdf":
+        raise HTTPException(400, detail="실패 문서 재출력은 한 건씩 실제 프린터로 요청해 주세요.")
+    if not body.expected_printer_name.strip():
+        raise HTTPException(400, detail="재출력할 프린터 이름을 확인해 주세요.")
+    with retry_lock:
+        invoice = get_invoice(body.invoice_ids[0])
+        if not invoice:
+            raise HTTPException(404, detail="Invoice not found")
+        try:
+            keys = validate_retry(invoice, body.retry_token, pending_jobs=job_store.list_recent(limit=None))
+        except ValueError as exc:
+            raise HTTPException(409, detail=str(exc)) from None
+        # Derive documents on the server; never trust a caller's retry selection.
+        return create_output_set_job(body.model_copy(update={
+            "retry_token": "", "selected_doc_keys": keys, "existing_only": True,
+        }), request)
+
+
 @app.post("/api/jobs/output-set", response_model=JobResponse, status_code=202)
 def create_output_set_job(body: OutputSetRequest, request: Request) -> JobResponse:
+    if getattr(body, "retry_token", ""):
+        return _retry_failed_output(body, request)
     if not body.invoice_ids:
         raise HTTPException(status_code=400, detail="출력 세트를 만들 건을 선택해야 합니다.")
     setup = require_setup_ready(request) if body.action == "print_individual" else {}
@@ -2790,6 +2815,9 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
         printer_name = str(mapping.get(body.printer_key) or "").strip()
         if not printer_name:
             raise HTTPException(status_code=400, detail="선택한 출력 대상 프린터 매핑이 없습니다.")
+        expected = getattr(body, "expected_printer_name", "").strip()
+        if expected and printer_name != expected:
+            raise HTTPException(409, detail="프린터 설정이 변경됐습니다. 출력 대상을 다시 확인해 주세요.")
         normalized_printer_name = printer_name.casefold()
         if "microsoft print to pdf" in normalized_printer_name:
             raise HTTPException(
@@ -2802,6 +2830,8 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
         "user_id": setup.get("user_id") or "",
     }
     for raw_id in body.invoice_ids:
+        if body.existing_only:
+            break
         invoice = get_invoice(int(raw_id))
         if not invoice or not _invoice_is_zoom_billing(invoice):
             continue
@@ -2936,7 +2966,12 @@ def api_admin_db_table(
 
 @app.get("/api/invoices")
 def api_list_invoices(mode: str = Query(default="", max_length=30), limit: int = Query(default=50, ge=1, le=200)) -> list[dict[str, Any]]:
-    return list_invoices(mode=mode, limit=limit)
+    invoices = list_invoices(mode=mode, limit=limit, include_data=True)
+    add_processing_status(invoices, pending_jobs=job_store.list_recent(limit=None))
+    for invoice in invoices:
+        invoice.pop("raw", None)
+        invoice.pop("data", None)
+    return invoices
 
 
 def _save_pdf_upload(upload: UploadFile, target_dir: Path, fallback_filename: str, *, fixed_filename: str = "") -> tuple[Path, str]:
@@ -3052,7 +3087,7 @@ def api_get_invoice(invoice_id: int) -> dict[str, Any]:
     invoice = get_invoice(invoice_id)
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return invoice
+    return add_processing_status([invoice], pending_jobs=job_store.list_recent(limit=None))[0]
 
 
 def _start_requested_approval(request: Request, invoice_id: int, *, doc_id: str = "", search_id: str = "") -> dict:

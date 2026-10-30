@@ -33,6 +33,8 @@ class OutputSetRequest(BaseModel):
     processor: str = Field(default="WEB v1.0", max_length=80)
     existing_only: bool = False
     selected_doc_keys: list[str] = Field(default_factory=list)
+    retry_token: str = Field(default="", max_length=64, pattern=r"^(?:[a-f0-9]{64})?$")
+    expected_printer_name: str = Field(default="", max_length=260)
 
 
 class PurchaseAnalysisUpdate(BaseModel):

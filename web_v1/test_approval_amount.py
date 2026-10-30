@@ -48,6 +48,22 @@ class MatchingTests(unittest.TestCase):
         for text in ("단가 413,120원", "계좌번호 413120", "총 금액 1413120원"):
             self.assertNotIn(413120, matching.stated_totals(text))
 
+    def test_won_prefixes_fullwidth_and_nbsp_totals(self):
+        for body in ("5. 금액 : \\413,120원 (VAT 포함)", "총 금액: ₩413,120", "합계 ￦４１３，１２０원", "합계 : ₩\u00a0413,120 원"):
+            with self.subTest(body=body):
+                self.assertEqual(matching.stated_totals(body), {413120})
+                self.assertEqual(self.decide([candidate(body=body+"\n일강1공장 컴퓨존")])["status"], "matched")
+
+    def test_currency_never_turns_unit_prices_malformed_or_partial_numbers_into_totals(self):
+        for body in ("단가 ₩413,120", "계좌번호 \\413120", "합계 ₩413,120.50", "합계 ₩413,120,50", "합계 -413120", "합계 ₩-413120", "합계 ₩413120ABC", "합계 ₩41,3120"):
+            with self.subTest(body=body): self.assertEqual(matching.stated_totals(body), set())
+
+    def test_currency_conflicting_totals_and_duplicate_candidates_still_require_choice(self):
+        row=candidate(body="총 금액 ₩413,120원\n합계 \\900,000원\n일강1공장 컴퓨존")
+        self.assertEqual(self.decide([row])["status"],"review")
+        row["body"]="합계 ₩413,120원\n일강1공장 컴퓨존"
+        self.assertEqual(self.decide([row,{**row,"doc_id":"second"}])["status"],"review")
+
     def test_unknown_total_requires_review(self):
         self.assertEqual(self.decide([candidate(body="단가 413120원 · 일강1공장 · 컴퓨존")])["status"], "review")
 
