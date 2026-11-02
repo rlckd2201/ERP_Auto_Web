@@ -1,5 +1,16 @@
 # TODO
 
+## 2026-11-02 Dongyang mail recovery
+
+- [x] Confirm four Oct31 plus one Nov2 failures; back up running source, SQLite and mail state.
+- [x] Install official signed WehagoPrint and WehagoAgent on105; confirm local8233 and native preview.
+- [x] Diagnose connected-session Save-button deadlock with Python stack dump; bound wait and prevent duplicate save requests.
+- [x] Identify genuine native PDFs saved under Documents/TX2A default names; add exact management-number/freshness/native-content recovery, preserving originals and existing destinations.
+- [x]17local/server tests and staged real-PDF recovery/visual validation; deploy only handler, restart pinned backend13628, preserve168invoice rows and other listeners. Graphify refreshed.
+- [x] Final collection restored284..288; native IDs/buyer numbers/Oct31/275000 verified, zero duplicates, failures cleared. Portal list verified.243claimed284.
+- [ ] Observe existing243job284 and sequential285..288 ERP/output completion; do not replay to test.
+- [x] Record recovery outcome and remaining ERP/output observation; user Downloads preserved.
+
 ## 2026-10-30 convenience items 1 and 2
 
 - [x] Back up running program/SQLite; display document PDF and print evidence, printer/time, and explicit failed-only retry with server revalidation.

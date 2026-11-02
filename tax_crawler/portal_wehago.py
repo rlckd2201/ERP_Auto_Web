@@ -1461,6 +1461,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
         final_path.parent.mkdir(parents=True, exist_ok=True)
         deadline = time.time() + timeout
         last_exception = None
+        save_requested = False
 
         while time.time() < deadline:
             direct = self.wait_new_file(".pdf", before_files, timeout=1)
@@ -1476,7 +1477,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
 
             try:
                 wrap = self._find_save_as_dialog(timeout=0.5)
-                if wrap:
+                if wrap and not save_requested:
                     success = self._set_save_as_filename_text(wrap, str(final_path))
                     if not success:
                         self._cleanup_saveas_new_folders(final_path, started_at)
@@ -1489,6 +1490,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                         self._cleanup_saveas_new_folders(final_path, started_at)
                         self._set_pdf_export_error(final_path, "PDF 저장창의 저장 버튼 클릭에 실패했습니다")
                         return None
+                    save_requested = True
                     time.sleep(0.5)
 
                     self._confirm_overwrite_dialog()
@@ -1665,7 +1667,68 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                         continue
         except Exception:
             pass
+        return self._recover_default_native_pdf(final_path, started_at)
+
+    def _recover_default_native_pdf(self, final_path: Path, started_at: float):
+        """Recover a fresh default-name export only for this exact invoice."""
+        match = re.search(r"__WEHAGO_(TX[A-Za-z0-9_-]+)$", final_path.stem, re.IGNORECASE)
+        if not match or final_path.exists():
+            return None
+        expected_id = match.group(1).upper()
+        roots = (final_path.parent, Path.home() / "Documents",
+                 Path.home() / "Downloads", Path.home() / "Desktop")
+        seen = set()
+        for root in roots:
+            try:
+                candidates = list(root.glob("TX2A*.pdf"))
+            except OSError:
+                continue
+            for source in candidates:
+                try:
+                    resolved = source.resolve()
+                    if resolved in seen:
+                        continue
+                    seen.add(resolved)
+                    if not re.fullmatch(r"TX2A(?:_\d+)?\.pdf", source.name, re.IGNORECASE):
+                        continue
+                    if source.stat().st_mtime < started_at - 10:
+                        continue
+                    if not self._is_stable(source, interval=0.5):
+                        continue
+                    if self._native_pdf_document_id(source) != expected_id:
+                        continue
+                    final_path.parent.mkdir(parents=True, exist_ok=True)
+                    # Preserve the vendor export and never replace an existing
+                    # accounting file, even if another worker creates it now.
+                    with source.open("rb") as incoming, final_path.open("xb") as target:
+                        try:
+                            shutil.copyfileobj(incoming, target)
+                        except Exception:
+                            target.close()
+                            final_path.unlink(missing_ok=True)
+                            raise
+                    self._write_saveas_debug(final_path, f"recovered_default_native_pdf={source.name} document_id={expected_id}")
+                    return final_path
+                except Exception:
+                    continue
         return None
+
+    @classmethod
+    def _native_pdf_document_id(cls, path: Path) -> str:
+        try:
+            import pdfplumber
+
+            with pdfplumber.open(str(path)) as pdf:
+                text = "\n".join(page.extract_text() or "" for page in pdf.pages)
+                valid, _reason = cls._assess_native_wehago_pdf(dict(pdf.metadata or {}), text)
+            if not valid:
+                return ""
+            ids = {value.upper() for value in re.findall(
+                r"관리\s*번호\s*[:：]?\s*(TX[A-Za-z0-9_-]+)", text, re.IGNORECASE
+            )}
+            return next(iter(ids)) if len(ids) == 1 else ""
+        except Exception:
+            return ""
 
     def _set_save_as_filename_text(self, dlg, text: str) -> bool:
         if self._set_save_as_filename_win32(dlg, text):
@@ -1823,7 +1886,7 @@ class WehagoHandler(BaseTaxInvoiceHandler):
 
     @staticmethod
     def _click_save_as_save_button_win32(dlg) -> bool:
-        """Click the standard Save button by control ID/window message."""
+        """Request Save without blocking on a modal opened by the button."""
         try:
             import win32con
             import win32gui
@@ -1850,7 +1913,26 @@ class WehagoHandler(BaseTaxInvoiceHandler):
                 if not buttons:
                     return False
                 button_handle = buttons[0]
-            win32gui.SendMessage(button_handle, win32con.BM_CLICK, 0, 0)
+            try:
+                win32gui.SendMessageTimeout(
+                    button_handle,
+                    win32con.BM_CLICK,
+                    0,
+                    0,
+                    win32con.SMTO_ABORTIFHUNG | win32con.SMTO_BLOCK,
+                    2000,
+                )
+            except Exception as exc:
+                error_code = getattr(exc, "winerror", None)
+                if error_code is None and getattr(exc, "args", ()):
+                    error_code = exc.args[0]
+                # Save can open a nested modal before BM_CLICK returns. A
+                # timeout is an uncertain dispatch, not permission to click
+                # again. The caller handles overwrite and requires a stable
+                # PDF before reporting success. Some Windows builds return
+                # zero without setting a more specific last-error value.
+                if error_code not in (0, 1460):
+                    raise
             return True
         except Exception:
             return False

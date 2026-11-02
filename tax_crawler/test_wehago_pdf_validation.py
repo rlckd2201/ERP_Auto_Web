@@ -1,4 +1,6 @@
 from pathlib import Path
+import os
+import time
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest import TestCase
@@ -16,6 +18,63 @@ NATIVE_TEXT = """
 
 
 class WehagoPdfValidationTests(TestCase):
+    def test_default_export_requires_one_exact_native_management_id(self):
+        cases = [
+            ("Developer Express Inc.", NATIVE_TEXT, "TX2026083821631"),
+            ("Skia/PDF", NATIVE_TEXT, ""),
+            ("Developer Express Inc.", NATIVE_TEXT + "\n관리번호 TXOTHER123", ""),
+            ("Developer Express Inc.", NATIVE_TEXT.replace("관리번호 TX2026083821631", "관리번호 없음"), ""),
+        ]
+        for producer, text, expected in cases:
+            with self.subTest(producer=producer, text=text):
+                pdf = Mock(metadata={"Producer": producer}, pages=[Mock()])
+                pdf.pages[0].extract_text.return_value = text
+                opener = Mock()
+                opener.return_value.__enter__ = Mock(return_value=pdf)
+                opener.return_value.__exit__ = Mock(return_value=False)
+                with patch("pdfplumber.open", opener):
+                    self.assertEqual(expected, WehagoHandler._native_pdf_document_id(Path("fixture.pdf")))
+
+    def test_recovers_default_export_by_id_and_preserves_original(self):
+        handler = WehagoHandler.__new__(WehagoHandler)
+        handler._is_stable = Mock(return_value=True)
+        handler._native_pdf_document_id = Mock(return_value="TX2026083821631")
+        handler._write_saveas_debug = Mock()
+        with TemporaryDirectory() as tmp, patch("portal_wehago.Path.home", return_value=Path(tmp)):
+            source = Path(tmp) / "Documents" / "TX2A_92.pdf"
+            source.parent.mkdir()
+            source.write_bytes(b"verified native invoice")
+            final = Path(tmp) / "downloads" / "invoice__WEHAGO_TX2026083821631.pdf"
+            self.assertEqual(final, handler._recover_misplaced_pdf(final, time.time()))
+            self.assertEqual(source.read_bytes(), final.read_bytes())
+
+    def test_default_export_rejects_wrong_id_stale_unstable_and_existing_target(self):
+        for scenario in ("wrong", "longer_id", "stale", "unstable", "existing", "unknown_id"):
+            with self.subTest(scenario=scenario), TemporaryDirectory() as tmp, patch(
+                "portal_wehago.Path.home", return_value=Path(tmp)
+            ):
+                handler = WehagoHandler.__new__(WehagoHandler)
+                handler._is_stable = Mock(return_value=scenario != "unstable")
+                actual_id = {"wrong": "TXOTHER123", "longer_id": "TX20260838216310"}.get(scenario, "TX2026083821631")
+                handler._native_pdf_document_id = Mock(return_value=actual_id)
+                source = Path(tmp) / "Documents" / "TX2A_92.pdf"
+                source.parent.mkdir()
+                source.write_bytes(b"vendor output")
+                started = time.time()
+                if scenario == "stale":
+                    os.utime(source, (started - 60, started - 60))
+                final = Path(tmp) / "invoice__WEHAGO_TX2026083821631.pdf"
+                if scenario == "unknown_id":
+                    final = Path(tmp) / "invoice__WEHAGO_URLHASH.pdf"
+                if scenario == "existing":
+                    final.write_bytes(b"keep existing")
+                self.assertIsNone(handler._recover_default_native_pdf(final, started))
+                self.assertEqual(b"vendor output", source.read_bytes())
+                if scenario == "existing":
+                    self.assertEqual(b"keep existing", final.read_bytes())
+                else:
+                    self.assertFalse(final.exists())
+
     def test_accepts_native_developer_express_invoice(self):
         valid, reason = WehagoHandler._assess_native_wehago_pdf(
             {"Producer": "Developer Express Inc. DXperience (tm) v15.1.7"},
@@ -163,7 +222,10 @@ class WehagoPdfValidationTests(TestCase):
         def send_message(handle, _message, _wparam, value):
             written[handle] = value
 
-        constants = SimpleNamespace(WM_SETTEXT=0x000C, BM_CLICK=0x00F5)
+        constants = SimpleNamespace(
+            WM_SETTEXT=0x000C, BM_CLICK=0x00F5,
+            SMTO_ABORTIFHUNG=2, SMTO_BLOCK=1,
+        )
         gui = SimpleNamespace(
             EnumChildWindows=enum_children,
             IsWindowVisible=Mock(return_value=True),
@@ -174,6 +236,7 @@ class WehagoPdfValidationTests(TestCase):
                 else (10, 500, 300, 520)
             ),
             SendMessage=Mock(side_effect=send_message),
+            SendMessageTimeout=Mock(),
             GetWindowText=Mock(
                 side_effect=lambda handle: Path(written.get(handle, "")).name
             ),
@@ -195,10 +258,45 @@ class WehagoPdfValidationTests(TestCase):
         gui.SendMessage.assert_has_calls(
             [
                 call(201, constants.WM_SETTEXT, 0, filename),
-                call(300, constants.BM_CLICK, 0, 0),
             ]
         )
+        gui.SendMessageTimeout.assert_called_once_with(300, constants.BM_CLICK, 0, 0, 3, 2000)
         gui.PostMessage.assert_not_called()
+
+    def test_save_timeout_does_not_fall_back_to_a_second_click(self):
+        handler = WehagoHandler.__new__(WehagoHandler)
+        dialog = Mock(handle=100)
+        constants = SimpleNamespace(BM_CLICK=0x00F5, SMTO_ABORTIFHUNG=2, SMTO_BLOCK=1)
+        gui = SimpleNamespace(
+            GetDlgItem=Mock(return_value=300), IsWindow=Mock(return_value=True),
+            SendMessageTimeout=Mock(side_effect=OSError(1460, "timed out")),
+        )
+        with patch.dict("sys.modules", {"win32con": constants, "win32gui": gui}):
+            self.assertTrue(handler._click_save_as_save_button(dialog))
+        gui.SendMessageTimeout.assert_called_once()
+        dialog.descendants.assert_not_called()
+
+    def test_save_request_is_not_success_without_a_pdf_and_is_not_repeated(self):
+        handler = WehagoHandler.__new__(WehagoHandler)
+        handler.snapshot = Mock(return_value=set())
+        handler.wait_new_file = Mock(return_value=None)
+        handler._find_save_as_dialog = Mock(return_value=Mock())
+        handler._set_save_as_filename_text = Mock(return_value=True)
+        handler._click_save_as_save_button = Mock(return_value=True)
+        handler._confirm_overwrite_dialog = Mock()
+        handler._recover_misplaced_pdf = Mock(return_value=None)
+        handler._recover_pdf_from_saveas_new_folders = Mock(return_value=None)
+        handler._cleanup_saveas_new_folders = Mock()
+        handler._set_pdf_export_error = Mock()
+        tick = iter(range(200))
+        with TemporaryDirectory() as temp_dir, patch("portal_wehago.time.sleep"), patch(
+            "portal_wehago.time.time", side_effect=lambda: next(tick)
+        ):
+            result = handler._save_pdf_dialog(Path(temp_dir) / "missing.pdf", timeout=40)
+        self.assertIsNone(result)
+        handler._click_save_as_save_button.assert_called_once()
+        handler._set_save_as_filename_text.assert_called_once()
+        handler._set_pdf_export_error.assert_called_once()
 
     def test_preview_detection_uses_title_without_scanning_window_tree(self):
         handler = WehagoHandler.__new__(WehagoHandler)

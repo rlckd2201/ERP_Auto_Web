@@ -1,5 +1,14 @@
 # Session
 
+## 2026-11-02 Dongyang missing mail recovery in progress
+
+- User authorized server105 installer/recovery work and asked to keep proceeding with the open RDP. Primary works alone. Four Oct31 Dongyang emails plus one Nov2 email failed before DB insertion because both WehagoPrint and required local WehagoAgent were missing after migration. Both official signed modules are now installed on105 only; no local-PC installation.
+- Backup root: C:/ERP_DB/maintenance/wehago_recovery_20261102_104424. Initial backup contains47 source files, consistent SQLite and mail state. save_timeout_fix and default_name_fix each preserve the prior source/DB/state before deployment. Original vendor exports and user Downloads files are preserved.
+- Connected RDP still failed. Python stack dump proved an unbounded Save-button SendMessage wait. Added2second SendMessageTimeout and one-save-request guard. Further filesystem/PDF evidence showed real Developer Express invoices saved as Documents/TX2A_30.pdf and TX2A_92.pdf with management numberTX2026103310980, instead of the requested accounting filename.
+- Added recovery of fresh TX2A default exports only after native producer/content validation and exact unique management-number comparison against the requested WEHAGO ID. Copy exclusively to absent destination, preserve original, reject stale/wrong/ambiguous/non-native files.17tests pass locally and on105; staged real PDF recovery and visual rendering passed. Graphify2037nodes5740edges refreshed.
+- Deployed only portal_wehago.py. Pinned native26376->19688->13628;3010/3011 bridge17760 and19443 relay10140 unchanged. Agent4688 retained in hosigi session9. All168 invoice rows unchanged across final restart; no manual ERP/print replay.
+- Final manual collection11:27:51 restored all5: #284D3, #285D2, #286일강2, #287P3, #288P2; each275000/issue2026-10-31. All exact management IDs, buyer business numbers and native PDFs verified, one DB row per ID, all5mail failures cleared and unread0 at11:33. Existing168business status/ERP/PDF fields unchanged. Authenticated portal shows all5PDFs ready. #284regular ERP job8a0c4109-6b1b-412f-a44a-748977adb118 claimed by243/DESKTOP-55LQ6BN-TEST at11:33; others remain waiting for automatic sequential scheduling. Next exact start: observe that existing job and subsequent285..288 jobs through ERP/output; never manually replay. Physical paper output not yet confirmed. SSH credentials remain only in transient tool memory.
+
 ## 2026-10-30 approved convenience items 1 and 2 deployed
 
 - User explicitly selected1/2: document/output visibility and currency-prefixed approval totals. Primary implemented/reviewed alone; bounded approval retries and exception inbox remain unapproved. List/detail now show each PDF and printer result separately, printer/time, and explicit failed-only retry. No ERP or print replay was submitted during verification.

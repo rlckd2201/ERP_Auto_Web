@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-02 WEHAGO runtime recovery boundary
+
+- Install missing vendor modules on105 only. Preserve portal35, public ports, authentication, existing243 routing, business records and user Downloads. One-time Agent launch task removed; vendor startup registration retained.
+- A Save-button dispatch is not PDF success. Use a bounded synchronous request; timeout is uncertain dispatch, so continue file/overwrite verification without clicking again. Keep existing native-only PDF validation.
+- Vendor export may retain default TX2A filename. Recover only a fresh, stable Developer Express tax invoice whose single management number exactly equals the requested WEHAGO document ID. Do not infer identity from amount, filename prefix or newest-file order. Copy without replacing an existing accounting file and retain the vendor original.
+- Recovery completion means original tax PDFs and unique list rows are verified. Subsequent automatic ERP/output may still be running; report their actual state separately.
+- Retry through existing manual mail collector and processed-message/PDF deduplication. Never manufacture DB rows or substitute browser-page PDFs. Observe existing243 scheduler rather than manually replaying financial work. Spooler evidence is distinct from physical paper receipt.
+
 ## 2026-10-30 output evidence and retry boundary
 
 - Calculate PDF availability using full invoice metadata before stripping private/detail fields from list responses. Derive print evidence from persistent output_print tasks, match semantic documents by standardized filename rather than selection-relative file_index, and preserve earlier successful documents when a later retry contains only some files.
