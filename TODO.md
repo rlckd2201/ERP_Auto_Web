@@ -8,7 +8,8 @@
 - [x] Identify genuine native PDFs saved under Documents/TX2A default names; add exact management-number/freshness/native-content recovery, preserving originals and existing destinations.
 - [x]17local/server tests and staged real-PDF recovery/visual validation; deploy only handler, restart pinned backend13628, preserve168invoice rows and other listeners. Graphify refreshed.
 - [x] Final collection restored284..288; native IDs/buyer numbers/Oct31/275000 verified, zero duplicates, failures cleared. Portal list verified.243claimed284.
-- [ ] Observe existing243job284 and sequential285..288 ERP/output completion; do not replay to test.
+- [x] #284ERP completed and both documents spooler-verified on평택 at11:34:24.
+- [ ] Observe existing243batch35a6f7b0 for285..288 ERP/output completion; do not replay to test.
 - [x] Record recovery outcome and remaining ERP/output observation; user Downloads preserved.
 
 ## 2026-10-30 convenience items 1 and 2
