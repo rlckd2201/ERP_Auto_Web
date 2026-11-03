@@ -69,7 +69,9 @@ Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'
 ```
 
 기본 그룹웨어 DB 계정은 `dlpadmin2`를 사용한다.
-메일 송신은 SMTP `211.233.214.90:25`, 발신 주소 `admpdm@dae-seung.co.kr`, 표시명 `재정전표자동화 시스템`을 기본값으로 사용한다. 운영 서버는 `C:\ERP_DB\finance_web105\environment.json`의 `EXCEL_VOUCHER_SMTP_HOST`가 우선하며, 변경 후 `FinanceVoucher-Web-3012` 예약 작업을 재시작해야 적용된다.
+메일 송신은 SMTP `211.233.214.90:25`, 발신 주소 `admpdm@dae-seung.co.kr`, 표시명 `재정전표자동화 시스템`을 기본값으로 사용한다. 2026-11-04 확인 기준 포털 연동 운영 설정은 `D:\PortalConnectedSystems\finance-voucher\private\native-environment.json`이며 `EXCEL_VOUCHER_SMTP_HOST`가 우선한다. 변경 후 `FinanceVoucher-Web-3012` 예약 작업만 재시작한다. 기존 `C:\ERP_DB\finance_web105\environment.json`에도 같은 SMTP 주소를 유지한다.
+
+포털 연동 후 실제 재정 백엔드는 `127.0.0.1:3013`에서 실행되고, 외부 3012는 `FinanceVoucher-PublicBridge-3012`가 처리한다. SMTP 변경 시 외부 브리지나 기존 회계 시스템은 재시작하지 않는다. 2026-11-04 08:57 KST에 운영 환경의 메일 발송 함수로 이승주 담당자에게 테스트 1건을 보내 SMTP 정상 접수를 확인했다. 수신함 도착 여부는 별도 확인 대상이다.
 SMTP 서버 연결에 실패하면 메일은 실제 발송되지 않고 `data/mail_outbox`에 JSON으로 보관된다.
 
 완료 메일은 업로드 당시 웹 로그인 계정을 기준으로 보낸다. 대승(`daeseung`)의 재정 계정 `tmdwn8807` 작업은 `이승주 <tmdwn8807@dae-seung.co.kr>`로 발송한다. ERP 로그인 계정이나 담당자 선택만으로 수신자를 바꾸지 않으며, 다른 웹 계정은 기존 작업자 이메일을 사용한다.

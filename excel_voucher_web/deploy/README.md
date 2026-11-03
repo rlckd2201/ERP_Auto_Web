@@ -5,6 +5,34 @@ Current origin: **https://172.16.19.105:3012**. Original origin:
 
 ## Port Reassignment
 
+### SMTP Update (2026-11-04)
+
+The service has since been integrated with the portal at
+`https://portal.dae-seung.co.kr/finance-voucher-automation/`.
+`FinanceVoucher-Web-3012` now runs `ops/native-launch.py` under
+`D:\PortalConnectedSystems\finance-voucher`; the finance backend listens on
+`127.0.0.1:3013`. The separate `FinanceVoucher-PublicBridge-3012` owns public 3012.
+Do not use the old 3012 socket as the backend restart check.
+
+The active environment file is
+`D:\PortalConnectedSystems\finance-voucher\private\native-environment.json`.
+On 2026-11-04, only `EXCEL_VOUCHER_SMTP_HOST` changed to `211.233.214.90` in
+that file and the retained `C:\ERP_DB\finance_web105\environment.json`.
+Port 25, sender identity, authentication, TLS settings and disabled failure
+emails were preserved. Timestamped `*.smtp-backup-20261104-085643.json` copies
+remain beside each private configuration. No secrets are included in source.
+
+After confirming no active vouchers, only the finance web task was restarted.
+The running backend's environment was verified, and its normal `send_mail`
+function sent one test message from `admpdm@dae-seung.co.kr` to
+`tmdwn8807@dae-seung.co.kr` at 08:57:20 KST. Result: `sent=true`, `queued=false`.
+This proves SMTP acceptance, not inbox delivery. The result marker is
+`C:\ERP_DB\finance_3011_data\service_logs\finance-smtp-20261104-081802.json`;
+do not resend that test automatically. Portal bridge and accounting processes
+were unchanged. Related notification/default/migration tests: 36 passed.
+
+### Original 3012 Cutover
+
 Ports 3010 and 3011 belong to the existing accounting system. Finance was
 reassigned to 3012 on 2026-10-27 at 10:23 KST. The accounting bridge and its
 scheduled task were not modified. The Agent validated the new HTTPS endpoint
