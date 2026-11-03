@@ -83,7 +83,7 @@ class Settings:
     )
     groupware_mail_domain: str = _env("EXCEL_VOUCHER_GROUPWARE_MAIL_DOMAIN", "dae-seung.co.kr")
 
-    smtp_host: str = _env("EXCEL_VOUCHER_SMTP_HOST", "35.216.76.148")
+    smtp_host: str = _env("EXCEL_VOUCHER_SMTP_HOST", "211.233.214.90")
     smtp_port: int = _env_int("EXCEL_VOUCHER_SMTP_PORT", 25)
     smtp_user: str = _env("EXCEL_VOUCHER_SMTP_USER", "")
     smtp_password: str = _env("EXCEL_VOUCHER_SMTP_PASSWORD", "")

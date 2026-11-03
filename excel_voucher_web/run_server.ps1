@@ -11,7 +11,7 @@ param(
   [string]$GroupwareDbUser = "dlpadmin2",
   [string]$GroupwareDbPassword = "rlarlckd12!@",
   [string]$GroupwareMailDomain = "dae-seung.co.kr",
-  [string]$SmtpHost = "35.216.76.148",
+  [string]$SmtpHost = "211.233.214.90",
   [int]$SmtpPort = 25,
   [string]$SmtpUser = "",
   [string]$SmtpPassword = "",

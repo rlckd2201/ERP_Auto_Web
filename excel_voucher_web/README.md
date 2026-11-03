@@ -61,7 +61,7 @@ self-signed 인증서를 아직 자동 전표처리 PC에 신뢰 등록하지 �
 운영 설정은 `C:\ERP_DB\finance_web105\environment.json`에 있다.
 - 데이터 폴더: `C:\ERP_DB\finance_3011_data`
 - 그룹웨어 DB: `172.16.19.33:3306 / ksystem_yundong / dlpadmin2`
-- 메일 SMTP: `35.216.76.148:25`
+- 메일 SMTP: `211.233.214.90:25`
 
 운영 서버 실행 예시:
 ```powershell
@@ -69,7 +69,7 @@ Start-ScheduledTask -TaskName 'FinanceVoucher-Web-3012'
 ```
 
 기본 그룹웨어 DB 계정은 `dlpadmin2`를 사용한다.
-메일 송신은 기존 회계업무 WEB과 같은 내부 SMTP `35.216.76.148:25`, 발신 주소 `admpdm@dae-seung.co.kr`, 표시명 `재정전표자동화 시스템`을 기본값으로 사용한다.
+메일 송신은 SMTP `211.233.214.90:25`, 발신 주소 `admpdm@dae-seung.co.kr`, 표시명 `재정전표자동화 시스템`을 기본값으로 사용한다. 운영 서버는 `C:\ERP_DB\finance_web105\environment.json`의 `EXCEL_VOUCHER_SMTP_HOST`가 우선하며, 변경 후 `FinanceVoucher-Web-3012` 예약 작업을 재시작해야 적용된다.
 SMTP 서버 연결에 실패하면 메일은 실제 발송되지 않고 `data/mail_outbox`에 JSON으로 보관된다.
 
 완료 메일은 업로드 당시 웹 로그인 계정을 기준으로 보낸다. 대승(`daeseung`)의 재정 계정 `tmdwn8807` 작업은 `이승주 <tmdwn8807@dae-seung.co.kr>`로 발송한다. ERP 로그인 계정이나 담당자 선택만으로 수신자를 바꾸지 않으며, 다른 웹 계정은 기존 작업자 이메일을 사용한다.

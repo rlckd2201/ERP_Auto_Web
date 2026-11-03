@@ -3,12 +3,21 @@ from __future__ import annotations
 import json
 from datetime import datetime
 from email.utils import getaddresses
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from app import notifications
 from app.models import JobEvent, JobRecord
+
+
+def test_smtp_default_matches_operating_relay():
+    settings_source = Path('app/settings.py').read_text(encoding='utf-8')
+    launcher_source = Path('run_server.ps1').read_text(encoding='utf-8')
+    assert '_env("EXCEL_VOUCHER_SMTP_HOST", "211.233.214.90")' in settings_source
+    assert '[string]$SmtpHost = "211.233.214.90"' in launcher_source
+    assert '_env_int("EXCEL_VOUCHER_SMTP_PORT", 25)' in settings_source
 
 
 def _fake_settings(tmp_path, outbox):
