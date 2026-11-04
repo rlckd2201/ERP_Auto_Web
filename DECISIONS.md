@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-11-04 approved automatic-mail recovery boundaries
+
+- Current explicit repair instruction authorizes implementation/deployment of the explained report-read and failure-recovery fix. November parser failure discovered during tests is in the same dispatch path and must be fixed before rollout. It supersedes the earlier DB-lock-only explanation; historical locks remain a separate demonstrated fault.
+- Require separators and complete date components, or explicitly supported compact dates; never split11/12 into month1 and day1/2. Invalid dates fail instead of being truncated.
+- Report/history reads must not initialize schemas, repair invoice rows, or invoke ERP/PDF readiness work. A failed or corrupt snapshot aborts the report, so incomplete data cannot generate false supplier reminders. Preserve the latest200-row compatibility limit.
+- Preserve legacy send keys; any successful internal entry for that date satisfies the daily report. Supplier cycle success remains independent and is saved after each accepted message. Recheck current invoice state before retries. Explicit force behavior remains available. Serialize same-host dispatch across threads/processes.
+- A refused primary recipient is failure even when CC succeeds; a refused CC must not resend an accepted supplier message. An error closing SMTP after accepted DATA is not a failed send. This does not claim exactly-once delivery through an ambiguous DATA acknowledgement or a crash between SMTP acceptance and ledger persistence.
+- Deployment is one source file on105; no portal35, shared bridge, authentication, financial replay or supplier-force tests. Observe the real scheduler after restart; preserve all historical success keys.
+
 ## 2026-11-02 WEHAGO runtime recovery boundary
 
 - Install missing vendor modules on105 only. Preserve portal35, public ports, authentication, existing243 routing, business records and user Downloads. One-time Agent launch task removed; vendor startup registration retained.

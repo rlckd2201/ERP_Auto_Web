@@ -1,5 +1,13 @@
 # Session
 
+## 2026-11-04 noon scheduler recovery deployed
+
+- User explicitly approved repair. Primary implemented/tested alone. Backup C:/ERP_DB/deploy_backups/regular_due_recovery_20261104_130950 contains45 program files, consistent174-row SQLite, SMTP .env and send ledger.
+- Confirmed the main November outage cause beyond the earlier DB-lock evidence: old _parse_date("2026-11-04") returned2026-01-01 (December returnedJanuary2), causing send_regular_due_report to return before_start_date. Fixed separated/compact dates with full component boundaries. Snapshot reads now use one closed, read-only SQLite connection; historical supplier/date matching is reused. Internal daily success and per-supplier success persist separately; failed suppliers retry without repeating successful messages. Thread/file dispatch locks, fail-closed ledger loading and accepted-DATA/failed-QUIT handling protect normal retry behavior.
+-31 new regressions plus6 existing sender guards passed locally and on105. Operating-data rehearsal reproduced before_start_date in old source, matched all report fields after correcting only its parser, and simulated one send followed by already_sent. Snapshot0.031s; revised report6.750s vs11.563s for previous matching with corrected parser. Graphify updated2086nodes/5915edges/124communities.
+- Deployed only regular_due_monitor.py (SHA2567cabfddef96c7310b1ca2373177337815f21d2df52192088510c2a0d7f8361f2); pinned backend25784->1884. Actual scheduler sent today's internal report13:23:40 to ds1501@dae-seung.co.kr through211.233.214.90; SMTP acceptance and daily ledger verified.174business rows and all previous send entries unchanged; vendor ledger unchanged, no stale supplier reminders. Other service listeners unchanged. Evidence output/regular_due_recovery_20261104/.
+- Follow-up13:26:31: one accepted internal message/one daily entry, no due errors; state checkpoint refreshed13:25:53 and scheduler thread is sleeping after subsequent cycles. Next exact start: inspect next scheduled12:00 record if further verification is requested; do not force-resend an accepted message. SMTP acceptance is not an observed inbox receipt.
+
 ## 2026-11-02 Dongyang missing mail recovery in progress
 
 - User authorized server105 installer/recovery work and asked to keep proceeding with the open RDP. Primary works alone. Four Oct31 Dongyang emails plus one Nov2 email failed before DB insertion because both WehagoPrint and required local WehagoAgent were missing after migration. Both official signed modules are now installed on105 only; no local-PC installation.

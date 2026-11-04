@@ -8,18 +8,19 @@ import os
 import re
 import smtplib
 import socket
+import sqlite3
 import threading
 import time
+from contextlib import closing, contextmanager
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from email.utils import formataddr, formatdate, make_msgid
+from email.utils import formataddr, formatdate, getaddresses, make_msgid
 from pathlib import Path
 from typing import Any
 
 from .config import settings
-from .invoice_db import get_invoice, list_invoices
 
 
 log = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ _scheduler_lock = threading.RLock()
 _scheduler_process_lock_guard = threading.RLock()
 _scheduler_process_lock_handle: Any | None = None
 _scheduler_process_lock_path: Path | None = None
+_dispatch_lock = threading.RLock()
 
 
 @dataclass(frozen=True)
@@ -296,18 +298,51 @@ def _load_state() -> dict[str, Any]:
     try:
         if path.exists():
             data = json.loads(path.read_text(encoding="utf-8") or "{}")
-            return data if isinstance(data, dict) else {}
+            if not isinstance(data, dict):
+                raise ValueError("regular due send state must be an object")
+            for key in ("sent", "vendor_alert_sent"):
+                if key in data and not isinstance(data[key], dict):
+                    raise ValueError(f"invalid regular due send state: {key}")
+            return data
     except Exception:
         log.exception("regular due monitor state load failed")
+        raise
     return {}
 
 
 def _save_state(state: dict[str, Any]) -> None:
     path = _state_path()
     path.parent.mkdir(parents=True, exist_ok=True)
-    tmp_path = path.with_suffix(".tmp")
-    tmp_path.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
-    tmp_path.replace(path)
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.{threading.get_ident()}.tmp")
+    try:
+        with tmp_path.open("w", encoding="utf-8") as handle:
+            json.dump(state, handle, ensure_ascii=False, indent=2)
+            handle.flush()
+            os.fsync(handle.fileno())
+        tmp_path.replace(path)
+    finally:
+        tmp_path.unlink(missing_ok=True)
+
+
+@contextmanager
+def _dispatch_guard():
+    """Serialize API/scheduler sends, including another process on this host."""
+    with _dispatch_lock:
+        path = _state_path().with_name("regular_due_dispatch.lock")
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with path.open("a+b") as handle:
+            if path.stat().st_size == 0:
+                handle.write(b"0")
+                handle.flush()
+            try:
+                _lock_file_handle(handle)
+            except OSError:
+                yield False
+                return
+            try:
+                yield True
+            finally:
+                _unlock_file_handle(handle)
 
 
 def _digits(value: Any) -> str:
@@ -360,8 +395,11 @@ def _parse_date(value: Any) -> date | None:
     if not text:
         return None
     patterns = (
-        r"(20\d{2})\D{0,4}(0?[1-9]|1[0-2])\D{0,4}([0-3]?\d)",
-        r"\b(\d{2})(0[1-9]|1[0-2])([0-3]\d)\b",
+        # A separator is required here: allowing zero characters split November
+        # into month=1/day=1 and made report_date precede the configured start date.
+        r"(?<!\d)(20\d{2})\D{1,4}(1[0-2]|0?[1-9])\D{1,4}(3[01]|[12]\d|0?[1-9])(?!\d)",
+        r"(?<!\d)(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)",
+        r"(?<!\d)(\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)",
     )
     for pattern in patterns:
         match = re.search(pattern, text)
@@ -374,12 +412,6 @@ def _parse_date(value: Any) -> date | None:
             return date(year, int(match.group(2)), int(match.group(3)))
         except ValueError:
             continue
-    digits = _digits(text)
-    if len(digits) >= 8 and digits[:2] == "20":
-        try:
-            return date(int(digits[:4]), int(digits[4:6]), int(digits[6:8]))
-        except ValueError:
-            return None
     return None
 
 
@@ -465,11 +497,18 @@ def _due_rules_around(reference_date: date, *, past_months: int = 12, future_mon
     return sorted(result, key=lambda item: (item[2], item[0].vendor_name))
 
 
-def _cycle_has_invoice(rule: DueRule, expected_date: date, invoices: list[dict[str, Any]]) -> bool:
-    for invoice in invoices:
-        if not _rule_matches_invoice(rule, invoice):
-            continue
-        issue_date = _invoice_issue_date(invoice)
+def _cycle_has_invoice(
+    rule: DueRule,
+    expected_date: date,
+    invoices: list[dict[str, Any]],
+    *,
+    issue_dates: tuple[date | None, ...] | None = None,
+) -> bool:
+    if issue_dates is None:
+        issue_dates = tuple(
+            _invoice_issue_date(invoice) for invoice in invoices if _rule_matches_invoice(rule, invoice)
+        )
+    for issue_date in issue_dates:
         if _issue_date_ok(rule, issue_date, expected_date) or _same_period(issue_date, expected_date):
             return True
     return False
@@ -484,10 +523,14 @@ def _cycle_for_report(rule: DueRule, reference_date: date, invoices: list[dict[s
     if alert_day_cycles:
         return alert_day_cycles[-1]
 
+    # Matching supplier identity/text is independent of the month being checked.
+    issue_dates = tuple(
+        _invoice_issue_date(invoice) for invoice in invoices if _rule_matches_invoice(rule, invoice)
+    )
     unresolved = [
         item
         for item in cycles
-        if item[2] < reference_date and not _cycle_has_invoice(item[0], item[1], invoices)
+        if item[2] < reference_date and not _cycle_has_invoice(item[0], item[1], invoices, issue_dates=issue_dates)
     ]
     if unresolved:
         return unresolved[0]
@@ -503,7 +546,7 @@ def _cycle_for_report(rule: DueRule, reference_date: date, invoices: list[dict[s
     completed_past = [
         item
         for item in cycles
-        if item[2] < reference_date and _cycle_has_invoice(item[0], item[1], invoices)
+        if item[2] < reference_date and _cycle_has_invoice(item[0], item[1], invoices, issue_dates=issue_dates)
     ]
     if completed_past:
         return completed_past[-1]
@@ -714,16 +757,35 @@ def _days_text(reference_date: date, receive_due_date: date, status: str) -> str
         return f"{abs(delta)}일 지남"
     return "-"
 
-def _load_regular_invoices() -> list[dict[str, Any]]:
-    summaries = list_invoices(mode="regular", limit=_scan_limit())
+def _load_regular_invoices(*, limit: int | None = None) -> list[dict[str, Any]]:
+    """Read one bounded snapshot without schema repair, writes, or ERP/PDF work."""
+    row_limit = _scan_limit() if limit is None else max(1, min(int(limit), 200))
+    uri = settings.sqlite_db_path.resolve().as_uri() + "?mode=ro"
+    with closing(sqlite3.connect(uri, uri=True, timeout=5.0)) as conn:
+        conn.row_factory = sqlite3.Row
+        rows = conn.execute(
+            "SELECT id, subject, pdf_path, json_data, status, processor, received_at, "
+            "processed_at, last_error, erp_job_id FROM invoices ORDER BY id DESC LIMIT ?",
+            (row_limit,),
+        ).fetchall()
     invoices: list[dict[str, Any]] = []
-    for item in summaries:
+    for row in rows:
         try:
-            invoice = get_invoice(int(item.get("id") or 0))
-        except Exception:
-            invoice = None
-        if invoice and str(invoice.get("invoice_type") or "").lower() == "regular":
-            invoices.append(invoice)
+            raw = json.loads(row["json_data"] or "{}")
+            if not isinstance(raw, dict):
+                raise ValueError("invoice data must be an object")
+        except (TypeError, ValueError) as exc:
+            # A partial read must not turn an already received invoice into a reminder.
+            raise ValueError(f"Invalid invoice data in regular due snapshot: #{row['id']}") from exc
+        invoice_type = str(raw.get("invoice_type") or "regular").strip().lower()
+        if invoice_type != "regular":
+            continue
+        data = dict(raw)
+        if isinstance(raw.get("data"), dict):
+            data.update(raw["data"])
+        invoice = {key: row[key] for key in row.keys() if key != "json_data"}
+        invoice.update(invoice_type=invoice_type, raw=raw, data=data)
+        invoices.append(invoice)
     return invoices
 
 
@@ -935,14 +997,28 @@ def _send_html_mail(to_addr: str, subject: str, plain: str, html_body: str, *, c
     msg["Message-ID"] = make_msgid()
     msg.attach(MIMEText(plain, "plain", _charset="utf-8"))
     msg.attach(MIMEText(html_body, "html", _charset="utf-8"))
-    with smtplib.SMTP(settings.regular_auto_result_smtp_server, settings.regular_auto_result_smtp_port, timeout=10) as smtp:
-        smtp.ehlo()
-        if smtp.has_extn("STARTTLS"):
-            smtp.starttls()
+    accepted = False
+    try:
+        with smtplib.SMTP(settings.regular_auto_result_smtp_server, settings.regular_auto_result_smtp_port, timeout=10) as smtp:
             smtp.ehlo()
-        if settings.regular_auto_result_smtp_user and settings.regular_auto_result_smtp_pw:
-            smtp.login(settings.regular_auto_result_smtp_user, settings.regular_auto_result_smtp_pw)
-        smtp.send_message(msg)
+            if smtp.has_extn("STARTTLS"):
+                smtp.starttls()
+                smtp.ehlo()
+            if settings.regular_auto_result_smtp_user and settings.regular_auto_result_smtp_pw:
+                smtp.login(settings.regular_auto_result_smtp_user, settings.regular_auto_result_smtp_pw)
+            refused = smtp.send_message(msg) or {}
+            primary = {address.casefold() for _, address in getaddresses([to_addr])}
+            if any(address.casefold() in primary for address in refused):
+                raise smtplib.SMTPRecipientsRefused(refused)
+            accepted = True
+            if refused:
+                log.warning("regular due mail accepted for primary recipient; CC refused: %s", list(refused))
+    except (smtplib.SMTPException, OSError):
+        if not accepted:
+            raise
+        # DATA was accepted; a failed QUIT must not trigger a duplicate message.
+        log.warning("regular due SMTP close failed after message acceptance", exc_info=True)
+    log.info("regular due SMTP accepted: to=%s message_id=%s", to_addr, msg["Message-ID"])
 
 
 
@@ -1070,6 +1146,7 @@ def _send_regular_vendor_alerts(report: dict[str, Any], state: dict[str, Any], *
     if not _vendor_alert_enabled():
         return [{"sent": False, "reason": "disabled"}]
     sent = state.get("vendor_alert_sent") if isinstance(state.get("vendor_alert_sent"), dict) else {}
+    state["vendor_alert_sent"] = sent
     results: list[dict[str, Any]] = []
     for item in report.get("items") or []:
         if item.get("severity") != "missing":
@@ -1092,7 +1169,8 @@ def _send_regular_vendor_alerts(report: dict[str, Any], state: dict[str, Any], *
         results.append(result)
         if result.get("sent"):
             sent[state_key] = datetime.now().isoformat(timespec="seconds")
-    state["vendor_alert_sent"] = sent
+            _save_state(state)
+            log.info("regular due vendor alert sent: key=%s to=%s", state_key, result.get("to"))
     return results
 
 
@@ -1123,7 +1201,17 @@ def send_regular_due_vendor_alert_sample(
     return {"ok": bool(result.get("sent")), "sample": True, "item": item, **result}
 
 def send_regular_due_report(reference_date: str | date | datetime | None = None, *, force: bool = False) -> dict[str, Any]:
+    with _dispatch_guard() as acquired:
+        if not acquired:
+            return {"sent": False, "skipped": True, "reason": "dispatch_busy"}
+        return _send_regular_due_report_locked(reference_date, force=force)
+
+
+def _send_regular_due_report_locked(reference_date: str | date | datetime | None = None, *, force: bool = False) -> dict[str, Any]:
+    started = time.monotonic()
+    state = _load_state()
     report = build_regular_due_report(reference_date)
+    log.debug("regular due report built in %.3fs", time.monotonic() - started)
     report_date = _parse_date(report.get("reference_date")) or datetime.now().date()
     if not _enabled():
         return {**report, "sent": False, "skipped": True, "reason": "disabled"}
@@ -1134,7 +1222,6 @@ def send_regular_due_report(reference_date: str | date | datetime | None = None,
     recipient = _recipient()
     if not recipient:
         return {**report, "sent": False, "skipped": True, "reason": "missing_recipient"}
-    state = _load_state()
     key_items = [
         f"{item['key']}@{item['receive_due_date']}"
         for item in report["items"]
@@ -1142,42 +1229,43 @@ def send_regular_due_report(reference_date: str | date | datetime | None = None,
     ] or [f"{item['key']}@{item['receive_due_date']}" for item in report["items"]]
     key = f"{report['reference_date']}:{','.join(key_items)}"
     sent = state.get("sent") if isinstance(state.get("sent"), dict) else {}
-    if sent.get(key) and not force:
-        return {**report, "sent": False, "skipped": True, "reason": "already_sent", "state_key": key}
+    day_prefix = f"{report['reference_date']}:"
+    # Existing keys retain the report's items, but the internal report is daily.
+    already_sent = any(str(saved_key).startswith(day_prefix) and value for saved_key, value in sent.items())
     prefix = "[누락]" if report["missing_count"] else "[확인]" if report["warning_count"] else "[정상]"
     subject = (
         f"{prefix} 정기 세금계산서 수신 점검 "
         f"- 누락 {report['missing_count']} / 확인 {report['warning_count']} / 예정 {report['pending_count']} / 완료 {report['ok_count']}"
     )
-    try:
-        _send_html_mail(recipient, subject, _plain_text(report), _html_report(report))
-    except Exception as exc:
-        log.exception("regular due alert email failed: %s", exc)
-        return {**report, "sent": False, "error": str(exc)}
-    vendor_alerts = _send_regular_vendor_alerts(report, state, force=force)
-    sent[key] = datetime.now().isoformat(timespec="seconds")
-    state["sent"] = sent
+    # Fail before SMTP if the success ledger cannot be persisted.
     _save_state(state)
+    if not already_sent or force:
+        try:
+            _send_html_mail(recipient, subject, _plain_text(report), _html_report(report))
+        except Exception as exc:
+            log.exception("regular due alert email failed: %s", exc)
+            return {**report, "sent": False, "error": str(exc)}
+        sent[key] = datetime.now().isoformat(timespec="seconds")
+        state["sent"] = sent
+        _save_state(state)
+        log.info("regular due internal report sent: date=%s to=%s elapsed=%.3fs", report["reference_date"], recipient, time.monotonic() - started)
+    # Retry only suppliers without a successful receipt, even after the daily report.
+    vendor_alerts = _send_regular_vendor_alerts(report, state, force=force)
+    if already_sent and not force:
+        return {**report, "sent": False, "skipped": True, "reason": "already_sent", "state_key": key, "vendor_alerts": vendor_alerts}
     return {**report, "sent": True, "to": recipient, "state_key": key, "vendor_alerts": vendor_alerts}
 
 
 def regular_due_history(*, limit: int = 500) -> dict[str, Any]:
     limit = max(1, min(int(limit or 500), 1000))
-    summaries = list_invoices(mode="regular", limit=limit)
     items: list[dict[str, Any]] = []
-    for summary in summaries:
-        try:
-            invoice = get_invoice(int(summary.get("id") or 0))
-        except Exception:
-            invoice = None
-        if not invoice or str(invoice.get("invoice_type") or "").lower() != "regular":
-            continue
+    for invoice in _load_regular_invoices(limit=limit):
         data = _invoice_data(invoice)
         issue_date = _invoice_issue_date(invoice)
         pdf_name = Path(str(invoice.get("pdf_path") or data.get("pdf_path") or "")).name
         items.append(
             {
-                "invoice_id": invoice.get("id") or summary.get("id"),
+                "invoice_id": invoice.get("id"),
                 "vendor_name": _history_vendor_name(invoice),
                 "issue_date": issue_date.isoformat() if issue_date else "-",
                 "received_at": _invoice_received_text(invoice),

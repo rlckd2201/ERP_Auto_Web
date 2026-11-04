@@ -1,5 +1,15 @@
 # TODO
 
+## 2026-11-04 noon scheduler repair (authorized and deployed)
+
+- [x] Back up45 operating program files, SQLite, SMTP settings and send history.
+- [x] Reproduce November/December misparse and before_start_date skip; correct all12months and supported timestamp/file date forms.
+- [x] Replace repeated schema-repair reads with one read-only snapshot; retain report selection and improve repeated vendor matching.
+- [x] Retry failed sends with daily/internal and per-vendor deduplication, serialized dispatch, persisted checkpoints and accurate primary-recipient/QUIT outcomes.
+- [x]37 local/server tests; operating-data no-send rehearsal; Graphify updated.
+- [x] Deploy only monitor, preserve174business records/other services, verify actual scheduler report13:23:40 and unchanged vendor ledger.
+- [x] Observe later scheduler cycles: one daily send, no due errors, checkpoint13:25:53 and live sleeping scheduler13:26:31.
+
 ## 2026-11-02 Dongyang mail recovery
 
 - [x] Confirm four Oct31 plus one Nov2 failures; back up running source, SQLite and mail state.
