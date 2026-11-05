@@ -1,5 +1,12 @@
 # Session
 
+## 2026-11-05 maintenance narration approved and deployed
+
+- User explicitly clarified/approved changing only text before " - "; retain current vendor suffix and do not add corporate designations. Primary agent worked alone. One-line change in erp_runner._summary replaces 통합유지보수료 with 전산, 전화, 방송, CCTV 유지보수료; site/period, supplier formatting and existing maintenance selection remain.
+- Backed up52 program/config files plus consistent174-row SQLite at C:/ERP_DB/deploy_backups/maintenance_summary_20261105_085950.90 fixture cases passed locally/server; operating129regular payload comparison changed only intended narration in48 and kept81 identical, with no errors. Eight recent October invoices retain site, month, vendor, account and amounts across all three rows.
+- Deployed only erp_runner.py SHA256a3b33a1447ca72591d8a789f6c402428f9abe5970f94a17337654cc261095389 at09:02:26; pinned native backend1884->34356, other listeners unchanged.174invoice rows unchanged. Graphify updated2086nodes/5915edges/124communities. No business replay or print.
+- At09:03:37,243 Agent is ready with all checks passed, heartbeat09:03:36 and exact bundle5aaeae4d597912f3961f5be7d2edcc8b202098ed73626ecebcfd4c6610a8fe15. Rollout complete for future maintenance vouchers. Next exact start: inspect the next genuine maintenance voucher if requested; do not replay completed invoices for validation. Local evidence output/maintenance_summary_review_20261105/production_verification.json; no actual financial transaction/print was submitted for testing.
+
 ## 2026-11-04 noon scheduler recovery deployed
 
 - User explicitly approved repair. Primary implemented/tested alone. Backup C:/ERP_DB/deploy_backups/regular_due_recovery_20261104_130950 contains45 program files, consistent174-row SQLite, SMTP .env and send ledger.

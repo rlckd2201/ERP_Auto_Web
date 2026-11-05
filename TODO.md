@@ -1,5 +1,12 @@
 # TODO
 
+## 2026-11-05 approved maintenance narration rollout
+
+- [x] Back up operating program/config and174-row DB; retain original vendor suffix per user clarification.
+- [x] Modify only the targeted maintenance wording before " - ";90 local/server fixture cases and129 operating regular payload comparisons pass.
+- [x] Deploy only erp_runner.py, activate pinned runtime34356 and verify invoice data/other listeners unchanged.
+- [x] Confirm243 Agent self-update to exact bundle5aaeae4d... and ready at09:03:37; deployment evidence saved. Future vouchers use new text, completed historical vouchers were not changed.
+
 ## 2026-11-04 noon scheduler repair (authorized and deployed)
 
 - [x] Back up45 operating program files, SQLite, SMTP settings and send history.

@@ -482,7 +482,7 @@ def _summary(site: str, vendor: str, item: dict[str, Any], supply: int, qty: int
     text = f"{name} {vendor_display}".lower()
 
     if ("동양정보통신" in text or "대신아이씨티" in text) and "보수료" in text and supply == 250000:
-        return f"{_site_short_name(site)} {year_month.replace(' 0', ' ')} 통합유지보수료 - {vendor_display}"
+        return f"{_site_short_name(site)} {year_month.replace(' 0', ' ')} 전산, 전화, 방송, CCTV 유지보수료 - {vendor_display}"
     if "다우오피스" in text or "그룹웨어" in text or "daou" in text:
         return f"{year_month} 다우오피스 월 사용료 - {vendor_display}"
     if "watching-on" in text or "watchingon" in text or "watching" in text:

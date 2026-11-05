@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-05 approved narration suffix preservation
+
+- User's latest instruction approves the previously presented scope and specifically limits changes to text before " - ". Keep the current vendor suffix exactly; do not append (주), change supplier names or add alias matching. No further approval is required for this scoped backup/test/deploy.
+- Only the existing shared maintenance summary string changes. Preserve site/month selection,250000 supply predicate, account/amounts and V.A.T prefix. Existing completed voucher correction and physical reprinting are outside this request.
+- Actual ERP execution imports this builder on243, so server source activation alone is insufficient. Require fresh243 bundle equality and readiness before reporting rollout complete; both verified09:03:37. The successful payload tests and installation checks do not claim an actual new printed voucher was observed.
+
 ## 2026-11-04 approved automatic-mail recovery boundaries
 
 - Current explicit repair instruction authorizes implementation/deployment of the explained report-read and failure-recovery fix. November parser failure discovered during tests is in the same dispatch path and must be fixed before rollout. It supersedes the earlier DB-lock-only explanation; historical locks remain a separate demonstrated fault.

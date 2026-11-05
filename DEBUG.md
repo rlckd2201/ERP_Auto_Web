@@ -1,5 +1,12 @@
 # Debug
 
+## 2026-11-05 maintenance narration regression and rollout
+
+- Backup C:/ERP_DB/deploy_backups/maintenance_summary_20261105_085950:52files, consistent174invoices; baseline sourcebe2fb044... and invoice SHA256dd6e6094efd07bad9cd5b80cbf21453dbc1b30dcbf09b846c7379b384bbde336.
+- output/maintenance_summary_review_20261105/verify_change.py AST-loads unmodified old/new builders without application startup or dispatch.90fixtures cover both suppliers,8sites,months1/9/10/11/12, total/item supply fallbacks, period preference, VAT prefix and unrelated vendor/service cases. Full payload equality permits only intended narration replacement; supplier suffix/account/amounts are explicitly checked. Operating snapshot129regular records:48changed/81identical/0errors; recent281..288 all match requested format.
+-3805queue files scanned; no recent pending/claimed/running/retry jobs. No active invoice statuses before activation. Only erp_runner.py differs among backed-up files. Deployed09:02:26 newSHA256a3b33a1447ca72591d8a789f6c402428f9abe5970f94a17337654cc261095389. Pinned supervisor restart1884->34356; bridge17760 ports3010/3011,finance14364 port3012,relay10140 port19443 unchanged.
+-09:03:03 verification:174invoice rows unchanged; certified native8081/public3010 return their expected anonymous403.243 heartbeat09:03:01 still oldbundle6155cfc...; only missing check is bundle update. Expected5aaeae4d597912f3961f5be7d2edcc8b202098ed73626ecebcfd4c6610a8fe15. At09:03:37,243 reports exact expected bundle, readytrue, missing_items=[] and heartbeat09:03:36. All174invoice rows still match backup. Final production_verification.json saved locally; rollout complete without live financial replay.
+
 ## 2026-11-04 noon recovery implementation evidence
 
 - Old source805c6d79... regex allowed zero separators and partial components: 2026-11-04=>2026-01-01,2026-12-04=>2026-01-02. Operating-data rehearsal explicitly returned before_start_date with old sender, even without DB locking. Fixed parser returns requested dates and invalid-date tests reject truncation. This explains absence beginningNovember1; previous DB errors were real but not a complete explanation.
