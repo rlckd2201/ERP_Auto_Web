@@ -7,12 +7,12 @@ import tempfile
 import uuid
 import zipfile
 import mimetypes
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import requests
-from fastapi import FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Query, Request, Response, UploadFile
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -33,6 +33,7 @@ from .models import (
     VerificationCodeRequest,
 )
 from .notifications import notify_job_completed, notify_job_failed, notify_password_reset
+from .log_viewer import read_logs
 from .settings import BASE_DIR, default_accounting_date, manager_profile, manager_profiles, settings
 from .storage import JobStore
 from .voucher_builder import build_voucher_payload
@@ -670,6 +671,21 @@ def api_forward_job(job_id: str) -> dict[str, Any]:
         result={**job.result, "data_server_forward": forward_result},
     )
     return {"ok": bool(forward_result.get("ok")), "forward": forward_result, "job": _public_job_dump(updated)}
+
+
+@app.get("/api/admin/logs")
+def api_admin_logs(
+    request: Request, response: Response,
+    source: Literal['jobs', 'agent', 'server'] = 'jobs',
+    q: str = Query('', max_length=200), level: Literal['all', 'error', 'warning', 'info'] = 'all',
+    job_id: str = Query('', max_length=64), file_id: str = Query('', max_length=64),
+    start: date | None = None, end: date | None = None,
+    page: int = Query(1, ge=1, le=10000), page_size: int = Query(100, ge=1, le=200),
+) -> dict[str, Any]:
+    _require_admin(request)
+    response.headers['Cache-Control'] = 'no-store'
+    return read_logs(store, settings, source=source, q=q, level=level, job_id=job_id,
+                     file_id=file_id, start=start, end=end, page=page, page_size=page_size)
 
 
 @app.get("/api/admin/agent-commands")

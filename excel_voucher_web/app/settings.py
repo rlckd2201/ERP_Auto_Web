@@ -92,6 +92,7 @@ class Settings:
     smtp_starttls: bool = _env_bool("EXCEL_VOUCHER_SMTP_STARTTLS", True)
     failure_email_enabled: bool = _env_bool("EXCEL_VOUCHER_FAILURE_EMAIL_ENABLED", False)
     mail_outbox_dir: Path = Path(_env("EXCEL_VOUCHER_MAIL_OUTBOX_DIR", str(data_dir / "mail_outbox")))
+    server_log_dir: Path = Path(_env("EXCEL_VOUCHER_SERVER_LOG_DIR", r"D:\PortalConnectedSystems\finance-voucher\logs"))
 
     @property
     def db_path(self) -> Path:

@@ -285,6 +285,7 @@ function applyAuthUi() {
   authShell.hidden = canUseApp();
   if (!canUseApp()) updateVerificationDialog({ status: "", result: {} });
   adminPanel.hidden = !isAdmin();
+  window.financeLogs?.setAccess(isAdmin() && canUseApp());
   loginPanel.hidden = Boolean(user && user.must_change_password);
   changePasswordPanel.hidden = !(user && user.must_change_password);
   userBar.hidden = !user;

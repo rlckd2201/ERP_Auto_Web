@@ -94,6 +94,18 @@ Test-NetConnection 172.16.19.105 -Port 3012
 - 수동 재전달 API `POST /api/jobs/{job_id}/forward`도 HTTP 409로 거절하며 외부 요청이나 작업 상태 변경을 하지 않는다.
 - 과거 이벤트는 감사 이력으로 유지하지만 비활성 연계를 현재 장애로 표시하지 않는다.
 
+## 관리자 로그 조회
+
+관리자 로그인 시 상단 `로그 조회` 탭에서 작업 처리 이력, 수집된 243 Agent 로그, 서버 로그를 구분해 조회한다. 작업/기간/수준/내용 검색, 페이지 이동, 10초 자동 갱신, 현재 페이지 텍스트 다운로드를 지원한다. 일반 사용자에게는 탭과 API 접근을 허용하지 않는다.
+
+- 조회와 자동 갱신은 저장된 로그만 읽는다. `Agent 로그 수집`을 눌렀을 때만 기존 `tail-log` 명령을 요청하며 전표 재실행, ERP 실행, 출력, 메일 발송은 하지 않는다.
+- 작업 이력은 최근 10,000건, Agent 스냅샷과 서버 파일은 최근 50개, 파일별 내용은 마지막 1 MiB/10,000줄로 제한한다. 내용 검색과 수준 필터는 이 범위에 적용된다.
+- 서버 파일은 데이터 폴더의 `service_logs/web-*.log`와 `EXCEL_VOUCHER_SERVER_LOG_DIR/native-*.log`만 읽는다. 후자의 기본 경로는 `D:\PortalConnectedSystems\finance-voucher\logs`이다. 링크/재분석 지점과 임의 파일 경로는 허용하지 않는다.
+- 알려진 비밀번호/인증번호/토큰/쿠키/개인키 패턴을 가린 뒤 화면과 다운로드에 제공한다. 원본 설정 JSON 및 작업 인증정보는 조회 대상이 아니다. 로그에는 처음부터 비밀 값을 기록하지 않는 원칙도 유지한다.
+- 포털 운영 배포 시 `private/native-host.json`의 `sourcePins` 중 변경된 `app/main.py` SHA256을 함께 갱신해야 한다. 다른 인증 설정과 핀은 그대로 유지하고 `FinanceVoucher-Web-3012`만 재시작한다.
+
+회귀 테스트: `python -m pytest tests/test_log_viewer.py -q`. 격리된 브라우저 검사는 Playwright가 설치된 개발 PC에서 `python tests/browser_log_viewer.py <결과폴더>`로 실행한다. 이 검사는 로컬 정적 서버와 가짜 API만 사용하고 실제 ERP/운영 API는 호출하지 않는다. 아이콘 출처/라이선스는 `app/static/icons/LUCIDE-LICENSE`에 포함되어 있다.
+
 ## 작업 내역 초기화
 계정/비밀번호는 유지하고 처리 내역과 업로드 파일만 지울 때 서버에서 실행한다.
 

@@ -1,0 +1,81 @@
+.workspaceTabs {
+  display: flex;
+  gap: 24px;
+  padding: 0 24px;
+  background: white;
+  border-bottom: 1px solid var(--line);
+}
+.workspaceTabs button {
+  min-height: 46px;
+  padding: 10px 2px;
+  border: 0;
+  border-bottom: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--subtle);
+  font-weight: 700;
+}
+.workspaceTabs button[aria-selected="true"] { color: var(--accent); border-bottom-color: var(--accent); }
+.logsShell { width: min(1400px, calc(100% - 48px)); margin: 24px auto 36px; }
+.logsHeading, .logsStatusBar, .logsPager, .logsActions, .logsPager > div { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.logsHeading { min-height: 42px; margin-bottom: 18px; }
+.logsActions { justify-content: flex-end; }
+.logsAuto { display: flex; align-items: center; gap: 7px; white-space: nowrap; font-size: 13px; }
+.logsAuto input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.logsShell button img { display: block; flex: 0 0 auto; }
+.logsShell .iconButton { display: inline-flex; align-items: center; justify-content: center; width: 38px; height: 38px; min-width: 38px; padding: 8px; border-radius: 6px; }
+.logsSource { display: flex; gap: 0; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.logsSource button { min-width: 88px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 10px 16px; color: var(--subtle); background: transparent; }
+.logsSource button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: #e7f3f1; font-weight: 700; }
+.logsFilters { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.logsFilters label { display: grid; gap: 6px; min-width: 0; font-size: 12px; color: var(--subtle); }
+.logsFilters input, .logsFilters select { height: 38px; min-width: 0; max-width: 100%; background: #fff; color: var(--text); border-radius: 6px; padding: 7px 9px; font-size: 13px; }
+#logsJobField, #logsFileField { flex: 1 1 230px; max-width: 420px; }
+#logsStartField, #logsEndField { flex: 0 1 142px; }
+.logsFilters .logsSearch { flex: 1 1 200px; }
+.logsStatusBar { min-height: 54px; font-size: 12px; color: var(--subtle); }
+#logsCollect { display: inline-flex; align-items: center; gap: 7px; min-height: 36px; width: auto; font-size: 12px; white-space: nowrap; border-radius: 6px; }
+#logsNotice { margin: 0; }
+#logsNotice:not(:empty) { margin-bottom: 12px; }
+.logsTableWrap { background: white; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); min-height: 220px; }
+.logsTableWrap[aria-busy="true"] { opacity: 0.6; }
+.logsTable { table-layout: fixed; width: 100%; border-collapse: collapse; }
+.logsTable th, .logsTable td { padding: 10px 12px; text-align: left; vertical-align: top; border-bottom: 1px solid #e7ecee; font-size: 12px; line-height: 1.6; overflow-wrap: anywhere; }
+.logsTable th { background: #edf2f4; color: #516168; font-weight: 700; }
+.logsTable td { width: auto; }
+.logsTable th:nth-child(1) { width: 170px; }
+.logsTable th:nth-child(2) { width: 70px; }
+.logsTable th:nth-child(3) { width: 210px; }
+.logsTable td.logCell-message { font-family: Consolas, "Malgun Gothic", monospace; white-space: pre-wrap; }
+.logsTable td.logCell-time { color: var(--subtle); font-variant-numeric: tabular-nums; }
+.logsTable .tableEmpty { text-align: center; padding: 72px 16px; }
+.logLevel { display: inline-block; font-weight: 700; white-space: nowrap; }
+.logLevel.error { color: #b42318; }
+.logLevel.warning { color: #99610c; }
+.logLevel.info { color: #49616a; }
+.logsTable tbody tr:hover { background: #f7fafb; }
+.logsPager { padding-top: 14px; font-size: 12px; color: var(--subtle); }
+.logsPager label { display: flex; align-items: center; gap: 8px; }
+.logsPager select { width: 72px; padding: 7px; border-radius: 6px; }
+#logsPage { min-width: 76px; text-align: center; font-variant-numeric: tabular-nums; }
+.logsShell button:disabled { cursor: default; opacity: 0.4; }
+.logsShell :focus-visible, .workspaceTabs :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+@media (max-width: 760px) {
+  .topbar { flex-wrap: wrap; }
+  .topActions { margin-left: auto; }
+  .logsShell { width: calc(100% - 24px); margin-top: 16px; }
+  .workspaceTabs { padding: 0 16px; }
+  .logsHeading { gap: 8px; flex-wrap: wrap; }
+  .logsActions { gap: 8px; }
+  .logsTable, .logsTable tbody { display: block; }
+  .logsTable thead { display: none; }
+  .logsTable tr { display: grid; grid-template-columns: 1fr 70px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+  .logsTable td { display: block; border: 0; padding: 3px 10px; }
+  .logsTable td.logCell-context, .logsTable td.logCell-message, .logsTable .tableEmpty { grid-column: 1 / -1; }
+  .logsTable td.logCell-context { color: var(--subtle); }
+  .logsTable td.logCell-level { text-align: right; }
+  .logsStatusBar { align-items: flex-start; padding: 10px 0; }
+  #logsSummary { line-height: 1.7; }
+  .logsPager { gap: 8px; }
+  .logsPager > div { gap: 4px; }
+}
