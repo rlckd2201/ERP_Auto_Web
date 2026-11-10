@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-11-10 preserve the portal source contract
+
+- Restoring entry and correcting this regression is within the already authorized viewer change. Keep server account restrictions in place during recovery.
+- The portal adapts legacy app.js source. Until a coordinated portal change is available, preserve that source exactly and implement UI changes through a separate deferred extension. Preserve the original cache URL as well; no manager-owned35 changes.
+- Pin the normalized original app source in a regression test (canonical SHA256e87a80caaa0a6d148932c0206064c37f447936afa8eb0a9d38cd0546c8e0a57e); operating raw-byte SHA remains1e19c81a.... The extension must load after app.js and use its existing runtime/session transport.
+- Backend health, native installation-check and mocked browser tests are distinct from authenticated portal acceptance. State that limitation explicitly and do not report portal recovery before observation or user confirmation.
+
 ## 2026-11-10 log/DB navigation and authorization
 
 - Latest explicit user instruction authorizes both viewer tabs and deploy; DB access belongs only to verified user_id rlckd9646, while every authenticated account can read processing logs. UI visibility alone is insufficient; direct DB queries must also be denied.

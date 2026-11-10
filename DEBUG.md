@@ -1,5 +1,14 @@
 # Debug
 
+## 2026-11-10 portal entry regression
+
+- User screenshot shows the portal loader failure, not the app's own bootstrap-guard message. Native stdout contains / and new assets200 but no browser setup/invoice API calls after initial rollout. No app exception in backend logs. Public unauthenticated portal entry returns401 and cannot expose the authenticated adapter response.
+- Historical DEBUG October27 14:51 records portal-served app.js503 while105 served200; restoring original raw app SHA1e19c81a... recovered the live portal then. Current changed app source was restored exactly at09:59:32; current35 source/exception has not been read, so do not label this a proven identical error.
+-10:03:17 frontend-only correction: index SHA5419e8b21bb999d74a4885138812723ebf26351bbdb3ac1878124d081f432c94; new viewer-navigation.js SHAe46128cab2355ce32e308972c8a0757f72bd5c034120f167286c8ea2a9f632e2. Original app.js and cache version retained. Native15740 unchanged, expected Agent bundle4fbe1ad3... unchanged,175 business rows unchanged.
+-9 Playwright viewer scenarios pass again using the original app plus extension;20 Node tests pass including2 new source-contract/load-order checks. This does not simulate the actual35 adapter. Graphify refreshed2274nodes/6408edges/78communities.
+- @oai/sky list_apps fails "Computer Use native pipe is unavailable ... os error2" before any input, also after node_repl reset/reinitialize. No browser tokens or Chrome debugging endpoints accessed. User refresh question pending.
+- Evidence under output/log_tab_20261110/portal_fix plus remote portal_restore.json,portal-fix-deployment.json,portal-fix-verification.json. As of10:04,no post-fix viewer-navigation request had reached105; actual portal recovery remains unconfirmed.
+
 ## 2026-11-10 viewer integration evidence
 
 - Local/server-stage unittest web_v1.test_log_viewer:13 pass. Covers six users, owner-only DB, expired/revoked sessions, native server-side identity, spoofed query/IP/headers, malformed native state, bounded/parameterized queries, source projection, orphan/malformed invoice JSON, read-only DB and no business-row changes.

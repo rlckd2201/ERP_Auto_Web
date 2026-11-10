@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-11-10 portal compatibility follow-up
+
+- [x] Restore verified original app.js bytes and cache URL.
+- [x] Move viewer navigation/hooks to separate viewer-navigation.js; retain restricted DB APIs and both tabs.
+- [x] Run9 browser tests and20 Node tests; add a regression guard for the external portal source contract.
+- [x] Deploy index/extension only with backup; verify unchanged native PID, Agent bundle and175 invoice rows.
+- [ ] Observe successful authenticated portal entry after refresh, then both log/DB views. User confirmation is pending; computer-use native pipe is unavailable.
+- If entry still fails, retain original app.js and inspect the actual portal adaptation failure with the35 owner; do not change authentication or suppress its protection.
+
 ## 2026-11-10 viewer integration
 
 - [x] Back up operating frontend/backend and consistent175-invoice DB.

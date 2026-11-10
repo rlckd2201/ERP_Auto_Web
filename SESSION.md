@@ -1,5 +1,14 @@
 # Session
 
+## 2026-11-10 portal rendering incident and compatibility repair
+
+- User reported the portal's full-page "전표 화면을 불러오지 못했습니다" after the viewer rollout. The earlier completion claim was premature: standalone fixture tests and healthy backend responses did not verify the portal's source adaptation.
+- Native backend15740 remained ready; portal-origin requests for / and every asset returned200 at105, followed by no setup/invoice API bootstrap. Historical October27 evidence records the same class of portal adaptation failure when app.js source changed. The exact35 adapter exception is not yet available; this is the leading compatibility diagnosis, not an independently captured35 error.
+- At09:59:32 restored exact original app.js and index.html on105 to recover the previous entry. At10:03:17 applied the new index and separate viewer-navigation.js. Original app.js remains byte-identical to verified baseline1e19c81a..., with its original cache URL. Both tabs and server permissions are retained; all navigation changes now run in the separate extension.
+- Fresh verification:9 isolated browser tests and20 Node tests pass, including a canonical legacy-source guard. NativePID15740/Agent bundle unchanged; all175 invoice rows remain identical. Backup C:/ERP_DB/deploy_backups/log_tab_portal_compat_20261110_100317. No native host/bridge/35 edits, backend restart, ERP, printing or mail.
+- Computer-use skill loaded; @oai/sky initialization succeeded but list_apps failed with native pipe unavailable, including after reset. Actual Chrome interaction was not possible. Asked user to refresh; no response or post-fix navigation asset request observed as of10:04.
+- Next exact start: check user's refresh result and105 logs for viewer-navigation.js, setup/invoice bootstrap and logs/DB endpoints. Do not call the portal recovered based only on server health or isolated tests. Working branch remains codex/log-tab-20261110.
+
 ## 2026-11-10 integrated log and DB tabs deployed
 
 - User explicitly approved moving both viewers into the normal left navigation, with logs for every authenticated account and DB only for rlckd9646. Primary worked alone in managed worktree C:/Users/user/.codex/worktrees/ac12/회계업무 자동화_WEB_Version, branch codex/log-tab-20261110; the original dirty source tree was preserved.
