@@ -1,5 +1,15 @@
 # Session
 
+## 2026-11-10 integrated log and DB tabs deployed
+
+- User explicitly approved moving both viewers into the normal left navigation, with logs for every authenticated account and DB only for rlckd9646. Primary worked alone in managed worktree C:/Users/user/.codex/worktrees/ac12/회계업무 자동화_WEB_Version, branch codex/log-tab-20261110; the original dirty source tree was preserved.
+- Implemented separate in-app 로그 조회 / DB 보기 tabs, search, source selection, paging, refresh, and existing invoice/job log shortcuts. Old /admin-db links enter the in-app DB tab; ordinary accounts fall back to logs. DB APIs enforce the verified account, independently of menu visibility.
+- Production source and consistent 175-invoice SQLite backup: C:/ERP_DB/deploy_backups/log_tab_20261110_092332. Seven source files applied on105; pinned native backend34356 ->15740 at09:43 KST. Bridge17760 (3010/3011), finance14364 (3012), relay25000 (19443) unchanged. All175 invoice rows and36,806 stored invoice logs preserved.
+- Verification:13 backend authorization/query tests locally and on server staging;18 existing frontend session/error tests;9 isolated Playwright UI tests. Operating source hashes match release; native/public version responds200 and anonymous log/DB requests remain403. Browser tests use fixtures, not a live authenticated portal session; current session has no usable browser connector.
+- New guards support the native portal host's verified request.state.accounting_identity and legacy verified browser sessions. No portal35 or native host changes, business replay, printing or mail send. Evidence: output/log_tab_20261110, including screenshots and production verification.
+- At09:45:40,243 heartbeat is fresh,ok=true,all checks pass and bundle exactly matches4fbe1ad342ab4578aeda07541b9c8c68c6fdfe632bafff8d1c266847e09a655e. Rollout is complete. Release source/docs belong to branch codex/log-tab-20261110.
+- Next exact start: if the user reports a menu issue, inspect the authenticated portal tab and the corresponding log/DB API status using this release branch. Do not re-run completed financial work for UI validation. Prior SMTP/APT remediation remains a separate task.
+
 ## 2026-11-05 maintenance narration approved and deployed
 
 - User explicitly clarified/approved changing only text before " - "; retain current vendor suffix and do not add corporate designations. Primary agent worked alone. One-line change in erp_runner._summary replaces 통합유지보수료 with 전산, 전화, 방송, CCTV 유지보수료; site/period, supplier formatting and existing maintenance selection remain.

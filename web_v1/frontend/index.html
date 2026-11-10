@@ -7,6 +7,7 @@
   <link rel="stylesheet" href="/assets/styles.css?v=20261027_portal254">
   <link rel="stylesheet" href="/assets/purchase-feedback.css?v=20261028_3">
   <link rel="stylesheet" href="/assets/output-progress.css?v=20261030_1">
+  <link rel="stylesheet" href="/assets/admin_db.css?v=20261110_logs">
 </head>
 <body>
   <section id="loginView" class="gate-view">
@@ -70,11 +71,14 @@
       <nav class="nav-list">
         <button id="purchaseNavButton" class="nav-item active" type="button">구매 처리</button>
         <button id="regularNavButton" class="nav-item" type="button">정기 처리</button>
+        <button id="logsNavButton" class="nav-item" type="button">로그 조회</button>
+        <button id="dbNavButton" class="nav-item hidden" type="button">DB 보기</button>
         <button id="setupNavButton" class="nav-item" type="button">설정</button>
       </nav>
     </aside>
 
     <main class="main">
+      <div id="processingView" class="processing-view">
       <header class="topbar">
         <div>
           <h1 id="pageTitle">구매 처리</h1>
@@ -252,6 +256,96 @@
           </table>
         </div>
       </section>
+      </div>
+
+      <section id="logsView" class="log-view hidden" aria-labelledby="logsTitle">
+        <header class="topbar">
+          <div>
+            <h1 id="logsTitle">로그 조회</h1>
+            <p>처리 기록을 선택하고 검색어로 필요한 내용을 찾아보세요.</p>
+          </div>
+          <button id="logRefreshButton" class="button secondary" type="button">새로고침</button>
+        </header>
+        <div class="admin-db-layout">
+          <aside class="admin-db-sidebar" aria-label="조회 항목">
+            <h2>조회 항목</h2>
+            <div id="logTableList" class="admin-db-table-list"></div>
+          </aside>
+          <section class="admin-db-panel" aria-label="조회 결과">
+            <div class="admin-db-toolbar">
+              <div>
+                <h2 id="logTableTitle">조회 항목 선택</h2>
+                <p id="logTableSummary" role="status" aria-live="polite">왼쪽에서 조회 항목을 선택하세요.</p>
+              </div>
+              <form id="logSearchForm" class="admin-db-search" role="search">
+                <input id="logSearchInput" type="search" maxlength="200" placeholder="검색어" aria-label="로그 검색어">
+                <select id="logLimitSelect" aria-label="로그 표시 건수">
+                  <option value="50">50건</option>
+                  <option value="100" selected>100건</option>
+                  <option value="200">200건</option>
+                  <option value="500">500건</option>
+                </select>
+                <button id="logSearchButton" class="button secondary" type="submit">검색</button>
+              </form>
+            </div>
+            <div id="logErrorBox" class="admin-db-error hidden" role="alert"></div>
+            <div class="admin-db-table-wrap" tabindex="0" aria-label="로그 조회 결과 표">
+              <table id="logDataTable" class="admin-db-table">
+                <thead></thead>
+                <tbody><tr><td class="empty-cell">조회 항목을 선택하세요.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="viewer-paging">
+              <button id="logPreviousButton" class="button ghost" type="button" disabled>이전</button>
+              <button id="logNextButton" class="button ghost" type="button" disabled>다음</button>
+            </div>
+          </section>
+        </div>
+      </section>
+      <section id="dbView" class="log-view hidden" aria-labelledby="dbTitle">
+        <header class="topbar">
+          <div>
+            <h1 id="dbTitle">DB 보기</h1>
+            <p>테이블을 선택하고 저장된 데이터를 조회합니다.</p>
+          </div>
+          <button id="dbRefreshButton" class="button secondary" type="button">새로고침</button>
+        </header>
+        <div class="admin-db-layout">
+          <aside class="admin-db-sidebar" aria-label="DB 테이블">
+            <h2>테이블</h2>
+            <div id="dbTableList" class="admin-db-table-list"></div>
+          </aside>
+          <section class="admin-db-panel" aria-label="DB 조회 결과">
+            <div class="admin-db-toolbar">
+              <div>
+                <h2 id="dbTableTitle">테이블 선택</h2>
+                <p id="dbTableSummary" role="status" aria-live="polite">왼쪽에서 테이블을 선택하세요.</p>
+              </div>
+              <form id="dbSearchForm" class="admin-db-search" role="search">
+                <input id="dbSearchInput" type="search" maxlength="200" placeholder="검색어" aria-label="DB 검색어">
+                <select id="dbLimitSelect" aria-label="DB 표시 건수">
+                  <option value="50">50건</option>
+                  <option value="100" selected>100건</option>
+                  <option value="200">200건</option>
+                  <option value="500">500건</option>
+                </select>
+                <button id="dbSearchButton" class="button secondary" type="submit">검색</button>
+              </form>
+            </div>
+            <div id="dbErrorBox" class="admin-db-error hidden" role="alert"></div>
+            <div class="admin-db-table-wrap" tabindex="0" aria-label="DB 조회 결과 표">
+              <table id="dbDataTable" class="admin-db-table">
+                <thead></thead>
+                <tbody><tr><td class="empty-cell">테이블을 선택하세요.</td></tr></tbody>
+              </table>
+            </div>
+            <div class="viewer-paging">
+              <button id="dbPreviousButton" class="button ghost" type="button" disabled>이전</button>
+              <button id="dbNextButton" class="button ghost" type="button" disabled>다음</button>
+            </div>
+          </section>
+        </div>
+      </section>
     </main>
   </div>
 
@@ -346,6 +440,7 @@
   <script src="/assets/api-response-guard.js?v=20261027_setup_retry" defer></script>
   <script src="/assets/purchase-feedback.js?v=20261028_3" defer></script>
   <script src="/assets/output-progress.js?v=20261030_1" defer></script>
-  <script src="/assets/app.js?v=20261027_http_errors" defer></script>
+  <script src="/assets/viewer-tabs.js?v=20261110_logs" defer></script>
+  <script src="/assets/app.js?v=20261110_logs" defer></script>
 </body>
 </html>

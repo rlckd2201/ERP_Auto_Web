@@ -1,5 +1,16 @@
 # Debug
 
+## 2026-11-10 viewer integration evidence
+
+- Local/server-stage unittest web_v1.test_log_viewer:13 pass. Covers six users, owner-only DB, expired/revoked sessions, native server-side identity, spoofed query/IP/headers, malformed native state, bounded/parameterized queries, source projection, orphan/malformed invoice JSON, read-only DB and no business-row changes.
+- Existing node session/HTTP frontend regressions:18 pass. New isolated Playwright test_viewer_tabs_browser:9 pass (member/owner navigation, no extra window, search/filter/paging/refresh, prefixed old-link redirect, anonymous deep link, safe502 recovery,401 clearing,420px overflow). Screenshots output/log_tab_20261110/screenshots inspected. No real portal credentials or session tokens were extracted.
+- Production native-host.py lines312-322 inserts verified accounting_identity into ASGI state and discards browser tokens. Initial new guard would have tried resolving its marker as a browser token; caught before deployment and corrected to consume trusted state first. Native wrapper and bindings were not changed.
+- Read-only snapshot queries:36,806 logs total,7,854 purchase,24,594 regular; remaining records have older/unknown/orphan invoice types. Current business DB175 invoices all completed. Backup/source manifest and release hashes in output/log_tab_20261110.
+- Host's existing installation-check operations endpoint reported7195 terminal jobs,0 active before restart. A dedicated service check used only purpose=installation-check; no user identity/session was minted. After native34356 ->15740,ready=true,0 active; old in-memory job history follows existing restart behavior, while stored invoice logs persist.
+- Release ZIP SHA2563f084dcfa01e4305cd3161a20765115fafed9d0a2136d3167adc86fbb3a44c7a, seven applied files all hash-matched. Native/public api/version200; anonymous log/DB403. Other listeners3010/3011/3012/19443 retain their owners. Invoice SHA256 unchanged and log count36,806 after deployment.
+- Graphify AST refresh completed:2271 nodes/6406 edges/76 communities. Existing invalid Python escape warning in app.py appears during AST tests; no new failure. Generated graph files are local, not part of the focused release commit.
+- At09:44:14,243 was connected/ok on previous5aaeae4d... bundle. Normal auto-update completed by09:45:40:exact expected4fbe1ad3... bundle,ok=true,no failed checks. Authenticated operating portal UI is not directly observed because no browser connector is available.
+
 ## 2026-11-05 maintenance narration regression and rollout
 
 - Backup C:/ERP_DB/deploy_backups/maintenance_summary_20261105_085950:52files, consistent174invoices; baseline sourcebe2fb044... and invoice SHA256dd6e6094efd07bad9cd5b80cbf21453dbc1b30dcbf09b846c7379b384bbde336.

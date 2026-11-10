@@ -12,6 +12,7 @@ import sqlite3
 import threading
 import time
 import zipfile
+from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -30,6 +31,7 @@ from .browser_session import SESSION_HEADER, create_browser_session, resolve_bro
 from .mail_collector import mail_collect_processed_history
 from .invoice_db import DONE, ERROR, PROCESSING, WAITING, add_invoice_log, delete_invoice, get_invoice, init_db, insert_manual_invoice, learn_dictionary_items, list_invoice_logs, list_invoices, normalize_processor, reset_invoice, set_invoice_status, update_invoice_json, update_invoice_pdf_path
 from .job_store import job_store
+from .log_viewer import readonly_db, require_db_viewer, router as log_viewer_router
 from .models import ApprovalChoiceRequest, InvoiceIdsRequest, InvoiceStatusUpdate, JobCreateRequest, JobResponse, OutputSetRequest, PurchaseAnalysisUpdate, RegularDataUpdate
 from .notifications import notify_regular_auto_result
 from .purchase_execution import purchase_routing_payload, resolve_purchase_execution
@@ -81,6 +83,8 @@ app = FastAPI(
     title="Accounting Automation WEB v1.0",
     version=settings.app_version,
 )
+
+app.include_router(log_viewer_router)
 
 app.add_middleware(
     CORSMiddleware,
@@ -2888,11 +2892,7 @@ def create_output_set_job(body: OutputSetRequest, request: Request) -> JobRespon
 
 
 def _admin_db_conn() -> sqlite3.Connection:
-    if not settings.sqlite_db_path.exists():
-        raise HTTPException(status_code=404, detail=f"DB file not found: {settings.sqlite_db_path}")
-    conn = sqlite3.connect(str(settings.sqlite_db_path), timeout=10.0)
-    conn.row_factory = sqlite3.Row
-    return conn
+    return readonly_db()
 
 
 def _quote_identifier(value: str) -> str:
@@ -2913,8 +2913,9 @@ def _admin_table_names(conn: sqlite3.Connection) -> list[str]:
 
 
 @app.get("/api/admin/db/overview")
-def api_admin_db_overview() -> dict[str, Any]:
-    with _admin_db_conn() as conn:
+def api_admin_db_overview(request: Request) -> dict[str, Any]:
+    require_db_viewer(request)
+    with closing(_admin_db_conn()) as conn:
         tables = []
         for table_name in _admin_table_names(conn):
             quoted = _quote_identifier(table_name)
@@ -2929,12 +2930,14 @@ def api_admin_db_overview() -> dict[str, Any]:
 
 @app.get("/api/admin/db/table")
 def api_admin_db_table(
+    request: Request,
     table: str = Query(..., min_length=1, max_length=80),
     q: str = Query(default="", max_length=200),
     limit: int = Query(default=100, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
 ) -> dict[str, Any]:
-    with _admin_db_conn() as conn:
+    require_db_viewer(request)
+    with closing(_admin_db_conn()) as conn:
         table_names = set(_admin_table_names(conn))
         if table not in table_names:
             raise HTTPException(status_code=404, detail="Unknown table")

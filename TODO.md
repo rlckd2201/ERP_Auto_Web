@@ -1,5 +1,17 @@
 # TODO
 
+## 2026-11-10 viewer integration
+
+- [x] Back up operating frontend/backend and consistent175-invoice DB.
+- [x] Add integrated log and DB tabs; retain old URL compatibility.
+- [x] Allow authenticated accounts to read logs; restrict raw DB APIs and menu to rlckd9646.
+- [x] Verify native portal identity hand-off, ordinary browser sessions, forged identity rejection, search/paging, safe gateway errors, expiry clearing, and narrow layout.
+- [x] Deploy only seven source files; verify pinned backend restart, unchanged other listeners, unchanged invoice fingerprint and stored log count.
+- [x] At09:45:40,243 Agent reports current bundle4fbe1ad342ab4578aeda07541b9c8c68c6fdfe632bafff8d1c266847e09a655e,ok=true,no failed checks.
+- Release branch: codex/log-tab-20261110; focused source/tests/four session documents, generated graph artifacts excluded.
+- Follow-up only if requested: authenticated portal visual confirmation; no browser connector was available for the operating session. Recent-job events retain the existing in-memory lifetime; persisted invoice logs remain available across restart.
+- Separate prior SMTP/APT work remains pending and was not changed by this task.
+
 ## 2026-11-05 approved maintenance narration rollout
 
 - [x] Back up operating program/config and174-row DB; retain original vendor suffix per user clarification.

@@ -50,12 +50,18 @@ const state = {
   oneClickOutputTarget: localStorage.getItem(ONE_CLICK_OUTPUT_STORAGE_KEY) || "",
   detailMode: localStorage.getItem("accountingWebDetailMode") === "1",
   invoiceMode: localStorage.getItem("accountingWebInvoiceMode") === "regular" ? "regular" : "purchase",
+  activeTab: ["#logs", "#db"].includes(window.location.hash) ? window.location.hash.slice(1) : (localStorage.getItem("accountingWebInvoiceMode") === "regular" ? "regular" : "purchase"),
 };
 
 const els = {
   loginView: document.querySelector("#loginView"),
   setupView: document.querySelector("#setupView"),
   appShell: document.querySelector("#appShell"),
+  processingView: document.querySelector("#processingView"),
+  logsView: document.querySelector("#logsView"),
+  logsNavButton: document.querySelector("#logsNavButton"),
+  dbView: document.querySelector("#dbView"),
+  dbNavButton: document.querySelector("#dbNavButton"),
   loginForm: document.querySelector("#loginForm"),
   loginUserId: document.querySelector("#loginUserId"),
   loginPassword: document.querySelector("#loginPassword"),
@@ -140,20 +146,6 @@ const els = {
   statusFilterButtons: [...document.querySelectorAll("[data-status-filter]")],
   stages: [...document.querySelectorAll("[data-stage]")],
 };
-
-function ensureAdminDbButton() {
-  if (document.querySelector("#adminDbButton")) return;
-  const host = document.querySelector(".top-actions");
-  if (!host) return;
-  const button = document.createElement("a");
-  button.id = "adminDbButton";
-  button.className = "button secondary admin-only";
-  button.href = "/admin-db";
-  button.target = "_blank";
-  button.rel = "noopener";
-  button.textContent = "DB 보기";
-  host.insertBefore(button, els.purchaseCollectButton || els.demoButton || null);
-}
 
 function isLocalhost() {
   return ["localhost", "127.0.0.1", "::1"].includes(window.location.hostname);
@@ -433,9 +425,24 @@ function showView(name) {
   els.loginView?.classList.toggle("hidden", name !== "login");
   els.setupView?.classList.toggle("hidden", name !== "setup");
   els.appShell?.classList.toggle("hidden", name !== "app");
-  els.purchaseNavButton?.classList.toggle("active", name === "app" && state.invoiceMode === "purchase");
-  els.regularNavButton?.classList.toggle("active", name === "app" && state.invoiceMode === "regular");
+  els.processingView?.classList.toggle("hidden", ["logs", "db"].includes(state.activeTab));
+  els.logsView?.classList.toggle("hidden", state.activeTab !== "logs");
+  els.dbView?.classList.toggle("hidden", state.activeTab !== "db" || !canViewDb());
+  els.dbNavButton?.classList.toggle("hidden", !canViewDb());
+  els.purchaseNavButton?.classList.toggle("active", name === "app" && state.activeTab === "purchase");
+  els.regularNavButton?.classList.toggle("active", name === "app" && state.activeTab === "regular");
+  els.logsNavButton?.classList.toggle("active", name === "app" && state.activeTab === "logs");
+  els.dbNavButton?.classList.toggle("active", name === "app" && state.activeTab === "db" && canViewDb());
   els.setupNavButton?.classList.toggle("active", name === "setup");
+  [els.purchaseNavButton, els.regularNavButton, els.logsNavButton, els.dbNavButton, els.setupNavButton].forEach((button) => {
+    if (!button) return;
+    if (button.classList.contains("active")) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  });
+}
+
+function canViewDb() {
+  return state.user?.id === "rlckd9646";
 }
 
 function setPasswordChangeOpen(open, data = null) {
@@ -514,6 +521,8 @@ function clearLoginAndShowLogin(message = "") {
   }
   localStorage.removeItem("accountingWebUser");
   state.user = null;
+  window.AccountingLogViewer?.reset();
+  window.AccountingDbViewer?.reset();
   state.setupStatus = null;
   state.appLoaded = false;
   state.setupWasReady = false;
@@ -802,17 +811,29 @@ async function openSetupSettings() {
   }
 }
 
-async function showApp(mode = state.invoiceMode) {
-  const nextMode = mode === "regular" ? "regular" : "purchase";
+async function showApp(mode = state.activeTab) {
+  let nextTab = ["purchase", "regular", "logs", "db"].includes(mode) ? mode : state.invoiceMode;
+  if (nextTab === "db" && !canViewDb()) nextTab = "logs";
+  const viewerTab = nextTab === "logs" || nextTab === "db";
+  const nextMode = viewerTab ? state.invoiceMode : nextTab;
   const modeChanged = state.invoiceMode !== nextMode;
+  state.activeTab = nextTab;
   state.invoiceMode = nextMode;
   localStorage.setItem("accountingWebInvoiceMode", state.invoiceMode);
+  const nextUrl = new URL(window.location.href);
+  if (viewerTab) nextUrl.hash = nextTab;
+  else if (["#logs", "#db"].includes(nextUrl.hash)) nextUrl.hash = "";
+  if (nextUrl.href !== window.location.href) history.replaceState(history.state, "", nextUrl.href);
   applyModeUi();
   showView("app");
   state.setupWasReady = true;
   startSetupMonitor();
   startMailCollectMonitor();
   startJobNotificationMonitor();
+  if (viewerTab) {
+    await (nextTab === "db" ? window.AccountingDbViewer : window.AccountingLogViewer).open(requestJson);
+    return;
+  }
   if (state.appLoaded) {
     if (modeChanged) {
       state.selectedInvoiceIds.clear();
@@ -2162,7 +2183,8 @@ async function loadInvoiceLogs(invoiceId) {
 async function loadSelectedInvoiceLogs() {
   const invoiceIds = [...state.selectedInvoiceIds];
   if (invoiceIds.length !== 1) return;
-  await loadInvoiceLogs(invoiceIds[0]);
+  window.AccountingLogViewer.select("all", `#${invoiceIds[0]}`);
+  await showApp("logs");
 }
 
 async function loadJobLog(jobId) {
@@ -2223,10 +2245,19 @@ els.purchaseNavButton?.addEventListener("click", () => {
 els.regularNavButton?.addEventListener("click", () => {
   if (setupReady()) showApp("regular");
 });
+els.logsNavButton?.addEventListener("click", () => {
+  if (setupReady()) showApp("logs");
+});
+els.dbNavButton?.addEventListener("click", () => {
+  if (setupReady() && canViewDb()) showApp("db");
+});
 els.detailModeButton?.addEventListener("click", toggleDetailMode);
 els.notifyButton.addEventListener("click", requestNotification);
 els.statusToggleButton.addEventListener("click", () => setStatusPanelOpen(!state.statusPanelOpen));
-els.workLogToggleButton.addEventListener("click", () => setWorkLogOpen(!state.workLogOpen));
+els.workLogToggleButton.addEventListener("click", () => {
+  window.AccountingLogViewer.select("jobs", state.currentJobId || "");
+  showApp("logs");
+});
 els.purchaseCollectButton?.addEventListener("click", () => startJob("/api/jobs/purchase-mail-collect"));
 els.oneClickOutputTarget?.addEventListener("change", (event) => {
   const value = event.target.value;
@@ -2401,7 +2432,8 @@ els.saveAnalysisButton.addEventListener("click", async () => {
 els.jobsTable.addEventListener("click", (event) => {
   const button = event.target.closest("[data-job-log]");
   if (!button) return;
-  loadJobLog(button.dataset.jobLog);
+  window.AccountingLogViewer.select("jobs", button.dataset.jobLog);
+  showApp("logs");
 });
 els.invoicePageSize.addEventListener("change", (event) => {
   state.invoicePageSize = Number(event.target.value) || 20;
@@ -2416,7 +2448,6 @@ els.statusFilterButtons.forEach((button) => {
 });
 
 async function bootstrap() {
-  ensureAdminDbButton();
   applyDetailMode();
   registerServiceWorker();
   if (!state.user?.id) {

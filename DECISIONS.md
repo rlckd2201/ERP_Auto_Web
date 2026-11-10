@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-11-10 log/DB navigation and authorization
+
+- Latest explicit user instruction authorizes both viewer tabs and deploy; DB access belongs only to verified user_id rlckd9646, while every authenticated account can read processing logs. UI visibility alone is insufficient; direct DB queries must also be denied.
+- Keep logs as a fixed read-only projection (all/purchase/regular/recent jobs), not an arbitrary table browser. Raw tables belong to the restricted DB view. Parameterize search, bound paging, close SQLite connections, open DB in mode=ro, and clear viewer data on logout.
+- Trust the existing native host's server-side request.state.accounting_identity after its signed portal verification, as the current application's _browser_identity already does. Otherwise require a real browser session. Query parameters, forwarded IP, arbitrary identity headers and a native marker alone never confer access. Do not modify the manager-owned portal/native SSO wrapper.
+- Preserve old /admin-db entry as a same-origin redirect to #db under the current portal prefix. Reuse existing requestJson transport, session handling and safe HTTP errors in both views. Preserve existing purchase/regular selection and actions.
+- Use an isolated worktree because the original source tree contains unrelated modifications/deletions. Commit only relevant source/tests/docs; Graphify's large regenerated artifacts stay local. Back up before deployment and restart only the verified pinned backend after the host's read-only installation-check reports activeJobs=0.
+- Actual ERP/printing/mail actions are outside this UI task; no live transaction is required to validate navigation or read permissions.
+
 ## 2026-11-05 approved narration suffix preservation
 
 - User's latest instruction approves the previously presented scope and specifically limits changes to text before " - ". Keep the current vendor suffix exactly; do not append (주), change supplier names or add alias matching. No further approval is required for this scoped backup/test/deploy.
