@@ -1,5 +1,24 @@
 # Session
 
+## 2026-11-12 approval recovery and Song PC repair package
+
+- Both supplied P3 approval images match the live purchases: #293/order29023421/195950/document184563 and #292/order29023727/186500/document184597. Their filenames and30-day scope were valid. The configured admpdm account reached the mandatory password-change screen before any search. User changed it to the same password; both normal order searches now succeed.
+- Discovered right-side clipping in generated PDFs. Backed up and deployed only the two approval PDF render paths, retaining matching/authentication/A4/margins and existing page-selection behavior. Verified full right approval stamp and tables in both final PDFs, then completed both lookups through the existing service. Both invoices remain waiting with no ERP job; all other178 invoice rows and both targets' non-approval fields are unchanged.
+- Operating backend8656 is healthy;243 has the exact new07070853... bundle. Detailed backup/hashes/tests are in DEBUG. No ERP/print/mail request was manually dispatched.
+- Song's diagnostic proves an incomplete installation under Windows user 전산 송명학: copied program and Python311 exist, but launcher/protocol/autostart/process are absent and .NET HTTPS trust fails. Old owned Agent 송명학-송명학 remains stale fromNov2; the exact original installer exception was not captured.
+- Prepared C:/Users/user/Desktop/송명학PC_회계연결복구.exe and 안내.txt for execution on Song's PC, not the development PC. It preserves existing Python/files, validates the pinned public certificate and HTTPS, backs up changed registration, restores the current user's launcher/trust/startup, and saves a result JSON. Actual Song execution/heartbeat/account binding is still pending.
+- Next exact start: read AccountingWeb_SongRepair_*.json generated on Song's Desktop; inspect natural new Agent 송명학-전산 송명학, verified tuy1120 ownership and latest bundle/setup readiness. Do not rerun #292/#293 lookup or financial processing merely to test this.
+
+## 2026-11-11 Song portal PC binding diagnosis (16:14 KST)
+
+- User reports Song's portal alert saying no linked PC, and requested another attempt. Current 105 native8492 and public3010 both return200;243 is fresh/ready on the deployed8fd49413... bundle. No server crash is involved in this symptom.
+- Song account tuy1120 still owns 송명학-송명학 at172.17.30.15. Last Agent heartbeat2026-11-02T10:25:04, old74e871be... bundle. Its last reported server is already https://172.16.19.105:3010; account ownership was not lost.
+- Active native resolver invokes browser_session._owned_agent; only a recent owned Agent is selected for a new portal session. The old heartbeat therefore yields an empty Agent identity and the screenshot's _identity_setup message. This proves why entry is blocked; it does not prove why the local process stopped or cannot reconnect.
+- SSH22/RDP3389/SMB445/WinRM5985 and8765 timed out from both development PC and105. User returned a16:22 screenshot of the installer start dialog. Song's172.17.30.15 downloaded the payload twice with200, but no heartbeat returned by16:25:08. No credentials, ownership, authentication, source, runtime or business data were changed; no ERP/print/mail dispatched.
+- Verification:23 existing browser-session tests passed locally. Five isolated tests using operating native resolver/owner-selector source confirm offline rejection, same-session late binding, pinning, owner-change rejection and ambiguity rejection. Evidence output/song_binding_20261111/diagnosis.json.
+- Prepared user-Desktop 송명학PC_회계연결진단.exe (existing read-only diagnostics, self-test passed) and 안내.txt for delivery to Song. It must execute on Song's PC; its result JSON is written to that PC's Desktop. Existing installer source starts hidden PowerShell and immediately shows the screenshot message without checking child exit/completion.
+- Next exact start: read Song-PC diagnostic JSON received from the user; verify runtime/Python/modules/launcher/server/Agent log and installation extraction, then repair the evidenced failure. Recheck tuy1120 heartbeat and current bundle. Download success is not restored access.
+
 ## 2026-11-11 duplicate Daou invoice prevention deployed
 
 - User reported two Daou vouchers after recovery. Confirmed294/295 are the same tax document: approval2026111141000018DA100001, total3652000, supplier2208102810/buyer1258105619. Two distinct incoming mail items referenced the same CSBill management202640769381; repeated PDF saves gained_1/_2 names and bypassed path-only registration/automatic dedupe.

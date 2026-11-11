@@ -1,5 +1,25 @@
 # TODO
 
+## 2026-11-12 approval lookup and Song recovery
+
+- [x] Cross-check both images against #292/#293 and distinguish login failure from attachment/date/filter failure.
+- [x] Verify user-completed password change with successful admpdm login and both exact order searches.
+- [x] Back up live sources/SQLite; fix right-edge PDF clipping in order and amount renderers; pass local/server tests and inspect complete final pages.
+- [x] Attach correct PDFs using normal guarded lookup; verify only approval metadata changed in two of180 invoices.
+- [x] Analyze Song's JSON and provide the tested, current-user-specific standalone recovery EXE on the user's Desktop.
+- [ ] Song executes the EXE as 전산 송명학 and returns its Desktop result JSON. Verify actual imports, new heartbeat, current bundle, authorized account binding and portal setup readiness; do not infer these from process start.
+- [ ] Improve mandatory-password-change detection/message in both groupware login paths; currently the old menu wait reports a generic timeout when authentication is blocked.
+- [ ] Separately verify #292 invoice_date2026-01-11 against its original20261110 tax PDF before any date correction. No financial date was changed in this task.
+- Existing order renderer still intentionally exports page1 only; this release fixes width and does not change that compatibility behavior for longer documents.
+
+## 2026-11-11 Song portal connection
+
+- [x] Confirm105/243 health and retained Song ownership; reproduce empty native identity from stale2026-11-02 heartbeat.
+- [x] Verify existing-session binding resumes after a fresh heartbeat with operating-source isolated tests.
+- [x] Inspect returned installer-start screenshot and confirm two successful Song-PC payload downloads; connection still absent16:25.
+- [ ] Read the requested Song-PC diagnostic JSON, then verify restored heartbeat, exact current bundle and setup readiness.
+- [ ] Diagnose local installation/launch failure from Song's JSON or usable remote control. Delivered read-only diagnostic is C:/Users/user/Desktop/송명학PC_회계연결진단.exe for forwarding; output belongs on Song's Desktop. Management ports time out; do not rebind an unrelated PC or replay financial work.
+
 ## 2026-11-11 duplicate tax document guard
 
 - [x] Confirm294/295 same approval, same original CSBill target and separate_1/_2files.

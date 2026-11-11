@@ -1,5 +1,20 @@
 # Decisions
 
+## 2026-11-12 evidence-based approval and PC recovery
+
+- A forced groupware password change is an authentication blocker, not a search miss. Wait for the account owner to clear it; do not bypass it, disable policy or switch to another user's session. User confirmed same-password change, so saved credentials remained unchanged.
+- Use the existing approval service for recovery, retaining invoice fingerprint/search-id/manual-attachment guards and financial state. Validate exact document number/order/total/site/drafter and rendered approval stamp before calling the task resolved.
+- Measure print overflow at A4's printable viewport and reduce scale only when necessary. Both isolated renderers use the same tested function; retain portrait A4,10mm margins and each renderer's existing page selection. No search ranking/date/account policy changes.
+- Song's repair belongs to the diagnosed computer and current Windows user only. Refuse a wrong target or concurrent Agent/setup. Verify real Python311 imports and certificate-validated HTTPS before registration; retain existing runtimes, backup prior settings and preserve the verified Python for later updates.
+- Keep Agent ownership and SSO checks. Do not reuse the old Windows user's Agent ID, fabricate heartbeat freshness, or bind a new Agent solely by IP. An Agent process alone is not recovered portal access.
+- Primary worked alone. Existing immediate-fix authorization covered the narrow PDF defect and reversible repair package; production secrets/certificates/binaries/diagnostic snapshots remain outside the commit.
+
+## 2026-11-11 Song offline Agent boundary
+
+- Preserve verified owner selection and shared243 routing. A working243 does not currently remove the caller Agent requirement: purchase execution uses243, while caller identity and output routing still refer to the requester's PC.
+- An existing account-to-Agent row with a nine-day-old heartbeat is not evidence that its process is running. Diagnose the local launch/connection path; do not fabricate heartbeat freshness, overwrite ownership by IP or remove authentication to clear the setup screen.
+- No production code change/restart is justified by the current evidence. Installer-start notification and payload200 do not prove install or Agent success: current launcher hides child PowerShell and does not collect its exit result. Use a read-only diagnostic executed on the affected PC to identify the failing stage before repair. The generic direct-login message is misleading for an already-owned offline Agent; consider a narrowly tested diagnostic-message improvement after recovery, without weakening selection rules.
+
 ## 2026-11-11 tax-document identity and existing duplicates
 
 - Correct the confirmed automatic duplication within the existing authorized fault-repair scope. Do not infer authorization to delete financial records from the coworker's screenshot; ask whether their ERP cleanup was completed.

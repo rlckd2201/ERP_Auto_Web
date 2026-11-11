@@ -156,6 +156,20 @@ async def search_rows(page, amount: str) -> tuple[list[dict], bool]:
     return rows, consumed < total
 
 
+async def _approval_pdf_scale(page):
+    """Fit fixed-width approval tables and the right approval stamp inside A4."""
+    await page.locator("form#document_content, div.approval_import").first.wait_for(timeout=15000)
+    await page.emulate_media(media="print")
+    await page.set_viewport_size({"width": 718, "height": 1047})
+    await page.evaluate("() => document.fonts.ready.then(() => true)")
+    width = float(await page.evaluate("""() => Math.max(718, document.body.scrollWidth,
+        ...Array.from(document.querySelectorAll('form#document_content *, div.approval_import *'))
+        .map(e => Math.ceil(e.getBoundingClientRect().right)))"""))
+    if not 0 < width <= 7160:
+        raise RuntimeError("품의 인쇄 폭을 확인하지 못해 PDF 저장을 중단했습니다.")
+    return 1.0 if width <= 718 else 716 / width
+
+
 async def render_pdf(page, selected: dict, config: dict) -> str:
     output = Path(config["output_dir"])
     output.mkdir(parents=True, exist_ok=True)
@@ -171,6 +185,7 @@ async def render_pdf(page, selected: dict, config: dict) -> str:
         raise RuntimeError("품의 인쇄 화면의 문서번호가 선택한 문서와 다릅니다.")
     target = output / f"approval_{config['context']['invoice_id']}_{selected['doc_id']}.pdf"
     await page.pdf(path=str(target), format="A4", print_background=True,
+                   scale=await _approval_pdf_scale(page),
                    margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"})
     return str(target)
 

@@ -186,6 +186,20 @@ def extract_order_number(quote_path):
         return nums[0]
     return ""
 
+async def _approval_pdf_scale(page):
+    """Fit fixed-width approval tables and the right approval stamp inside A4."""
+    await page.locator("form#document_content, div.approval_import").first.wait_for(timeout=15000)
+    await page.emulate_media(media="print")
+    await page.set_viewport_size({"width": 718, "height": 1047})
+    await page.evaluate("() => document.fonts.ready.then(() => true)")
+    width = float(await page.evaluate("""() => Math.max(718, document.body.scrollWidth,
+        ...Array.from(document.querySelectorAll('form#document_content *, div.approval_import *'))
+        .map(e => Math.ceil(e.getBoundingClientRect().right)))"""))
+    if not 0 < width <= 7160:
+        raise RuntimeError("품의 인쇄 폭을 확인하지 못해 PDF 저장을 중단했습니다.")
+    return 1.0 if width <= 718 else 716 / width
+
+
 async def run(config):
     quote_path = config["quote_path"]
     output_dir = config["output_dir"]
@@ -338,6 +352,7 @@ async def run(config):
                     path=out_path,
                     format="A4",
                     page_ranges="1",
+                    scale=await _approval_pdf_scale(page),
                     print_background=True,
                     margin={"top": "10mm", "bottom": "10mm", "left": "10mm", "right": "10mm"},
                 )
