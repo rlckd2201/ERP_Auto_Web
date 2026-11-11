@@ -692,6 +692,8 @@ def _regular_auto_path_values(value: Any, *, depth: int = 0) -> set[str]:
 
 
 def _regular_auto_dedupe_keys(invoice: dict[str, Any]) -> set[str]:
+    from .invoice_identity import tax_approval_number
+
     data = _invoice_data(invoice)
     raw = invoice.get("raw") if isinstance(invoice.get("raw"), dict) else {}
     root = {"invoice": invoice, "raw": raw, "data": data}
@@ -699,6 +701,9 @@ def _regular_auto_dedupe_keys(invoice: dict[str, Any]) -> set[str]:
     invoice_id = int(invoice.get("id") or 0)
     if invoice_id:
         keys.add(f"id:{invoice_id}")
+    tax_number = tax_approval_number(invoice)
+    if tax_number:
+        keys.add(f"number:{tax_number}")
     for number in _regular_auto_number_values(root):
         keys.add(f"number:{number}")
     for path in _regular_auto_path_values(root):
@@ -739,6 +744,8 @@ def _regular_auto_mark_skip(invoice: dict[str, Any], reason: str, detail: str) -
 
 
 def _regular_auto_candidate_invoices() -> list[tuple[dict[str, Any], set[str]]]:
+    from .invoice_identity import is_csbill_invoice, tax_approval_number
+
     limit = max(1, min(int(settings.regular_auto_scan_limit or 200), 200))
     summaries = list_invoices(mode="regular", limit=limit)
     invoices = [get_invoice(int(item.get("id") or 0)) for item in summaries]
@@ -776,6 +783,9 @@ def _regular_auto_candidate_invoices() -> list[tuple[dict[str, Any], set[str]]]:
             blocked_keys.update(_regular_auto_dedupe_keys(invoice))
             continue
         keys = _regular_auto_dedupe_keys(invoice)
+        if is_csbill_invoice(invoice) and not tax_approval_number(invoice):
+            _regular_auto_mark_skip(invoice, "tax_identity_unverified", "세금계산서 승인번호를 확인할 수 없어 자동 기표를 보류했습니다.")
+            continue
         duplicate_keys = sorted(key for key in keys if key in blocked_keys and not key.startswith("id:"))
         if duplicate_keys:
             _regular_auto_mark_skip(invoice, "duplicate", ", ".join(duplicate_keys[:5]))

@@ -1,5 +1,16 @@
 # Session
 
+## 2026-11-11 duplicate Daou invoice prevention deployed
+
+- User reported two Daou vouchers after recovery. Confirmed294/295 are the same tax document: approval2026111141000018DA100001, total3652000, supplier2208102810/buyer1258105619. Two distinct incoming mail items referenced the same CSBill management202640769381; repeated PDF saves gained_1/_2 names and bypassed path-only registration/automatic dedupe.
+- Backed up operating Python/frontend/version files and consistent180-row SQLite at C:/ERP_DB/deploy_backups/tax_identity_20261111_113511. Deployed only app.py,invoice_db.py,new invoice_identity.py at11:35:49, registered backend26248->8492. Native/bridge/authentication/frontend runtime unchanged.
+- New identity reads labelled24-character tax approval numbers from original PDFs and compatible structured metadata, preserving letters. Collection checks identity and inserts/logs in one serialized transaction. Automatic selection also recognizes legacy PDF identity and holds CSBill records when identity is missing/conflicting. Repeated amounts alone are never merged.
+-37 local/server tests passed. Copied real294/295 rehearsal registered one row, selected only294 and skipped295;178 other fixture rows unchanged. Operating180 rows remained identical to the deployment backup; no live ERP/print/mail or record deletion was manually dispatched.
+- At11:37:39,8492 remains healthy/noERROR, native/public200;243ready on exact new8fd494134d5378ff659a09a7a6f74c6cb9817b88ceb32e2b87be6d93969fdd91 bundle. Graphify2339nodes/6596edges/78communities. Primary worked alone in the existing worktree.
+- Operating invoice_db had pre-existing Zoom/readiness/system-adjustment/status-log behavior absent from Git. Applied the focused patch to that live baseline, preserved those behaviors, and synchronized this touched file in the release source. Mail collector/CSBill crawler baseline drift was not overwritten.
+- User's11:20 screenshot confirms the regular list renders after runtime recovery. Log/DB tab visual acceptance is still separate. Async question about whether Hyeon deleted the duplicate in ERP or only the web list is pending; do not delete/reverse either automatically.
+- Next exact start: resolve ERP cleanup confirmation for294/295. Read-only audit also found historical same-approval pairs155/157 and194/195; determine whether their ERP duplicates were already corrected before any data change. Evidence: output/duplicate_dau_20261111/.
+
 ## 2026-11-11 native listener outage recovered
 
 - User's portal displayed `Accounting bridge request rejected`. Diagnosed the live native listener loss and failed supervisor recovery; primary worked alone in the existing isolated worktree. Existing authorization to repair faults covers this narrow runtime recovery.

@@ -206,6 +206,12 @@ def _readiness(data: dict[str, Any], raw: dict[str, Any], *, invoice_type: str, 
             or _clean_int(data.get("total_amount"))
             or _clean_int(data.get("amount"))
         )
+        if data.get("document_kind") == "zoom_billing" or data.get("zoom_billing"):
+            currency = str(data.get("currency") or "").strip().upper()
+            foreign_total = _clean_int(data.get("foreign_total_amount"))
+            if total <= 0 and not (currency and foreign_total > 0):
+                return False, "청구 금액 확인 필요"
+            return True, "청구서/현출 처리 가능"
         if total <= 0:
             return False, "금액 확인 필요"
         return True, "ERP 입력 가능"
@@ -319,6 +325,7 @@ def detect_invoice_type(subject: str, result: dict[str, Any]) -> str:
         "hometax",
         "nts_etaxinvoice",
         "smileedi",
+        "zoom",
     )
     if any(token.lower() in text for token in regular_tokens):
         return "regular"
@@ -362,13 +369,13 @@ def _is_cad_pc_text(value: Any) -> bool:
     return "CADPC" in compact
 
 
-def learn_dictionary_items(items: list[dict[str, Any]]) -> int:
+def learn_dictionary_items(items: list[dict[str, Any]], *, include_system_adjustments: bool = False) -> int:
     init_db()
     learned = 0
     account_choices = {"소모품비", "집기비품", "컴퓨터소프트웨어"}
     with get_conn() as conn:
         for item in items or []:
-            if item.get("system_adjustment"):
+            if item.get("system_adjustment") and not include_system_adjustments:
                 continue
             original_text = str(
                 item.get("raw_desc")
@@ -424,6 +431,9 @@ def _repair_regular_fields(result: dict[str, Any], pdf_path: str) -> dict[str, A
 
 
 def insert_crawler_invoice(subject: str, result: dict[str, Any]) -> bool:
+    from contextlib import closing
+    from .invoice_identity import find_tax_duplicate, tax_approval_number, warm_stored_identities
+
     init_db()
     pdf_path = str(result.get("pdf_path") or "")
     if not pdf_path:
@@ -441,12 +451,43 @@ def insert_crawler_invoice(subject: str, result: dict[str, Any]) -> bool:
         result["subject"] = stored_subject
         result["invoice_type"] = "regular"
 
-    with get_conn() as conn:
+    number = tax_approval_number({**result, "pdf_path": pdf_path})
+    if number:
+        result["tax_approval_number"] = number
+        with closing(get_conn()) as read_conn:
+            warm_stored_identities(read_conn)
+
+    with closing(get_conn()) as conn, conn:
+        conn.execute("BEGIN IMMEDIATE")
         cur = conn.cursor()
         cur.execute("SELECT id, json_data FROM invoices WHERE pdf_path=?", (pdf_path,))
         existing = cur.fetchone()
         if existing:
-            if str(result.get("invoice_type") or "").strip().lower() == "purchase":
+            invoice_id = int(existing["id"])
+            try:
+                existing_json = json.loads(existing["json_data"] or "{}")
+            except Exception:
+                existing_json = {}
+            is_zoom = bool(result.get("zoom_billing")) or str(result.get("document_kind") or "").strip().lower() == "zoom_billing"
+            if is_zoom:
+                existing_json.update(result)
+                cur.execute(
+                    "UPDATE invoices SET subject=?, json_data=?, last_error='' WHERE id=?",
+                    (stored_subject, json.dumps(existing_json, ensure_ascii=False), invoice_id),
+                )
+                cur.execute(
+                    """
+                    INSERT INTO invoice_logs (invoice_id, job_id, level, message, created_at)
+                    VALUES (?, '', 'info', ?, ?)
+                    """,
+                    (
+                        invoice_id,
+                        "Zoom 청구서 중복 수집 확인으로 청구서/현금출금결의서 데이터가 갱신되었습니다.",
+                        now_text(),
+                    ),
+                )
+                conn.commit()
+            elif str(result.get("invoice_type") or "").strip().lower() == "purchase":
                 try:
                     existing_json = json.loads(existing["json_data"] or "{}")
                 except Exception:
@@ -470,6 +511,13 @@ def insert_crawler_invoice(subject: str, result: dict[str, Any]) -> bool:
                     )
                     conn.commit()
             return False
+        duplicate_id = find_tax_duplicate(conn, number)
+        if duplicate_id is not None:
+            conn.execute(
+                "INSERT INTO invoice_logs (invoice_id, job_id, level, message, created_at) VALUES (?, '', 'info', ?, ?)",
+                (duplicate_id, f"동일 승인번호 중복 수집 제외: {number} / 기존 계산서 #{duplicate_id}", now_text()),
+            )
+            return False
         cur.execute(
             """
             INSERT INTO invoices (subject, pdf_path, json_data, status, received_at)
@@ -478,8 +526,11 @@ def insert_crawler_invoice(subject: str, result: dict[str, Any]) -> bool:
             (stored_subject, pdf_path, json.dumps(result, ensure_ascii=False), WAITING, now_text()),
         )
         invoice_id = int(cur.lastrowid)
+        conn.execute(
+            "INSERT INTO invoice_logs (invoice_id, job_id, level, message, created_at) VALUES (?, '', 'info', ?, ?)",
+            (invoice_id, "메일 수집으로 계산서가 등록되었습니다.", now_text()),
+        )
         conn.commit()
-    add_invoice_log(invoice_id, "메일 수집으로 계산서가 등록되었습니다.")
     return True
 
 
@@ -710,6 +761,7 @@ def set_invoice_status(
     job_id: str = "",
     error: str = "",
     processed: bool = False,
+    log_message: str = "",
 ) -> bool:
     init_db()
     fields = ["status=?"]
@@ -738,7 +790,7 @@ def set_invoice_status(
         conn.commit()
         ok = cur.rowcount > 0
     if ok:
-        message = f"상태 변경: {status}"
+        message = str(log_message or "").strip() or f"상태 변경: {status}"
         if error:
             message += f" / {error}"
         add_invoice_log(invoice_id, message, "error" if status == ERROR else "info", job_id=job_id)

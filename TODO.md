@@ -1,5 +1,18 @@
 # TODO
 
+## 2026-11-11 duplicate tax document guard
+
+- [x] Confirm294/295 same approval, same original CSBill target and separate_1/_2files.
+- [x] Back up operating version/180-row DB; preserve all existing working behavior.
+- [x] Add stable approval identity to serialized crawler registration and automatic ERP selection; hold unverifiable CSBill identity and preserve distinct same-price invoices.
+- [x]37 local/server tests; copied real-data replay proves one insertion/one selected invoice with other178 rows preserved.
+- [x] Deploy three source files, verify180 live rows unchanged,8492/3010healthy and243ready on8fd49413... bundle.
+- [x] Refresh Graphify and record the existing operating invoice_db compatibility additions in source.
+- [x] User screenshot confirms post-recovery regular list renders.
+- [ ] Confirm whether294/295's extra ERP voucher was actually removed; a web-row deletion alone is insufficient. User question pending.
+- [ ] Review historical same-approval pairs155/157 and194/195 against ERP correction history. Database status alone does not establish whether a duplicate voucher remains.
+- Do not replay these invoices or erase their logs/PDFs to test the guard. Future records without an identifiable approval number still use existing path behavior, except CSBill automatic posting is held for review.
+
 ## 2026-11-11 runtime recovery
 
 - [x] Identify missing8081 listener, WinError64 accept failure, Uvicorn loop-factory override and stale supervisor record.

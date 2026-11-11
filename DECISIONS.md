@@ -1,5 +1,14 @@
 # Decisions
 
+## 2026-11-11 tax-document identity and existing duplicates
+
+- Correct the confirmed automatic duplication within the existing authorized fault-repair scope. Do not infer authorization to delete financial records from the coworker's screenshot; ask whether their ERP cleanup was completed.
+- Treat a validated labelled approval number as the document identity across filenames and mail IDs. Normalize Unicode/formatting/case while preserving alphanumeric suffixes; require24characters and a valid date prefix. Never deduplicate on amount/vendor/month alone.
+- Read only the source tax PDF and explicit tax-number metadata. Ignore voucher/output/approval-document attachments; reject conflicting identities for automated CSBill processing. Cache PDF extraction by resolved path,mtime_ns,size; transient read errors are not cached.
+- Warm legacy PDF identities before the write transaction. BEGIN IMMEDIATE serializes check/insert; registration and its audit log commit together, so retry after a log failure cannot strand a new invoice row. Existing duplicate rows keep their financial/status fields.
+- Reuse existing regular-auto skip reporting. Guard old waiting duplicates even if collection happened before the fix. Do not introduce an automatic merge/deletion, new financial status, or authenticated portal/SSO change.
+- Active operating source remains authoritative. Preserve its existing Zoom and status/dictionary compatibility behavior when patching invoice_db, and include that touched-file baseline in Git to prevent a later full-file deployment from deleting it.
+
 ## 2026-11-11 runtime repair boundary
 
 - The existing instruction to fix faults authorizes restoring the failed runtime. This is a narrow exception to the previous no-native-host-edit rule: change only the Uvicorn loop keyword. Preserve all signed authentication, identity resolution, keys, cohort, TLS, bridge and35 settings.
