@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-11 runtime repair boundary
+
+- The existing instruction to fix faults authorizes restoring the failed runtime. This is a narrow exception to the previous no-native-host-edit rule: change only the Uvicorn loop keyword. Preserve all signed authentication, identity resolution, keys, cohort, TLS, bridge and35 settings.
+- Set the loop factory explicitly on Windows. A global event-loop policy is insufficient with installed Uvicorn0.46.0, which supplies its own Proactor factory. Preserve automatic selection on non-Windows platforms; review Selector subprocess/descriptor constraints on future runtime upgrades.
+- Pin a child immediately after verified launch, before waiting for its listener. Wait up to180seconds for startup. On listener loss, re-enter recovery only under the supervisor mutex and require exact executable/arguments/PID/creation/hash identity. Foreign or ambiguous ownership still fails closed.
+- Stale-record reconciliation is a one-off, evidence-backed maintenance action, not an automatic adoption rule. Require a unique exact process, verified parent/creation time and matching trusted launch logs, and preserve the old record/evidence. Do not restore old PID metadata after a restart.
+- Restore existing scheduler behavior without manually replaying financial work. Document subsequent normal queue/status changes separately from deployment preservation checks. Physical paper receipt and authenticated portal rendering require their own evidence.
+
 ## 2026-11-10 preserve the portal source contract
 
 - Restoring entry and correcting this regression is within the already authorized viewer change. Keep server account restrictions in place during recovery.

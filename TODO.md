@@ -1,5 +1,17 @@
 # TODO
 
+## 2026-11-11 runtime recovery
+
+- [x] Identify missing8081 listener, WinError64 accept failure, Uvicorn loop-factory override and stale supervisor record.
+- [x] Back up operating runtime files/task/consistent180-row DB; verify orphan provenance before reconciling its record.
+- [x] Explicitly select Windows Selector; pin launched child immediately, allow180-second startup and recover a lost pinned listener without weakening identity checks.
+- [x] Run six supervisor behavior cases and twelve certificate-validated HTTPS requests after interrupted TLS handshakes against the operating patched files.
+- [x] Verify registered taskRunning, native/public200, installation-check readiness, unchanged other listeners and fresh ready243.
+- [x] Confirm initial business-row preservation and distinguish naturally resumed294/295 ERP/output from maintenance actions; existing178 other rows unchanged.
+- [x] Refresh Graphify and save a focused runtime release without generated caches/backups.
+- [ ] User confirms authenticated portal rendering after refresh; browser API inspection is blocked by timeoutMs failure. Keep November10 visual-acceptance item open until observed.
+- Follow-up for later runtime upgrades: rerun the Windows TLS fixture with installed Python/Uvicorn; preserve native guard and loopback-only listener.
+
 ## 2026-11-10 portal compatibility follow-up
 
 - [x] Restore verified original app.js bytes and cache URL.

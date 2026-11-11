@@ -1,0 +1,11 @@
+--- a/native-host.py
++++ b/native-host.py
+@@ -506,7 +506,7 @@
+     snapshot_restored = False
+     app = NativeGuard(original_with_ip, context=context, native_key=native_key, cohort=cohort, reader=reader, policy=policy, operations=lambda: operation_state(jobs.job_store, snapshot_restored), identity_resolver=identity_resolver)
+     snapshot_restored = restore_terminal_jobs(jobs.job_store, jobs.JobRecord, jobs.JobEvent, settings["snapshot"])
+-    uvicorn.run(app, host=listen["host"], port=listen["port"], ssl_certfile=listen["sslCertfile"], ssl_keyfile=listen["sslKeyfile"], proxy_headers=False)
++    uvicorn.run(app, host=listen["host"], port=listen["port"], ssl_certfile=listen["sslCertfile"], ssl_keyfile=listen["sslKeyfile"], proxy_headers=False, loop="asyncio:SelectorEventLoop" if sys.platform.startswith("win") else "auto")
+
+
+ if __name__ == "__main__":

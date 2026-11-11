@@ -1,5 +1,18 @@
 # Debug
 
+## 2026-11-11 accept failure plus supervision deadlock
+
+- 10:55KST: native127.0.0.1:8081 refused connections; public3010 returned502 `Accounting bridge request rejected`. Bridge17760(3010/3011), finance14364(3012), relay25000(19443) were alive. Native29380 retained background threads but had no listener.
+- Native stderr `20261111T0112106038758Z.stderr.log`:29380 created01:12:10.615Z by supervisor36728; startup completed~10:13:36KST. Supervisor log `supervision-20261111T0112077914772Z-36728.log` rejected at01:13:12.7235789Z because old startup deadline60s expired before the~86s launch. Record still pointed11368; retries rejected `ORPHAN_RUNTIME_IDENTITY_DIFFERS`.
+- At10:27:17, Proactor accept failed with WinError64 at asyncio/proactor_events.py843 and windows_events.py finish_accept; listener disappeared. Installed Uvicorn0.46.0 selects ProactorEventLoop itself despite native host's earlier WindowsSelectorEventLoopPolicy. Stale record then prevented safe automatic termination/restart.
+- Backup110633:180 invoices/176completed+4pending, fingerprint92ed0bd5951a756c618537fe00ae79a9a054abe52e980a851b08331b37278014. Native-beforefa674125..., supervisor-before821badb2.... Mutations ran under Global\\DSIGAccountingNativeRuntimeSupervisor; exact29380 provenance and command hash were checked and saved before repinning/recovery. First attempt failed reading a shared log before any mutation; retried with FileShare.ReadWrite.
+- Final hostSHA83ad043c933fc8e20e4d1134229c2d32a30490c5fd9fe349e2d7722d3b59ed59; supervisorSHAb076f91bedab9137de9fdad6f7474bf11a1f07a67e0e4c6aeea9275b5cef78ce. Registered restart11:07:24; child26248 pinned02:07:27.199829Z, listener adopted02:07:31.0185356Z; no other listener owner changed.
+- Six mocked supervisor cases passed on Windows locally/server: early pin, stale record, reused PID, missing owned listener, foreign listener, exact pinned termination. Actual patched-host loop evaluated to WindowsSelector; isolated ephemeral TLS server survived12 interrupted handshakes with12 subsequent certificate-validated200 responses. Fixture cleanup reached its deliberate1s grace bound (0running tasks), then stopped; this is not an operating-server error.
+- 11:08 installation-check ready=true/activeJobs=0 and invoice fingerprint unchanged. At11:12:56, six certificate-validated native/public requests returned200 in15-31ms;243 last_seen11:12:54,ok/readytrue,unchanged4fbe1ad3... bundle. New operatingstderr contains0ERROR/accept failures.
+- Final fingerprint14d966e33cf21775509ab133a988f603e675d409885083891da3538c97c3befa differs only for naturally processed294/295: scheduler queued6dd80df0...11:08:40, ERP completed11:11:36-37, output4c316fd7...spooler verified4files11:11:45-46 and existing result mail11:11:46. No manual dispatch was invoked. All other178 rows match backup.
+- Browser: legacy Sky native pipe still unavailable; cua_repl now lists Chrome/accounting tab, but getTab/domSnapshot/screenshot fail `Cannot read properties of undefined (reading 'timeoutMs')` before interaction. No token extraction or alternate browser-debugging transport used. User refresh verification remains pending.
+- Evidence under output/runtime_recovery_20261111 and matching server incoming_migration folder; backup path in SESSION. Graphify AST update2304nodes/6481edges/78communities.
+
 ## 2026-11-10 portal entry regression
 
 - User screenshot shows the portal loader failure, not the app's own bootstrap-guard message. Native stdout contains / and new assets200 but no browser setup/invoice API calls after initial rollout. No app exception in backend logs. Public unauthenticated portal entry returns401 and cannot expose the authenticated adapter response.

@@ -1,5 +1,15 @@
 # Session
 
+## 2026-11-11 native listener outage recovered
+
+- User's portal displayed `Accounting bridge request rejected`. Diagnosed the live native listener loss and failed supervisor recovery; primary worked alone in the existing isolated worktree. Existing authorization to repair faults covers this narrow runtime recovery.
+- Backed up the native host, external supervisor, runtime record, task XML and consistent180-row SQLite at `C:/ERP_DB/deploy_backups/runtime_recovery_20261111_110633`. Applied the explicit Windows Selector loop and repaired supervision; authentication/keys, bridge, portal35 and application/Agent code are unchanged.
+- At11:07:24 restarted the registered task after evidence-based reconciliation of the orphan's stale record. New native26248 was pinned before startup and adopted at11:07:31. Native8081/public3010 respond200; taskRunning, installation-check ready,243 fresh/ready on unchanged4fbe1ad3... bundle.
+- Initial post-restart180-row fingerprint matched backup. Existing automatic processing then resumed naturally: #294/#295 queued11:08:40, ERP completed11:11:36-37, four documents spooler-verified on the平택 printer11:11:45-46. No manual replay/print/mail request was issued. Remaining178 rows are unchanged in the final comparison.
+- Source is recorded under `web_v1/deploy/native_runtime/`; six mocked supervisor cases and12 interrupted-TLS/recovery pairs passed against operating files. Graphify updated2304nodes/6481edges/78communities. Local evidence: `output/runtime_recovery_20261111/`.
+- Browser inventory is available through cua_repl, but tab inspection/screenshot consistently fail with an internal timeoutMs error. Actual authenticated portal rendering is unverified; user refresh check is pending.
+- Next exact start: check the user's portal refresh result. If only the old frontend-loader error remains, resume the November10 compatibility investigation with the current source preserved. Otherwise observe26248/supervisor/243 normally; do not replay completed294/295.
+
 ## 2026-11-10 portal rendering incident and compatibility repair
 
 - User reported the portal's full-page "전표 화면을 불러오지 못했습니다" after the viewer rollout. The earlier completion claim was premature: standalone fixture tests and healthy backend responses did not verify the portal's source adaptation.
