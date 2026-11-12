@@ -1,5 +1,13 @@
 # Debug
 
+## 2026-11-12 10:27-10:33 portal maintenance notice
+
+- User text: 전표자동화(전산) 업데이트·점검 중; 잠시 후 다시 시도해 주세요. 다른 시스템은 계속 이용할 수 있습니다. At10:27:27 native38608/created00:39:02.7108000Z and command hash405cac... unchanged; operation-state ready=true,activeJobs0,total49/terminal49; public3010 api/version200/15ms/version1.0.254.
+- Current native stdout20261112T0039026955971Z contains81 GET /api/setup/status?user_id=tuy1120 requests, all200 at10:31:33. No403/5xx entries were returned by the same monitor. This is natural portal traffic, not a synthetic signed user.
+-10:29:54 unauthenticated GET https://portal.dae-seung.co.kr/accounting-automation/ returned401 JSON APPLICATION_SESSION_REQUIRED, no-store, ARR/3.0. At10:32 root and three referenced JS assets returned200. Public application shell references POST /api/apps/{applicationId}/launch; neither this public source nor105 feature sources expose the exact per-app maintenance cause. No authenticated launch request was synthesized.
+- Browser diagnostics could not inspect the rendered notice: chrome-devtools connection timed out; Chrome extension inventory works but navigation/snapshot/evaluate/close methods fail with undefined timeoutMs; native Computer Use pipe is unavailable. The failed creation left an agent-owned about:blank tab929745104, with close also failing; rely on automatic ephemeral cleanup rather than claim it closed. Existing user tabs were not navigated or modified.
+- All evidence is under output/portal_maintenance_20261112: initial_probe.json, song_requests.json, portal_response.json/html and observed public assets.35 operator state/launch reason and actual Song UI acceptance remain pending. No business action, credentials change, service restart or source edit occurred.
+
 ## 2026-11-12 09:35-09:40 Song permission rejection
 
 - Current native logs show three GET /api/setup/status?user_id=tuy1120 requests rejected403, while other users' setup calls returned200. User/account exists with is_initial0; new owned Agent is fresh/ready. The request carried no agent_id override. Evidence output/song_access_20261112/{initial_probe,current_requests,setup_requests}.json.

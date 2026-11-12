@@ -1,5 +1,12 @@
 # TODO
 
+## 2026-11-12 portal entry maintenance follow-up
+
+- [x] Confirm105 native/public health and distinguish the new notice from the earlier Song403.
+- [x] Verify81 real tuy1120 setup requests now return200; confirm unauthenticated portal entry still requires an application session.
+- [ ] Obtain35 per-application maintenance state and the failing launch/entry request reason; determine operator-set maintenance versus upstream failure before changing anything.
+- [ ] Verify authenticated Song purchase-screen entry after the portal issue is resolved. Do not ask for another PC installation based on this notice.
+
 ## 2026-11-12 Song native identity correction
 
 - [x] Trace actual tuy1120 setup403 and reproduce the native resolver's rejection of the space in the current Windows user name.

@@ -1,5 +1,12 @@
 # Session
 
+## 2026-11-12 portal maintenance notice after Song repair
+
+- User supplied the exact notice: 전표자동화(전산) 업데이트·점검 중 / 잠시 후 다시 시도해 주세요. 다른 시스템은 계속 이용할 수 있습니다. This requires the portal entry state to be investigated separately from Agent setup.
+- 10:27 live105 inspection: native38608 unchanged since09:39, signed installation-check ready=true/activeJobs0, public3010 api/version200 in15ms. At10:31 the new native log contains81 natural tuy1120 setup requests, all200, proving the previous403 path is now passing. No code/config/account/service changes were made in this follow-up.
+- The portal entry without a browser session correctly returns401 APPLICATION_SESSION_REQUIRED; its public root/scripts load200. These unauthenticated results do not determine why the authenticated maintenance notice appears. Browser inspection was blocked by current tool connection/runtime failures; do not claim the live maintenance UI was inspected.
+- Next exact start: obtain the35 portal operator's per-application maintenance/launch failure state for 전표자동화(전산), then verify Song's actual entry. Asked the user to request that check or arrange35 access; earlier35 operator constraint remains in force. Evidence: output/portal_maintenance_20261112.
+
 ## 2026-11-12 Song portal permission rejection
 
 - User reported a permission error after installation became ready. Actual requests for /api/setup/status?user_id=tuy1120 returned403. Read-only execution of the operating native resolver reproduced rejection at its text(candidate["agent_id"]) validation: the exact owned Windows identity 송명학-전산 송명학 contains a normal internal space.

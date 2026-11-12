@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-12 portal maintenance diagnosis boundary
+
+- Keep three distinct claims:105 process/API health, authenticated setup API success, and actual portal document entry. Success at one does not prove the next. The81 successful Song requests validate the prior resolver fix, not the current portal entry screen.
+- A maintenance notice alone does not prove an operator enabled maintenance or that disabling it is appropriate. Inspect35's application state/launch reason first; do not bypass the gateway or repeatedly restart healthy105 to suppress the notice.
+- Respect the previously stated35 operator constraint. No access to35, session-cookie extraction, fabricated browser identity, or security/permission changes were attempted.
+
 ## 2026-11-12 Windows Agent labels versus authentication identifiers
 
 - Treat the stored host/Windows-user Agent label separately from signed subject and login identifiers. Preserve normal internal spaces in the exact database-selected label, its160-character bound and ownership; continue rejecting controls and leading/trailing whitespace. Do not globally relax the token text validator.
