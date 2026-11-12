@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-11-12 executable entry and result guarantees
+
+- Preserve caller parameters around dot-sourced libraries. A library-only test must not substitute for executing the packaged entry.
+- Record launcher state before extraction/PowerShell, then retain the script's completed report or synthesize a clear failure. A child exit code0 without a completed report is failure.
+- The default result location is the affected user's Desktop, with EXE directory/local data/temp fallbacks and an explicit path. Keep a separate UTF-8 execution log, including errors raised before the script body. Do not weaken PC/user identity, TLS or ownership guards to make tests pass.
+- Full-entry tests deliberately supply an invalid PC/user identity and assert zero repair steps. Harmless synthetic scripts cover failure/success reporting. Actual Song repair and server identity verification remain a separate acceptance step.
+
 ## 2026-11-12 evidence-based approval and PC recovery
 
 - A forced groupware password change is an authentication blocker, not a search miss. Wait for the account owner to clear it; do not bypass it, disable policy or switch to another user's session. User confirmed same-password change, so saved credentials remained unchanged.

@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-11-12 Song v2 result-file recovery
+
+- [x] Reproduce v1's LibraryOnly scope collision and correct the main entry.
+- [x] Produce bootstrap JSON/log before PowerShell; detect child early exit, parse/import errors and denied primary result location.
+- [x] Test the final compiled EXE through Windows PowerShell5.1, including Unicode/apostrophe paths; preserve helper/target/TLS guards.
+- [x] Deliver separately named v2 EXE and instructions to the user's Desktop.
+- [ ] Song runs v2 and returns its JSON plus same-name .log from the opened result folder. Verify actual repair stages, server heartbeat, owner binding and portal access.
+- The optional question about the old window behavior is superseded by the reproducible entry bug; do not wait for that answer before supplying v2.
+
 ## 2026-11-12 approval lookup and Song recovery
 
 - [x] Cross-check both images against #292/#293 and distinguish login failure from attachment/date/filter failure.

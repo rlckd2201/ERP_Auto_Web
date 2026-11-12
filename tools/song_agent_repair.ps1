@@ -1,5 +1,8 @@
-param([switch]$LibraryOnly)
+param([switch]$LibraryOnly, [string]$ResultPath)
 $ErrorActionPreference = 'Stop'
+# The dot-sourced library assigns its own LibraryOnly parameter in this scope.
+# Keep the requested entry mode separate so a normal run reaches the repair.
+$songLibraryOnly = [bool]$LibraryOnly
 . (Join-Path $PSScriptRoot 'repair-common.ps1') -LibraryOnly
 
 function Assert-SongIdentity([string]$Computer, [string]$User) {
@@ -79,13 +82,15 @@ function Register-SongLauncher([string]$Launcher, [string]$Root, [string]$Shortc
         throw 'Launcher registration verification failed. See the backup and result file.'
     }
 }
-if ($LibraryOnly) { return }
+if ($songLibraryOnly) { return }
 
 $stamp = Get-Date -Format 'yyyyMMdd_HHmmss'
-$resultPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "AccountingWeb_SongRepair_$stamp.json"
-$script:Report = [ordered]@{repair_version=1;created_at=(Get-Date -Format o);computer=$env:COMPUTERNAME;user=$env:USERNAME;status='started';steps=(New-Object 'Collections.Generic.List[object]')}
+if (-not $ResultPath) { $ResultPath = Join-Path ([Environment]::GetFolderPath('Desktop')) "AccountingWeb_SongRepair_$stamp.json" }
+[Console]::OutputEncoding = New-Object Text.UTF8Encoding($false)
+$script:Report = [ordered]@{repair_version=2;created_at=(Get-Date -Format o);computer=$env:COMPUTERNAME;user=$env:USERNAME;status='started';steps=(New-Object 'Collections.Generic.List[object]')}
 $exitCode = 1
 try {
+    $script:Report | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $ResultPath -Encoding UTF8
     Assert-SongIdentity $env:COMPUTERNAME $env:USERNAME
     if ((Get-AgentProcesses).Count -gt 0) { throw 'An Agent is already running. Do not start another one; send this result for server verification.' }
     if ((Get-RunningSetup).Count -gt 0) { throw 'An installation is still running. Wait for it to finish, then run this recovery once.' }

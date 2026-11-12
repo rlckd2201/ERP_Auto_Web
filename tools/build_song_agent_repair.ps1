@@ -18,7 +18,7 @@ $resourceCert = Join-Path $resources 'server105-trust.pem'
 if ($cert -ine $resourceCert) { Copy-Item -LiteralPath $cert -Destination $resourceCert -Force }
 $compiler = Join-Path $env:SystemRoot 'Microsoft.NET\Framework64\v4.0.30319\csc.exe'
 $exe = Join-Path $output 'AccountingWebSongRepair.exe'
-& $compiler /nologo /target:exe ("/out:$exe") ("/resource:" + (Join-Path $resources 'repair.ps1') + ',repair.ps1') ("/resource:" + (Join-Path $resources 'repair-common.ps1') + ',repair-common.ps1') ("/resource:$resourceCert,server105-trust.pem") (Join-Path $PSScriptRoot 'AccountingWebSongRepair.cs')
+& $compiler /nologo /target:exe /r:System.Web.Extensions.dll ("/out:$exe") ("/resource:" + (Join-Path $resources 'repair.ps1') + ',repair.ps1') ("/resource:" + (Join-Path $resources 'repair-common.ps1') + ',repair-common.ps1') ("/resource:$resourceCert,server105-trust.pem") (Join-Path $PSScriptRoot 'AccountingWebSongRepair.cs')
 if ($LASTEXITCODE -ne 0) { throw 'Recovery executable compilation failed.' }
 & $exe --self-test
 if ($LASTEXITCODE -ne 0) { throw 'Recovery executable resource check failed.' }

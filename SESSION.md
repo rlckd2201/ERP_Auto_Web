@@ -1,5 +1,12 @@
 # Session
 
+## 2026-11-12 Song recovery v2 entry fix (08:57 KST)
+
+- User reported no JSON from the delivered recovery. Reproduced a defect in our v1 package: dot-sourcing repair-common.ps1 with -LibraryOnly overwrote the caller's same-named parameter. The main script returned before the repair and report body. Earlier11 tests exercised helpers/library mode, not the full entry; do not attribute this failure to Song's PC.
+- v2 preserves the requested entry mode. The EXE creates JSON and a text log before extracting/starting PowerShell, captures child output/exit, reports an early return as failure, and selects a writable result location with visible paths. It opens the result folder on normal interactive completion.
+- Delivered C:/Users/user/Desktop/송명학PC_회계연결복구_v2.exe and v2 안내.txt. Use v2 for the next attempt. Actual compiled-EXE/Windows-PowerShell5.1 tests and helper tests passed; details in DEBUG. No production service/source/DB or developer-PC configuration was modified this turn.
+- Next exact start: read the v2 JSON and adjacent log from Song's PC, then check fresh natural Agent identity, verified tuy1120 binding and setup readiness. A generated file or process start alone is not completed repair. Prior #292/#293 approval recovery remains complete.
+
 ## 2026-11-12 approval recovery and Song PC repair package
 
 - Both supplied P3 approval images match the live purchases: #293/order29023421/195950/document184563 and #292/order29023727/186500/document184597. Their filenames and30-day scope were valid. The configured admpdm account reached the mandatory password-change screen before any search. User changed it to the same password; both normal order searches now succeed.

@@ -1,5 +1,14 @@
 # Debug
 
+## 2026-11-12 08:57 Song EXE no-JSON root cause and verification
+
+- v1 artifact d43003eb50d715cbb9379b5b9f1ea5b65522206ffda6f017ff4f3d4fcc868a6c contains param([switch]$LibraryOnly), dot-sources common -LibraryOnly, then returns if($LibraryOnly). Read-only reproduction: caller false -> true after dot-source. Thus the actual entry exits before Assert-SongIdentity/try/finally/report creation. Earlier11 helper tests passed because they explicitly used library mode.
+- Preserved baseline sources/EXE under output/song_repair_v2_20261112/before. Fixed with independent songLibraryOnly entry flag and explicit ResultPath. Launcher reserves a unique JSON/log before child startup, records incomplete/early exit, preserves completed child status, and records output-path fallback failures.
+- Launcher sets UTF-8 before parsing the child, disables progress serialization and requests plain text so Korean startup errors stay readable. Normal completion opens Explorer selecting the JSON; automated tests use --no-pause and isolated output directories.
+-7 compiled-launcher cases passed on Windows PowerShell5.1: real script target rejection with Korean/apostrophe paths and zero repair steps, early zero exit, nonzero17, syntax failure, missing dependency, completed harmless report preservation, and blocked preferred directory fallback.11 existing helper/resource tests also passed explicitly under PowerShell5.1. No repair, Agent start, registry or trust change ran on the developer PC.
+- Final Desktop v2 EXE SHA25658c6b9ce38cd6fc6fc7992650535119c02496212204f3c4b3a1ef459f1a8c7a2,39424bytes. Evidence: output/song_repair_v2_20261112/{launcher_tests,verification}.json; test-case directory is recorded in launcher_tests.json. User execution is pending; no newer Song heartbeat was assumed or fabricated.
+- Graphify updated2428nodes/6742edges/96communities. No operating105 source/runtime/database changes were made for this client-package correction.
+
 ## 2026-11-12 approval login, print overflow and Song installation
 
 -08:07 server-owned browser login returned200 for admpdm but ended at https://gw.dae-seung.co.kr/passwordChange; visible mandatory-change notice explicitly warns of messenger/mobile/external-mail logout. Historical #293 searchNov10 14:37:17-14:37:42 and #29214:34:56-14:35:33 stopped waiting20s for nav#menu-container, before searching. User subsequently confirmed same-password change; both original searches completed.
