@@ -1,5 +1,15 @@
 # TODO
 
+## 2026-11-12 shared duplicate-protection audit
+
+- [x] Confirm real duplicate deliveries via read-only IMAP headers/attachment hashes; compare47purchase approvals and23recent Agent results.
+- [x] Distinguish KT/Daou duplicate mail from292/293's two different Compuzone tax invoices.
+- [ ] Check211.233.214.90 ->spam.f0.co.kr forwarding/relay transactions; common upstream Received IDs become two downstream deliveries. No forwarding rule was inspected or changed.
+- [ ] Extend approval identity protection to manual upload and shared purchase/regular ERP dispatch, covering different rows/same approval, concurrent requests, repeat clicks and completed documents.
+- [ ] Preserve output-only reprints, confirmed-unsaved retries, distinct same-price approvals and non-tax billing. Keep post-save-unknown requests blocked pending save confirmation.
+- [ ] Retain durable source-message/target evidence with invoice records; current Message-ID history expires after72hours.
+- Diagnosis only this turn. Existing financial cleanup remains human-owned; no forwarding configuration change is authorized by this audit.
+
 ## 2026-11-12 KT duplicate prevention
 
 - [x] Verify original PDF identity and actual separate voucher PDFs for296–303; isolate the KT table-layout extraction gap.

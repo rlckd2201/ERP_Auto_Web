@@ -1,5 +1,14 @@
 # Session
 
+## 2026-11-12 duplicate-mail provenance and purchase/regular scope audit
+
+- User asked whether both workflows' duplicates originate from two emails. Read-only production Gmail INBOX inspection sinceNov1 found209 messages. KT pairs2106/2107,2110/2111,2113/2114,2116/2117 have identical attachment SHA256 within each pair; Daou2073/2074 share CSBill202640769381. Both copies have distinct Gmail Message-IDs with SMTPIN_ADDED_MISSING/BROKEN markers.
+- Paired Received headers share the original company gateway transaction IDs. The first differing receiving transaction is the211.233.214.90 ->spam.f0.co.kr handoff; Gmail receives two deliveries. Duplicate mail delivery before collection is confirmed; exact relay/rule cause remains unverified.
+- Operating collector uses72-hour Message-ID history; distinct IDs are separately crawled. Existing filename suffixing produced different paths, and the prior identity extraction gap allowed both records/ERP jobs. Current common collection dedupe applies to purchase and regular.
+- All47 surviving purchase rows have47 distinct approvals. Recent Compuzone mail2052/2053 maps to292/293 with different XML approvals. SinceOct1,23 purchase queue entries include retries but no invoice has two successful Agent results; failed-after-save records do not prove absence of ERP vouchers.
+- Additional source gap: manual upload remains path-only; shared purchase/regular manual queue preparation lacks cross-row approval dedupe/atomic document reservation. Do not describe the prior KT release as universal manual/automatic protection.
+- No source/service/business data/mail flags/settings changed; no ERP/print/mail dispatch. Evidence output/mail_duplicate_audit_20261112. Next exact start: common manual-upload/ERP-dispatch identity design preserving output-only reprints, confirmed-unsaved retries and non-tax Zoom; separately obtain relay logs for the repeated transactions. Human cleanup remains untouched.
+
 ## 2026-11-12 KT duplicate registration and automatic posting
 
 - User reported pairs296/297,298/299,300/301. Their original tax PDFs have identical text within each pair and the same electronic approval numbers; saved ERP PDFs prove separate voucher numbers.302/303 were an already-claimed later copy of296; their voucher PDFs show two further postings.

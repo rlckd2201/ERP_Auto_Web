@@ -1,5 +1,16 @@
 # Debug
 
+## 2026-11-12 16:15-16:19 duplicate delivery evidence
+
+- Evidence output/mail_duplicate_audit_20261112: mail_db_audit.json, purchase_queue_audit.json, purchase_results_since_oct1.json, summary.json and operating source snapshots. IMAP readonly=True/BODY.PEEK and SQLite mode=ro; no collect/store/mark-seen/SMTP/ERP endpoint invoked.
+- Daou2073/2074: same2026-11-11T10:05:02+09 Date andCSBill202640769381. Shared gw Received1794359112.65450.140063135667968.gw and forwarded spamgw1794359116.396152.140519184799488.spamgw. Separate spam.f0 transactions1794359113.613727.140301500847872/1794359113.610539.140301712275200, different Gmail SMTPIN_ADDED_BROKEN IDs. Collector saved10:15:31/10:17:43KST.
+- KT2106/2107: identical109359bytes/SHA470932c339d8fc6f08c9e3c8d0ae9433f1ad98ab7b8c628baa85dd32c77cc838; shared gw1794463280.542690.140062637414144 and forwarded spamgw1794463285.376911.140519322605312, separate spam.f0 transactions andSMTPIN_ADDED_MISSING IDs; saved15:02:40/48.2110/2111 share SHA13654c92d9aef7e6d9bade8e680b2da8893f69799a3be38a2a8fd436b6516e4f and original hops, saved15:46:24/28.
+- Reissued KT2113/2114,2116/2117 are also exact attachment pairs.2115/2118 is excludedW00127. Original attachments are encrypted, so text extraction returnedValueError; raw byte equality is established, and the preceding KT audit established decrypted tax identities. No encryption bypass attempted.
+- Compuzone2052 approval2026111041000115g81davyo and2053 approval2026111041000115g81daw00 are distinct XMLs for292/293. Current184rows=47purchase/137regular;47purchase approvals allunique. Historical same-approval regular groups155/157,194/195,261/263,294/295 remain observations, not cleanup authorization.
+- SinceOct1 purchase queue23entries:6distinct successful IDs277/278/279/280/292/293; no ID has two successful Agent results.292 naturally completed11:15:55 with server voucher PDF after earlier date fix. Earlier save ambiguity for other rows is not resolved by these results.
+- Operating app matches local; mail_collector/worker/invoice_db/erp_queue have independent deployed differences. Collector checks Message-ID before targets, prunes72hours and unions unread/new/manual48hours; KT attachment save suffixes existing names. insert_crawler_invoice uses approval+BEGIN IMMEDIATE for bothtypes. insert_manual_invoice checks onlypdf_path; shared worker and Agent row/job checks lack cross-row taxidentity reservation.
+- Exact forwarding configuration uninspected. No source/runtime changes; no graph update required. Audit artifacts stay outsideGit. Human cleanup unchanged.
+
 ## 2026-11-12 KT duplicate evidence and validation
 
 - Evidence output/kt_duplicate_20261112; remote C:/ERP_DB/incoming_migration/kt_duplicate_20261112. Initial296–301 data and original tax/voucher PDFs saved before human cleanup. KT table extraction places hundreds of characters between 전자승인번호 and 과세YYYYMMDD-XXXXXXXX-XXXXXXXX; previous tax_approval_number returnedempty and auto keys contained onlyid/path.

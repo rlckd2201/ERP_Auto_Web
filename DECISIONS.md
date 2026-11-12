@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-12 mail identity versus document identity
+
+- Distinguish duplicate delivery, duplicate registration, duplicate ERP posting and duplicate result notifications. Message-ID and filename identify a transport/artifact; tax approval identifies the business document.
+- Identical company-gateway Received transactions with different spam.f0.co.kr/Gmail transactions establish a downstream delivery split. They do not establish the exact forwarding rule defect or prove the supplier sent twice.
+- Scope this turn to the requested diagnosis. Explicitly record manual-upload/manual-dispatch gaps rather than claiming the preceding collection/regular-auto fix covers every path.
+- Future shared execution protection must reserve/check document identity across purchase/regular, retaining output-only reprints, confirmed-unsaved retries, corrections and non-tax bills. Amount and filename are insufficient identities.
+- Repeated failed jobs do not establish multiple saved vouchers. Preserve the user's human cleanup instruction; no financial mutation, forwarding change or test dispatch.
+
 ## 2026-11-12 KT identity extension
 
 - Accept KT's separated 과세/면세 approval values only in a statement carrying 전자승인번호, 명세서 and the KT supplier registration marker. Keep the existing24-character/date validation, letter preservation and ambiguity rejection; do not use amount or filename suffix as identity.
