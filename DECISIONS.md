@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-12 Windows Agent labels versus authentication identifiers
+
+- Treat the stored host/Windows-user Agent label separately from signed subject and login identifiers. Preserve normal internal spaces in the exact database-selected label, its160-character bound and ownership; continue rejecting controls and leading/trailing whitespace. Do not globally relax the token text validator.
+- A native resolver must be tested with the actual operating ownership selector and representative Windows user names. Keep ambiguous-PC rejection, session pinning/expiry, same-account lookup, and query/body Agent equality tests.
+- A direct read-only resolver diagnostic is supporting evidence, not an authenticated portal session or UI acceptance. No signed browser identity was fabricated, no account/owner was altered in this follow-up, and the primary worked alone under the standing corrective authorization.
+
 ## 2026-11-12 installer routes and diagnosed PC ownership
 
 - The bridge and native host independently enforce service routes. Permit only the existing literal company names 대승, 대승정밀 and 일강 on the configured GET installer route; retain ASCII compatibility and all other authentication, path, TLS and parameter rules. Verify public responses after both validators, not only loopback.

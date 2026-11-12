@@ -1,0 +1,13 @@
+--- a/native-host.py
++++ b/native-host.py
+@@ -193,5 +193,9 @@
+                     candidate = self.owned_agent(connection, user["id"], preferred_ip if is_new else "")
+                     if candidate is not None:
+-                        require(text(candidate["agent_id"], 160))
++                        agent_id = candidate["agent_id"]
++                        # Windows user names may contain spaces; token identifiers may not.
++                        require(isinstance(agent_id, str) and 0 < len(agent_id) <= 160
++                                and agent_id == agent_id.strip()
++                                and not re.search(r"[\x00-\x1f\x7f]", agent_id))
+                         owner = connection.execute('SELECT agent_id,client_ip FROM agent_profiles WHERE agent_id = ? AND user_id = ?', (candidate["agent_id"], user["id"])).fetchone()
+                         require(owner is not None and owner["agent_id"] == candidate["agent_id"])

@@ -1,5 +1,12 @@
 # TODO
 
+## 2026-11-12 Song native identity correction
+
+- [x] Trace actual tuy1120 setup403 and reproduce the native resolver's rejection of the space in the current Windows user name.
+- [x] Back up the current runtime/DB, apply the narrow Agent-label fix and pass24 isolated local/server tests plus live readiness/data checks.
+- [ ] Confirm Song refreshes the portal and reaches the purchase screen. Observe natural requests; do not forge browser identity or replay a business action.
+- Previous server/Agent readiness was insufficient to validate the native portal identity path. The exact resolver regression now covers that gap.
+
 ## 2026-11-12 Song operating recovery
 
 - [x] Analyze the supplied v2 snapshot and distinguish tray-Agent exit from recovery-EXE completion.

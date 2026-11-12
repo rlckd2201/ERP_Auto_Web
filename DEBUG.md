@@ -1,5 +1,15 @@
 # Debug
 
+## 2026-11-12 09:35-09:40 Song permission rejection
+
+- Current native logs show three GET /api/setup/status?user_id=tuy1120 requests rejected403, while other users' setup calls returned200. User/account exists with is_initial0; new owned Agent is fresh/ready. The request carried no agent_id override. Evidence output/song_access_20261112/{initial_probe,current_requests,setup_requests}.json.
+- Direct read-only resolver diagnostic (no signed token/HTTP identity) reproduced Rejected403 at native-host.py line195: require(text(candidate["agent_id"],160)). text rejects ASCII space, so the valid stored 송명학-전산 송명학 cannot enter the portal path. The previous setup_status-only check never exercised this resolver.
+- New16-case regression executes the actual native resolver and actual _owned_agent function against isolated SQLite. Baseline has8 errors on valid names with spaces; patched16/16 pass. Existing installer/native-guard8/8 also pass locally and on105 staging. Covers controls/length, token/login spaces still rejected, owner selection, ambiguity/offline/pinning/expiry, exact query/body matching and no DB writes.
+- Backup C:/ERP_DB/deploy_backups/song_access_20261112_093834 contains original native source, supervisor/runtime record and consistent180-row DB. Source SHA3d5e422067855e5dfa6f7f89802e8be89a0565d50030a7ab6a33b8e4e896081b ->7f845d8a4e4ac0c801c1435f0c7a5a8fdf0efbc32e64c9305c90875f8e033f77. Deployment09:38:59 checked activeJobs0 twice and exact pinned20436; registered supervisor restarted native38608. Other bridge27636/finance14364/relay25000 listeners unchanged.
+- At09:39:23 real resolver returns tuy1120/current Song identity/IP; Song heartbeat09:39:22 ready=true/missing_items=[],243 heartbeat09:39:20 ready=true. Public installer ranges206; unknown company/unsigned browser/anonymous DB403. All owners unchanged; all180 invoice rows retain3ce7e0a132cf6d401de8dad31fd454bc17da7d5509f2ffc3dcdfe0b0b322eea4. No manual ERP/print/mail dispatch.
+- Graphify refreshed2791 nodes /7814 edges /99 communities after the resolver tests and patch.
+- Staging C:/ERP_DB/incoming_migration/song_access_20261112; local evidence output/song_access_20261112 including baseline/after test reports, patch/backup/deployment/final verification manifests. New native stdout20261112T0039026955971Z. No Song portal request yet at09:40:10; user was asked to refresh. Actual screen confirmation is pending.
+
 ## 2026-11-12 Song live recovery after v2 files
 
 - Received AccountingWeb_SongRepair_20261112_090145_b753ad8b.json (221 bytes) and .log (243 bytes): repair_version 2, correct 송명학 / 전산 송명학, status started, no steps/completed_at/error. Copies and hashes: output/song_repair_followup_20261112/inputs and received_file_manifest.json. User clarified the closed icon was the tray Agent, not evidence about the EXE's exit path.

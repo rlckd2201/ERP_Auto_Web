@@ -1,5 +1,12 @@
 # Session
 
+## 2026-11-12 Song portal permission rejection
+
+- User reported a permission error after installation became ready. Actual requests for /api/setup/status?user_id=tuy1120 returned403. Read-only execution of the operating native resolver reproduced rejection at its text(candidate["agent_id"]) validation: the exact owned Windows identity 송명학-전산 송명학 contains a normal internal space.
+- Backed up105 and applied only native-host-agent-name.patch. The database-selected Agent label now permits internal spaces while retaining exact identity/ownership and control/length checks; signed subject/login validation stays unchanged. Native20436 ->38608 at09:39; bridge/portal/other services were untouched.
+- At09:39:23 the real resolver selects tuy1120 / 송명학-전산 송명학 /172.17.30.15, setup is fresh/ready without missing items, and purchase execution remains ready243. All180 invoice rows and all Agent owners are unchanged.24 local/server tests passed. Evidence and backup are in DEBUG.
+- Next exact start: read output/song_access_20261112/portal_requests_after.json and the pending user refresh reply. No Song portal request arrived in the new runtime by09:40:10; authenticated UI acceptance remains unconfirmed. Do not rerun the installer or financial jobs to test entry.
+
 ## 2026-11-12 Song connection and installer-path repair
 
 - The returned v2 JSON/log contain only the 09:01 startup snapshot, with no completion/error. They do not establish the repair executable's final outcome. The user clarified that Song closed the tray Agent; the new Agent had already connected before this v2 run and resumed by 09:14.

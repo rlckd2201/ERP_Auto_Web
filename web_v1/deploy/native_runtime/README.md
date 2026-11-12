@@ -18,6 +18,14 @@ node --test tests/test_bridge_installer_policy.cjs
 
 After applying both patches, verify each public company download using `Range: bytes=0-0`, and verify that unknown company names, unsigned browser requests, and unauthenticated DB requests are still rejected. Native-loopback success alone is insufficient because the public bridge has its own validator. Keep the original host and bridge, task XML, runtime identity, and a consistent database backup before restarting their exact registered tasks. Do not change Agent ownership by IP alone; the separate administrative PC repair must verify the supplied Windows identity, prior account ownership, current unowned profile, and a fresh heartbeat, then audit only the exact ownership change.
 
+The separate `native-host-agent-name.patch` fixes portal rejection of an owned Agent whose Windows user name contains an internal space, such as `송명학-전산 송명학`. Only the database-selected Agent label uses this validation: it retains its exact value and length limit, permits internal spaces, and rejects control characters and leading/trailing whitespace. Login IDs, signed subjects, account ownership, session expiry, ambiguous-PC rejection and exact Agent request matching keep their existing rules. A ready setup heartbeat alone does not exercise this native identity resolver.
+
+Run the resolver regression test against the staged native host and the operating browser-session source. It executes the actual resolver and owned-Agent selector against an isolated SQLite fixture, without producing signed identities or sending business requests:
+
+```powershell
+python tests/test_native_agent_identity.py --native-host <staged-native-host.py> --browser-session <operating-browser_session.py>
+```
+
 Do not reconcile a stale record automatically. The incident recovery verified the unique orphan's executable/arguments, creation time, parent supervisor PID and matching launch logs before replacing its stale bookkeeping record. Preserve that evidence and back up files, task XML and consistent SQLite before maintenance. Do not restore an old PID record after a restart or replay financial jobs to test availability.
 
 Run the mocked lifecycle tests with Windows PowerShell; they do not launch or stop real processes:
