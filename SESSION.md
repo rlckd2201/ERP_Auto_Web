@@ -1,5 +1,12 @@
 # Session
 
+## 2026-11-12 SMTP certificate comparison (11:24 KST)
+
+- User asked whether accounting has the same expired SMTP certificate failure reported by the SSL VPN system. Read-only105 probes confirm accounting uses211.233.214.90:25 and presents CN=gw.dae-seung.co.kr, expired2025-08-20T23:59:59Z.
+- Operating notifications.py and regular_due_monitor.py call smtp.starttls() without an explicit validating context. The actual Python3.11.5 connection succeeds with TLS1.3, verify_mode0/check_hostnamefalse; this does not mean the certificate is valid. Strict IP verification fails with mismatch64; strict gw.dae-seung.co.kr verification against the same endpoint fails with expired10.
+- No authentication, envelope/DATA, message delivery, configuration, source, service or DB change was performed. Evidence output/smtp_certificate_20261112/105_probe.json.
+- Next exact start for SMTP: after the mail administrator renews the certificate, validate the certificate chain and matching SMTP hostname from105 before changing accounting to certificate verification. Earlier #292 actual retry/output verification and portal35 maintenance investigation remain separate.
+
 ## 2026-11-12 purchase292 wrong date and masked save rejection
 
 - #292/order29023727/186500/P3 failed at08:51,08:58 and09:33. All three243 screenshots show 회계일2026-01-11, blank voucher numbers, and ERP “저장 후 출력해 주십시오.” Original PDF and crawler XML both say2026-11-10. The purchase fast parser split compact20261110 into2026/1/11;293 used AI analysis and retained the correct date.

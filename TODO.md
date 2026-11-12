@@ -1,5 +1,11 @@
 # TODO
 
+## 2026-11-12 SMTP certificate finding
+
+- [x] Compare actual accounting STARTTLS behavior and strict certificate checks from105 without sending mail.
+- [ ] Mail service certificate renewal/matching hostname verification remains required before enabling strict validation in accounting. Do not copy the accounting client's current non-validating behavior into the SSL VPN system to hide its error.
+- [ ] No message acceptance/inbox delivery test was requested or performed in this comparison.
+
 ## 2026-11-12 purchase292 follow-up
 
 - [x] Compare all three failure screenshots with original292 tax PDF/XML and reproduce compact-date truncation.

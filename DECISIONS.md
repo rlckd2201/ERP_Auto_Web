@@ -1,5 +1,10 @@
 # Decisions
 
+## 2026-11-12 SMTP comparison scope
+
+- Distinguish successful non-validating TLS transport from certificate validity and from actual message delivery. Accounting's current default Python smtplib context does not verify peer certificate or hostname; keep that fact explicit.
+- This question authorizes diagnosis, not a silent TLS downgrade, mail dispatch or changes to another system. Certificate renewal and a matching hostname must be verified before a later accounting validation change.
+
 ## 2026-11-12 purchase date and save rejection boundaries
 
 - Compact purchase dates consume exactly eight bounded digits; separated dates require separators and complete month/day. Validate real calendar dates. Preserve existing filename → labeled document date → labeled approval-number fallback precedence and unrelated purchase-account/manual-classification behavior.

@@ -1,5 +1,13 @@
 # Debug
 
+## 2026-11-12 SMTP live certificate probe
+
+- At11:24:38 on105 Python3.11.5, regular_auto_result SMTP is211.233.214.90:25, authentication not configured, display name회계처리프로그램. Operating notifications.py65 andregular_due_monitor.py1005 both call smtp.starttls() with no context.
+- Exact existing-client flow: EHLO250, STARTTLSadvertised, STARTTLS220, TLSv1.3, SSLContext verify_mode0/check_hostnamefalse, postTLS EHLO250. No login/MAIL FROM/RCPT TO/DATA sent.
+- Presented certificate subjectCN=gw.dae-seung.co.kr, issuerSectigo RSA Domain Validation Secure Server CA, valid2024-08-29T00:00:00Z through2025-08-20T23:59:59Z; SHA2560a0fb10384222e00fd1f97811122d15edc51bfe9f217f9118c5fcf20e7354755.
+- ssl.create_default_context against the configured IP rejects with SSLCertVerificationError/code64 IP address mismatch. Same endpoint with TLS SNI/namegw.dae-seung.co.kr rejects with code10 certificate has expired. Thus the SSL VPN report's certificate problem is reproduced, while accounting's current client does not enforce it.
+- No SMTP/other configuration or runtime changes. Evidence output/smtp_certificate_20261112/105_probe.json; initial cryptography naive-date deprecation warning concerns the diagnostic formatting only, not connection status.
+
 ## 2026-11-12 purchase292 date and save rejection evidence
 
 - Evidence folder output/erp292_rdviewer_20261112; remote C:/ERP_DB/incoming_migration/erp292_rdviewer_20261112. Three243 captures030a9d2d...(08:51:38),49bd20ee...(08:57:58),591772ba...(09:33:33) all show2026-01-11 and “저장 후 출력해 주십시오.” Screenshot establishes the current form was not confirmed saved; it does not reveal the earlier dismissed save alert or independently prove a closed-period rejection.
