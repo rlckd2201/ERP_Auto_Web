@@ -184,6 +184,73 @@ class InvoiceIdentityTests(unittest.TestCase):
         item["raw"]["data"]["approval_no"] = OTHER
         self.assertEqual(self.auto_candidates([item]), ([], [(1, "tax_identity_unverified")]))
 
+    def kt_pdf(self, name, number="20261106-50000002-e2382940", *, markers=True):
+        path = self.root / name
+        with fitz.open() as document:
+            page = document.new_page()
+            label = "KT 명세서\n공급자 등록번호 102-81-42945\n전자승인번호" if markers else "기타 문서"
+            page.insert_text((30, 45), label, fontname="korea", fontsize=10)
+            page.insert_text((30, 130), "\n".join(["명세서 금액 및 이용기간 표의 다른 행"] * 12), fontname="korea", fontsize=10)
+            page.insert_text((30, 420), "과세 " + number, fontname="korea", fontsize=10)
+            document.save(path)
+        return str(path)
+
+    def kt_invoice(self, rid, path, status=invoice_db.WAITING):
+        result = self.invoice(rid, path, status)
+        result["raw"]["portal"] = "kt"
+        return result
+
+    def test_kt_column_layout_reads_electronic_approval(self):
+        path = self.kt_pdf("kt.pdf")
+        self.assertEqual(identity.tax_approval_number({"pdf_path": path}), "2026110650000002E2382940")
+        self.assertEqual(identity.tax_approval_number({"data": {"전자승인번호": "20261106-50000002-e2382940"}}), "2026110650000002E2382940")
+
+    def test_kt_value_requires_statement_markers(self):
+        path = self.kt_pdf("other.pdf", markers=False)
+        self.assertEqual(identity.tax_approval_number({"pdf_path": path}), "")
+        for text in ("전자승인번호\n기타 표\n과세 " + NUMBER,
+                     "명세서\n102-81-42945\n전자승인번호\n과세 " + NUMBER + "9",
+                     "명세서\n102-81-42945\n전자승인번호\n과세 20261306-50000002-e2382940"):
+            self.assertEqual(identity.numbers_from_text(text), set())
+
+    def test_kt_retry_with_renamed_pdf_inserts_once(self):
+        paths = [self.kt_pdf("kt.pdf"), self.kt_pdf("kt_1.pdf")]
+        results = [invoice_db.insert_crawler_invoice("KT 세금계산서", {**self.result(path), "portal": "kt"}) for path in paths]
+        self.assertEqual(results, [True, False])
+        self.assertEqual(self.count(), 1)
+
+    def test_kt_concurrent_collectors_insert_once(self):
+        paths = [self.kt_pdf(f"kt_race_{i}.pdf") for i in range(4)]
+        barrier = threading.Barrier(4)
+        def collect(path):
+            barrier.wait(timeout=5)
+            return invoice_db.insert_crawler_invoice("KT 세금계산서", {**self.result(path), "portal": "kt"})
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(pool.map(collect, paths))
+        self.assertEqual(results.count(True), 1)
+        self.assertEqual(self.count(), 1)
+
+    def test_kt_oldest_pending_only_and_completed_blocks_resent_copy(self):
+        paths = [self.kt_pdf(f"kt_copy{i}.pdf") for i in range(4)]
+        pending = [self.kt_invoice(296 + i, path) for i, path in enumerate(paths)]
+        self.assertEqual(self.auto_candidates(pending), ([296], [(297, "duplicate"), (298, "duplicate"), (299, "duplicate")]))
+        pending[0]["status"] = invoice_db.DONE
+        self.assertEqual(self.auto_candidates(pending), ([], [(297, "duplicate"), (298, "duplicate"), (299, "duplicate")]))
+
+    def test_kt_different_approvals_same_price_are_not_merged(self):
+        first = self.kt_invoice(1, self.kt_pdf("kt_one.pdf"))
+        second = self.kt_invoice(2, self.kt_pdf("kt_two.pdf", "20261107-50000002-e3519533"))
+        self.assertEqual(self.auto_candidates([first, second]), ([1, 2], []))
+
+    def test_kt_missing_conflicting_or_multiple_identity_is_held(self):
+        item = self.kt_invoice(1, self.kt_pdf("kt_missing.pdf", "no approval"))
+        self.assertEqual(self.auto_candidates([item]), ([], [(1, "tax_identity_unverified")]))
+        item = self.kt_invoice(2, self.kt_pdf("kt_conflict.pdf"))
+        item["raw"]["tax_approval_number"] = OTHER
+        self.assertEqual(self.auto_candidates([item]), ([], [(2, "tax_identity_unverified")]))
+        item = self.kt_invoice(3, self.kt_pdf("kt_multiple.pdf", "20261106-50000002-e2382940\n면세 20261106-50000002-e2382941"))
+        self.assertEqual(self.auto_candidates([item]), ([], [(3, "tax_identity_unverified")]))
+
 
 if __name__ == "__main__":
     unittest.main()

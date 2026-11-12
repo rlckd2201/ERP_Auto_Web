@@ -1,5 +1,14 @@
 # Session
 
+## 2026-11-12 KT duplicate registration and automatic posting
+
+- User reported pairs296/297,298/299,300/301. Their original tax PDFs have identical text within each pair and the same electronic approval numbers; saved ERP PDFs prove separate voucher numbers.302/303 were an already-claimed later copy of296; their voucher PDFs show two further postings.
+- Root cause: KT's PDF extraction separates the 전자승인번호 column label from its 과세-prefixed value. Existing adjacent-label parsing returned no identity, so suffix-renamed paths bypassed collection/auto dedupe; unknown-identity blocking previously covered CSBill only.
+- Added tightly scoped KT statement identity extraction and KT unknown/conflicting-identity auto-post hold. Source/SQLite backed up,31 tests passed locally and against operating stage; real8-document/copy-DB rehearsal inserted3 distinct invoices and rejected5 duplicates, and auto selection chose only the3 unique documents.
+- Deployed only invoice_identity.py and app.py at16:07:58; final16:09:17 native17672/public3010 healthy,183 business rows identical to predeploy backup,243 fresh onf31ec878... bundle. Live read-only checks resolve all8 originals to existing296/298/300.
+- User explicitly said humans are cleaning the existing vouchers and requested only future prevention. Do not delete/restore/replay affected rows or ERP vouchers; no financial/test mail action was dispatched by this agent.
+- Next exact start for this issue: if another KT duplicate is reported, inspect its original approval identity and collection/auto skip logs. The implemented cases are verified; a future natural incoming duplicate has not been deliberately generated. Earlier292/SMTP/portal follow-ups remain independent.
+
 ## 2026-11-12 SMTP certificate comparison (11:24 KST)
 
 - User asked whether accounting has the same expired SMTP certificate failure reported by the SSL VPN system. Read-only105 probes confirm accounting uses211.233.214.90:25 and presents CN=gw.dae-seung.co.kr, expired2025-08-20T23:59:59Z.

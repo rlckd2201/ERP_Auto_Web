@@ -1,5 +1,13 @@
 # TODO
 
+## 2026-11-12 KT duplicate prevention
+
+- [x] Verify original PDF identity and actual separate voucher PDFs for296–303; isolate the KT table-layout extraction gap.
+- [x] Back up183-row current DB/source, implement KT electronic approval extraction and hold unknown/conflicting identities, run31 local/staged regressions and real8-document rehearsal.
+- [x] Deploy only two backend files at idle; verify live duplicate matching, healthy server, exact243 bundle and unchanged183 business rows.
+- [x] Respect user direction: existing duplicate cleanup belongs to humans. Do not restore the manually deleted297/299/301/302/303 or initiate financial cleanup/replay.
+- [ ] On a future naturally repeated KT invoice, confirm duplicate collection exclusion or unknown-identity hold in logs; no test mail/ERP job is needed.
+
 ## 2026-11-12 SMTP certificate finding
 
 - [x] Compare actual accounting STARTTLS behavior and strict certificate checks from105 without sending mail.

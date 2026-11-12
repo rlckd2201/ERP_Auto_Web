@@ -15,9 +15,15 @@ _LABELLED_NUMBER = re.compile(
     r"([12][0-9]{7}\s*-?\s*[0-9A-Z]{8}\s*-?\s*[0-9A-Z]{8})"
     r"(?![0-9A-Z])", re.IGNORECASE,
 )
+_KT_TAX_NUMBER = re.compile(
+    r"(?<!\S)(?:과세|면세)\s*"
+    r"([12][0-9]{7}\s*-?\s*[0-9A-Z]{8}\s*-?\s*[0-9A-Z]{8})"
+    r"(?![0-9A-Z])", re.IGNORECASE,
+)
 _NUMBER_FIELDS = {
     "taxapprovalnumber", "taxapprovalno", "approvalnumber", "approvalno",
     "ntsapprovalnumber", "ntsapprovalno", "issueid", "승인번호", "국세청승인번호",
+    "전자승인번호",
 }
 
 
@@ -35,7 +41,16 @@ def normalize_approval_number(value: Any) -> str:
 
 def numbers_from_text(text: str) -> set[str]:
     normalized = unicodedata.normalize("NFKC", text or "")
-    return {number for match in _LABELLED_NUMBER.finditer(normalized)
+    matches = list(_LABELLED_NUMBER.finditer(normalized))
+    # KT's statement table extracts all column labels before their values.
+    # The electronic approval value is separately labelled 과세/면세, often
+    # hundreds of characters after 전자승인번호. Require KT statement markers
+    # so arbitrary unlabelled IDs or amounts cannot become tax identities.
+    if (re.search(r"전자\s*승인\s*번호", normalized)
+            and "명세서" in normalized
+            and re.search(r"(?<!\d)102\s*-?\s*81\s*-?\s*42945(?!\d)", normalized)):
+        matches.extend(_KT_TAX_NUMBER.finditer(normalized))
+    return {number for match in matches
             if (number := normalize_approval_number(match.group(1)))}
 
 
@@ -90,6 +105,12 @@ def is_csbill_invoice(invoice: dict[str, Any]) -> bool:
             if str(value.get("portal") or "").strip().lower() == "csbill":
                 return True
     return False
+
+
+def is_kt_invoice(invoice: dict[str, Any]) -> bool:
+    return any(isinstance(value, dict)
+               and str(value.get("portal") or "").strip().lower() == "kt"
+               for value in (invoice, invoice.get("raw"), invoice.get("data")))
 
 
 def _stored_invoice(row) -> dict[str, Any]:

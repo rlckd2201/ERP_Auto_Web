@@ -1,5 +1,16 @@
 # Debug
 
+## 2026-11-12 KT duplicate evidence and validation
+
+- Evidence output/kt_duplicate_20261112; remote C:/ERP_DB/incoming_migration/kt_duplicate_20261112. Initial296–301 data and original tax/voucher PDFs saved before human cleanup. KT table extraction places hundreds of characters between 전자승인번호 and 과세YYYYMMDD-XXXXXXXX-XXXXXXXX; previous tax_approval_number returnedempty and auto keys contained onlyid/path.
+- Same tax text/identity groups:296/297/302/303 approval2026110650000002E2382940 (일강1,1878800),298/299 approval2026110750000002E3519533 (P1,1058200),300/301 approval2026110750000002E3625722 (P4,2511300). Separate saved voucher numbers:296IP-P1-20261106-0021;297...0022;302...0023;303...0024;298P3-P1-20261107-0001;299...0002;300K7-K3-20261107-0002;301...0003. Current ERP cancellation state was not inspected.
+- At16:01:38 later302/303 queue36e3edb3... was already claimed since15:59:25 and302 already had a voucher. No mid-save termination was attempted. At16:04:55 rows297/299/301/302/303 were absent due to external cleanup. User confirmed humans are handling existing records and requested only future prevention. No rows/vouchers were deleted or restored by this agent.
+- New tests cover distant KT table values, supplier/label markers, invalid/trailing numbers, electronic-approval metadata, renamed copies,4 simultaneous collectors, completed/pending duplicate exclusion, distinct approvals with identical prices, and missing/conflicting/multiple-number holds.31 tests pass locally and on staged operating source. An initial test edit left the prior CSBill assertions under the last added method; corrected placement and reran all31.
+- Real8-file rehearsal on a copy of the183-row snapshot with only the three current KT originals removed: insert flagsT,F,T,F,T,F,F,F;3unique/5rejected; original180rowsunchanged. Pending auto selection296/298/300; after marking those completed in the fixture, all5copiesblocked. No live collection/job/print/mail dispatched.
+- Backup C:/ERP_DB/deploy_backups/kt_identity_20261112_160552 contains exact two source files, consistent learned_data.db and183-row snapshot. Deployed16:07:58 under pinned supervisor lock after activeJobs0; native15732→17672, unrelated bridge27636/finance14364/relay25000 not targeted.
+- SHA invoice_identity f61cc9e66a8712e1ed7ccb5892d290092c3f41fe51a15577a68a6a32556faa97→562f3a3b7af157e92876fef0c10a6442e818c33d92bb3dc7049f6722b60da995; app08b9a9a23c55590e0c8cb8bacd07fd5f0ad5995b4ac9316d713a5f0dd65c7bc3→b2c1eda97d0c93896c3129ac17a076ec94a87e95fdc8e0afcbfde36c1b404ebd.
+- Final16:09:17: native/publicapi/version200, operationready/activeJobs0; all183businessrowsbyte-equal to backup, manually deleted IDs remainabsent. Live read-only find_tax_duplicate resolves8 samples to296/298/300.243heartbeat16:09:17 exactf31ec8781e63e8b076154757d854c844df03042f574432e51df7deeca889f8b8 bundle. Graphify AST3368nodes/9763edges/109communities.
+
 ## 2026-11-12 SMTP live certificate probe
 
 - At11:24:38 on105 Python3.11.5, regular_auto_result SMTP is211.233.214.90:25, authentication not configured, display name회계처리프로그램. Operating notifications.py65 andregular_due_monitor.py1005 both call smtp.starttls() with no context.

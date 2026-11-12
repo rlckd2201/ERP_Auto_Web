@@ -744,7 +744,7 @@ def _regular_auto_mark_skip(invoice: dict[str, Any], reason: str, detail: str) -
 
 
 def _regular_auto_candidate_invoices() -> list[tuple[dict[str, Any], set[str]]]:
-    from .invoice_identity import is_csbill_invoice, tax_approval_number
+    from .invoice_identity import is_csbill_invoice, is_kt_invoice, tax_approval_number
 
     limit = max(1, min(int(settings.regular_auto_scan_limit or 200), 200))
     summaries = list_invoices(mode="regular", limit=limit)
@@ -783,7 +783,7 @@ def _regular_auto_candidate_invoices() -> list[tuple[dict[str, Any], set[str]]]:
             blocked_keys.update(_regular_auto_dedupe_keys(invoice))
             continue
         keys = _regular_auto_dedupe_keys(invoice)
-        if is_csbill_invoice(invoice) and not tax_approval_number(invoice):
+        if (is_csbill_invoice(invoice) or is_kt_invoice(invoice)) and not tax_approval_number(invoice):
             _regular_auto_mark_skip(invoice, "tax_identity_unverified", "세금계산서 승인번호를 확인할 수 없어 자동 기표를 보류했습니다.")
             continue
         duplicate_keys = sorted(key for key in keys if key in blocked_keys and not key.startswith("id:"))

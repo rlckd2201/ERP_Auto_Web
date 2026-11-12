@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-11-12 KT identity extension
+
+- Accept KT's separated 과세/면세 approval values only in a statement carrying 전자승인번호, 명세서 and the KT supplier registration marker. Keep the existing24-character/date validation, letter preservation and ambiguity rejection; do not use amount or filename suffix as identity.
+- KT automatic posting now requires a unique verified tax identity just as CSBill does. Existing shared transaction-based collection dedupe and pre-queue identity keys handle renamed/repeated documents without merging distinct approvals of the same amount.
+- Preserve completed records and current human cleanup. User explicitly limited follow-up to recurrence prevention; deleting/canceling existing financial vouchers or restoring removed web rows is outside this change.
+- Production invoice_db has unrelated drift and remains untouched. Only the verified operating-identical app.py andinvoice_identity.py baselines were patched.
+
 ## 2026-11-12 SMTP comparison scope
 
 - Distinguish successful non-validating TLS transport from certificate validity and from actual message delivery. Accounting's current default Python smtplib context does not verify peer certificate or hostname; keep that fact explicit.
