@@ -1,5 +1,13 @@
 # Session
 
+## 2026-11-12 purchase292 wrong date and masked save rejection
+
+- #292/order29023727/186500/P3 failed at08:51,08:58 and09:33. All three243 screenshots show 회계일2026-01-11, blank voucher numbers, and ERP “저장 후 출력해 주십시오.” Original PDF and crawler XML both say2026-11-10. The purchase fast parser split compact20261110 into2026/1/11;293 used AI analysis and retained the correct date.
+- Backed up operating source and consistent180-row SQLite, patched only purchase date parsing and legacy save-rejection detection, tested65 cases locally and against the staged operating baseline, and deployed at10:59. The first deployment attempt detected a newly active job and exited before changing files or stopping a service.
+- User explicitly confirmed the affected voucher was not created. Corrected only292's three nested invoice_date values, reset it to waiting with the existing manual-reset semantics, and recorded this confirmation in invoice_logs. Other179 invoice rows are unchanged by the repair. No ERP/print/mail job was dispatched.
+- At11:01:17 native15732 and public3010 return200;243 is fresh on expected6beffe2b... bundle and the exact patched manager source. A read-only payload build for292 now uses2026-11-10. See DEBUG for hashes/backup/evidence.
+- Next exact start: observe the user's next #292 one-click attempt and verify its voucher PDF/number and output receipts. Do not claim live ERP save or printing was validated by the mocked tests. Separate portal35 maintenance notice remains awaiting operator evidence; historical262 date metadata discrepancy needs read-only ERP-date comparison.
+
 ## 2026-11-12 portal maintenance notice after Song repair
 
 - User supplied the exact notice: 전표자동화(전산) 업데이트·점검 중 / 잠시 후 다시 시도해 주세요. 다른 시스템은 계속 이용할 수 있습니다. This requires the portal entry state to be investigated separately from Agent setup.

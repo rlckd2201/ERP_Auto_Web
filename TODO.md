@@ -1,5 +1,14 @@
 # TODO
 
+## 2026-11-12 purchase292 follow-up
+
+- [x] Compare all three failure screenshots with original292 tax PDF/XML and reproduce compact-date truncation.
+- [x] Back up105 source/SQLite, fix calendar-validated purchase date parsing and ERP save-rejection reporting, run65 local and65 staged operating regressions, deploy only two files.
+- [x] After user's explicit no-existing-voucher confirmation, correct292 metadata to2026-11-10 and reset to waiting with audit log; other179 invoices unchanged. Verify243 natural update and ready server.
+- [ ] Verify the next real #292 attempt yields a voucher and required outputs. No live ERP/print action was dispatched during this repair.
+- [ ] Historical262: stored invoice_date2026-01-01 conflicts with original crawler XML2026-10-12; status is completed and no voucher PDF is attached in metadata. Inspect actual ERP voucher date before any data/action change. No conclusion about its actual ERP date yet.
+- [ ] Retain separate portal35 maintenance/entry investigation from the preceding session; this release does not change portal maintenance configuration.
+
 ## 2026-11-12 portal entry maintenance follow-up
 
 - [x] Confirm105 native/public health and distinguish the new notice from the earlier Song403.

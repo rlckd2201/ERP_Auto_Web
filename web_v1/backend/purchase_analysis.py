@@ -10,7 +10,7 @@ from typing import Any
 import pdfplumber
 
 from .config import settings
-from .erp_runner import FACTORY_MAP, _site_from_biz_no, _to_int
+from .erp_runner import FACTORY_MAP, _format_invoice_date, _site_from_biz_no, _to_int
 
 
 ACCOUNT_CHOICES = {"소모품비", "집기비품", "컴퓨터소프트웨어"}
@@ -164,36 +164,36 @@ def _extract_order_no_from_quote(text: str) -> str:
 
 
 def _extract_date(text: str, fallback_path: str = "") -> str:
-    def _format(match: re.Match[str]) -> str:
-        return f"{int(match.group(1)):04d}-{int(match.group(2)):02d}-{int(match.group(3)):02d}"
+    # Compact dates must consume exactly eight digits. Optional separators with
+    # one-digit months used to turn 20261110 into 2026-01-11.
+    compact = r"(?<!\d)(20\d{2})(0[1-9]|1[0-2])(0[1-9]|[12]\d|3[01])(?!\d)"
+    separated = r"(?<!\d)(20\d{2})[-./년\s]+(1[0-2]|0?[1-9])[-./월\s]+(3[01]|[12]\d|0?[1-9])(?!\d)"
+    generic_patterns = [compact, separated]
 
-    generic_patterns = [
-        r"(20\d{2})[-./년\s]*(0?[1-9]|1[0-2])[-./월\s]*([0-3]?\d)",
-        r"(20\d{2})(0[1-9]|1[0-2])([0-3]\d)",
-    ]
+    def _first_valid(patterns: list[str], value: str) -> str:
+        for pattern in patterns:
+            for match in re.finditer(pattern, value, re.DOTALL):
+                parsed = _format_invoice_date(*match.groups())
+                if parsed:
+                    return parsed
+        return ""
 
     # The tax-invoice body can contain old certificate/legal dates such as 2002-02-06.
     # Prefer the crawler filename and explicit invoice-date labels, then stop.
     filename = Path(fallback_path or "").name
-    for pattern in generic_patterns:
-        match = re.search(pattern, filename)
-        if match:
-            return _format(match)
+    parsed = _first_valid(generic_patterns, filename)
+    if parsed:
+        return parsed
 
-    label_patterns = [
-        r"(?:작성일자|작성\s*일자|발행일자|발행\s*일자|공급일자|공급\s*일자).{0,80}?(20\d{2})[-./년\s]*(0?[1-9]|1[0-2])[-./월\s]*([0-3]?\d)",
-        r"(?:작성일자|작성\s*일자|발행일자|발행\s*일자|공급일자|공급\s*일자).{0,80}?(20\d{2})(0[1-9]|1[0-2])([0-3]\d)",
-    ]
-    for pattern in label_patterns:
-        match = re.search(pattern, text, re.DOTALL)
-        if match:
-            return _format(match)
+    label = r"(?:작성\s*일자|발행\s*일자|공급\s*일자).{0,80}?"
+    parsed = _first_valid([label + pattern for pattern in generic_patterns], text)
+    if parsed:
+        return parsed
 
     for value in re.findall(r"(?:승인번호|관리번호).{0,30}?(20\d{2})(0[1-9]|1[0-2])([0-3]\d)", text, re.DOTALL):
-        try:
-            return f"{int(value[0]):04d}-{int(value[1]):02d}-{int(value[2]):02d}"
-        except Exception:
-            pass
+        parsed = _format_invoice_date(*value)
+        if parsed:
+            return parsed
 
     return ""
 

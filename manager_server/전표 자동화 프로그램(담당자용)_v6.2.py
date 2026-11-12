@@ -3211,6 +3211,7 @@ class ERPLoginBot:
             end_at = time.time() + max(0.2, float(timeout_sec))
             title_re = re.compile(r"(Report Designer Viewer|RD Viewer|Designer Viewer)", re.I)
             while time.time() < end_at:
+                _raise_erp_save_rejection()
                 viewer_pids = set()
                 try:
                     for proc in psutil.process_iter(['pid', 'name']):
@@ -3731,6 +3732,37 @@ class ERPLoginBot:
                 return _save_pdf_output_dialog(choice.get("save_path", ""))
             return True
 
+        def _raise_erp_save_rejection():
+            # Read the current ERP's visible validation text before dismissing
+            # alerts or retrying Print. A rejected save is not an RD timeout.
+            texts = []
+            try:
+                for element in main_win.descendants(control_type="Text"):
+                    if element.is_visible():
+                        texts.append(str(element.window_text() or ""))
+            except Exception:
+                pass
+            try:
+                erp_pid = int(main_win.element_info.process_id)
+                main_handle = int(main_win.handle)
+                for dialog in Desktop(backend="uia").windows():
+                    if int(getattr(dialog.element_info, "process_id", 0) or 0) != erp_pid:
+                        continue
+                    if int(dialog.handle) == main_handle or not dialog.is_visible():
+                        continue
+                    texts.extend(_dialog_text_blob(dialog).splitlines())
+            except Exception:
+                pass
+            rejection = re.compile(
+                r"저장\s*후\s*출력|저장(?:이|에)?\s*(?:실패|불가|불가능)"
+                r"|(?:회계|전표|해당|이미).{0,40}마감"
+                r"|마감.{0,40}(?:되었습니다|처리|일자|기간|입력|저장|불가)"
+            )
+            for text in texts:
+                if rejection.search(text):
+                    message = re.sub(r"\s+", " ", text).strip()[:500]
+                    raise RuntimeError(f"ERP 저장/출력 거부: {message}")
+
         def _save_and_open_print_dialog():
             save_attempted = False
             try:
@@ -3742,9 +3774,11 @@ class ERPLoginBot:
                     float(os.getenv("ERP_PRINT_SAVE_WAIT", str(ERP_PRINT_SAVE_WAIT)) or ERP_PRINT_SAVE_WAIT),
                 )
                 time.sleep(save_wait)
+                _raise_erp_save_rejection()
                 pyautogui.press('enter')
                 self.logger.info("  [SAVE] 저장 알림 닫기용 Enter 전송 완료")
                 time.sleep(ERP_SETTLE_WAIT)
+                _raise_erp_save_rejection()
 
                 self.logger.info("  [PRINT] 전표출력 버튼 클릭 시작")
                 _click_print_button()

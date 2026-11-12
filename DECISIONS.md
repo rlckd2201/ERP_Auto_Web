@@ -1,5 +1,12 @@
 # Decisions
 
+## 2026-11-12 purchase date and save rejection boundaries
+
+- Compact purchase dates consume exactly eight bounded digits; separated dates require separators and complete month/day. Validate real calendar dates. Preserve existing filename → labeled document date → labeled approval-number fallback precedence and unrelated purchase-account/manual-classification behavior.
+- Inspect visible validation text belonging to the active ERP before dismissing save alerts and while awaiting RD Viewer. Recognized save-first/closed-period/save-failure messages stop with the original ERP wording under ERP_SAVE_CONFIRM_REQUIRED. They must not trigger a second print attempt or be hidden as a generic viewer timeout.
+- A blank voucher number in a failure screenshot alone does not prove every previous attempt was unsaved.292's retry lock was released only after the user explicitly confirmed that this affected voucher was not created; date correction and unlock are audited. Actual business replay remains separate from regression testing.
+- Preserve production drift by applying the narrow function/import changes to the deployed purchase-analysis baseline. Never replace that file wholesale with the older worktree baseline.
+
 ## 2026-11-12 portal maintenance diagnosis boundary
 
 - Keep three distinct claims:105 process/API health, authenticated setup API success, and actual portal document entry. Success at one does not prove the next. The81 successful Song requests validate the prior resolver fix, not the current portal entry screen.
