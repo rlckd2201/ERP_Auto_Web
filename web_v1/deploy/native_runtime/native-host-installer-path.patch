@@ -1,0 +1,11 @@
+--- a/native-host.py
++++ b/native-host.py
+@@ -139,4 +139,8 @@
+             require(not re.search(r"[{}]", re.sub(r"\{[a-z_]+\}", "parameter", path)) and (route["method"], path) not in seen, 503)
+             seen.add((route["method"], path))
+             expression = ''.join(r"[A-Za-z0-9_.-]{1,160}" if re.fullmatch(r"\{[a-z_]+\}", part) else re.escape(part) for part in re.split(r"(\{[a-z_]+\})", path))
++            # The existing ERP bundles use these three Korean company names.
++            # Keep every other service parameter restricted to its ASCII contract.
++            if route["method"] == "GET" and path == "/api/setup/installers/{company}":
++                expression = r"/api/setup/installers/(?:[A-Za-z0-9_.-]{1,160}|대승|대승정밀|일강)"
+             self.routes.append((route["method"], re.compile("^" + expression + "$")))

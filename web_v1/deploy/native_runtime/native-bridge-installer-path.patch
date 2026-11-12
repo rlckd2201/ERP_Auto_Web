@@ -1,0 +1,15 @@
+--- a/native-bridge.cjs
++++ b/native-bridge.cjs
+@@ -66,7 +66,11 @@
+     const literal = route.path.replace(/\{[a-z_]+\}/gu, 'parameter');
+     check(!/[{}]/u.test(literal) && !seen.has(route.method + ' ' + route.path), 'Ambiguous native service route', 503);
+     seen.add(route.method + ' ' + route.path);
+-    const expression = route.path.split(/(\{[a-z_]+\})/gu).map(part => /^\{[a-z_]+\}$/u.test(part) ? '[A-Za-z0-9_.-]{1,160}' : part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('');
++    let expression = route.path.split(/(\{[a-z_]+\})/gu).map(part => /^\{[a-z_]+\}$/u.test(part) ? '[A-Za-z0-9_.-]{1,160}' : part.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')).join('');
++    // Mirror the native host exception for the three existing ERP bundles.
++    if (route.method === 'GET' && route.path === '/api/setup/installers/{company}') {
++      expression = '/api/setup/installers/(?:[A-Za-z0-9_.-]{1,160}|대승|대승정밀|일강)';
++    }
+     return { method: route.method, expression: new RegExp('^' + expression + '$', 'u') };
+   });
+   return { canonicalPortalUrl, isService(method, pathname) { return routes.some(route => route.method === method && route.expression.test(pathname)); } };

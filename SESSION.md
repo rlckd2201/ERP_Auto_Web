@@ -1,5 +1,13 @@
 # Session
 
+## 2026-11-12 Song connection and installer-path repair
+
+- The returned v2 JSON/log contain only the 09:01 startup snapshot, with no completion/error. They do not establish the repair executable's final outcome. The user clarified that Song closed the tray Agent; the new Agent had already connected before this v2 run and resumed by 09:14.
+- Diagnosed two operating blockers: the new Windows identity 송명학-전산 송명학 was unowned, and both native-host and native-bridge rejected Korean ERP bundle names despite the registered installer route. Restored the exact diagnosed profile to existing account tuy1120 after verifying prior ownership, current identity and heartbeat; patched only the three existing company names in both validators.
+- Production backup and verification are in DEBUG. Public company downloads now work, authentication boundaries remain intact, and purchase execution still resolves to ready 172.17.30.243. Song's existing automatic installation resumed without a manual install/ERP/print/mail dispatch.
+- At 09:28:39 the natural install job 03160d75-e16e-4b79-bbf4-8f2178a37117 completed successfully for all three companies. At 09:30:17 Song was fresh, owned by tuy1120, ready with no missing checks; shared purchase execution still resolved to ready 243. Public route/auth checks and all 180 invoice rows passed final verification.
+- Next exact start: obtain Song's portal refresh result from the pending question. Server/Agent readiness is verified; authenticated purchase-screen rendering is not yet confirmed. If it still fails, inspect the current portal request/session and error rather than rerunning the EXE. Evidence: output/song_repair_followup_20261112/final_verification.json. Keep the tray Agent running.
+
 ## 2026-11-12 Song recovery v2 entry fix (08:57 KST)
 
 - User reported no JSON from the delivered recovery. Reproduced a defect in our v1 package: dot-sourcing repair-common.ps1 with -LibraryOnly overwrote the caller's same-named parameter. The main script returned before the repair and report body. Earlier11 tests exercised helpers/library mode, not the full entry; do not attribute this failure to Song's PC.

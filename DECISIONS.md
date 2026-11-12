@@ -1,5 +1,11 @@
 # Decisions
 
+## 2026-11-12 installer routes and diagnosed PC ownership
+
+- The bridge and native host independently enforce service routes. Permit only the existing literal company names 대승, 대승정밀 and 일강 on the configured GET installer route; retain ASCII compatibility and all other authentication, path, TLS and parameter rules. Verify public responses after both validators, not only loopback.
+- Administrative ownership repair must match the user-supplied computer/Windows-user evidence, the prior account owner, the exact unowned natural Agent identity and a current heartbeat. Update only that profile's owner and retain its old profile/history; never invent heartbeat timestamps or assign by IP alone.
+- A startup-only recovery JSON is not a completion report. The Agent was observed before this v2 execution, so its presence is not proof that the EXE repaired it. Track the actual installation report and ready heartbeat separately from an authenticated portal rendering check.
+
 ## 2026-11-12 executable entry and result guarantees
 
 - Preserve caller parameters around dot-sourced libraries. A library-only test must not substitute for executing the packaged entry.

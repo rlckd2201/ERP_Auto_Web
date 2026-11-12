@@ -1,12 +1,20 @@
 # TODO
 
+## 2026-11-12 Song operating recovery
+
+- [x] Analyze the supplied v2 snapshot and distinguish tray-Agent exit from recovery-EXE completion.
+- [x] Audit and repair the exact new Windows identity's existing accounting ownership.
+- [x] Reproduce and patch Korean installer-route rejection in both 105 validators; verify public downloads and retained access boundaries.
+- [x] Confirm automatic installation completes for all three companies and fresh Song setup is ready with no missing checks (09:28-09:30).
+- [ ] Confirm Song can enter the portal purchase screen after refresh; pending user reply. Keep the tray Agent running.
+
 ## 2026-11-12 Song v2 result-file recovery
 
 - [x] Reproduce v1's LibraryOnly scope collision and correct the main entry.
 - [x] Produce bootstrap JSON/log before PowerShell; detect child early exit, parse/import errors and denied primary result location.
 - [x] Test the final compiled EXE through Windows PowerShell5.1, including Unicode/apostrophe paths; preserve helper/target/TLS guards.
 - [x] Deliver separately named v2 EXE and instructions to the user's Desktop.
-- [ ] Song runs v2 and returns its JSON plus same-name .log from the opened result folder. Verify actual repair stages, server heartbeat, owner binding and portal access.
+- [x] Receive Song's v2 JSON/log; they contain only startup, not completion. Live server diagnosis and recovery above supersede further EXE retries; portal acceptance remains pending.
 - The optional question about the old window behavior is superseded by the reproducible entry bug; do not wait for that answer before supplying v2.
 
 ## 2026-11-12 approval lookup and Song recovery
@@ -16,7 +24,7 @@
 - [x] Back up live sources/SQLite; fix right-edge PDF clipping in order and amount renderers; pass local/server tests and inspect complete final pages.
 - [x] Attach correct PDFs using normal guarded lookup; verify only approval metadata changed in two of180 invoices.
 - [x] Analyze Song's JSON and provide the tested, current-user-specific standalone recovery EXE on the user's Desktop.
-- [ ] Song executes the EXE as 전산 송명학 and returns its Desktop result JSON. Verify actual imports, new heartbeat, current bundle, authorized account binding and portal setup readiness; do not infer these from process start.
+- [x] Receive Song's diagnostic/repair files and verify actual current bundle, fresh heartbeat, audited account binding and setup readiness through the subsequent live recovery above. EXE completion itself was not established.
 - [ ] Improve mandatory-password-change detection/message in both groupware login paths; currently the old menu wait reports a generic timeout when authentication is blocked.
 - [ ] Separately verify #292 invoice_date2026-01-11 against its original20261110 tax PDF before any date correction. No financial date was changed in this task.
 - Existing order renderer still intentionally exports page1 only; this release fixes width and does not change that compatibility behavior for longer documents.
