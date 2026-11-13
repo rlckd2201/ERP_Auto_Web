@@ -1,5 +1,32 @@
 # Debug
 
+## 2026-11-13 EML release evidence
+
+- Worktree C:/Users/user/.codex/worktrees/ac12/회계업무 자동화_WEB_Version; evidence output/eml_dedupe_20261113. Production backup C:/ERP_DB/deploy_backups/eml_dedupe_20261113_135724 includes source, consistent learned_data.db,184-row snapshot and legacy collector state. Remote stage C:/ERP_DB/incoming_migration/eml_dedupe_20261113.
+- Operating collector baseline93035b46... was newer than git by419 additions/7 deletions. Synchronized that existing behavior before applying the narrow content check; did not deploy unrelated invoice_db/worker/config drift.
+- New collector SHA256796b59297f61332c6af4ce93b8be739d299bf07f294d29656780f6da87c8d1bf; mail_content SHA256a67a2bec2baf3e75611a7ab61e99735260ba75615da4c49c73fa56b0c90a5d3f. Two production source files changed.
+- 53 tests: unittest web_v1.test_mail_content web_v1.test_mail_approval_dispatch web_v1.test_invoice_identity. Local/staged passed; existing invalid-escape DeprecationWarnings only. Actual EML groups:2052;2053;2073/2074;2106/2107;2110/2111;2113/2114;2116/2117. Purchase and regular mocked replays each7 collected/5 skipped; second run12 skipped/zero crawls. Production-stage MIME parse+hash median6.213ms/p95 6.989ms excludes network/crawler/ERP.
+- First deploy preflight falsely reported source drift because Windows PowerShell5.1 read a BOM-less script's Korean path incorrectly; byte-for-byte source comparison showed no actual drift. UTF-8 BOM fixed it. A subsequent preflight found active work and exited unchanged. Final14:06:43 deployment required ready/activeJobs0 under the existing pinned supervisor guard.
+- Seeded7 content receipts from12 hashes/Message-IDs whose saved outcome was verified in the backup. No invoice/mailbox flags/ERP mutation by the seed; seed_result.json and verification.json record the evidence.
+- Final14:08:29 native17672->600, native8081/public3010 HTTP200, ready/activeJobs0,184 invoice rows exactly equal backup.243 DESKTOP-55LQ6BN-TEST last_seen14:08:28 on41801952cde1bea7feb59d7eb4cac3c39b2e9e9c446ac8bc09129392fcd6e9ca. Automatic IMAP cycles14:06:49 and14:07:49 completed with0 unread/new messages, no new runtime errors. No natural post-release duplicate was available yet.
+- Graphify AST update completed3747 nodes/11129 edges/116 communities. Evidence/raw EML/generated graphs are not staged. Existing invoice cleanup remains human-owned; no test SMTP/ERP/print work was triggered.
+
+## 2026-11-13 offline EML comparison
+
+- Evidence read from C:/Users/user/.codex/worktrees/ac12/회계업무 자동화_WEB_Version/output/mail_duplicate_audit_20261112/mail_db_audit.json, captured Nov12. Offline comparisons: pairs2073/2074,2106/2107,2110/2111 each raw_equal=false,decoded_body_equal=true,message_id_equal=false,subject_equal=true,date_equal=true. KT attachment lists have identical content hashes/sizes; Daou lists are empty.
+- These results establish equal decoded content without claiming every other raw difference is only a header. No source/runtime/DB/mail flag or financial change, and no new IMAP fetch. Current working-root output lacks this historical artifact; the original worktree contains it.
+
+## 2026-11-13 duplicate-mail benchmark
+
+- Synthetic local Python3.11 hashlib SHA256 + SQLite primary-key lookup,100000 fixture fingerprints, WAL/synchronousFULL.110000bytes/300runs: median0.0973ms,p95 0.1163ms,max0.284ms.1MiB/150runs: median0.7371ms,p95 0.8693ms,max1.0475ms.110000byte hash+new-row durable commit/100runs: median2.9163ms,p95 3.4006ms,max10.2054ms.
+- Excludes IMAP transfer,MIME parsing,web crawling,PDF parsing andERP. Previous evidence file was absent under the current working root, so the benchmark used synthetic bytes rather than claiming to rerun the original KT attachment. Fixture DB was closed/deleted; result.json retained under output/mail_duplicate_benchmark_20261113. No production access/change or source edit.
+
+## 2026-11-12 unified-guard design review
+
+- Re-read the four session documents and Graphify report. Recommendations are grounded in the preceding operating-source/IMAP/SQLite audit; no new mail/server query, source change, migration, restart or ERP/print/SMTP action occurred.
+- Proposed reservation must account for the non-transactional external ERP save: after a lost response, absence of a success receipt cannot be treated as proof of no voucher. Preserve ERP_SAVE_CONFIRM_REQUIRED handling and require reconciliation before retry.
+- No tests were run for the proposed design; prior31-test KT verification applies only to the earlier deployed scope. Four session documents record this boundary and the next exact starting point.
+
 ## 2026-11-12 16:15-16:19 duplicate delivery evidence
 
 - Evidence output/mail_duplicate_audit_20261112: mail_db_audit.json, purchase_queue_audit.json, purchase_results_since_oct1.json, summary.json and operating source snapshots. IMAP readonly=True/BODY.PEEK and SQLite mode=ro; no collect/store/mark-seen/SMTP/ERP endpoint invoked.

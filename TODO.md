@@ -1,5 +1,35 @@
 # TODO
 
+## 2026-11-13 approved EML dedupe release
+
+- [x] Back up current operating collector/SQLite and preserve the newer operating collection baseline.
+- [x] Add durable scoped content receipts and a process-safe collection lock; skip before attachment writes/crawling only after complete collection success.
+- [x] Verify changed invoice content, purchase/regular paths, Zoom, partial failure retry, restart, simultaneous collectors and encoded sender names; 53 tests passed locally and against operating source.
+- [x] Replay 12 actual EMLs with mocked side effects: 7 distinct contents/5 duplicate deliveries; verify all12 are skipped after restart.
+- [x] Deploy at idle, seed7 content groups from12 independently verified prior-success originals, and verify184 business rows unchanged plus healthy105/243.
+- [x] Update Graphify (3747 nodes/11129 edges/116 communities); generated graph/output artifacts remain outside the release commit.
+- [ ] Observe the next naturally duplicated delivery's early-skip log; no deliberate financial replay or test mail required.
+- Earlier early-mail proposals are fulfilled by this whole-message success design. Per-target optimization and the broader shared ERP reservation proposal are outside this approved release.
+
+## 2026-11-13 EML fingerprint scope
+
+- [x] Confirm decoded bodies match for all three sampled duplicate pairs despite changed raw EML/Message-ID.
+- [ ] Add early canonical EML fingerprints excluding delivery headers and MIME serialization differences; retain semantic body content, document URLs/identifiers and every attachment.
+- [ ] Skip only successfully collected matching messages; keep partial-failure retries, simultaneous-collection protection and the independent final ERP guard. Proposed, not deployed.
+
+## 2026-11-13 early duplicate-mail proposal
+
+- [x] Measure local hash/index lookup and durable insert overhead using synthetic data; keep results distinct from production measurements.
+- [ ] Implement/test early identity checks for exact same attachments and provider-qualified document links, after current-source review. Preserve all targets in multi-invoice mail, failed-attempt retries and distinct invoices with similar subjects/amounts.
+- [ ] Verify concurrent collection and restart semantics before claiming the duplicate-mail check is complete; retain the ERP final guard as an independent requirement.
+
+## 2026-11-12 proposed acceptance cases
+
+- [ ] Before a unified-guard release, test duplicate deliveries with different Message-IDs, renamed/manual-upload PDFs, different row IDs sharing one approval, simultaneous users, automatic/manual overlap, process restart and stale Agent callbacks.
+- [ ] Confirm a completed invoice only reprints saved documents; an uncertain save never retries automatically; an explicitly confirmed unsaved attempt can retry; same-price/different-approval transactions remain distinct.
+- [ ] Keep execution identity/history after a web-list deletion. Define explicit reversal/correction handling and separate non-tax billing identity before migration; do not invent backfilled ERP outcomes.
+- Proposal only in this turn; no implementation or live test was started.
+
 ## 2026-11-12 shared duplicate-protection audit
 
 - [x] Confirm real duplicate deliveries via read-only IMAP headers/attachment hashes; compare47purchase approvals and23recent Agent results.

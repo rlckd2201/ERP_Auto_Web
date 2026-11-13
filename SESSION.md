@@ -1,5 +1,29 @@
 # Session
 
+## 2026-11-13 EML duplicate collection prevention deployed
+
+- User explicitly approved early EML-content dedupe for both purchase and regular collection. Implemented alone in the existing common collector; preserved operating UID scans, retries, exclusions, Zoom handling and purchase analysis/approval dispatch.
+- Backed up current source/184-row business DB, passed 53 local and operating-stage tests, and replayed 12 actual originals with all network/document/business effects mocked: 7 distinct contents collected and 5 duplicates skipped. Restart replay skipped all 12.
+- Deployed two backend files at14:06:43. At14:08:29 native600/public3010 healthy, automatic IMAP collection completed twice, all184 invoice rows equal backup, and243 fresh on expected41801952... bundle.
+- Current release source is the ac12 worktree. Next exact start for this issue: inspect a future naturally repeated message's content receipt and collector skip event. No artificial mail/ERP/print job was dispatched. Relay configuration and the broader manual-upload/shared ERP reservation proposal remain separate, unimplemented work.
+
+## 2026-11-13 EML content comparison confirmed
+
+- Rechecked saved Nov12 read-only IMAP evidence: Daou2073/2074 andKT2106/2107,2110/2111 have different raw-message hashes/Message-IDs but identical decoded body hashes. KT attachment byte hashes also match; Daou has no attachments. Subject and original Date match in all three pairs.
+- This supports early canonical EML-content fingerprinting before crawling. No fresh IMAP access, source change or deployment in this turn. Next exact start: define stable sender/recipient/subject/original-date/body/attachment representation, completed-collection state and retry semantics on the operating collector baseline.
+
+## 2026-11-13 early duplicate-mail performance check
+
+- User asked whether inspecting duplicate mail would slow processing. Ran only a synthetic local SHA256/indexed-SQLite benchmark with100000 existing fingerprints; no operating mail, source, database, service or ERP action.
+- Recommendation: compare already-read attachment content or validated provider document identifiers before crawling/PDF generation; skip only previously successful matching targets. Keep confirmed failure retry and the separate ERP final duplicate guard.
+- Next exact start: inspect the live collector baseline and scope early target fingerprint persistence/concurrency/retry semantics before implementation. This turn did not deploy that feature. Benchmark output/mail_duplicate_benchmark_20261113/result.json.
+
+## 2026-11-12 proposed unified duplicate protection
+
+- User asked how best to handle the confirmed duplication. Recommend one document identity and durable ERP execution record shared by purchase/regular, automatic/manual collection and manual execution. This is a design recommendation, not a new deployment.
+- Prioritize application protection, then investigate duplicate forwarding separately. Preserve the current human cleanup and existing output-only reprint behavior.
+- Next exact implementation start: inspect operating invoice_db/worker/queue drift, back up source and SQLite, then design a durable identity/reservation migration and mocked ERP verification. Do not generate live financial jobs for tests.
+
 ## 2026-11-12 duplicate-mail provenance and purchase/regular scope audit
 
 - User asked whether both workflows' duplicates originate from two emails. Read-only production Gmail INBOX inspection sinceNov1 found209 messages. KT pairs2106/2107,2110/2111,2113/2114,2116/2117 have identical attachment SHA256 within each pair; Daou2073/2074 share CSBill202640769381. Both copies have distinct Gmail Message-IDs with SMTPIN_ADDED_MISSING/BROKEN markers.

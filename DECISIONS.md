@@ -1,5 +1,34 @@
 # Decisions
 
+## 2026-11-13 EML dedupe implementation boundary
+
+- Canonical identity includes original From/To/Cc/Reply-To mailboxes, subject/date, decoded text bodies and every decoded attachment. Ignore relay Message-ID/Received headers, transfer encoding, MIME boundaries and attachment filename suffixes. Preserve numbers, URLs, meaningful whitespace and attachment multiplicity; changed original dates remain separate content.
+- Parse mailbox syntax before decoding display names: actual Compuzone encoded [LG U+] names otherwise create false invalid addresses. Unverifiable MIME/date/address data returns no fingerprint and follows existing collection behavior.
+- Store only fully collected saved/duplicate outcomes in indexed mail_content_state.sqlite3, scoped by IMAP server/account/inbox. Failed, partial, ignored or unsupported mail is not certified. Existing per-message retry/backoff remains; semantic invoice dedupe remains independent.
+- Hold a crash-released OS file lock around the whole collector, including legacy JSON state. Concurrent collectors stop before IMAP/crawling; no stale lease cleanup or persistent pending-success assumptions.
+- Existing trusted Message-ID successes can learn a content receipt; new records additionally compare the fingerprint so changed content reusing an ID remains eligible. Seed only originals whose exact raw hash/key/prior-success record were verified against the backup.
+- This is collection protection, not proof of ERP save or a new shared execution ledger. Preserve the user's human cleanup, existing completed-output behavior and save-confirmation hold.
+
+## 2026-11-13 canonical EML identity proposal
+
+- For exact mail-duplicate detection, compare stable envelope/content fields and decoded MIME bodies/attachment bytes, rather than whole raw EML hashes. Received/transport-added Message-ID/authentication signatures and encoding/boundary serialization can change on repeated delivery.
+- Preserve substantive numbers, invoice links, sender/recipient, original date and attachment content; avoid aggressive text normalization or template/subject-only comparison. A changed tax document must remain eligible even when its subject matches.
+- A matching fingerprint permits collection bypass only after a prior complete collection success, not merely a previous attempt. This protects mail-stage duplicate delivery; semantic reissues and execution retries still require the separate ERP guard.
+
+## 2026-11-13 proposed early mail dedupe
+
+- A changed transport Message-ID or filename must not defeat exact attachment-content/provider-document identity. Sender/subject/amount or an HTML template alone must not suppress a different invoice.
+- Fingerprint previously read MIME payload/validated portal identifiers and use an indexed persistent lookup, not scans/re-parsing of all historical PDFs. Store per-target outcome; a failed or uncertain attempt is not a successfully processed duplicate.
+- Recommend this optimization with the previously discussed final ERP duplicate check. Performance numbers here are local synthetic measurements, not an operating-system SLA.
+
+## 2026-11-12 proposed handling policy (not yet implemented)
+
+- Use validated tax approval identity, cross-checked with supplier/buyer information, across both workflows. Use provider-issued billing identity for non-tax documents; ambiguous/missing identity goes to review rather than automatic posting.
+- Collection associates repeated mail/manual files with the existing invoice and keeps provenance. Before ERP, atomically reserve the identity in durable storage shared by all entry points and recheck at dispatch/Agent boundaries.
+- Track queued/running, confirmed saved, failed before save and save outcome unknown separately. Only confirmed unsaved attempts may re-enter posting; completed invoices use saved outputs, and unknown saves require reconciliation.
+- A web-list deletion must not erase the execution history. Preserve correction/reversal workflows explicitly; never silently merge different approval numbers based on amount/date/vendor.
+- UI should show the existing invoice link, processing owner/time, allowed reprint or the precise review reason. Mail relay repair remains independent of the application's guard.
+
 ## 2026-11-12 mail identity versus document identity
 
 - Distinguish duplicate delivery, duplicate registration, duplicate ERP posting and duplicate result notifications. Message-ID and filename identify a transport/artifact; tax approval identifies the business document.
